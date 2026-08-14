@@ -17,7 +17,7 @@ Dann <http://localhost:5180> öffnen.
 | Spiel | Stand |
 |---|---|
 | **Sternenfang** (Platzhalter) | spielbar |
-| Farbsortierer | geplant |
+| **Farbsortierer** | spielbar |
 | Blockblitz | geplant |
 | Reihenfall | geplant |
 | Geisterjagd | geplant |

@@ -96,11 +96,36 @@ Ein Punkt nach dem anderen. Nach jedem Schritt spielt Ronni und gibt
 Rückmeldung. **Nicht mit dem nächsten anfangen, bevor er okay gesagt hat.**
 
 1. ✅ Hülle, gemeinsame Bausteine, Platzhalter-Spiel („Sternenfang")
-2. ⬜ Farbsortierer — Ronnis vorhandene Fassung ist die Grundlage, sie muss
-   noch in die Session
+2. ✅ Farbsortierer — von Grund auf neu gebaut (Ronnis vorhandene Fassung ist
+   nie in der Session angekommen)
 3. ⬜ Blockblitz
 4. ⬜ Reihenfall
 5. ⬜ Geisterjagd
+
+## Farbsortierer — Besonderheiten
+
+Ein Level ist eine Runde: gelöst → sofort `onGameOver` mit einem Punktestand
+nach Zügen (weniger Züge = mehr Punkte), landet in der Bestenliste — passend
+zur Idee „gleiche Levelnummer, gleiches Rätsel, vergleichbar". „Nochmal"
+versucht deshalb genau dasselbe Level erneut.
+
+- `logik.ts`: Lösbarkeits-Suchlauf ist eine echte Breitensuche (nicht nur
+  „garantiert lösbar durch Konstruktion") — genau wie gefordert. Deckel bei
+  5 Farben (`MAX_FARBEN`), weil 6 Farben im Test bis zu 10 Versuche à
+  mehrere Sekunden brauchten, bevor ein lösbares Brett gefunden war.
+- `geometrie.ts`: Röhrchen-Raster und der komplette Bewegungsablauf beim
+  Gießen (anheben/hinfliegen/kippen/gießen/aufrichten/zurückstellen) sind
+  reine, getestete Funktionen — die Ausgusskante wird per Drehmatrix aus dem
+  aktuellen Kippwinkel berechnet, nicht geschätzt.
+- Farben kommen aus `farbpaletteFuerLevel(level, anzahl)` — eine aus der
+  Levelnummer gemischte Auswahl, damit nicht immer dieselben ersten Farben
+  drankommen. Jede Farbe hat eine stabile `id` für Verlaufs-Zuordnung.
+- Anzeige merged aufeinanderfolgende gleichfarbige Schichten zu einem
+  einzigen Block (`Roehrchen.tsx`) — sonst sieht jede Schichtgrenze wie ein
+  Neuanfang aus, auch bei zwei gleichen Farben übereinander.
+- Bewusst kein Muster mehr auf den Farbschichten (war testweise drin,
+  Rückmeldung: sieht unruhig aus). Nicht-visuelle Unterscheidung läuft über
+  die Farbnamen im `aria-label` jedes Röhrchens.
 
 ## Befehle
 

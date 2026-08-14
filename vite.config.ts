@@ -8,5 +8,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // Der Lösbarkeits-Suchlauf im Farbsortierer braucht bei vielen Levelnummern
+    // hintereinander mehr als die Standard-5s.
+    testTimeout: 15000,
   },
 });
