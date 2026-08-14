@@ -4,7 +4,12 @@ import type { PointerEvent } from 'react';
 const VERZOEGERUNG = 170; // ms bis zur ersten Wiederholung — wie bei gehaltener Taste
 const TAKT = 45; // ms zwischen den weiteren Wiederholungen
 
-/** Absichtlich nur diese vier — rotate/drop/select kommen erst mit Reihenfall dazu. */
+/**
+ * Absichtlich nur diese vier. Reihenfall (das erste Spiel mit Drehen/hartem
+ * Fallen/Halten) benutzt dafür lieber `useInput`s Wischen/Tastatur plus
+ * eigene, klar beschriftete Knöpfe — eine Erweiterung hier hätte den
+ * gemeinsamen Baustein für alle anderen Spiele mit angefasst.
+ */
 type Richtung = 'up' | 'down' | 'left' | 'right';
 
 /**

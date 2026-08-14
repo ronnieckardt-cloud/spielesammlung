@@ -19,7 +19,7 @@ Dann <http://localhost:5180> öffnen.
 | **Sternenfang** (Platzhalter) | spielbar |
 | **Farbsortierer** | spielbar |
 | **Blockblitz** | spielbar |
-| Reihenfall | geplant |
+| **Reihenfall** | spielbar |
 | Geisterjagd | geplant |
 
 Der Platzhalter ist kein richtiges Spiel, sondern der Beweis, dass das

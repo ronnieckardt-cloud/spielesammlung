@@ -108,7 +108,7 @@ kurz zusammenfassen, was fertig ist.
 2. ✅ Farbsortierer — von Grund auf neu gebaut (Ronnis vorhandene Fassung ist
    nie in der Session angekommen)
 3. ✅ Blockblitz
-4. ⬜ Reihenfall
+4. ✅ Reihenfall
 5. ⬜ Geisterjagd
 
 Danach zusätzlich geplant (noch nicht begonnen):
@@ -152,6 +152,42 @@ versucht deshalb genau dasselbe Level erneut.
 - Bewusst kein Muster mehr auf den Farbschichten (war testweise drin,
   Rückmeldung: sieht unruhig aus). Nicht-visuelle Unterscheidung läuft über
   die Farbnamen im `aria-label` jedes Röhrchens.
+
+## Blockblitz — Besonderheiten
+
+- `logik.ts`: 27 Formen (Größe 1 bis 9), alle Drehlagen von L/T/S/Z einzeln
+  im Satz, weil im Spiel nicht gedreht wird. Teileziehung ist nach
+  Füllstand gewichtet (`gewichtFuerGroesse`) — bei vollerem Feld werden
+  kleine Teile wahrscheinlicher, große nie unmöglich.
+- Ziehen läuft über rohe Pointer-Events (nicht über `useInput`, das passt
+  hier nicht — es geht um „welches von N Teilen an welche von 64 Stellen",
+  nicht um vier Richtungen). `platzieren()` liest den Zustand über eine Ref
+  statt über sich ständig ändernde Closures, sonst hängt sich der
+  Zieh-Effekt nach jedem Zug neu auf.
+- Tempo/Position des fliegenden Teils: `zug.y - VERSATZ_Y` hebt es über den
+  Finger, `ankerZentriertAuf()` (`geometrie.ts`) zentriert es aufs Ziel.
+
+## Reihenfall — Besonderheiten
+
+- `logik.ts`: Formen und Wandtritte im SRS-Stil (Standard-Drehsystem), von
+  Hand aus der y-nach-oben-Konvention auf dieses Projekts y-nach-unten
+  übertragen — beim Ändern vorsichtig sein, ein Vorzeichenfehler bei den
+  Kicks fällt im Spiel kaum auf, nur beim genauen Hinsehen.
+- Lock Delay: `sperrZeitRest` läuft nur, während der Stein aufliegt; jede
+  erfolgreiche Bewegung/Drehung im Aufliegen setzt sie zurück, aber nur
+  `MAX_SPERR_VERLAENGERUNGEN`-mal (`verlaengereWennAmBoden`) — danach läuft
+  die Zeit ungebremst ab, damit man nicht endlos schweben kann.
+- 7-Bag über zwei Ebenen: `beutel` (Rest des aktuellen Beutels) und
+  `warteschlange` (die tatsächlich gezeigten nächsten Teile, immer
+  mindestens `VORSCHAU_ANZAHL + 1` lang). Sauber trennen, sonst stimmt die
+  „jede Sorte einmal pro sieben"-Garantie nicht mehr mit der Vorschau überein.
+- Steuerung bewusst über `useInput` (Wischen + Tastatur decken sechs der
+  sieben Aktionen ab) plus einen eigenen, schmalen Zusatz-Listener für die
+  Taste C (Halten) — dafür reichte in `useInput`s sieben Aktionen kein
+  Platz mehr. `Steuerkreuz` wurde absichtlich **nicht** erweitert, siehe
+  Kommentar dort.
+- Farben bewusst anders zugeordnet als beim Original (`farben.ts`) — jedes
+  der sieben Teile hat eine andere Farbe als in der klassischen Zuordnung.
 
 ## Befehle
 
