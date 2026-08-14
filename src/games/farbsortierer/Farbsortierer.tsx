@@ -33,6 +33,16 @@ const NAECHSTES_TEMPO: Record<Tempo, Tempo> = { normal: 'schnell', schnell: 'aus
 
 const SCHICHTHOEHE = ROEHRCHEN_HOEHE / KAPAZITAET;
 
+/**
+ * Welches Level als Nächstes drankommt — als Modul-Variable, nicht als
+ * React-State: „Nochmal" nach einer Lösung lässt die Hülle das Spiel per
+ * neuem `key` komplett neu mounten (siehe Spielrahmen.tsx), ein useState
+ * würde also jedes Mal wieder bei seinem Anfangswert landen. Die Variable
+ * bleibt für die Dauer der Sitzung im Speicher — kein Browser-Speicher,
+ * kein Zugriff nach außen, verschwindet beim echten Neuladen der Seite.
+ */
+let naechsteLevelNummer = 1;
+
 type Guss = {
   von: number;
   nach: number;
@@ -57,7 +67,7 @@ function beschreibung(
 }
 
 export function Farbsortierer({ onScore, onGameOver, settings }: GameProps) {
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(1));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
   const [tempo, setTempo] = useState<Tempo>(settings.reducedMotion ? 'aus' : 'normal');
   const [guss, setGuss] = useState<Guss | null>(null);
 
@@ -127,6 +137,9 @@ export function Farbsortierer({ onScore, onGameOver, settings }: GameProps) {
   useEffect(() => {
     if (z.geloest && !guss) {
       sfx('ende');
+      // "Nochmal" im Vorbei-Bildschirm der Hülle startet damit automatisch
+      // das nächste Level, nicht wieder dasselbe.
+      naechsteLevelNummer = z.level + 1;
       onGameOver(punkteFuerLoesung(z.zuege, z.farbenAnzahl));
     }
     // Absichtlich nur an geloest/guss gebunden — onGameOver darf nur einmal kommen.
@@ -140,6 +153,18 @@ export function Farbsortierer({ onScore, onGameOver, settings }: GameProps) {
   const beiExtraRoehrchen = useCallback(() => {
     if (!guss) setZ((alt) => extraRoehrchenHinzufuegen(alt));
   }, [guss]);
+
+  // Freie Levelwahl — "gleiche Levelnummer, gleiches Rätsel" soll man auch
+  // gezielt ansteuern können, nicht nur der Reihe nach durchspielen.
+  const beiLevelWechsel = useCallback(
+    (neu: number) => {
+      if (guss) return;
+      const geklemmt = Math.max(1, neu);
+      naechsteLevelNummer = geklemmt;
+      setZ(neuesLevel(geklemmt));
+    },
+    [guss],
+  );
 
   const breite = rasterBreite(z.roehrchen.length);
   const hoehe = rasterHoehe(z.roehrchen.length);
@@ -162,7 +187,27 @@ export function Farbsortierer({ onScore, onGameOver, settings }: GameProps) {
       <FarbMusterDefs />
 
       <div className="flex w-full max-w-md flex-wrap items-center justify-between gap-2 text-sm">
-        <span className="font-semibold text-gedaempft">Level {z.level}</span>
+        <div className="flex items-center gap-1 font-semibold text-gedaempft">
+          <button
+            type="button"
+            onClick={() => beiLevelWechsel(z.level - 1)}
+            disabled={z.level <= 1 || !!guss}
+            aria-label="Voriges Level"
+            className="rounded-lg border border-rand bg-flaeche px-2 py-1 text-base leading-none disabled:opacity-30"
+          >
+            ‹
+          </button>
+          <span className="w-16 text-center tabular-nums">Level {z.level}</span>
+          <button
+            type="button"
+            onClick={() => beiLevelWechsel(z.level + 1)}
+            disabled={!!guss}
+            aria-label="Nächstes Level"
+            className="rounded-lg border border-rand bg-flaeche px-2 py-1 text-base leading-none disabled:opacity-30"
+          >
+            ›
+          </button>
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -267,6 +312,10 @@ export function Farbsortierer({ onScore, onGameOver, settings }: GameProps) {
 
       <p className="max-w-md text-center text-sm text-gedaempft">
         Antippen wählt ein Röhrchen, nochmal Antippen gießt hinein.
+        <br />
+        Gelöst? „Nochmal" im nächsten Bildschirm startet automatisch das
+        nächste Level — mit den Pfeilen oben lässt sich auch direkt ein
+        bestimmtes Level ansteuern.
       </p>
     </div>
   );

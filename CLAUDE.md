@@ -90,6 +90,12 @@ Durchgehend eigene Namen verwenden (Farbsortierer, Blockblitz, Reihenfall,
 Geisterjagd) und sich optisch **nicht** an die Originale anlehnen — keine
 gelbe Kreisfigur, keine originalen Steinfarben.
 
+Ausnahme auf ausdrücklichen Wunsch: Die Spielfigur in Sternenfang
+(`games/platzhalter/Platzhalter.tsx`, Komponente `KatzenGesicht`) ist
+bewusst eine gelbe Kreisfigur mit angedeutetem Mund — durch Katzenohren
+bleibt sie als Katze lesbar. Für Geisterjagd (Schritt 5) gilt die Regel
+oben weiterhin uneingeschränkt: eigene Optik, keine Anlehnung.
+
 ## Reihenfolge
 
 Ein Punkt nach dem anderen. Nach jedem Schritt spielt Ronni und gibt

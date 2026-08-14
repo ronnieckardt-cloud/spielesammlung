@@ -54,13 +54,13 @@ export function Steuerkreuz({
       onPointerLeave={loslassen}
       onPointerCancel={loslassen}
       onContextMenu={(e) => e.preventDefault()}
-      className="grid size-14 touch-none select-none place-items-center rounded-xl border border-rand bg-flaeche text-2xl active:bg-flaeche-hoch disabled:opacity-40"
+      className="grid size-18 touch-none select-none place-items-center rounded-xl border border-rand bg-flaeche text-4xl active:bg-flaeche-hoch disabled:opacity-40"
     >
       <span aria-hidden="true">{symbol}</span>
     </button>
   );
 
-  const platz = <div className="size-14" aria-hidden="true" />;
+  const platz = <div className="size-18" aria-hidden="true" />;
 
   return (
     <div

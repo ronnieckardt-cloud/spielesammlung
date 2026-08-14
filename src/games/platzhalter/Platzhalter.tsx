@@ -10,13 +10,27 @@ import type { Richtung } from './logik';
 
 const AKZENT = '#7dd3fc';
 const ZIEL_FARBE = '#f0b429';
-
-// An einer Stelle austauschbar — anderes Tier gewünscht? Hier ändern.
-const TIER = '🐱';
+const KATZE_FARBE = '#f5c518';
 const TIER_NAME = 'Katze';
 
 const istRichtung = (wert: string): wert is Richtung =>
   wert === 'up' || wert === 'down' || wert === 'left' || wert === 'right';
+
+/**
+ * Rundliche, gelbe Form mit angedeutetem Mund und Katzenohren — auf
+ * ausdrücklichen Wunsch, obwohl das eigentlich der Projektregel "keine
+ * gelbe Kreisfigur" widerspricht. Bleibt durch die Ohren als Katze lesbar.
+ */
+function KatzenGesicht() {
+  return (
+    <svg viewBox="0 0 100 100" width="46" height="46" className="drop-shadow-lg">
+      <polygon points="24,24 14,2 37,17" fill={KATZE_FARBE} />
+      <polygon points="63,17 86,2 76,24" fill={KATZE_FARBE} />
+      <path d="M50,50 L88.97,27.5 A45,45 0 1 0 88.97,72.5 Z" fill={KATZE_FARBE} />
+      <circle cx="46" cy="38" r="4" fill="#4a3708" />
+    </svg>
+  );
+}
 
 /**
  * Platzhalter-Spiel: Sammle möglichst viele Sterne, bevor die Zeit abläuft.
@@ -108,7 +122,7 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
             >
               {/* Größer als die Kachel, damit das Tier wie eine Figur wirkt
                   und nicht wie ein Symbol in einer Box. */}
-              {istSpieler && <span className="text-4xl drop-shadow-lg">{TIER}</span>}
+              {istSpieler && <KatzenGesicht />}
               {/* Nur der Stern pulsiert, nicht die Kachel drum herum. */}
               {istZiel && (
                 <span className="pulsiert text-2xl" style={{ color: ZIEL_FARBE }}>
