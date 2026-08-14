@@ -12,7 +12,11 @@ export function Kachelmenue({
   onBestenliste: () => void;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-6">
+    <div
+      className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-6"
+      // Siehe Seite.tsx — Abstand zur Statusleiste bei installierter App auf dem iPhone.
+      style={{ paddingTop: 'calc(1.5rem + env(safe-area-inset-top))' }}
+    >
       <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Spielesammlung</h1>

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { useInput } from '../../core/useInput';
+import { Steuerkreuz } from '../../core/Steuerkreuz';
 import { saatAus } from '../../core/rng';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
@@ -9,6 +10,10 @@ import type { Richtung } from './logik';
 
 const AKZENT = '#7dd3fc';
 const ZIEL_FARBE = '#f0b429';
+
+// An einer Stelle austauschbar — anderes Tier gewünscht? Hier ändern.
+const TIER = '🐱';
+const TIER_NAME = 'Katze';
 
 const istRichtung = (wert: string): wert is Richtung =>
   wert === 'up' || wert === 'down' || wert === 'left' || wert === 'right';
@@ -24,10 +29,13 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
   const [z, setZ] = useState(() => neuesSpiel(saatAus('platzhalter', Date.now())));
   const brett = useRef<HTMLDivElement>(null);
 
+  // Von Tastatur, Wischen und dem Steuerkreuz benutzt — ein Weg für alle drei.
+  const bewege = useCallback((richtung: Richtung) => setZ((alt) => bewegen(alt, richtung)), []);
+
   useInput(
     (aktion) => {
       if (!istRichtung(aktion)) return;
-      setZ((alt) => bewegen(alt, aktion));
+      bewege(aktion);
     },
     { bereich: brett, wiederholen: ['up', 'down', 'left', 'right'], aktiv: !z.vorbei },
   );
@@ -78,7 +86,7 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
         className="grid w-full max-w-sm touch-none gap-2"
         style={{ gridTemplateColumns: `repeat(${z.breite}, minmax(0, 1fr))` }}
         role="img"
-        aria-label={`Spielfeld. Du bist in Reihe ${z.spieler.y + 1}, Spalte ${z.spieler.x + 1}. Der Stern ist in Reihe ${z.ziel.y + 1}, Spalte ${z.ziel.x + 1}.`}
+        aria-label={`Spielfeld. Deine ${TIER_NAME} ist in Reihe ${z.spieler.y + 1}, Spalte ${z.spieler.x + 1}. Der Stern ist in Reihe ${z.ziel.y + 1}, Spalte ${z.ziel.x + 1}.`}
       >
         {Array.from({ length: z.breite * z.hoehe }, (_, i) => {
           const x = i % z.breite;
@@ -89,25 +97,35 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
             <div
               key={i}
               aria-hidden="true"
-              className="grid aspect-square place-items-center rounded-xl border border-rand bg-flaeche text-2xl font-bold"
+              className="grid aspect-square place-items-center overflow-visible rounded-xl border border-rand bg-flaeche"
               style={
                 istSpieler
-                  ? { backgroundColor: AKZENT, borderColor: AKZENT, color: '#0b0f14' }
+                  ? { borderColor: AKZENT }
                   : istZiel
-                    ? { borderColor: ZIEL_FARBE, color: ZIEL_FARBE }
+                    ? { borderColor: ZIEL_FARBE }
                     : undefined
               }
             >
-              {istSpieler ? '●' : istZiel ? '★' : ''}
+              {/* Größer als die Kachel, damit das Tier wie eine Figur wirkt
+                  und nicht wie ein Symbol in einer Box. */}
+              {istSpieler && <span className="text-4xl drop-shadow-lg">{TIER}</span>}
+              {/* Nur der Stern pulsiert, nicht die Kachel drum herum. */}
+              {istZiel && (
+                <span className="pulsiert text-2xl" style={{ color: ZIEL_FARBE }}>
+                  ★
+                </span>
+              )}
             </div>
           );
         })}
       </div>
 
+      <Steuerkreuz onRichtung={bewege} aktiv={!z.vorbei} />
+
       <p className="max-w-sm text-center text-sm text-gedaempft">
-        Sammle die Sterne. Jeder Stern gibt einen Punkt und etwas Zeit dazu.
+        Fang mit deiner {TIER_NAME} die Sterne ein, bevor die Zeit abläuft.
         <br />
-        Pfeiltasten oder wischen.
+        Pfeiltasten, das Kreuz unten oder wischen.
       </p>
 
       <p className="sr-only" aria-live="polite">

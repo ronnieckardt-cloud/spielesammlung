@@ -59,6 +59,22 @@
   }
 }
 
+/* Leichtes Pulsieren fürs Ziel-Symbol — wird durch die Regeln unten
+   automatisch abgeschaltet, wenn "weniger Bewegung" gilt. */
+@keyframes pulsieren {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.18);
+  }
+}
+
+.pulsiert {
+  animation: pulsieren 1.1s ease-in-out infinite;
+}
+
 /* Der React-Wurzelknoten füllt den Rest der Seite. */
 #wurzel {
   display: flex;

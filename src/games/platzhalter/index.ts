@@ -5,7 +5,7 @@ import { Platzhalter } from './Platzhalter';
 export const platzhalter: GameApi = {
   id: 'platzhalter',
   title: 'Sternenfang',
-  blurb: 'Sammle Sterne, bevor die Zeit abläuft.',
+  blurb: 'Fang mit deiner Katze Sterne, bevor die Zeit abläuft.',
   accent: '#7dd3fc',
   symbol: '★',
   Component: Platzhalter,

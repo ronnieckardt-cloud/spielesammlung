@@ -62,7 +62,11 @@ export function Spielrahmen({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
-      <header className="flex items-center gap-3 border-b border-rand px-4 py-3">
+      <header
+        className="flex items-center gap-3 border-b border-rand px-4 pb-3"
+        // Siehe Seite.tsx — Abstand zur Statusleiste bei installierter App auf dem iPhone.
+        style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}
+      >
         <button
           type="button"
           onClick={onExit}
