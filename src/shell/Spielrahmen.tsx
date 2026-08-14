@@ -61,7 +61,7 @@ export function Spielrahmen({
   const Spiel = spiel.Component;
 
   return (
-    <div className="sicherer-rand mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
+    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
       <header className="flex items-center gap-3 border-b border-rand px-4 py-3">
         <button
           type="button"

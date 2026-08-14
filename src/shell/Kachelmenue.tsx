@@ -12,13 +12,13 @@ export function Kachelmenue({
   onBestenliste: () => void;
 }) {
   return (
-    <div className="sicherer-rand mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 py-6">
-      <header className="mb-6 flex items-end justify-between gap-3">
+    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-6">
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Spielesammlung</h1>
           <p className="text-sm text-gedaempft">Läuft auch ohne Internet.</p>
         </div>
-        <nav className="flex gap-2">
+        <nav className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={onBestenliste}

@@ -26,6 +26,13 @@
   body {
     margin: 0;
     min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    /* Abstand zu Aussparung und Wischbalken bei Handys. Gehört hierher und
+       nicht an die einzelnen Seiten — sonst überschreibt es deren Ränder. */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
     background-color: var(--color-grund);
     color: var(--color-text);
     font-family:
@@ -52,12 +59,12 @@
   }
 }
 
-@layer utilities {
-  .sicherer-rand {
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+/* Der React-Wurzelknoten füllt den Rest der Seite. */
+#wurzel {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
 }
 
 /* Wenn der Nutzer wenig Bewegung möchte — per Systemeinstellung oder

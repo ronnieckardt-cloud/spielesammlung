@@ -13,7 +13,7 @@ export function Seite({
   children: ReactNode;
 }) {
   return (
-    <div className="sicherer-rand mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
+    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-rand bg-grund/90 px-4 py-3 backdrop-blur">
         {onZurueck && (
           <button
