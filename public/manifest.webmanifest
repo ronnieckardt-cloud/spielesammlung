@@ -1,0 +1,21 @@
+{
+  "name": "Spielesammlung",
+  "short_name": "Spiele",
+  "description": "Eine Sammlung kleiner Spiele für den Browser. Läuft offline.",
+  "lang": "de",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0f14",
+  "theme_color": "#0b0f14",
+  "icons": [
+    { "src": "/icons/symbol-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/symbol-512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "/icons/symbol-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
