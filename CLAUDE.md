@@ -98,8 +98,11 @@ oben weiterhin uneingeschränkt: eigene Optik, keine Anlehnung.
 
 ## Reihenfolge
 
-Ein Punkt nach dem anderen. Nach jedem Schritt spielt Ronni und gibt
-Rückmeldung. **Nicht mit dem nächsten anfangen, bevor er okay gesagt hat.**
+Ursprünglich: ein Punkt nach dem anderen, erst nach Ronnis Okay weiter. Seit
+Schritt 3 hat Ronni das gelockert — Blockblitz und Reihenfall dürfen
+hintereinander gebaut werden, ohne auf Rückmeldung zu warten. Trotzdem nach
+jedem Spiel gründlich selbst testen (Tests, Typprüfung, Browser-Check) und
+kurz zusammenfassen, was fertig ist.
 
 1. ✅ Hülle, gemeinsame Bausteine, Platzhalter-Spiel („Sternenfang")
 2. ✅ Farbsortierer — von Grund auf neu gebaut (Ronnis vorhandene Fassung ist
@@ -107,6 +110,16 @@ Rückmeldung. **Nicht mit dem nächsten anfangen, bevor er okay gesagt hat.**
 3. ⬜ Blockblitz
 4. ⬜ Reihenfall
 5. ⬜ Geisterjagd
+
+Danach zusätzlich geplant (noch nicht begonnen):
+
+6. Gehirnjogging — Konzept noch offen
+7. Wortspiel — Konzept noch offen
+8. Quiz — **ca. 1000 Fragen mit Antworten, Zielgruppe 10- bis 12-Jährige.**
+   Das ist selbst ein größerer Inhalts-Auftrag (nicht nur Code) — beim
+   Anfangen genauer klären: Themenbereiche, ob Fragen aus der Levelnummer
+   reproduzierbar gezogen werden (wie beim Farbsortierer), Mehrfachauswahl
+   oder Texteingabe.
 
 ## Farbsortierer — Besonderheiten
 
