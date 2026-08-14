@@ -107,7 +107,7 @@ kurz zusammenfassen, was fertig ist.
 1. ✅ Hülle, gemeinsame Bausteine, Platzhalter-Spiel („Sternenfang")
 2. ✅ Farbsortierer — von Grund auf neu gebaut (Ronnis vorhandene Fassung ist
    nie in der Session angekommen)
-3. ⬜ Blockblitz
+3. ✅ Blockblitz
 4. ⬜ Reihenfall
 5. ⬜ Geisterjagd
 
@@ -115,11 +115,18 @@ Danach zusätzlich geplant (noch nicht begonnen):
 
 6. Gehirnjogging — Konzept noch offen
 7. Wortspiel — Konzept noch offen
-8. Quiz — **ca. 1000 Fragen mit Antworten, Zielgruppe 10- bis 12-Jährige.**
-   Das ist selbst ein größerer Inhalts-Auftrag (nicht nur Code) — beim
-   Anfangen genauer klären: Themenbereiche, ob Fragen aus der Levelnummer
+8. Quiz — **ca. 100 Fragen mit Antworten, Zielgruppe 10- bis 12-Jährige,
+   Thema allgemeine Wissenserweiterung** (kein enges Fachthema). Immer noch
+   ein eigener Inhalts-Auftrag, nur kleiner als ursprünglich gedacht. Beim
+   Anfangen klären: Themenbereiche, ob Fragen aus der Levelnummer
    reproduzierbar gezogen werden (wie beim Farbsortierer), Mehrfachauswahl
    oder Texteingabe.
+9. Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer ist
+   der/die Beste. Braucht Supabase (bringt fertige Anmeldung mit) — war von
+   Anfang an als "später" vorgesehen, jetzt konkret gewünscht. Das ist ein
+   Eingriff in die Hülle (`shell/`), nicht in ein einzelnes Spiel: erst
+   angehen, wenn die Spiele durch sind, dann mit Ronni gemeinsam planen
+   (welche Daten genau, wie Kinder-tauglich das Passwort sein muss).
 
 ## Farbsortierer — Besonderheiten
 

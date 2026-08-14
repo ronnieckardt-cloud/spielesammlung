@@ -18,7 +18,7 @@ Dann <http://localhost:5180> öffnen.
 |---|---|
 | **Sternenfang** (Platzhalter) | spielbar |
 | **Farbsortierer** | spielbar |
-| Blockblitz | geplant |
+| **Blockblitz** | spielbar |
 | Reihenfall | geplant |
 | Geisterjagd | geplant |
 
