@@ -1328,6 +1328,27 @@ Weitere Entscheidungen:
   die Zeichenschleife war der Grund, warum es sich nicht ganz flüssig
   anfühlte. Nur der Punktestand für die Kopfzeile der Hülle geht zweimal je
   Sekunde nach außen — das kostet ein paar Textknoten, nicht die Leinwand.
+- **Die Steuerung war seitenverkehrt** — und die Ursache steckt tief:
+  Die Kamera blickt in **+z**, dadurch liegt Welt-Rechts auf dem Bildschirm
+  **links**. Wischen nach links schickte die Figur nach rechts. Gespiegelt
+  wird jetzt an genau einer Stelle beim Zeichnen (`bildX` in `szene.ts`);
+  die Logik behält ihr Koordinatensystem, dort ist es richtig und die Tests
+  hängen daran.
+- **Alle Texturen sind im Code gezeichnet** (`texturen.ts`), keine
+  Bilddateien. Das ist nicht Sparsamkeit um ihrer selbst willen: Jede Datei
+  müsste in den Service-Worker-Vorrat, könnte fehlschlagen und verlängerte
+  die erste Ladezeit. Und Texturen sind der größte Einzelsprung in der
+  Bildqualität — eine einfarbige Hauswand sieht nach Klotz aus, dieselbe
+  Wand mit Fenstern nach Stadt.
+- **Die Fahrbahnstreifen sind Teil der Straßentextur**, nicht mehr 52
+  einzelne Körper. Das Vorbeiziehen entsteht durch Verschieben der Textur —
+  eine einzige Zahl je Bild statt 52 Positionen. Das Minuszeichen dabei ist
+  wichtig: Ein wachsender Versatz schöbe das Muster sonst von uns weg statt
+  auf uns zu.
+- `MeshPhongMaterial` statt `MeshLambertMaterial`, Kantenglättung an,
+  filmische Tonwertkurve (`ACESFilmicToneMapping`). Bei einer Figur aus
+  lauter Kugeln ist der leichte Glanz der Unterschied zwischen „Spielfigur
+  aus Kunststoff" und „Pappe".
 - **Nicht duellfähig**: keine Levelnummer.
 
 ## Box Push — Besonderheiten
