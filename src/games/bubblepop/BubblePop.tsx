@@ -86,8 +86,15 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
           Bubble Pop
         </h1>
         <p className="mt-3 text-sm font-semibold text-white/85">
-          {bestScore > 0 ? `🏆 Beste Punktzahl: ${bestScore}` : 'Drei gleiche lassen es knallen'}
+          Drei gleiche lassen es knallen
         </p>
+        {bestScore > 0 && (
+          /* Regel und Bestleistung stehen nebeneinander, nicht
+             statt einander — siehe core/Startbildschirm.tsx. */
+          <p className="mt-1.5 text-sm font-bold text-white/70">
+            <span aria-hidden="true">🏆</span> Beste Punktzahl: {bestScore}
+          </p>
+        )}
       </div>
 
       <button

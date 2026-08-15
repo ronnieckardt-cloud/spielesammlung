@@ -582,10 +582,28 @@
   );
 }
 
-/* Alles, was in der Bühne liegt, gehört über den Schein. */
-.spielbuehne > * {
+/* Alles, was in der Bühne liegt, gehört über den Schein.
+
+   **`:not(.absolute)` ist hier kein Feinschliff, sondern behebt einen
+   sichtbaren Fehler.** Diese Regel steht ohne `@layer` und schlägt damit
+   jede Tailwind-Utility — auch `.absolute`. Ein Punktgewinn-Popup, das
+   sich mit `absolute` über das Brett legen soll, wurde dadurch auf
+   `relative` zurückgesetzt, war plötzlich ein zweites Flex-Kind der Bühne
+   und **schob das Brett 0,9 Sekunden lang zur Seite** — bei jedem
+   einzelnen Punkt. Betraf Ring Rise, Snake Rush und Line Fall.
+
+   Ghost Chase fiel nicht auf, weil es sein Popup ins Brett legt statt in
+   die Bühne. Das ist die sauberere Bauweise, aber sie darf nicht die
+   Bedingung dafür sein, dass die Regel oben nichts kaputt macht. */
+.spielbuehne > *:not(.absolute) {
   position: relative;
   z-index: 1;
+}
+
+/* Absolut liegende Kinder behalten ihre Positionierung und kommen
+   trotzdem über den Schein — sogar über das Brett. */
+.spielbuehne > .absolute {
+  z-index: 2;
 }
 
 /* `--vz` ist das Seitenverhältnis als reine Zahl (Breite geteilt durch

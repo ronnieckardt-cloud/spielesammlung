@@ -89,9 +89,28 @@ export function Startbildschirm({
         >
           {titel}
         </h1>
-        <p className="mt-3 text-sm font-semibold text-white/85">
-          {bestScore > 0 ? `🏆 Beste Punktzahl: ${bestScore}` : untertitel}
-        </p>
+        {/*
+         * **Beides, nicht entweder-oder.**
+         *
+         * Vorher stand hier `bestScore > 0 ? Bestleistung : untertitel` —
+         * der Untertitel ist aber die **Spielregel**, und die verschwand
+         * damit nach der allerersten Runde für immer. Zusammen mit
+         * `.nur-bei-platz` (blendet den Hilfetext im Spiel unter 720 Pixel
+         * Höhe aus) hieß das auf einem kurzen Bildschirm: Sobald ein
+         * Bestwert existiert, steht die Regel **nirgends mehr**. Das traf
+         * zwölf Spiele.
+         *
+         * Die Regel steht jetzt immer oben, die Bestleistung als zweite,
+         * kleinere Zeile darunter — die eine sagt, was zu tun ist, die
+         * andere, wie gut man schon war. Das sind zwei verschiedene
+         * Auskünfte und keine Alternative.
+         */}
+        <p className="mt-3 text-sm font-semibold text-white/85">{untertitel}</p>
+        {bestScore > 0 && (
+          <p className="mt-1.5 text-sm font-bold text-white/70">
+            <span aria-hidden="true">🏆</span> Beste Punktzahl: {bestScore}
+          </p>
+        )}
       </div>
 
       <button

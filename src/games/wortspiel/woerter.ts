@@ -37,7 +37,11 @@ export const WOERTER: readonly Wort[] = [
   { kategorie: 'Alltag', antworten: ['Tich', 'Disch', 'Tisc', 'Tisch'], richtig: 3, stufe: 1, regel: '"sch" bleibt zusammen, und am Anfang steht "T", kein "D".' },
   { kategorie: 'Alltag', antworten: ['Fenster', 'Venster', 'Fänster', 'Fenser'], richtig: 0, stufe: 1, regel: 'Am Anfang steht ein "F", kein "V", der Vokal in der Mitte bleibt "e".' },
   { kategorie: 'Alltag', antworten: ['Zimer', 'Zimmer', 'Cimmer', 'Zimmär'], richtig: 1, stufe: 1, regel: 'Nach kurzem Vokal steht "mm", das Doppel-m, nicht nur ein "m".' },
-  { kategorie: 'Alltag', antworten: ['Kueche', 'Küsche', 'Küche', 'Kühe'], richtig: 2, stufe: 1, regel: '"ü" mit Umlautpunkten, nicht "ue", und am Ende "che", nicht "he".' },
+  // „Kühe" stand hier als Fehlschreibung von „Küche" — es ist aber der
+  // völlig korrekt geschriebene Plural von Kuh. Ein Kind, das das weiß,
+  // wurde für richtiges Wissen bestraft. Ersetzt durch „Kücke", eine
+  // echte Falle (ck statt ch).
+  { kategorie: 'Alltag', antworten: ['Kueche', 'Küsche', 'Küche', 'Kücke'], richtig: 2, stufe: 1, regel: '"ü" mit Umlautpunkten, nicht "ue", und in der Mitte "ch" — nicht "sch" und nicht "ck".' },
   { kategorie: 'Natur', antworten: ['Bawm', 'Boum', 'Baumm', 'Baum'], richtig: 3, stufe: 1, regel: '"au" bleibt zusammen als ein Laut, kein "aw" oder "ou".' },
   { kategorie: 'Natur', antworten: ['Blume', 'Bluhme', 'Plume', 'Blumme'], richtig: 0, stufe: 1, regel: 'Kein Dehnungs-h nach dem "u", und nur ein "m".' },
   { kategorie: 'Natur', antworten: ['Sone', 'Sonne', 'Zonne', 'Sonnä'], richtig: 1, stufe: 1, regel: 'Nach kurzem Vokal steht "nn", das Doppel-n.' },

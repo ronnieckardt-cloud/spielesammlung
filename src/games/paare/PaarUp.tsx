@@ -76,8 +76,15 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
           Pair Up
         </h2>
         <p className="mt-3 text-sm font-semibold text-white/80">
-          {bestScore > 0 ? `Beste Punktzahl: ${bestScore}` : 'Finde alle Paare!'}
+          Finde alle Paare!
         </p>
+        {bestScore > 0 && (
+          /* Regel und Bestleistung stehen nebeneinander, nicht
+             statt einander — siehe core/Startbildschirm.tsx. */
+          <p className="mt-1.5 text-sm font-bold text-white/70">
+            <span aria-hidden="true">🏆</span> Beste Punktzahl: {bestScore}
+          </p>
+        )}
       </div>
 
       <button
