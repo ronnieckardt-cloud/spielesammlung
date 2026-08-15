@@ -436,12 +436,54 @@ Pipe Mania (Rohre legen), Bomberman-Prinzip, Kaiser (Handelsspiel wie Öl
 Imperium), Archon. Bei allen gilt die Namensregel oben: Prinzip frei,
 Name und Optik nicht.
 
-**Zu 3-D:** Das ist der einzige Punkt, der die Technikentscheidung von
-Seite eins berührt — „kein Spiel-Framework, keine Bibliothek ohne
-Rückfrage". Echtes 3-D hieße WebGL, und das hieße realistisch three.js.
-Vorher mit Ronni klären. Ein Zwischenschritt ohne jede neue Bibliothek ist
-möglich und für ein Handy oft die bessere Wahl: Isometrie (2,5-D) mit dem
-vorhandenen Canvas — sieht räumlich aus, rechnet aber flach.
+**Zu 3-D:** Nachgemessen, nicht geschätzt (Bericht vom 15.08.2026).
+
+**Isometrie ist für einen Läufer die falsche Technik** — hier stand das
+vorher falsch. Isometrie ist eine *Parallel*projektion, sie hat keinen
+Fluchtpunkt: Eine Figur, die in die Tiefe läuft, würde dabei nicht kleiner.
+Was ein Endlosläufer braucht, ist eine **Zentralprojektion** — dieselbe
+Rechnung wie in Pole Position und OutRun, und die läuft auf Canvas 2D.
+
+Die Zahlen zu three.js:
+
+| | gzip |
+|---|---|
+| App heute (React + Hülle + alle Spiele) | 141 kB |
+| davon eigener Code (Hülle + 19 Spiele) | 81 kB |
+| three.js, sparsamster Import | **133 kB** |
+
+three.js allein wäre also **1,6-mal so groß wie das gesamte selbst
+geschriebene Projekt** und würde die App fast verdoppeln. Ein Teilimport
+hilft nicht: `WebGLRenderer` zieht die ganze Shader-Bibliothek nach — die
+sparsame Fassung war in der Messung sechs Byte **größer** als „alles
+importieren".
+
+Dazu: WebGL auf älterem iOS-Safari hat bekannte Einbrüche (bis zu
+zwanzigfache Bildzeiten) und verliert beim App-Wechsel den Zeichenkontext.
+Und die Rechenkerne lägen in der Bibliothek statt in einem getesteten
+`geometrie.ts` — das bricht die Projektregel „Spiellogik in reinen,
+testbaren Funktionen" wirksamer als jede Dateigröße.
+
+**Also Zentralprojektion auf Canvas 2D.** Belegt: eine gerade Strecke sind
+rund 200 Zeilen, ein komplettes Spiel rund 700 (Referenzen: Jake Gordons
+JavaScript-Racer, Frank Force' HueJumper2k). Etwa 75 Polygonfüllungen je
+Bild — für ein altes iPad keine Last.
+
+**Es gibt bisher kein einziges Canvas-Spiel im Projekt** (`getContext` kommt
+in `src/` nirgends vor), obwohl oben seit jeher „Canvas 2D für Spiele mit
+fortlaufender Bewegung" steht. Ein Läufer wäre das erste.
+
+Drei Fallen, die vorher feststehen müssen:
+
+1. `bildY` mit **`breite/2`** skalieren, nicht mit `hoehe/2`. Jake Gordons
+   Racer nimmt die Höhe — im Hochformat wäre das mehr als das Doppelte, und
+   jede Kiste sähe hochgezogen aus. Gleicher Faktor in beiden Achsen, sonst
+   ist ein Würfel kein Würfel.
+2. Der Horizont gehört bei etwa 35 % der Höhe, nicht in die Mitte — sonst
+   fehlt unten der Platz für Straße und Figur.
+3. Punkte mit `z - kameraZ <= nahgrenze` verwerfen, nicht erst bei `<= 0`.
+   Sonst schießt die Skalierung gegen unendlich und ein Trapez explodiert
+   über den ganzen Bildschirm.
 
 ## Farbsortierer — Besonderheiten
 
