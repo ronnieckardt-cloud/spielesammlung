@@ -462,6 +462,80 @@
   animation: konfetti-flug 0.8s ease-out forwards;
 }
 
+/* Pair Up: Karten schlagen um, statt einfach ihr Bild zu wechseln.
+
+   Aufbau ist der übliche Dreh-Kniff: Ein Behälter mit `perspective`, darin
+   ein Dreher, der sich um die Y-Achse wendet, und darin zwei Seiten, die
+   beide `backface-visibility: hidden` haben — es ist also immer nur eine
+   zu sehen.
+
+   `transition`, keine Keyframes: Unter `.ruhig` entfällt dann nur die
+   Überblendung, die Karte liegt aber sofort richtig herum. Mit einer
+   Animation müsste ich zusätzlich dafür sorgen, dass sie im richtigen
+   Endbild stehen bleibt. */
+.karte-huelle {
+  perspective: 700px;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.karte-dreher {
+  position: relative;
+  display: block;
+  block-size: 100%;
+  inline-size: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.32s ease-out;
+}
+
+.karte-offen {
+  transform: rotateY(180deg);
+}
+
+.karte-seite {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 0.6rem;
+  backface-visibility: hidden;
+  /* Safari braucht die Eigenschaft weiterhin mit Präfix, sonst blitzt die
+     Rückseite durch und man sieht beide Bilder übereinander. */
+  -webkit-backface-visibility: hidden;
+}
+
+.karte-rueckseite {
+  background: linear-gradient(150deg, #6366f1, #a21caf);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.28);
+  color: #ffffff;
+}
+
+.karte-vorderseite {
+  transform: rotateY(180deg);
+  background: var(--color-flaeche-hoch);
+  box-shadow: inset 0 0 0 2px var(--color-rand);
+}
+
+/* Gefundene Paare treten in den Hintergrund — sonst sucht das Auge immer
+   wieder die Karten ab, die längst erledigt sind. Grüner Rahmen dazu, damit
+   „erledigt" nicht allein an der Helligkeit hängt.
+
+   Die Abblendung sitzt an der **Hülle**, nicht am Dreher. `opacity` unter 1
+   zwingt `transform-style` auf `flat` — säße sie am Dreher, verlöre der
+   seine Räumlichkeit, `backface-visibility` griffe nicht mehr, und bei
+   jedem gefundenen Paar schiene die Rückseite seitenverkehrt durch statt
+   des Motivs. Genau das ist beim ersten Versuch passiert. */
+.karte-erledigt {
+  opacity: 0.5;
+}
+
+.karte-erledigt .karte-vorderseite {
+  box-shadow: inset 0 0 0 2px #22c55e;
+}
+
 /* Quiz Time, Word Play und Brain Blitz: Rückmeldung auf eine Antwort.
    Zehn Aufgaben je Runde, und bisher wechselte dabei nur die Farbe von
    Rahmen und Hintergrund — zehnmal passierte optisch also fast nichts.

@@ -10,6 +10,7 @@ import { wortspiel } from '../games/wortspiel';
 import { schlange } from '../games/schlange';
 import { mergeup } from '../games/mergeup';
 import { bubblepop } from '../games/bubblepop';
+import { paare } from '../games/paare';
 
 /**
  * Die einzige Liste aller Spiele. Ein neues Spiel wird hier eingetragen —
@@ -27,6 +28,7 @@ export const spiele: readonly GameApi[] = [
   schlange,
   mergeup,
   bubblepop,
+  paare,
 ];
 
 export function spielFinden(id: string): GameApi | undefined {

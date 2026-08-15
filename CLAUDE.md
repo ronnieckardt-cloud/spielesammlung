@@ -140,6 +140,7 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `schlange` | Snake Rush |
 | `mergeup` | Merge Up |
 | `bubblepop` | Bubble Pop |
+| `paare` | Pair Up |
 
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
@@ -324,12 +325,40 @@ Danach zusätzlich geplant:
    (ß/ss, ie/i, Doppelkonsonanten, Dehnungs-h, Fremdwörter). Level = Runde
    wie beim Quiz, Schwierigkeit steigt mit dem Level (welcher Teil des
    Wortpools erlaubt ist).
-9. Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer ist
-   der/die Beste. Braucht Supabase (bringt fertige Anmeldung mit) — war von
-   Anfang an als "später" vorgesehen, jetzt konkret gewünscht. Das ist ein
-   Eingriff in die Hülle (`shell/`), nicht in ein einzelnes Spiel: erst
-   angehen, wenn die Spiele durch sind, dann mit Ronni gemeinsam planen
-   (welche Daten genau, wie Kinder-tauglich das Passwort sein muss).
+
+Danach außer der Reihe dazugekommen (alle drei auf einmal gewünscht):
+
+9. ✅ Snake Rush
+10. ✅ Merge Up
+11. ✅ Bubble Pop
+
+Dazwischen lag eine lange Runde Feinschliff (App-Symbole, Startseite,
+Handy-Größen, Apple-Anpassung, Animationen, räumlichere Figuren) — siehe
+die Abschnitte oben. Damit sind **alle elf Spiele fertig**.
+
+Als Nächstes die zweite Sechser-Staffel. Ronni hat alle sechs auf einmal
+freigegeben („Die find ich alle perfekt, die fänd ich mega, wenn Du die
+alle machst"), sie dürfen also wie Schritt 9 bis 11 hintereinander gebaut
+werden — trotzdem nach jedem Spiel selbst testen und kurz zusammenfassen.
+Reihenfolge nach Aufwand und Abwechslung:
+
+12. ✅ Pair Up — Kartenpaare aufdecken. **Nicht** „Memory Match": „Memory"
+    ist in Deutschland ein eingetragener Markenname für genau dieses Spiel,
+    und hier gilt die Regel oben (Prinzip frei, Name nicht).
+13. Tower Stack — schwingende Blöcke stapeln, Überstand fällt weg.
+14. Tap Rhythm — im Takt tippen.
+15. Sudoku Junior — 4×4 und 6×6 statt 9×9.
+16. Flow Connect — gleichfarbige Punkte verbinden, ohne sich zu kreuzen.
+17. Mini Golf — Winkel und Stärke, Bande, Loch.
+
+Erst danach:
+
+18. Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer ist
+    der/die Beste. Braucht Supabase (bringt fertige Anmeldung mit) — war von
+    Anfang an als "später" vorgesehen. Das ist ein Eingriff in die Hülle
+    (`shell/`), nicht in ein einzelnes Spiel: erst angehen, wenn die Spiele
+    durch sind, dann mit Ronni gemeinsam planen (welche Daten genau, wie
+    Kinder-tauglich das Passwort sein muss).
 
 ## Farbsortierer — Besonderheiten
 
@@ -775,6 +804,44 @@ Ganzflächige Hell-Dunkel-Wechsel sind grundsätzlich tabu.
 - Neue Kugeln werden nur aus Farben gezogen, die noch im Feld liegen
   (`vorhandeneFarben`) — sonst bekommt man irgendwann eine Farbe ins Rohr,
   die es gar nicht mehr gibt, und der Schuss ist zwangsläufig verschenkt.
+
+## Pair Up — Besonderheiten
+
+- **Der Name ist bewusst nicht „Memory".** Das ist in Deutschland ein
+  eingetragener Markenname für genau dieses Spiel; hier gilt die Regel
+  oben — das Prinzip ist frei, der Name nicht. Interne `id` ist `paare`.
+- Level = Runde wie beim Quiz. Aus der Levelnummer entsteht immer dieselbe
+  Verteilung. Anders als beim Farbsortierer geht „Nochmal" nach einem Sieg
+  ins **nächste** Level: Dasselbe Feld noch einmal zu spielen ist bei einem
+  Merkspiel sinnlos, man weiß ja noch, wo alles liegt.
+- Feldgröße wächst alle zwei Level eine Stufe (`STUFEN` in `logik.ts`) und
+  ist bei 6×5 gedeckelt — darüber passt es auf einem schmalen Handy nicht
+  mehr ohne Scrollen, und fünfzehn Paare sind für ein Kind ohnehin viel.
+  Ein Test prüft für Level 1 bis 40, dass jede Stufe eine **gerade**
+  Kartenzahl hat (sonst bliebe eine Karte übrig) und nie mehr Paare
+  verlangt, als es Motive gibt.
+- **Die Logik kennt keine Uhr.** Ein Fehlgriff setzt nur `fehlgriff: true`;
+  die Anzeige wartet `ZUDECKEN_MS` und ruft dann `schliessen`. Solange
+  zwei Karten offen liegen, sind weitere Tipps wirkungslos — sonst könnte
+  man sich durch schnelles Tippen das ganze Feld ansehen, ohne einen
+  einzigen Zug zu verbrauchen. Dafür gibt es einen eigenen Test.
+- Die fünfzehn Motive (`motive.tsx`) unterscheiden sich in **Form und**
+  Farbe, nicht nur in der Farbe. Bei einem Spiel, das ausschließlich aus
+  „sind diese beiden gleich?" besteht, wäre reine Farbunterscheidung für
+  farbfehlsichtige Spieler unlösbar. Jede aufgedeckte Karte trägt zusätzlich
+  den Motivnamen im `aria-label`. `fillRule="evenodd"` ist bei Kreis,
+  Schlüssel und Würfel nötig — sonst füllt der Browser ihre Löcher mit.
+- Die Karten schlagen um (`.karte-huelle`/`.karte-dreher`/`.karte-seite` in
+  `index.css`): Behälter mit `perspective`, darin ein Dreher mit
+  `transform-style: preserve-3d`, darin zwei Seiten mit
+  `backface-visibility: hidden`. **Die Abblendung gefundener Karten sitzt an
+  der Hülle, nicht am Dreher**: `opacity` unter 1 zwingt `transform-style`
+  auf `flat`. Am Dreher verlor der dadurch seine Räumlichkeit, und bei jedem
+  gefundenen Paar schien die Rückseite seitenverkehrt durch statt des
+  Motivs. Genau so ist es beim ersten Versuch passiert.
+- `--vz` rechnet sich hier aus Spalten mal 3 zu Zeilen mal 4, weil die
+  Karten hochkant sind (Verhältnis 3:4) — sonst quetscht `.spielbrett` sie
+  zu Quadraten.
 
 ## Befehle
 
