@@ -1,8 +1,13 @@
 import { AppSymbol } from '../../core/AppSymbol';
+import { GEIST_FARBEN } from './farben';
 
 /**
  * App-Symbol: ein Ausschnitt des Labyrinths mit Punkten, einem Geist und
  * einer Kraftpille. Aufbau siehe `core/AppSymbol.tsx`.
+ *
+ * Der Geist war hier weiß, im Spiel ist er seit der Farbumstellung rot —
+ * das Symbol zeigt jetzt dieselbe Farbe wie das Spiel. Alles andere ist
+ * unverändert geblieben.
  */
 
 /** Die kleinen Punkte, die man einsammelt. */
@@ -41,14 +46,19 @@ export function GeisterjagdIcon({ className }: { className?: string }) {
         fill="#facc15"
       />
 
-      {/* Der Geist: runder Kopf, gezackter Saum, große Augen. */}
+      {/* Der Geist: runder Kopf, gezackter Saum, große Augen. Rot wie der
+          erste Geist im Spiel (`GEIST_FARBEN[0]`) — so ändert sich das
+          Symbol automatisch mit, falls die Farben im Spiel noch einmal
+          gedreht werden. */}
       <g transform="translate(0,-1)">
         <path
           d="M20 30 a8 8 0 0 1 16 0 v8.5 l-2.7-2.4 -2.6 2.4 -2.7-2.4 -2.7 2.4 -2.6-2.4 -2.7 2.4 Z"
-          fill="#ffffff"
+          fill={GEIST_FARBEN[0]}
         />
-        <circle cx="24.6" cy="28.6" r="2.5" fill="#1e1b4b" />
-        <circle cx="31.4" cy="28.6" r="2.5" fill="#1e1b4b" />
+        <circle cx="24.6" cy="28.6" r="2.5" fill="#ffffff" />
+        <circle cx="31.4" cy="28.6" r="2.5" fill="#ffffff" />
+        <circle cx="25.2" cy="28.8" r="1.2" fill="#1e1b4b" />
+        <circle cx="32" cy="28.8" r="1.2" fill="#1e1b4b" />
       </g>
     </AppSymbol>
   );

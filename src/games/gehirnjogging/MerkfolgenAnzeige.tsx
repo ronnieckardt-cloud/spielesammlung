@@ -96,12 +96,24 @@ export function MerkfolgenAnzeige({
               onClick={() => beiTipp(i)}
               disabled={phase !== 'eingabe'}
               aria-label={k.name}
-              className="h-20 w-20 rounded-xl border-4 transition-all disabled:cursor-default"
+              className="h-20 w-20 rounded-xl border-4 transition-all duration-150 disabled:cursor-default"
               style={{
                 backgroundColor: k.farbe,
                 borderColor: istLetzterTipp ? (letzterTipp?.richtig ? '#22c55e' : '#ef4444') : 'transparent',
                 opacity: phase !== 'zeigen' || leuchtet ? 1 : 0.4,
-                transform: leuchtet ? 'scale(1.08)' : 'scale(1)',
+                transform: leuchtet ? 'scale(1.12)' : 'scale(1)',
+                // Die vorgeführte Kachel wurde bisher nur um 8 % größer und
+                // etwas heller — das ist die Kernmechanik dieses
+                // Aufgabentyps und wirkte dafür viel zu lasch. Jetzt kommt
+                // ein weißer Ring und deutlich mehr Helligkeit dazu.
+                //
+                // Als reiner Übergang, nicht als Keyframe-Animation: Unter
+                // `.ruhig` entfällt dann nur die Überblendung, der Zustand
+                // selbst bleibt richtig. Eine Kachel je 750 ms sind rund
+                // 1,3 Hz und immer nur eine kleine Fläche — deutlich unter
+                // der Grenze, ab der Blinken unangenehm wird.
+                boxShadow: leuchtet ? `0 0 0 6px rgba(255,255,255,0.9), 0 0 18px ${k.farbe}` : undefined,
+                filter: leuchtet ? 'brightness(1.6)' : undefined,
               }}
             />
           );

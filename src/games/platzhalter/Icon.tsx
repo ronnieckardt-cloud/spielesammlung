@@ -38,9 +38,11 @@ export function PlatzhalterIcon({ className }: { className?: string }) {
       />
 
       {/* Der Sternenschlucker, aus dem Spiel übernommen — mittig, damit das
-          Maul unter dem Stern steht. */}
+          Maul unter dem Stern steht. Ohne Bodenschatten: hier schwebt er
+          vor dem Nachthimmel, ein Schatten hätte nichts, worauf er fällt —
+          und er käme dem Schriftband darunter gefährlich nah. */}
       <g transform="translate(15.5,12) scale(0.33)">
-        <SternenschluckerTeile />
+        <SternenschluckerTeile mitBodenschatten={false} />
       </g>
     </AppSymbol>
   );

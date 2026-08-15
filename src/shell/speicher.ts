@@ -58,9 +58,35 @@ export function bestenlisteLoeschen(spielId?: string): void {
     for (const schluessel of Object.keys(localStorage)) {
       if (schluessel.startsWith(`${PRAEFIX}beste:`)) localStorage.removeItem(schluessel);
     }
+    // Beim großen Aufräumen muss auch das Weiterspielen-Angebot weg —
+    // sonst bietet die Startseite nach dem „alles löschen" weiter ein
+    // Spiel an, zu dem es gar keine Daten mehr gibt.
+    localStorage.removeItem(`${PRAEFIX}${ZULETZT}`);
   } catch {
     /* absichtlich still */
   }
+}
+
+const ZULETZT = 'zuletzt';
+
+/**
+ * Welches Spiel zuletzt geöffnet wurde — Grundlage der Weiterspielen-Karte
+ * auf der Startseite.
+ *
+ * Das `datum` in der Bestenliste taugt dafür **nicht**: Dort überleben nur
+ * die fünf besten Ergebnisse, eine schwache Runde von gestern fliegt also
+ * wieder raus. Deshalb ein eigener Schlüssel.
+ */
+export function zuletztGespieltMerken(spielId: string): void {
+  const alle = lesen<Record<string, string>>(ZULETZT, {});
+  schreiben(ZULETZT, { ...alle, [spielId]: new Date().toISOString() });
+}
+
+/** Die id des zuletzt geöffneten Spiels, oder `undefined` beim ersten Start. */
+export function zuletztGespielt(): string | undefined {
+  const alle = lesen<Record<string, string>>(ZULETZT, {});
+  if (typeof alle !== 'object' || alle === null) return undefined;
+  return Object.entries(alle).sort((a, b) => b[1].localeCompare(a[1]))[0]?.[0];
 }
 
 export function einstellungenLesen(): Einstellungen {

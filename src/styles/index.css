@@ -462,6 +462,125 @@
   animation: konfetti-flug 0.8s ease-out forwards;
 }
 
+/* Quiz Time, Word Play und Brain Blitz: Rückmeldung auf eine Antwort.
+   Zehn Aufgaben je Runde, und bisher wechselte dabei nur die Farbe von
+   Rahmen und Hintergrund — zehnmal passierte optisch also fast nichts.
+
+   Die richtige Antwort ploppt kurz auf, die falsche wackelt. Beide enden
+   bei 100 % im Ruhezustand, aus demselben Grund wie überall sonst:
+   `.ruhig` kürzt nur die Dauer, das Element bleibt auf dem Schlussbild
+   stehen — eine dauerhaft verschobene oder vergrößerte Antwort wäre die
+   Folge.
+
+   Die Klasse wird gesetzt, sobald geantwortet wurde, und beim Wechsel zur
+   nächsten Aufgabe wieder entfernt. Genau dieses Setzen startet die
+   Animation, es braucht keinen Schlüsselwechsel wie bei `.punkte-bumsen`. */
+@keyframes antwort-richtig {
+  0% {
+    scale: 1;
+  }
+  35% {
+    scale: 1.07;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+.antwort-richtig {
+  animation: antwort-richtig 0.34s ease-out;
+}
+
+@keyframes antwort-falsch {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20%,
+  60% {
+    translate: -5px 0;
+  }
+  40%,
+  80% {
+    translate: 5px 0;
+  }
+}
+
+.antwort-falsch {
+  animation: antwort-falsch 0.32s ease-in-out;
+}
+
+/* Ghost Chase: Das Männchen läuft. Arme und Beine schwingen gegenläufig,
+   dazu ein winziges Auf und Ab des ganzen Körpers — gerade das verkauft
+   das Laufen bei 17 Pixeln stärker als die Beine selbst.
+
+   Alle drei enden bei 100 % im Stand, aus demselben Grund wie bei Snake
+   Rush: `.ruhig` kürzt nur die Dauer, das Element bleibt auf dem
+   Schlussbild stehen — sonst fröre die Figur bei „weniger Bewegung"
+   mitten im Ausfallschritt ein.
+
+   Ein Umlauf dauert 0,36 s, ein Schritt der Spielfigur 0,11 bis 0,16 s.
+   Die beiden laufen bewusst nicht synchron: Bei einer kachelweisen
+   Bewegung gäbe es dafür nichts zu synchronisieren, und das Auge nimmt
+   bei dieser Größe ohnehin nur „bewegt sich" wahr. */
+@keyframes glied-vor {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  25% {
+    rotate: 20deg;
+  }
+  75% {
+    rotate: -20deg;
+  }
+}
+
+@keyframes glied-zurueck {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  25% {
+    rotate: -20deg;
+  }
+  75% {
+    rotate: 20deg;
+  }
+}
+
+@keyframes laeuft-huepf {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  25%,
+  75% {
+    translate: 0 -1px;
+  }
+}
+
+/* Ursprung oben mittig = die Hüfte beziehungsweise die Schulter. Ohne
+   `fill-box` wäre der Bezug die viewBox, und das Bein schlüge einen
+   Bogen quer über das halbe Labyrinth. */
+.glied-vor,
+.glied-zurueck {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+}
+
+.glied-vor {
+  animation: glied-vor 0.36s linear infinite;
+}
+
+.glied-zurueck {
+  animation: glied-zurueck 0.36s linear infinite;
+}
+
+.laeuft-huepf {
+  animation: laeuft-huepf 0.36s linear infinite;
+}
+
 /* Der React-Wurzelknoten füllt den Rest der Seite. */
 #wurzel {
   display: flex;

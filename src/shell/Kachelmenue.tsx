@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
+import type { GameApi } from '../core/types';
 import { spiele } from '../core/registry';
-import { bestwert } from './speicher';
+import { bestwert, zuletztGespielt } from './speicher';
 
 /**
  * Schwebende Farbflecken im Hintergrund der Startseite — feste Liste, rein
@@ -21,6 +22,51 @@ const DEKO_FLECKEN: readonly {
   { x: 4, y: 70, groesse: 80, farbe: '#2dd4bf', verzoegerung: 0.4 },
 ];
 
+/**
+ * Die große Karte über dem Raster: ein Klick, und man ist wieder da, wo man
+ * aufgehört hat.
+ *
+ * Der Grund, warum das **über** dem Raster steht und nicht das Raster
+ * umsortiert: Ein Kind lernt „Snake Rush ist das grüne unten links" und
+ * tippt es beim zehnten Mal blind. Ein Raster, das sich nach jedem Spielen
+ * neu sortiert, nimmt genau diese Sicherheit weg — und ausgerechnet beim
+ * Lieblingsspiel, das dann ständig woanders läge. Also: Dynamik oben,
+ * feste Ordnung unten.
+ *
+ * Hier darf der Bestwert auch sichtbar stehen. Im Raster bleibt er
+ * weiterhin nur im `aria-label`; das ist eine bewusste Entscheidung für
+ * die Kacheln, keine Regel für die ganze Seite.
+ */
+function Weiterkarte({ spiel, onSpielen }: { spiel: GameApi; onSpielen: (id: string) => void }) {
+  const beste = bestwert(spiel.id);
+  const Icon = spiel.Icon;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSpielen(spiel.id)}
+      className="mb-4 flex w-full items-center gap-4 rounded-3xl border border-white/20 bg-white/15 p-4 text-left shadow-2xl backdrop-blur-sm transition-transform active:scale-[0.98]"
+    >
+      <Icon className="size-16 shrink-0 rounded-2xl shadow-lg" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-semibold tracking-wide text-white/70 uppercase">
+          Weiterspielen
+        </span>
+        <span className="block truncate text-xl font-black text-white">{spiel.title}</span>
+        <span className="block text-xs text-white/75">
+          {beste > 0 ? `Beste Punktzahl: ${beste}` : 'Noch keine Punkte — auf geht’s!'}
+        </span>
+      </span>
+      <span
+        aria-hidden="true"
+        className="grid size-11 shrink-0 place-items-center rounded-full bg-white text-xl text-indigo-700"
+      >
+        ▶
+      </span>
+    </button>
+  );
+}
+
 /** Die Startseite: eine Kachel je Spiel. */
 export function Kachelmenue({
   onSpielen,
@@ -31,6 +77,13 @@ export function Kachelmenue({
   onEinstellungen: () => void;
   onBestenliste: () => void;
 }) {
+  // Frisch bei jedem Rendern gelesen, genau wie `bestwert` unten. Beim
+  // Zurückkommen aus einem Spiel wird das Menü ohnehin neu aufgebaut, es
+  // braucht dafür keinen eigenen Zustand.
+  const zuletzt = zuletztGespielt();
+  const weiter = spiele.find((s) => s.id === zuletzt);
+  const angespielt = spiele.filter((s) => bestwert(s.id) > 0).length;
+
   return (
     <div
       className="relative flex flex-1 flex-col overflow-hidden"
@@ -69,7 +122,11 @@ export function Kachelmenue({
             >
               Spielesammlung
             </h1>
-            <p className="text-sm text-white/75">Läuft auch ohne Internet.</p>
+            <p className="text-sm text-white/75">
+              {angespielt > 0
+                ? `${angespielt} von ${spiele.length} Spielen ausprobiert.`
+                : 'Läuft auch ohne Internet.'}
+            </p>
           </div>
           <nav className="flex flex-wrap gap-2">
             <button
@@ -89,6 +146,8 @@ export function Kachelmenue({
           </nav>
         </header>
 
+        {weiter && <Weiterkarte spiel={weiter} onSpielen={onSpielen} />}
+
         {/* Icon-Kacheln wie kleine App-Symbole vom Handy-Startbildschirm —
             feste, kleinere Größe statt sich über Grid-Spalten an die
             Bildschirmbreite anzupassen (Rückmeldung: wirkten zu groß, sollen
@@ -103,7 +162,23 @@ export function Kachelmenue({
             // von der Hülle kommt dann nur noch der farbige Schatten.
             const vollflaechig = spiel.iconVollflaechig === true;
             return (
-              <li key={spiel.id} className="flex w-20 flex-col items-center gap-1.5">
+              <li key={spiel.id} className="relative flex w-20 flex-col items-center gap-1.5">
+                {/* „Neu" als Wort, nicht nur als farbiger Punkt — Farbe darf
+                    nie das einzige Merkmal sein. Für Screenreader steht
+                    dasselbe schon im aria-label des Knopfes.
+
+                    Nicht am Spiel der Weiterspielen-Karte: „Weiterspielen"
+                    und „Neu" gleichzeitig widerspricht sich. Das passiert
+                    genau dann, wenn eine Runde abgebrochen wurde, bevor es
+                    Punkte gab — also gar nicht so selten. */}
+                {beste === 0 && spiel.id !== weiter?.id && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-1 -right-0.5 z-10 rounded-full bg-amber-400 px-1.5 py-px text-[9px] font-black text-amber-950 shadow"
+                  >
+                    Neu
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => onSpielen(spiel.id)}

@@ -220,6 +220,38 @@ in einer eigenen, etwas breiteren Box (`w-20`) und darf bei Bedarf
 zweizeilig umbrechen (`leading-tight`, kein `truncate`) — sonst wurden
 längere Namen wie „Gehirnjogging" oder „Ghost Chase" abgeschnitten.
 
+**Weiterspielen-Karte und „Neu"-Abzeichen.** Über dem Kachelraster steht
+eine große Karte mit dem zuletzt geöffneten Spiel (`Weiterkarte` in
+`Kachelmenue.tsx`), darunter das Raster in **immer derselben** Reihenfolge.
+Das Raster darf sich ausdrücklich nicht umsortieren: Florian lernt „Snake
+Rush ist das grüne unten links" und tippt es beim zehnten Mal blind — ein
+Raster, das sich nach jedem Spielen neu ordnet, nimmt genau diese
+Sicherheit weg, und das ausgerechnet beim Lieblingsspiel. Also Dynamik
+oben, feste Ordnung unten.
+
+`zuletztGespieltMerken` / `zuletztGespielt` in `speicher.ts` führen dafür
+einen eigenen Schlüssel (`zuletzt`). Das `datum` in der Bestenliste taugt
+**nicht**: Dort überleben nur die fünf besten Ergebnisse, eine schwache
+Runde von gestern fliegt wieder raus. Gesetzt wird der Wert beim
+**Betreten** des Spiels (`Spielrahmen.tsx`), nicht erst am Rundenende —
+eine abgebrochene Runde ist beim Kind der Normalfall, und genau dann will
+man beim nächsten Öffnen dort weitermachen. `bestenlisteLoeschen()` ohne
+Argument räumt den Schlüssel mit weg.
+
+Kacheln ohne Bestenlisten-Eintrag tragen ein „Neu"-Abzeichen — als **Wort**,
+nicht als farbiger Punkt (Farbe nie als einziges Merkmal). Nicht am Spiel
+der Weiterspielen-Karte: „Weiterspielen" und „Neu" gleichzeitig
+widerspricht sich, und genau das passiert bei einer abgebrochenen Runde
+ohne Punkte. In der Kopfzeile steht statt „Läuft auch ohne Internet."
+der Fortschritt („8 von 11 Spielen ausprobiert"), sobald das erste Spiel
+Punkte hat.
+
+Bewusst **nicht** übernommen, obwohl echte Spielesammlungen das haben:
+Reiter zum Umschalten (versteckt bei elf Spielen sieben hinter einem
+Klick — lohnt erst ab etwa 20), Suchleiste, Gesamtpunktzahl (die
+Punkteskalen sind unvergleichbar, Quiz 0–10 gegen Block Burst in den
+Tausenden), Streak-Zähler, Werbung und Bewertungsanzeigen.
+
 Die Startseite selbst (`Kachelmenue.tsx`) liegt auf einem eigenen,
 kräftigen Farbverlauf (Indigo→Violett→Pink) mit vier großen, sehr weichen
 Farbflecken (`DEKO_FLECKEN`, stark `blur`, `opacity-20`) — sie sollen den
@@ -239,6 +271,25 @@ Oberseite ein offenes Maul ist, mit den Augen darunter am Bauch. Wunsch war
 ausdrücklich „nicht irgendwie eine Katze oder 'n Hund, sondern irgendwas
 selber erfunden … was es halt noch nicht gibt" und explizit auch kein
 Emoji-Monster (also kein runder Klecks mit einem Auge und Hörnern).
+
+Die Figur ist inzwischen räumlich gebaut (Rückmeldung: „irgendwie son
+dreidimensionales Ding"). Zwei Griffe, beide wichtig:
+
+1. **Das Maul ist ein Trichter, keine Scheibe.** Vorderer Rand dick und
+   hell, hinterer dünn und dunkel, Schlund nach hinten versetzt. Genau
+   diese Asymmetrie lässt eine Ellipse als Loch lesen — vorher war der Rand
+   rundum gleich dick und das Maul wirkte wie ein Aufkleber.
+2. **Radialverlauf im Körper**, Licht oben links, Tiefe unten rechts, dazu
+   ein einzelner harter Glanzpunkt. Der Verlauf war nötig: Zwei
+   aufeinandergelegte Ellipsen für Licht- und Schattenseite gingen zuerst
+   über den Rand hinaus (Flecken auf dem Hintergrund), und selbst nach dem
+   Beschneiden auf die Körperform sah man ihre Kante quer über den Bauch
+   laufen. Eine sichtbare Kante zerstört die Wölbung sofort wieder.
+
+Lichtquelle ist durchgehend oben links — wer daran dreht, muss Verlauf und
+Glanzpunkt gemeinsam anfassen. Der Bodenschatten lässt sich über
+`mitBodenschatten={false}` abschalten; das App-Symbol tut das, dort schwebt
+die Figur vor dem Nachthimmel.
 
 Die Datei zeichnet die Figur **einmal** als `SternenschluckerTeile`
 (Koordinaten 0…100, ohne eigenes `<svg>`), damit Spiel und App-Symbol
@@ -426,6 +477,22 @@ versucht deshalb genau dasselbe Level erneut.
   Kommentar dort.
 - Farben bewusst anders zugeordnet als beim Original (`farben.ts`) — jedes
   der sieben Teile hat eine andere Farbe als in der klassischen Zuordnung.
+- **Volle Zeilen zerbröseln** (`ZerbroeselndeZeilen` in `Reihenfall.tsx`).
+  Das war die auffälligste Lücke im ganzen Projekt: Der Kern des Spiels
+  passierte optisch überhaupt nicht — `einrasten` rechnete die vollen
+  Zeilen aus und warf sie sofort weg. Jetzt führt der `Zustand` ein Feld
+  `geloescht` mit den betroffenen Zeilen **samt Inhalt vor dem Entfernen**
+  (aus dem Feld ist er ja weg) und einem `tick`, der bei jeder Löschung
+  hochzählt. Ohne den `tick` wäre eine zweite gleiche Löschung von der
+  ersten nicht zu unterscheiden und die Animation liefe kein zweites Mal
+  an; die Anzeige benutzt ihn als `key`.
+  `.aufloesen-blitz` und `.kruemel` aus Block Burst werden unverändert
+  weiterverwendet, gestaffelt von links nach rechts (22 ms je Spalte, bei
+  `reducedMotion` selbst auf 0 gesetzt — `.ruhig` kürzt nur die Dauer,
+  nicht die Verzögerung). Das Feld ist zu dem Zeitpunkt schon
+  zusammengefallen; bei rund 400 ms Gesamtlauf liest sich das als „die
+  Zeile ist zerplatzt", und die nach unten wegfliegenden Krümel
+  unterstützen den Zusammenfall sogar.
 - Eigener Startbildschirm (`Startbildschirm` in `Reihenfall.tsx`, gleiche
   `gestartet`-Vorlage wie Blockblitz): dunkles, aber bewusst nicht
   schwarzes Indigo/Violett mit feinem Neon-Raster
@@ -455,8 +522,38 @@ versucht deshalb genau dasselbe Level erneut.
   Original-Werte. Beim Wechsel kehren nicht-ängstliche, nicht-heimkehrende
   Geister sofort um — klassisches, absichtlich beibehaltenes Verhalten.
 - Auf ausdrücklichen Wunsch trotzdem **keine** Pac-Man-Optik: eigene
-  Spielfigur (Pfeil/Chevron, dreht sich in Laufrichtung, `figuren.tsx`),
-  eigene Geister-Silhouette und -Farben (`farben.ts`).
+  Spielfigur (ein kleines Männchen, `figuren.tsx`), eigene
+  Geister-Silhouette und -Farben (`farben.ts`).
+- **Blau gegen Rot** (`farben.ts`). Der Spieler ist die einzige kalte Farbe
+  im Labyrinth, die vier Geister die einzigen warmen (Rot, Rose, Pink,
+  Fuchsia). Vorher war der Spieler grün und die Geister lila/gelb/türkis/
+  rosa — bunt, aber ohne Aussage, und der grüne Spieler ging unter.
+  Rückmeldung: „mach den Geist irgendwie rot, dann fällt er besser auf.
+  Blau und Rot passt gut." Orange und Gelb bleiben für Punkte und
+  Kraftpillen reserviert. Das App-Symbol zieht die Geisterfarbe direkt aus
+  `GEIST_FARBEN[0]`, ändert sich also von allein mit.
+- **Das Männchen ist nur etwa 17 Pixel groß.** Bei der Größe kommt nur
+  Umriss, Kontrast und Bewegung an — mehr Realismus würde es *schlechter*
+  erkennbar machen. Deshalb: breiter (nutzt die Kachelbreite jetzt aus,
+  vorher 57 %), dunkler Saum um jede Fläche, hellere Hose und Haare (die
+  alten Dunkeltöne waren auf fast schwarzem Grund unsichtbar), ein weicher
+  Lichthof und eine Laufanimation. In der **Höhe** geht bewusst nichts
+  mehr: Die Gänge sind eine Kachel breit, ab etwa 1,25-facher Größe ragt
+  die Figur in die Wand und man sieht an einer Kreuzung nicht mehr, in
+  welchem Gang sie steht.
+- Lichthof und Geister-Wölbung sind **Verläufe**, keine Flächen mit wenig
+  Deckkraft. Beide Male war die erste Fassung schlechter als gar nichts:
+  Der Hof als Kreis mit 13 % Deckkraft wurde auf dem fast schwarzen Grund
+  zu einer dunklen Scheibe mit harter Kante, der Geisterschatten als
+  waagerechter Strich zu einem Gürtel quer über den Geist. Der Verlauf für
+  die Wölbung arbeitet nur mit Weiß und Schwarz und passt dadurch zu allen
+  vier Geisterfarben, ohne dass es vier Verläufe braucht.
+- `useLaeuft` in `Geisterjagd.tsx` meldet, ob die Figur seit kurzem die
+  Kachel gewechselt hat (Nachlauf 280 ms, ein Schritt dauert je nach Level
+  110 bis 160 ms). Steht sie an einer Wand, hört sie nach dem Nachlauf von
+  selbst auf zu strampeln. Die Keyframes (`glied-vor`, `glied-zurueck`,
+  `laeuft-huepf`) enden alle im Stand — sonst fröre die Figur bei „weniger
+  Bewegung" im Ausfallschritt ein.
 - Steuerung über `useInput` (Wischen + Tastatur) **und** den gemeinsamen
   `Steuerkreuz`-Baustein — hier passt er, weil es wirklich nur die vier
   Richtungen braucht.
@@ -475,6 +572,33 @@ versucht deshalb genau dasselbe Level erneut.
   Punkte noch im Labyrinth liegen. Die Hülle zeigt dafür „🎉 Gewonnen!"
   statt „Vorbei" — dafür wurde `GameProps.onGameOver` um ein optionales
   zweites Argument erweitert (siehe „Die Schnittstelle" oben).
+
+## Antwort-Rückmeldung (Quiz Time, Word Play, Brain Blitz)
+
+Alle drei zeigen vier Antworten und hatten dafür nur `transition-colors` —
+zehn Aufgaben je Runde, und zehnmal passierte optisch fast nichts. Zwei
+Klassen in `index.css` beheben das in allen drei Spielen gleichzeitig:
+`.antwort-richtig` (ploppt kurz auf) und `.antwort-falsch` (wackelt).
+
+Die richtige Antwort ploppt **immer** auf, auch wenn danebengetippt
+wurde — sie ist die, die man sich merken soll. Gewackelt wird nur bei der
+tatsächlich angetippten falschen. Beide Keyframes enden im Ruhezustand
+(siehe Snake Rush), und das bloße Setzen der Klasse startet die Animation;
+es braucht keinen Schlüsselwechsel wie bei `.punkte-bumsen`.
+
+Die vorgeführte Kachel bei den Merk-Folgen (`MerkfolgenAnzeige.tsx`)
+bekommt zusätzlich einen weißen Ring und deutlich mehr Helligkeit — das ist
+die Kernmechanik des Aufgabentyps und wirkte mit 8 % Vergrößerung viel zu
+lasch. Bewusst als reiner Übergang, nicht als Keyframe-Animation: Unter
+`.ruhig` entfällt dann nur die Überblendung, der Zustand bleibt richtig.
+
+**Grenze für alle neuen Dauerpulse: höchstens 1,7 Hz, und über Deckkraft
+oder Helligkeit in einem engen Band statt über An/Aus oder Farbwechsel.**
+Der Angst-Blink der Geister in Ghost Chase liegt mit rund 2,5 Hz bei hohem
+Kontrast auf bis zu vier Figuren schon dicht an der Grenze, ab der Blinken
+unangenehm bis gefährlich wird — diese eine Stelle darf weder schneller
+noch flächiger werden, und das Muster gehört nirgendwo sonst hin.
+Ganzflächige Hell-Dunkel-Wechsel sind grundsätzlich tabu.
 
 ## Wissensquiz — Besonderheiten
 

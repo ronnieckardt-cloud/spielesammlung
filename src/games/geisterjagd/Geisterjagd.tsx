@@ -35,6 +35,27 @@ function useSpruenge(figuren: readonly { id: string; x: number; y: number }[]): 
   return spruenge;
 }
 
+/** So lange nach dem letzten Kachelwechsel gilt die Figur noch als laufend. */
+const LAUF_NACHLAUF_MS = 280;
+
+/**
+ * Meldet, ob der Spieler gerade läuft — also ob er seit kurzem die Kachel
+ * gewechselt hat. Ein Schritt dauert je nach Level 110 bis 160 ms, der
+ * Nachlauf ist absichtlich etwas länger: Sonst flackerte die Laufanimation
+ * zwischen zwei Schritten kurz aus.
+ *
+ * Steht die Figur an einer Wand, bleibt die Kachel gleich, und nach dem
+ * Nachlauf hört sie von selbst auf zu strampeln.
+ */
+function useLaeuft(x: number, y: number): boolean {
+  const letzterWechsel = useRef({ x, y, zeit: Number.NEGATIVE_INFINITY });
+  const jetzt = performance.now();
+  if (letzterWechsel.current.x !== x || letzterWechsel.current.y !== y) {
+    letzterWechsel.current = { x, y, zeit: jetzt };
+  }
+  return jetzt - letzterWechsel.current.zeit < LAUF_NACHLAUF_MS;
+}
+
 const istRichtung = (wert: string): wert is Richtung =>
   wert === 'up' || wert === 'down' || wert === 'left' || wert === 'right';
 
@@ -92,6 +113,8 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
     { id: 'spieler', x: z.spieler.position.x, y: z.spieler.position.y },
     ...z.geister.map((g) => ({ id: `g${g.id}`, x: g.position.x, y: g.position.y })),
   ]);
+
+  const laeuft = useLaeuft(z.spieler.position.x, z.spieler.position.y);
 
   // Alles in Prozent statt in Pixeln: Eine Verschiebung um 100 % ist bei
   // einer kachelgroßen Figur genau eine Kachel — dadurch stimmt die
@@ -167,7 +190,10 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
             transition: spruenge.has('spieler') ? 'none' : 'transform 100ms linear',
           }}
         >
-          <Spieler richtung={z.spieler.richtung} />
+          <Spieler
+            richtung={z.spieler.richtung}
+            laeuft={laeuft && !settings.reducedMotion && !z.vorbei}
+          />
         </div>
 
         {z.geister.map((g) => (

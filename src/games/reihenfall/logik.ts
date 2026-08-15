@@ -55,6 +55,22 @@ export type Zustand = {
   saat: number;
   /** Aufeinanderfolgende Vierfach-Löschungen, für den Bonus. */
   vierfachStreak: number;
+  /**
+   * Die zuletzt gelöschten Zeilen — nur zum Anzeigen, die Logik liest das
+   * nie zurück. Der Inhalt wird **vor** dem Entfernen gesichert, sonst
+   * wüsste die Anzeige nicht mehr, welche Farben da eben noch lagen.
+   *
+   * `tick` zählt bei jeder Löschung hoch. Ohne ihn wäre eine zweite
+   * Löschung derselben Zeile mit denselben Farben von der ersten nicht zu
+   * unterscheiden, und die Animation liefe kein zweites Mal an.
+   */
+  geloescht: Geloescht;
+};
+
+/** Siehe `Zustand.geloescht`. */
+export type Geloescht = {
+  tick: number;
+  zeilen: readonly { y: number; farben: readonly Zelle[] }[];
 };
 
 export const FARB_INDEX: Record<TeilTyp, number> = { I: 0, O: 1, T: 2, S: 3, Z: 4, J: 5, L: 6 };
@@ -300,6 +316,7 @@ export function neuesSpiel(saat: number): Zustand {
     fallzeitRest: fallintervallFuerLevel(1),
     vorbei: false,
     vierfachStreak: 0,
+    geloescht: { tick: 0, zeilen: [] },
   };
 }
 
@@ -335,6 +352,17 @@ function einrasten(z: Zustand): Zustand {
     fallzeitRest: fallintervallFuerLevel(level),
     vorbei,
     vierfachStreak,
+    // Nur bei einer echten Löschung neu setzen. Bei einem Zug ohne volle
+    // Zeile bleibt der alte Eintrag stehen, sein `tick` ändert sich nicht —
+    // die Anzeige lässt die Animation dann einfach auslaufen, statt sie bei
+    // jedem einzelnen abgelegten Stein neu zu starten.
+    geloescht:
+      zeilen.length > 0
+        ? {
+            tick: z.geloescht.tick + 1,
+            zeilen: zeilen.map((y) => ({ y, farben: eingebettet[y]! })),
+          }
+        : z.geloescht,
   };
 }
 

@@ -22,6 +22,92 @@ import { ReihenfallIcon } from './Icon';
 
 const ZELLE_PX = 22;
 
+/** Zeitversatz je Spalte beim Zerbröseln — die Zeile löst sich von links
+ *  nach rechts auf statt schlagartig. Bei zehn Spalten macht das rund
+ *  200 ms Gesamtlauf, kurz genug, um nicht im Weg zu sein. */
+const ZERBROESELN_VERSATZ_MS = 22;
+
+/** Flugrichtung der beiden Krümel je Zelle — fest, kein Zufall. */
+const KRUEMEL: readonly { kx: string; ky: string }[] = [
+  { kx: '-9px', ky: '11px' },
+  { kx: '8px', ky: '13px' },
+];
+
+/**
+ * Die eben gelöschten Zeilen zerbröseln über dem Feld.
+ *
+ * Das war die auffälligste Lücke im ganzen Spiel: Volle Zeilen
+ * verschwanden bisher völlig lautlos — der Kern des Spiels, und optisch
+ * passierte dabei nichts. Block Burst hatte dafür längst `.aufloesen-blitz`
+ * und `.kruemel`; beide werden hier unverändert weiterverwendet.
+ *
+ * Die Zellen liegen als eigenes Raster **über** dem Feld, in derselben
+ * Aufteilung. Das Feld selbst ist zu diesem Zeitpunkt bereits
+ * zusammengefallen — die Blöcke hier sind also eine Erinnerung an das,
+ * was da eben noch lag. Bei gut 200 ms Laufzeit liest sich das als
+ * „die Zeile ist zerplatzt", nicht als Widerspruch, und die nach unten
+ * wegfliegenden Krümel unterstützen den Zusammenfall sogar.
+ */
+function ZerbroeselndeZeilen({
+  geloescht,
+  ruhig,
+}: {
+  geloescht: Zustand['geloescht'];
+  ruhig: boolean;
+}) {
+  if (geloescht.zeilen.length === 0) return null;
+
+  return (
+    <div
+      // Der Schlüssel ist der Auslöser: Bei jeder neuen Löschung wird das
+      // Raster neu eingehängt, und die CSS-Animationen laufen von vorn.
+      key={geloescht.tick}
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 grid"
+      style={{
+        gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${HOEHE}, minmax(0, 1fr))`,
+        gap: 1,
+      }}
+    >
+      {geloescht.zeilen.flatMap(({ y, farben }) =>
+        farben.map((farbe, x) => {
+          if (farbe === null) return null;
+          // Bei „weniger Bewegung" selbst auf 0 setzen: `.ruhig` kürzt nur
+          // die Dauer, nicht die Verzögerung.
+          const versatz = ruhig ? 0 : x * ZERBROESELN_VERSATZ_MS;
+          const zeit = { '--verzoegerung': `${versatz}ms` } as CSSProperties;
+          return (
+            <div
+              key={`${y},${x}`}
+              className="relative"
+              style={{ gridColumn: x + 1, gridRow: y + 1 }}
+            >
+              <div
+                className="aufloesen-blitz glanzstein absolute inset-0 rounded-[3px]"
+                style={{ ...zeit, backgroundColor: reihenfallFarbe(farbe) }}
+              />
+              {/* Der weiße Blitz darüber — er macht aus dem Schrumpfen ein
+                  Aufleuchten. */}
+              <div
+                className="aufloesen-blitz absolute inset-0 rounded-[3px] bg-white"
+                style={zeit}
+              />
+              {KRUEMEL.map((k) => (
+                <span
+                  key={k.kx}
+                  className="kruemel absolute top-1/2 left-1/2 size-1 rounded-full bg-white"
+                  style={{ ...zeit, '--kx': k.kx, '--ky': k.ky } as CSSProperties}
+                />
+              ))}
+            </div>
+          );
+        }),
+      )}
+    </div>
+  );
+}
+
 /** Zeigt ein Teil in seiner Start-Lage als kleines Raster — für Halten und Vorschau. */
 function MiniTeil({ typ, abgedunkelt = false }: { typ: TeilTyp; abgedunkelt?: boolean }) {
   const form = FORMEN[typ][0];
@@ -300,6 +386,8 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
               />
             );
           })}
+
+          <ZerbroeselndeZeilen geloescht={z.geloescht} ruhig={settings.reducedMotion} />
 
           {/* Kein eigenes „Vorbei" mehr im Feld — die Hülle legt direkt
               darüber ihr Rundenende-Fenster, das stand doppelt. */}

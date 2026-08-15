@@ -110,12 +110,17 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
           let rahmenfarbe: string | undefined;
           let hintergrund: string | undefined;
           let deckkraft: number | undefined;
+          // Siehe Quiz Time: Die richtige Schreibweise ploppt immer auf,
+          // gewackelt wird nur bei der angetippten falschen.
+          let bewegung = '';
           if (beantwortet && istRichtigeAntwort) {
             rahmenfarbe = RICHTIG_FARBE;
             hintergrund = `${RICHTIG_FARBE}26`;
+            bewegung = 'antwort-richtig';
           } else if (beantwortet && istAusgewaehlt) {
             rahmenfarbe = FALSCH_FARBE;
             hintergrund = `${FALSCH_FARBE}26`;
+            bewegung = 'antwort-falsch';
           } else if (beantwortet) {
             deckkraft = 0.5;
           }
@@ -126,7 +131,7 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
               type="button"
               onClick={() => beiAntwort(i as 0 | 1 | 2 | 3)}
               disabled={beantwortet}
-              className="rounded-xl border border-rand bg-flaeche p-4 text-center text-lg font-semibold transition-colors disabled:cursor-default"
+              className={`rounded-xl border border-rand bg-flaeche p-4 text-center text-lg font-semibold transition-colors disabled:cursor-default ${bewegung}`}
               style={{ borderColor: rahmenfarbe, backgroundColor: hintergrund, opacity: deckkraft }}
             >
               {antwort}

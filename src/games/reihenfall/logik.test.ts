@@ -430,3 +430,52 @@ describe('Spielende', () => {
     expect(nach.vorbei).toBe(true);
   });
 });
+
+describe('geloescht — Daten für die Auflös-Animation', () => {
+  /** Feld, bei dem Zeile 19 bis auf die letzte Spalte voll ist. */
+  const fastVolleUnterzeile = (): Feld => [
+    ...Array.from({ length: HOEHE - 1 }, () => Array<Zelle>(BREITE).fill(null)),
+    Array.from({ length: BREITE }, (_, x) => (x === BREITE - 1 ? null : 3)),
+  ];
+
+  /** Ein senkrechtes I-Teil ganz rechts füllt die Lücke — genau eine Zeile. */
+  const zeileSchliessen = (z: Zustand): Zustand =>
+    aktionAnwenden({ ...z, aktuell: { typ: 'I', lage: 1, x: BREITE - 3, y: 0 } }, 'hartFallen');
+
+  it('ist am Rundenanfang leer', () => {
+    const z = neuesSpiel(7);
+    expect(z.geloescht).toEqual({ tick: 0, zeilen: [] });
+  });
+
+  it('merkt sich die gelöschte Zeile samt Farben vor dem Entfernen', () => {
+    const nach = zeileSchliessen({ ...neuesSpiel(7), feld: fastVolleUnterzeile() });
+
+    expect(nach.geloescht.tick).toBe(1);
+    expect(nach.geloescht.zeilen).toHaveLength(1);
+    const [zeile] = nach.geloescht.zeilen;
+    expect(zeile!.y).toBe(HOEHE - 1);
+    // Vollständig belegt — das ist der Zustand *vor* dem Entfernen, sonst
+    // wüsste die Anzeige nicht mehr, welche Blöcke zerbröseln sollen.
+    expect(zeile!.farben).toHaveLength(BREITE);
+    expect(zeile!.farben.every((f) => f !== null)).toBe(true);
+    // Im Feld selbst ist die Zeile weg. Ganz leer ist sie danach trotzdem
+    // nicht: Vom senkrechten I-Teil bleiben drei Zellen übrig, und die
+    // rutschen nach unten nach. Genau deshalb muss die Anzeige den Inhalt
+    // aus `geloescht` nehmen und nicht aus dem Feld.
+    expect(nach.feld[HOEHE - 1]!.filter((f) => f !== null)).toHaveLength(1);
+  });
+
+  it('zählt den Tick bei jeder weiteren Löschung hoch', () => {
+    const erste = zeileSchliessen({ ...neuesSpiel(7), feld: fastVolleUnterzeile() });
+    const zweite = zeileSchliessen({ ...erste, feld: fastVolleUnterzeile() });
+    expect(zweite.geloescht.tick).toBe(2);
+  });
+
+  it('bleibt unverändert, wenn ein Zug keine Zeile schließt', () => {
+    const mitLoeschung = zeileSchliessen({ ...neuesSpiel(7), feld: fastVolleUnterzeile() });
+    // Derselbe Zug auf leerem Feld schließt nichts.
+    const ohneLoeschung = zeileSchliessen({ ...mitLoeschung, feld: leeresFeld() });
+    // Gleiche Referenz: Die Anzeige startet die Animation dadurch nicht neu.
+    expect(ohneLoeschung.geloescht).toBe(mitLoeschung.geloescht);
+  });
+});

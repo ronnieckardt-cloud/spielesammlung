@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Einstellungen, GameApi } from '../core/types';
-import { bestwert, ergebnisEintragen } from './speicher';
+import { bestwert, ergebnisEintragen, zuletztGespieltMerken } from './speicher';
 
 type Ende = { punkte: number; beste: number; rekord: boolean; gewonnen: boolean };
 
@@ -48,6 +48,13 @@ export function Spielrahmen({
     setPunkte(0);
     setRunde((r) => r + 1);
   }, []);
+
+  // Fürs Weiterspielen-Angebot auf der Startseite. Bewusst beim **Betreten**
+  // und nicht erst am Rundenende: Eine abgebrochene Runde ist beim Kind der
+  // Normalfall, und genau dann will man beim nächsten Öffnen dort weitermachen.
+  useEffect(() => {
+    zuletztGespieltMerken(spiel.id);
+  }, [spiel.id]);
 
   // Escape führt immer zurück ins Menü.
   useEffect(() => {

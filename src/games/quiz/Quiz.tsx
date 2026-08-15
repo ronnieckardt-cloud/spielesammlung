@@ -204,12 +204,18 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
           let rahmenfarbe: string | undefined;
           let hintergrund: string | undefined;
           let deckkraft: number | undefined;
+          // Die richtige Antwort ploppt immer auf, auch wenn danebengetippt
+          // wurde — sie ist die Antwort, die man sich merken soll. Gewackelt
+          // wird nur bei der tatsächlich angetippten falschen.
+          let bewegung = '';
           if (beantwortet && istRichtigeAntwort) {
             rahmenfarbe = RICHTIG_FARBE;
             hintergrund = `${RICHTIG_FARBE}26`;
+            bewegung = 'antwort-richtig';
           } else if (beantwortet && istAusgewaehlt) {
             rahmenfarbe = FALSCH_FARBE;
             hintergrund = `${FALSCH_FARBE}26`;
+            bewegung = 'antwort-falsch';
           } else if (beantwortet) {
             deckkraft = 0.5;
           }
@@ -220,7 +226,7 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
               type="button"
               onClick={() => beiAntwort(i as 0 | 1 | 2 | 3)}
               disabled={beantwortet}
-              className="rounded-xl border border-rand bg-flaeche p-4 text-left transition-colors disabled:cursor-default"
+              className={`rounded-xl border border-rand bg-flaeche p-4 text-left transition-colors disabled:cursor-default ${bewegung}`}
               style={{ borderColor: rahmenfarbe, backgroundColor: hintergrund, opacity: deckkraft }}
             >
               {antwort}

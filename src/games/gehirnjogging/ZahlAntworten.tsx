@@ -28,12 +28,18 @@ export function ZahlAntworten({
         let rahmenfarbe: string | undefined;
         let hintergrund: string | undefined;
         let deckkraft: number | undefined;
+        // Siehe Quiz Time: Die richtige Zahl ploppt immer auf, gewackelt
+        // wird nur bei der angetippten falschen. Weil Kopfrechnen und
+        // Muster erkennen sich diese Anzeige teilen, gilt das für beide.
+        let bewegung = '';
         if (beantwortet && istRichtig) {
           rahmenfarbe = RICHTIG_FARBE;
           hintergrund = `${RICHTIG_FARBE}26`;
+          bewegung = 'antwort-richtig';
         } else if (beantwortet && istAusgewaehlt) {
           rahmenfarbe = FALSCH_FARBE;
           hintergrund = `${FALSCH_FARBE}26`;
+          bewegung = 'antwort-falsch';
         } else if (beantwortet) {
           deckkraft = 0.5;
         }
@@ -44,7 +50,7 @@ export function ZahlAntworten({
             type="button"
             onClick={() => onWaehlen(i as 0 | 1 | 2 | 3)}
             disabled={beantwortet}
-            className="rounded-xl border border-rand bg-flaeche p-4 text-center text-xl font-bold tabular-nums transition-colors disabled:cursor-default"
+            className={`rounded-xl border border-rand bg-flaeche p-4 text-center text-xl font-bold tabular-nums transition-colors disabled:cursor-default ${bewegung}`}
             style={{ borderColor: rahmenfarbe, backgroundColor: hintergrund, opacity: deckkraft }}
           >
             {wert}
