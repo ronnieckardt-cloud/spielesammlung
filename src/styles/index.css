@@ -462,6 +462,50 @@
   animation: konfetti-flug 0.8s ease-out forwards;
 }
 
+/* Drop Four: Der eben eingeworfene Stein fällt in seine Zelle.
+
+   Die Fallhöhe steckt in `--fallhoehe` und richtet sich danach, wie tief
+   der Stein landet — ein Stein in der untersten Zeile fällt weiter als
+   einer, der oben auf dem Stapel liegen bleibt. Ohne das sähe jeder Wurf
+   gleich aus, egal wie voll die Spalte schon ist.
+
+   Endet bei 100 % in Ruhelage; das kurze Überschwingen davor ist das
+   Aufsetzen. */
+@keyframes stein-faellt {
+  0% {
+    translate: 0 var(--fallhoehe, -300%);
+  }
+  70% {
+    translate: 0 0;
+  }
+  82% {
+    translate: 0 -9%;
+  }
+  100% {
+    translate: 0 0;
+  }
+}
+
+.stein-faellt {
+  animation: stein-faellt 0.34s cubic-bezier(0.45, 0, 0.7, 1);
+}
+
+/* Die vier Steine, die die Partie entscheiden, blinken ruhig weiter.
+   0,8 Hz und nur über die Helligkeit — deutlich unter der Grenze. */
+@keyframes siegerstein {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.55);
+  }
+}
+
+.siegerstein {
+  animation: siegerstein 1.25s ease-in-out infinite;
+}
+
 /* Das Kombo-Herz (Block Burst, Line Fall — siehe core/Komboherz.tsx).
 
    Ein echter Doppelschlag: laut, leise, dann eine lange Pause. Ein

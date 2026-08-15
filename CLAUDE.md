@@ -151,6 +151,7 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `bubblepop` | Bubble Pop |
 | `paare` | Pair Up |
 | `messerwurf` | Blade Toss |
+| `viererreihe` | Drop Four |
 
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
@@ -369,7 +370,7 @@ Dazu ausgewählt aus einer zweiten Ideenliste — nach der Frage „was brauchen
 wir am meisten und kostet nicht zu viel Aufwand". Die vier schließen je eine
 Lücke, die keines der bisherigen Spiele abdeckt:
 
-18. Drop Four — vier in einer Reihe **gegen den Computer**. Bis hierher
+18. ✅ Drop Four — vier in einer Reihe **gegen den Computer**. Bis hierher
     spielt man in allen Spielen allein gegen sich selbst; das ist die
     größte Lücke in der Sammlung. Nicht „Vier gewinnt": Das ist in
     Deutschland ein geschützter Handelsname, dieselbe Überlegung wie bei
@@ -935,6 +936,54 @@ bekannten Vorbilds — dieselbe Regel wie bei Pair Up.
   einen `pauseRest`: Nach dem letzten Messer vergeht eine kurze Pause, bevor
   der neue Stamm kommt. Ohne sie wirft ein noch tippender Finger sofort ins
   frische Level.
+
+## Drop Four — Besonderheiten
+
+Das erste Spiel der Sammlung, bei dem ein Gegner zurückspielt. Bis dahin
+spielte man überall allein gegen sich selbst — das war die größte Lücke.
+Der Name ist bewusst nicht „Vier gewinnt": ein geschützter Handelsname,
+dieselbe Überlegung wie bei Pair Up.
+
+- **Die Rechenkunst steht getrennt** in `gegner.ts`, die Spielregeln in
+  `logik.ts`. Beide rein und ohne React, beide getestet.
+- Verfahren: **Minimax mit Alpha-Beta-Beschneidung**. Suchtiefe 2 / 4 / 6 je
+  Stufe. Sieben Spalten hoch sechs wären ohne Beschneidung 117 649
+  Stellungen; mit Alpha-Beta und Zugsortierung von der Mitte nach außen ist
+  es ein Bruchteil davon und läuft auch auf einem alten iPad in
+  Millisekunden. **Die Sortierung ist keine Kosmetik** — Alpha-Beta
+  beschneidet umso mehr, je früher der beste Zug geprüft wird, und das ist
+  hier fast immer ein mittlerer.
+- Die Stellungsbewertung zählt über 69 vorab berechnete Vierer-Fenster. Die
+  Liste wird **einmal** aufgebaut, nicht bei jedem Aufruf — sie läuft im
+  innersten Teil der Suche und wird zehntausendfach gebraucht.
+- **Die Drohungen des Gegners wiegen schwerer als die eigenen Chancen**
+  (80 gegen 50, 12 gegen 10). Ohne dieses Übergewicht baut der Computer
+  lieber die eigene Reihe weiter, statt zu blocken, und verliert gegen
+  jeden, der stur drei nebeneinander legt. Dafür gibt es einen eigenen Test.
+- Ein Sieg wird um die Resttiefe verringert: Ein Sieg in zwei Zügen ist mehr
+  wert als derselbe Sieg in vier — sonst schiebt der Computer einen sicheren
+  Gewinn beliebig vor sich her.
+- **Streuung nur auf der leichten Stufe** (`NACHSICHT`): Ohne sie spielt der
+  Computer bei gleicher Lage immer exakt dieselbe Partie. Einen sicheren
+  Sieg oder eine nötige Abwehr streut sie aber nie — sonst übersähe die
+  leichte Stufe einen Vierer, der direkt vor ihr liegt, und das wirkt kaputt
+  statt leicht.
+- Der aussagekräftigste Test lässt **die schwere Stufe gegen die leichte**
+  eine ganze Partie spielen; die schwere muss gewinnen. Das ist der einzige
+  Beleg dafür, dass die Suchtiefe wirklich etwas bringt.
+- **Punkte nach Stufe gestaffelt** (150 / 400 / 900 plus Bonus für einen
+  schnellen Sieg), sonst lohnt es sich, immer auf „leicht" zu spielen, und
+  die Bestenliste sagt nichts mehr aus. Niederlage null, Remis ein Drittel.
+- Die Stufe wird auf dem Startbildschirm gewählt und ist danach fest —
+  mitten in der Partie umzuschalten würde die Wertung sinnlos machen.
+- Der Computer hat eine **Bedenkzeit** von einer halben Sekunde. Ohne sie
+  käme sein Stein im selben Augenblick wie der eigene an, und man sähe gar
+  nicht, dass jemand geantwortet hat.
+- Mensch und Computer unterscheiden sich in **Farbe und Form** (blauer
+  Kreis gegen orange Raute). Bei einem Spiel, in dem man ständig „wem gehört
+  dieser Stein?" beantwortet, reicht Farbe allein nicht.
+- Die ganze **Spalte** ist anklickbar, nicht nur die freie Zelle — ein Kind
+  tippt irgendwo in die Spalte, nicht auf ein bestimmtes Loch.
 
 ## Befehle
 

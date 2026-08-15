@@ -12,6 +12,7 @@ import { mergeup } from '../games/mergeup';
 import { bubblepop } from '../games/bubblepop';
 import { paare } from '../games/paare';
 import { messerwurf } from '../games/messerwurf';
+import { viererreihe } from '../games/viererreihe';
 
 /**
  * Die einzige Liste aller Spiele. Ein neues Spiel wird hier eingetragen —
@@ -31,6 +32,7 @@ export const spiele: readonly GameApi[] = [
   bubblepop,
   paare,
   messerwurf,
+  viererreihe,
 ];
 
 export function spielFinden(id: string): GameApi | undefined {
