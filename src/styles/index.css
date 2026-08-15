@@ -11,7 +11,26 @@
   --color-gedaempft: #97a3b8;
   --color-fokus: #7dd3fc;
 
+  /* Zustandsfarben. Sie bedeuten etwas und sind deshalb von den
+     Akzentfarben der Spiele getrennt — ein grüner Haken darf nicht
+     zufällig die Spielfarbe von Snake Rush sein. */
+  --color-erfolg: #34d399;
+  --color-warnung: #fbbf24;
+  --color-fehler: #fb7185;
+
+  /* Auszeichnung: Podest und Bestleistung. */
+  --color-gold: #fbbf24;
+  --color-silber: #cbd5e1;
+  --color-bronze: #d18a55;
+
+  /* Fortschritt. Violett, weil es im ganzen Bild sonst nirgends vorkommt —
+     Erfahrung soll man auf einen Blick von Punkten unterscheiden. */
+  --color-xp: #a78bfa;
+
+  --radius-klein: 0.625rem;
   --radius-karte: 1rem;
+  --radius-gross: 1.5rem;
+  --radius-riesig: 2rem;
 }
 
 /* Die vier Grundtöne noch einmal unter eigenem Namen.
@@ -25,6 +44,116 @@
   --basis-flaeche: #151c26;
   --basis-flaeche-hoch: #1d2634;
   --basis-rand: #2a3546;
+
+  /* ------------------------------------------------------------------
+     Schatten, Zeiten, Kurven — die Maßeinheiten des Designsystems.
+     ------------------------------------------------------------------
+     Vorher standen Schattenwerte und Übergangszeiten überall einzeln im
+     Code, jede Stelle ein bisschen anders. Genau daran erkennt man eine
+     zusammengestückelte Oberfläche: Zwei Karten nebeneinander werfen
+     unterschiedlich weiche Schatten, zwei Knöpfe reagieren
+     unterschiedlich schnell. Ab hier gibt es dafür eine Leiter.
+
+     Die Schattenstufen sind **Ebenen**, keine Geschmacksfrage: 1 liegt
+     flach auf, 2 ist angehoben, 3 schwebt, 4 ist ein Dialog über allem.
+     Wer eine neue Fläche baut, wählt die Ebene — nicht die Pixel. */
+  --schatten-1: 0 1px 2px rgb(0 0 0 / 0.32);
+  --schatten-2: 0 4px 12px -2px rgb(0 0 0 / 0.42);
+  --schatten-3: 0 12px 28px -6px rgb(0 0 0 / 0.52);
+  --schatten-4: 0 24px 48px -12px rgb(0 0 0 / 0.62);
+
+  /* Zeiten. Kurz fürs Antippen (muss sofort wirken), mittel für Karten
+     und Zustände, lang für einen Seitenwechsel. Alles über 450 ms fühlt
+     sich auf einem Handy nach Warten an. */
+  --zeit-kurz: 120ms;
+  --zeit-mittel: 240ms;
+  --zeit-lang: 400ms;
+
+  /* Beschleunigung. `--kurve-raus` federt am Ende leicht über — das ist
+     der ganze Unterschied zwischen „erscheint" und „ploppt auf". */
+  --kurve: cubic-bezier(0.2, 0, 0, 1);
+  --kurve-raus: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* --------------------------------------------------------------------
+   Räumliche Antipp-Rückmeldung
+   --------------------------------------------------------------------
+   **Bewusst kein Hover.** Florian spielt auf iPad und iPhone; dort gibt
+   es keinen Zeiger, der über etwas schwebt. Ein Entwurf, der seine
+   Räumlichkeit aus Hover-Effekten bezieht, ist auf dem Zielgerät
+   unsichtbar. Die Tiefe steckt deshalb im **Drücken**: Die Fläche sinkt
+   ein, ihr Schatten wird flacher, und beim Loslassen federt sie zurück.
+
+   `translateZ` in der Ruhelage ist kein Zierrat — es schiebt das Element
+   auf eine eigene Ebene der Grafikkarte, dadurch läuft das Einsinken
+   ohne Neuberechnung des Layouts. */
+.druckbar {
+  transform: translateZ(0);
+  box-shadow: var(--schatten-2);
+  transition:
+    transform var(--zeit-kurz) var(--kurve),
+    box-shadow var(--zeit-kurz) var(--kurve),
+    filter var(--zeit-kurz) var(--kurve);
+}
+
+.druckbar:active {
+  transform: translateY(2px) scale(0.975);
+  box-shadow: var(--schatten-1);
+  filter: brightness(1.08);
+}
+
+/* Für Karten, die kippen sollen statt nur einzusinken — Spielkacheln,
+   Podestplätze. Die Perspektive muss am **Elternelement** hängen, sonst
+   bekommt jede Karte ihren eigenen Fluchtpunkt und die Reihe wirkt
+   auseinandergerissen. */
+.buehne-3d {
+  perspective: 800px;
+}
+
+.kippbar {
+  transform: translateZ(0);
+  transform-style: preserve-3d;
+  transition:
+    transform var(--zeit-mittel) var(--kurve-raus),
+    box-shadow var(--zeit-mittel) var(--kurve);
+}
+
+.kippbar:active {
+  transform: rotateX(9deg) scale(0.96);
+  box-shadow: var(--schatten-1);
+}
+
+/* --------------------------------------------------------------------
+   Ladezustand
+   --------------------------------------------------------------------
+   Eine weiße oder leere Fläche liest sich als Fehler. Ein Platzhalter in
+   der Form dessen, was gleich kommt, liest sich als „gleich da". Der
+   Schimmer läuft in 1,4 s einmal durch — 0,7 Hz, weit unter der
+   1,7-Hz-Grenze für Dauerbewegung im Projekt. */
+.schimmer {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-flaeche-hoch);
+}
+
+.schimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.07),
+    transparent
+  );
+  animation: schimmer-lauf 1.4s ease-in-out infinite;
+}
+
+@keyframes schimmer-lauf {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 @layer base {

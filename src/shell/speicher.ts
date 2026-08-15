@@ -1,4 +1,5 @@
 import type { Einstellungen } from '../core/types';
+import { fortschrittBereinigen, type Fortschritt } from './fortschritt';
 
 /**
  * Der einzige Ort im Projekt, der localStorage anfassen darf.
@@ -207,11 +208,38 @@ export function bestenlisteLoeschen(spielId?: string): void {
     localStorage.removeItem(`${PRAEFIX}${AUSGANG}`);
     localStorage.removeItem(`${PRAEFIX}${EIGENE_SERVERWERTE}`);
     localStorage.removeItem(`${PRAEFIX}${SERVERLISTE}`);
+    // Und der Fortschritt. Stufe 12 zu behalten, während alle Punkte weg
+    // sind, wäre ein Widerspruch — die Stufe ist ja aus genau diesen Runden
+    // entstanden.
+    localStorage.removeItem(`${PRAEFIX}${FORTSCHRITT}`);
     // Die Sitzung bleibt ausdrücklich stehen: „Bestenliste löschen" darf
     // nicht heimlich abmelden. Abmelden ist eine eigene Handlung.
   } catch {
     /* absichtlich still */
   }
+}
+
+// ---------------------------------------------------------------------
+// Fortschritt
+// ---------------------------------------------------------------------
+
+const FORTSCHRITT = 'fortschritt';
+
+/**
+ * Der gespeicherte Fortschritt — Erfahrung, Stufe, Statistik, Erfolge.
+ *
+ * Geht **immer** durch `fortschrittBereinigen`. Der Speicher kann aus einer
+ * älteren Fassung stammen, von Hand verändert oder halb geschrieben worden
+ * sein; ein fehlendes Feld darf nicht die halbe Startseite weiß werden
+ * lassen. Das ist derselbe Grund, aus dem `bestenlisteLesen` auf `Array`
+ * prüft, nur konsequenter.
+ */
+export function fortschrittLesen(): Fortschritt {
+  return fortschrittBereinigen(lesen<unknown>(FORTSCHRITT, null));
+}
+
+export function fortschrittSchreiben(stand: Fortschritt): void {
+  schreiben(FORTSCHRITT, stand);
 }
 
 const ZULETZT = 'zuletzt';

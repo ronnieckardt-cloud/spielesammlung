@@ -2,7 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Einstellungen, GameApi } from '../core/types';
 import { sfx } from '../core/sfx';
-import { bestwert, ergebnisEintragen, zuletztGespieltMerken } from './speicher';
+import {
+  bestwert,
+  ergebnisEintragen,
+  fortschrittLesen,
+  fortschrittSchreiben,
+  zuletztGespieltMerken,
+} from './speicher';
+import { spiele } from '../core/registry';
+import {
+  heute,
+  rundeVerbuchen,
+  stufeAus,
+  type Erfolg,
+  type Stufenstand,
+} from './fortschritt';
 import { duellMelden, ergebnisMelden } from './konto';
 import type { Duell } from './konto';
 import { fremdePunkte, standFuer, standText } from './duell';
@@ -25,6 +39,13 @@ type Ende = {
   platz?: { platz: number; teilnehmer: number };
   /** Stand des Duells, wenn die Runde eines war. Kommt ebenfalls nach. */
   duell?: Duell;
+  /** Was die Runde an Erfahrung gebracht hat, und der Stand danach. */
+  xpGewinn: number;
+  stand: Stufenstand;
+  /** Gesetzt, wenn diese Runde eine Stufe gehoben hat. */
+  neueStufe?: number;
+  /** Erfolge, die **durch diese Runde** dazugekommen sind. */
+  neueErfolge: Erfolg[];
 };
 
 /**
@@ -77,6 +98,72 @@ function useHochzaehlen(ziel: number, ruhig: boolean): number {
   }, [ziel, ruhig]);
 
   return gezeigt;
+}
+
+/**
+ * Der Erfahrungsbalken im Rundenende.
+ *
+ * **Der Balken füllt sich, er steht nicht da.** Das ist der ganze Punkt: Ein
+ * fertig gefüllter Balken ist eine Zahl, ein laufender Balken ist eine
+ * Belohnung. Er startet dort, wo er vor der Runde stand, und wächst auf den
+ * neuen Stand — deshalb bekommt er den Zuwachs gereicht und nicht nur das
+ * Ergebnis.
+ *
+ * Bei „weniger Bewegung" steht er sofort auf dem Endwert. Die Zahl daneben
+ * stimmt in beiden Fällen; niemand verliert Information.
+ */
+function Erfahrungsbalken({
+  stand,
+  gewinn,
+  ruhig,
+  verzoegerung,
+}: {
+  stand: Stufenstand;
+  gewinn: number;
+  ruhig: boolean;
+  verzoegerung: number;
+}) {
+  // Wo der Balken vor der Runde stand. Ein Stufenaufstieg lässt den Wert
+  // negativ werden — dann fing die Stufe bei null an, und genau das ist
+  // richtig: Der Balken läuft von links los statt rückwärts zu springen.
+  const vorher = Math.max(0, stand.imLevel - gewinn);
+  const [breite, setBreite] = useState(ruhig ? stand.anteil : vorher / stand.fuerLevel);
+
+  useEffect(() => {
+    if (ruhig) return;
+    const uhr = window.setTimeout(() => setBreite(stand.anteil), verzoegerung);
+    return () => window.clearTimeout(uhr);
+  }, [stand.anteil, ruhig, verzoegerung]);
+
+  return (
+    <div
+      className="ende-zeile mt-4"
+      style={{ '--verzoegerung': `${verzoegerung}ms` } as CSSProperties}
+    >
+      <div className="mb-1.5 flex items-baseline justify-between text-xs font-bold">
+        <span style={{ color: 'var(--color-xp)' }}>Stufe {stand.stufe}</span>
+        <span className="text-gedaempft">
+          {stand.imLevel} / {stand.fuerLevel} XP
+        </span>
+      </div>
+      <div
+        className="h-2.5 overflow-hidden rounded-full bg-white/12"
+        role="img"
+        aria-label={`Stufe ${stand.stufe}, ${stand.imLevel} von ${stand.fuerLevel} Erfahrungspunkten`}
+      >
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${Math.round(breite * 100)}%`,
+            background: 'linear-gradient(90deg, var(--color-xp), var(--color-fokus))',
+            // Länger als die Standardzeit: Der Balken ist hier die
+            // Belohnung, nicht ein Zustandswechsel nebenbei.
+            transition: 'width 900ms var(--kurve)',
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -173,6 +260,20 @@ export function Spielrahmen({
 
       const vorher = bestwert(spiel.id);
       const { liste, schluessel } = ergebnisEintragen(spiel.id, wert);
+
+      /*
+       * Erfahrung, Stufe und Erfolge werden **hier** verbucht, in der Hülle.
+       * Kein Spiel weiß davon; die Schnittstelle bleibt unverändert. Alles,
+       * was dafür nötig ist, liegt ohnehin schon vor: Punkte, Sieg-Merkmal
+       * und die Bestleistung vor der Runde.
+       */
+      const ausbeute = rundeVerbuchen(
+        fortschrittLesen(),
+        { spielId: spiel.id, punkte: wert, gewonnen, bestwertVorher: vorher, tag: heute() },
+        spiele.length,
+      );
+      fortschrittSchreiben(ausbeute.nachher);
+
       setPunkte(wert);
       setEnde({
         punkte: wert,
@@ -180,6 +281,10 @@ export function Spielrahmen({
         vorher,
         rekord: wert > vorher,
         gewonnen,
+        xpGewinn: ausbeute.xpGewinn,
+        stand: stufeAus(ausbeute.nachher.xp),
+        ...(ausbeute.neueStufe ? { neueStufe: ausbeute.neueStufe } : {}),
+        neueErfolge: ausbeute.neueErfolge,
       });
 
       // Der Platz kommt **nachträglich** dazu. Der Dialog steht sofort, ohne
@@ -400,6 +505,59 @@ export function Spielrahmen({
                   </span>
                 )}
               </p>
+
+              {/* Erfahrung. Steht **vor** Platz und Duell: Sie kommt sofort
+                  und ohne Netz, die beiden anderen kommen vielleicht nie.
+                  Was immer da ist, gehört nach oben. */}
+              <Erfahrungsbalken
+                stand={ende.stand}
+                gewinn={ende.xpGewinn}
+                ruhig={einstellungen.reducedMotion}
+                verzoegerung={700}
+              />
+              <p
+                className="ende-zeile mt-1.5 text-sm font-bold"
+                style={{ '--verzoegerung': '760ms', color: 'var(--color-xp)' } as CSSProperties}
+              >
+                +{ende.xpGewinn} XP
+              </p>
+
+              {/* Der Stufenaufstieg ist das größte Ereignis im Dialog und
+                  bekommt deshalb als Einziges einen eigenen farbigen
+                  Kasten. Käme er als weitere graue Zeile, wäre er
+                  weniger wert als „Beste Punktzahl: 41". */}
+              {ende.neueStufe !== undefined && (
+                <p
+                  className="dialog-auf mt-3 rounded-xl px-3 py-2.5 text-base font-black"
+                  style={{
+                    background:
+                      'linear-gradient(90deg, color-mix(in oklab, var(--color-xp) 32%, transparent), color-mix(in oklab, var(--color-fokus) 26%, transparent))',
+                    boxShadow: 'var(--schatten-2)',
+                  }}
+                >
+                  🎉 Stufe {ende.neueStufe} erreicht!
+                </p>
+              )}
+
+              {/* Frisch freigeschaltete Erfolge. Nur die **neuen** — die
+                  gesammelten stehen auf der Fortschrittsseite. Ein Dialog,
+                  der nach jeder Runde alle vierzehn aufzählt, feiert nichts
+                  mehr. */}
+              {ende.neueErfolge.map((erfolg, i) => (
+                <p
+                  key={erfolg.id}
+                  className="dialog-auf mt-2 flex items-center gap-2.5 rounded-xl bg-white/10 px-3 py-2 text-left"
+                  style={{ animationDelay: `${900 + i * 140}ms` }}
+                >
+                  <span aria-hidden="true" className="text-2xl">
+                    {erfolg.symbol}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold">{erfolg.titel}</span>
+                    <span className="block text-xs text-gedaempft">{erfolg.beschreibung}</span>
+                  </span>
+                </p>
+              ))}
 
               {/* Kommt nach, sobald der Server geantwortet hat — und nur,
                   wenn jemand angemeldet ist. Der Auftritt ist bewusst

@@ -1782,6 +1782,91 @@ groß und mittig sitzt.
   Kippwinkel, nicht als Umschalter bei 90°: Ein Sprung mitten im Kippen wäre
   auffälliger als der Fehler, den er behebt.
 
+## Fortschritt: Erfahrung, Stufe, Erfolge
+
+Stufe 1 des großen Qualitäts-Umbaus („aus der App ein richtiges Game
+machen"). `shell/fortschritt.ts` ist rein und getestet, `speicher.ts`
+speichert, `Spielrahmen.tsx` verbucht am Rundenende.
+
+**Kein Spiel weiß davon, und das war die Bedingung.** An `GameApi`/
+`GameProps` hängen zwanzig fertige Spiele; die Schnittstelle ist in der
+ganzen Projektgeschichte zweimal erweitert worden. Für Erfahrungspunkte ist
+das nicht nötig: Die Hülle kennt am Rundenende ohnehin Punkte, Sieg-Merkmal
+und die Bestleistung davor — mehr braucht die Rechnung nicht. Zwanzig Spiele
+anzufassen hätte genau das riskiert, was funktioniert.
+
+**Erfahrung kommt nicht aus Punkten.** Dieselbe Falle wie bei den Sternen:
+Quiz Time geht von 0 bis 10, Block Burst in die Tausende. Gäbe es Erfahrung
+je Punkt, wäre Block Burst hundertmal so viel wert, und die Stufe sagte nur
+noch aus, *welches* Spiel jemand spielt. Gezählt wird deshalb, was überall
+dasselbe bedeutet:
+
+| | XP |
+|---|---|
+| Runde gespielt | 10 |
+| je Stern (die messen schon gegen die eigene Bestleistung) | 10 |
+| echter Sieg | 15 |
+| neue persönliche Bestleistung | 25 |
+| Spiel zum ersten Mal gespielt | 50 |
+
+Eine Runde bringt damit 20 bis 120 XP.
+
+**Die Stufenkosten steigen linear, nicht exponentiell** (`100 + (n-1)·50`).
+Eine Verdopplung je Stufe sieht nach kurzer Zeit so aus, als ginge gar nichts
+mehr — bei einem Kind ist das der Moment, in dem der Balken aufhört, etwas zu
+bedeuten.
+
+**Keine Uhr in `fortschritt.ts`.** Der Tag wird als `JJJJ-MM-TT` gereicht.
+Sonst ließe sich die Serienzählung („fünf Tage hintereinander") überhaupt
+nicht testen, ohne die Systemuhr zu verstellen. `heute()` ist die einzige
+Stelle mit `new Date()`, und sie rechnet **Ortszeit**: Wer abends um 23 Uhr
+spielt, hat *heute* gespielt. Der Tagesabstand rechnet dagegen mit `T12:00Z`
+— mit `T00:00Z` kippt er westlich von Greenwich um einen Tag, und aus
+„gestern gespielt" würde „vorgestern"; die Serie risse ohne Grund.
+
+**Erfolge werden nach dem Verbuchen geprüft, gegen den neuen Stand.**
+Andersherum hinkte jeder Erfolg eine Runde hinterher: Die zehnte Partie
+löste „Warmgelaufen" erst bei der elften aus. Dafür gibt es einen Test.
+
+**Alles Gespeicherte geht durch `fortschrittBereinigen`.** Der Speicher ist
+nicht vertrauenswürdig — ältere Fassung, halb geschrieben, von Hand
+verändert. Ein fehlendes Feld darf nicht die halbe Startseite weiß werden
+lassen.
+
+`bestenlisteLoeschen()` räumt den Fortschritt mit weg: Stufe 12 zu behalten,
+während alle Punkte gelöscht sind, wäre ein Widerspruch.
+
+## Designsystem
+
+Schatten, Zeiten und Kurven standen vorher überall einzeln im Code, jede
+Stelle ein bisschen anders — daran erkennt man eine zusammengestückelte
+Oberfläche. Jetzt eine Leiter in `index.css`:
+
+- `--schatten-1` bis `-4` sind **Ebenen**, keine Pixelwerte: 1 liegt flach
+  auf, 2 ist angehoben, 3 schwebt, 4 ist ein Dialog über allem. Wer eine
+  Fläche baut, wählt die Ebene.
+- `--zeit-kurz/mittel/lang` (120/240/400 ms). Alles über 450 ms fühlt sich
+  auf einem Handy nach Warten an.
+- `--kurve-raus` federt am Ende leicht über — der Unterschied zwischen
+  „erscheint" und „ploppt auf".
+- Zustandsfarben (`--color-erfolg/warnung/fehler`) sind von den Akzentfarben
+  der Spiele getrennt: Ein grüner Haken darf nicht zufällig die Spielfarbe
+  von Snake Rush sein.
+- `--color-xp` ist violett, weil sonst nichts im Bild violett ist —
+  Erfahrung soll man auf einen Blick von Punkten unterscheiden.
+
+**`.druckbar` und `.kippbar` statt Hover.** Florian spielt auf iPad und
+iPhone; dort gibt es keinen Zeiger, der über etwas schwebt. Ein Entwurf, der
+seine Räumlichkeit aus Hover-Effekten bezieht, ist auf dem Zielgerät
+unsichtbar. Die Tiefe steckt deshalb im **Drücken**: Die Fläche sinkt ein,
+ihr Schatten wird flacher, sie federt zurück. `perspective` gehört dabei ans
+Elternelement (`.buehne-3d`) — sonst bekommt jede Karte ihren eigenen
+Fluchtpunkt und die Reihe wirkt auseinandergerissen.
+
+`.schimmer` ist der Ladeplatzhalter (1,4 s Durchlauf = 0,7 Hz, weit unter
+der 1,7-Hz-Grenze des Projekts). Eine leere Fläche liest sich als Fehler,
+ein Platzhalter in der Form dessen, was gleich kommt, als „gleich da".
+
 ## Ausliefern
 
 Läuft auf **Netlify** unter `florian-spielesammlung.netlify.app`. Das ist
