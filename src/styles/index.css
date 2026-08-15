@@ -388,9 +388,72 @@
 /* Apples Richtlinie nennt 44 × 44 Punkte als kleinste sicher treffbare
    Fläche. Mehrere Knöpfe lagen darunter (die Level-Pfeile bei rund 24 × 22),
    was für einen Kinderfinger auf dem Tablet zu klein ist. */
+/* Der eine Knopfstil für alle Spiele.
+
+   Vorher gab es fünf Varianten für denselben Zweck — mal `rounded-lg`, mal
+   `rounded-xl`, mal mit und mal ohne Antipp-Reaktion, drei verschiedene
+   Innenabstände. Jetzt bringt die Klasse alles mit; die Spiele setzen nur
+   noch `.spielknopf` und höchstens die Textgröße.
+
+   Die 2,75 rem sind Apples Mindestmaß für eine Trefferfläche (44 Punkte). */
 .spielknopf {
   min-height: 2.75rem;
   min-width: 2.75rem;
+  /* Flex, nicht Grid: Ein Knopf wie „← Zurück" hat zwei Kinder, und ein
+     Raster hätte sie untereinander gestapelt statt nebeneinander. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em;
+  padding-inline: 0.75rem;
+  white-space: nowrap;
+  border: 1px solid var(--color-rand);
+  border-radius: 0.75rem;
+  background-color: var(--color-flaeche);
+  /* Kurz und knackig: 100 ms sind auf einem Handy der Unterschied zwischen
+     „reagiert" und „hängt". */
+  transition: transform 0.1s ease-out, background-color 0.1s ease-out;
+}
+
+.spielknopf:active:not(:disabled) {
+  transform: scale(0.95);
+  background-color: var(--color-flaeche-hoch);
+}
+
+.spielknopf:disabled {
+  opacity: 0.3;
+}
+
+/* Für den Weiter-Knopf und andere große Handlungen — dieselbe Klasse, nur
+   breiter und mit dem Radius des „Nochmal" aus der Hülle.
+
+   Ohne Rand: Diese Knöpfe bringen ihre eigene, kräftige Füllung mit, ein
+   grauer Rahmen darum sähe nach Versehen aus. */
+.spielknopf-gross {
+  padding-inline: 1.5rem;
+  padding-block: 0.75rem;
+  border-color: transparent;
+  border-radius: 1rem;
+  font-weight: 600;
+}
+
+/* Der eine Brett-Look für alle Spiele.
+
+   Vorher gab es vier verschiedene Eckenradien für dasselbe Element, und vier
+   Bretter hatten überhaupt keinen Rahmen.
+
+   Der Rahmen ist ein **innerer Schatten**, kein `border`. Das ist kein
+   Geschmack: `.spielbrett` rechnet seine Breite aus `100cqw`/`100cqh`, und
+   ein echter Rand addiert zwei Pixel obendrauf — auf einem 375 × 560 großen
+   Bildschirm kann genau das den Ausschlag geben. Die Farbe kommt aus der
+   Spielfarbe (siehe `shell/spielfarbe.ts`), fällt aber auf die Randfarbe
+   zurück, solange keine gesetzt ist. */
+.spielbrett-rahmen {
+  border-radius: 1rem;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--spielfarbe, var(--color-rand)) 45%, var(--color-rand)),
+    inset 0 2px 0 rgba(255, 255, 255, 0.06),
+    0 6px 24px -12px rgba(0, 0, 0, 0.8);
 }
 
 /* Hilfetext ist auf kurzen Bildschirmen der erste Kandidat zum Weglassen —

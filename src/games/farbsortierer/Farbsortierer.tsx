@@ -310,7 +310,7 @@ export function Farbsortierer({
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-4">
+    <div className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3">
       <FarbMusterDefs />
 
       <div className="flex w-full max-w-md flex-wrap items-center justify-between gap-2 text-sm">
@@ -320,7 +320,7 @@ export function Farbsortierer({
             onClick={() => beiLevelWechsel(z.level - 1)}
             disabled={z.level <= 1 || !!guss}
             aria-label="Voriges Level"
-            className="rounded-lg border border-rand bg-flaeche spielknopf px-2 py-1 text-base leading-none disabled:opacity-30 transition-transform active:scale-95"
+            className="spielknopf text-base leading-none transition-transform active:scale-95"
           >
             ‹
           </button>
@@ -330,7 +330,7 @@ export function Farbsortierer({
             onClick={() => beiLevelWechsel(z.level + 1)}
             disabled={!!guss}
             aria-label="Nächstes Level"
-            className="rounded-lg border border-rand bg-flaeche spielknopf px-2 py-1 text-base leading-none disabled:opacity-30 transition-transform active:scale-95"
+            className="spielknopf text-base leading-none transition-transform active:scale-95"
           >
             ›
           </button>
@@ -340,7 +340,7 @@ export function Farbsortierer({
             type="button"
             onClick={beiZurueck}
             disabled={z.verlauf.length === 0 || !!guss}
-            className="spielknopf rounded-lg border border-rand bg-flaeche px-3 py-1.5 disabled:opacity-40 transition-transform active:scale-95"
+            className="spielknopf"
           >
             <span aria-hidden="true">↩</span> Zurück
           </button>
@@ -348,18 +348,22 @@ export function Farbsortierer({
             type="button"
             onClick={beiExtraRoehrchen}
             disabled={z.extraRoehrchenUebrig === 0 || !!guss}
-            className="spielknopf rounded-lg border border-rand bg-flaeche px-3 py-1.5 disabled:opacity-40 transition-transform active:scale-95"
+            className="spielknopf"
           >
             + Röhrchen
           </button>
         </div>
       </div>
 
+      <div className="spielbuehne">
       <svg
         viewBox={`0 0 ${breite} ${hoehe}`}
         role="group"
         aria-label={`Farbsortierer, Level ${z.level}. ${z.roehrchen.map((r, i) => beschreibung(i, r, palette)).join('. ')}.`}
-        style={{ width: '100%', maxWidth: breite, aspectRatio: `${breite} / ${hoehe}`, overflow: 'visible' }}
+        className="spielbrett"
+        // `overflow: visible`, weil Deckel und Konfetti über den Rand des
+        // Kastens hinausragen dürfen.
+        style={{ '--vz': breite / hoehe, overflow: 'visible' } as CSSProperties}
       >
         {z.roehrchen.map((inhalt, i) => {
           const istVon = guss?.von === i;
@@ -432,14 +436,17 @@ export function Farbsortierer({
           </g>
         )}
       </svg>
+      </div>
 
-      <p className="max-w-md text-center text-sm text-gedaempft">
+      <p className="nur-bei-platz max-w-md text-center text-xs text-gedaempft">
         Antippen wählt ein Röhrchen, nochmal Antippen gießt hinein.
         <br />
         Gelöst? „Nochmal" im nächsten Bildschirm startet automatisch das
         nächste Level — mit den Pfeilen oben lässt sich auch direkt ein
         bestimmtes Level ansteuern.
       </p>
+
+      {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}
     </div>
   );
 }

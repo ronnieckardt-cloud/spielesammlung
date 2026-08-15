@@ -1,0 +1,117 @@
+# Bei jedem Push auf `main` bauen, testen und aufs Hetzner-Webpaket laden.
+#
+# Damit bleibt die Kette aus dem Zielablauf erhalten: Handy → Cloud-Sitzung →
+# Push auf GitHub → live. Nur das Ziel ist nicht mehr Netlify, sondern
+# `spiele.klarvorteil.de`.
+#
+# ============================================================================
+# EINMALIG EINZURICHTEN (in GitHub unter Settings → Secrets and variables →
+# Actions). Die Zugangsdaten trägt Ronni selbst ein — sie gehören nirgendwo
+# in den Code und niemand außer GitHub soll sie sehen:
+#
+#   FTP_HOST      z. B. ftp.klarvorteil.de  (steht in der Hetzner-Konsole)
+#   FTP_BENUTZER  der FTP-Benutzername des Webpakets
+#   FTP_PASSWORT  das zugehörige Passwort
+#   FTP_ZIEL      der Ordner der Subdomain, z. B. /spiele
+#
+# ACHTUNG beim FTP_ZIEL: Der Abgleich unten löscht auf dem Server alles, was
+# nicht mehr im Bau vorkommt. Zeigt der Pfad versehentlich auf das Stammver-
+# zeichnis, löscht er die ganze Webseite. Der Schritt „Ziel prüfen" fängt die
+# offensichtlichen Fälle ab, aber der Pfad muss trotzdem stimmen.
+# ============================================================================
+
+name: Ausliefern
+
+on:
+  push:
+    branches: [main]
+  # Zum Auslösen von Hand, ohne dass sich etwas geändert haben muss.
+  workflow_dispatch:
+
+# Läuft immer nur eine Auslieferung. Kommen zwei Pushes kurz hintereinander,
+# gewinnt der neuere — sonst könnten sie sich gegenseitig überholen.
+concurrency:
+  group: ausliefern
+  cancel-in-progress: true
+
+jobs:
+  bauen-und-hochladen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Erst prüfen, dann bauen: Eine kaputte Fassung soll gar nicht erst
+      # hochgeladen werden. `npm run build` enthält die Typprüfung.
+      - name: Tests
+        run: npm test
+
+      - name: Bauen
+        run: npm run build
+
+      # Der Offline-Speicher wird nur geleert, wenn die Nummer in sw.js
+      # hochgezählt wurde. Wird sie vergessen, zeigen installierte Geräte
+      # weiter die alte Fassung — das ist in diesem Projekt schon passiert.
+      # Deshalb hier eine Warnung statt eines stillen Fehlschlags.
+      - name: Speicherversion gegen die letzte Auslieferung prüfen
+        continue-on-error: true
+        run: |
+          NEU=$(grep -o "spielesammlung-v[0-9]*" public/sw.js | head -1)
+          ALT=$(curl -fsS "https://spiele.klarvorteil.de/sw.js" 2>/dev/null \
+                | grep -o "spielesammlung-v[0-9]*" | head -1 || echo "")
+          echo "live: ${ALT:-unbekannt} · neu: $NEU"
+          if [ -n "$ALT" ] && [ "$ALT" = "$NEU" ]; then
+            echo "::warning::SPEICHER in public/sw.js wurde nicht hochgezählt ($NEU). Installierte Geräte bekommen die neue Fassung womöglich nicht."
+          fi
+
+      - name: lftp installieren
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
+      - name: Ziel prüfen
+        env:
+          FTP_ZIEL: ${{ secrets.FTP_ZIEL }}
+        run: |
+          if [ -z "$FTP_ZIEL" ] || [ "$FTP_ZIEL" = "/" ] || [ "$FTP_ZIEL" = "." ]; then
+            echo "FTP_ZIEL ist leer oder zeigt aufs Stammverzeichnis — abgebrochen." >&2
+            exit 1
+          fi
+          test -f dist/index.html || { echo "dist/index.html fehlt." >&2; exit 1; }
+
+      - name: Hochladen
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_BENUTZER: ${{ secrets.FTP_BENUTZER }}
+          FTP_PASSWORT: ${{ secrets.FTP_PASSWORT }}
+          FTP_ZIEL: ${{ secrets.FTP_ZIEL }}
+        run: |
+          # `ftp:ssl-force` erzwingt eine verschlüsselte Verbindung — ohne das
+          # ginge das Passwort im Klartext über die Leitung.
+          #
+          # `--delete` räumt alte Dateien weg. Das ist hier gewollt: Sonst
+          # blieben nach einem Umbau alte JS-Dateien liegen, und ein Gerät mit
+          # zwischengespeichertem index.html könnte sie weiter laden.
+          #
+          # `.htaccess` wird ausdrücklich mitgenommen — ohne sie fehlt die
+          # no-cache-Regel für sw.js.
+          lftp -c "
+            set ftp:ssl-force true;
+            set ftp:ssl-protect-data true;
+            set ssl:verify-certificate true;
+            set net:max-retries 3;
+            set net:timeout 20;
+            open -u '$FTP_BENUTZER','$FTP_PASSWORT' '$FTP_HOST';
+            mirror --reverse --delete --verbose --parallel=4 \
+                   --exclude-glob .DS_Store \
+                   dist/ '$FTP_ZIEL';
+          "
+
+      - name: Nachsehen, ob es angekommen ist
+        run: |
+          sleep 5
+          curl -fsS "https://spiele.klarvorteil.de/sw.js" | grep -o "spielesammlung-v[0-9]*" | head -1

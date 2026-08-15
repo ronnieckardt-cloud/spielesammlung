@@ -184,7 +184,7 @@ export function DropFour({ onScore, onGameOver, settings, bestScore, istErsteRun
 
       <div className="spielbuehne">
         <div
-          className="spielbrett grid touch-none gap-1.5 rounded-2xl p-1.5"
+          className="spielbrett grid touch-none gap-1.5 rounded-2xl p-2"
           style={
             {
               gridTemplateColumns: `repeat(${SPALTEN}, minmax(0, 1fr))`,

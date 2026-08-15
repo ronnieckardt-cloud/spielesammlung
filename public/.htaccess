@@ -1,0 +1,38 @@
+# Regeln für das Hetzner-Webpaket (Apache).
+#
+# Liegt in `public/`, wird von Vite also unverändert nach `dist/` kopiert und
+# landet damit bei jedem Ausliefern mit oben.
+#
+# Auf Netlify tut die Datei nichts — dort gilt `netlify.toml`. Beide dürfen
+# nebeneinander stehen bleiben, solange der Umzug läuft.
+
+<IfModule mod_headers.c>
+  # Alles unter assets/ trägt eine Prüfsumme im Dateinamen. Ändert sich der
+  # Inhalt, ändert sich der Name — diese Dateien dürfen deshalb ewig im
+  # Zwischenspeicher liegen bleiben.
+  <FilesMatch "\.(js|css|woff2?|png|svg|ico)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # Diese drei behalten ihren Namen für immer und müssen deshalb bei jedem
+  # Aufruf frisch geholt werden. Steht bewusst NACH dem Block oben, damit es
+  # dessen Regel für `sw.js` wieder überschreibt.
+  #
+  # Das ist die wichtigste Zeile der ganzen Datei: Kommt die `sw.js` aus dem
+  # Zwischenspeicher, bemerkt ein installiertes iPad eine neue Fassung nicht
+  # und zeigt tagelang die alte. Genau das ist in diesem Projekt schon einmal
+  # passiert (siehe CLAUDE.md).
+  <FilesMatch "^(sw\.js|index\.html|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+# Apache kennt die Endung nicht von Haus aus. Ohne den richtigen Typ
+# verweigert Safari die Installation auf dem Startbildschirm.
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+</IfModule>
+
+# Eine Umschreibung auf index.html braucht die App **nicht**: Die Adresse
+# steht hinter dem Rautezeichen (`#/spiel/schlange`), der Server sieht immer
+# nur `/`. Deshalb steht hier absichtlich keine RewriteRule.

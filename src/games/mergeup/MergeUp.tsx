@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useInput } from '../../core/useInput';
+import { Steuerkreuz } from '../../core/Steuerkreuz';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
@@ -97,18 +98,23 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
   const punkteVorherRef = useRef(0);
   const gewonnenVorherRef = useRef(false);
 
-  const anwenden = (richtung: Richtung) => setZ((alt) => ziehen(alt, richtung));
+  // Die vier Himmelsrichtungen des Eingabe-Bausteins heißen im Spiel anders.
+  // Eine Abbildung für Tastatur, Wischen **und** Steuerkreuz.
+  const beiKreuz = useCallback((eingabe: 'up' | 'down' | 'left' | 'right') => {
+    const richtungen: Record<typeof eingabe, Richtung> = {
+      up: 'hoch',
+      down: 'runter',
+      left: 'links',
+      right: 'rechts',
+    };
+    setZ((alt) => ziehen(alt, richtungen[eingabe]));
+  }, []);
 
   useInput(
     (eingabe) => {
-      const richtungen: Partial<Record<typeof eingabe, Richtung>> = {
-        up: 'hoch',
-        down: 'runter',
-        left: 'links',
-        right: 'rechts',
-      };
-      const richtung = richtungen[eingabe];
-      if (richtung) anwenden(richtung);
+      if (eingabe === 'up' || eingabe === 'down' || eingabe === 'left' || eingabe === 'right') {
+        beiKreuz(eingabe);
+      }
     },
     // Kein Wiederholen bei gehaltener Taste — ein Zug soll ein Tastendruck
     // sein, sonst rauscht das halbe Spiel bei einem zu langen Druck durch.
@@ -173,7 +179,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
       <div className="spielbuehne">
       <div
         ref={feldRef}
-        className="spielbrett grid touch-none gap-2 rounded-2xl bg-flaeche p-2"
+        className="spielbrett spielbrett-rahmen grid touch-none gap-2 bg-flaeche p-2"
         style={
           {
             gridTemplateColumns: `repeat(${GROESSE}, minmax(0, 1fr))`,
@@ -212,46 +218,10 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
 
       </div>
 
-      <div className="grid grid-cols-3 gap-0.5" role="group" aria-label="Steuerung">
-        <div className="size-12" aria-hidden="true" />
-        <button
-          type="button"
-          onClick={() => anwenden('hoch')}
-          disabled={z.vorbei}
-          aria-label="Nach oben schieben"
-          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
-        >
-          <span aria-hidden="true">↑</span>
-        </button>
-        <div className="size-12" aria-hidden="true" />
-        <button
-          type="button"
-          onClick={() => anwenden('links')}
-          disabled={z.vorbei}
-          aria-label="Nach links schieben"
-          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
-        >
-          <span aria-hidden="true">←</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => anwenden('runter')}
-          disabled={z.vorbei}
-          aria-label="Nach unten schieben"
-          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
-        >
-          <span aria-hidden="true">↓</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => anwenden('rechts')}
-          disabled={z.vorbei}
-          aria-label="Nach rechts schieben"
-          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
-        >
-          <span aria-hidden="true">→</span>
-        </button>
-      </div>
+      {/* Der gemeinsame Baustein statt einer Kopie. Der Kopie hier fehlten
+          `touch-none` und die Unterdrückung des Kontextmenüs — langes
+          Drücken auf einen Pfeil öffnete auf dem iPhone das Auswahlmenü. */}
+      <Steuerkreuz kompakt onRichtung={beiKreuz} aktiv={!z.vorbei} />
 
       <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
         Pfeiltasten, Wischen oder die Knöpfe schieben alle Kacheln. Zwei

@@ -3,9 +3,13 @@ import type { CSSProperties } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { useInput } from '../../core/useInput';
 import { Steuerkreuz } from '../../core/Steuerkreuz';
+import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
+import { Startbildschirm } from '../../core/Startbildschirm';
+import type { DekoTeil } from '../../core/Startbildschirm';
 import type { GameProps } from '../../core/types';
+import { GeisterjagdIcon } from './Icon';
 import { istWand, schluessel } from './labyrinth';
 import { STARTLEBEN, neuesSpiel, richtungEingeben, zeitFortschritt } from './logik';
 import type { Richtung, Zustand } from './logik';
@@ -56,10 +60,46 @@ function useLaeuft(x: number, y: number): boolean {
   return jetzt - letzterWechsel.current.zeit < LAUF_NACHLAUF_MS;
 }
 
+/** Geister und Sterne als Deko — feste Liste, kein Zufall. */
+const DEKO: readonly DekoTeil[] = [
+  { x: 8, y: 12, winkel: -10, verzoegerung: 0, inhalt: <DekoGeist farbe={GEIST_FARBEN[0]!} groesse={40} /> },
+  { x: 85, y: 9, winkel: 12, verzoegerung: 0.65, inhalt: <DekoStern groesse={22} /> },
+  { x: 87, y: 70, winkel: -6, verzoegerung: 1.25, inhalt: <DekoGeist farbe={GEIST_FARBEN[2]!} groesse={34} /> },
+  { x: 4, y: 73, winkel: 8, verzoegerung: 0.4, inhalt: <DekoStern groesse={18} /> },
+  { x: 92, y: 41, winkel: 18, verzoegerung: 1.7, inhalt: <DekoStern groesse={14} /> },
+  { x: 3, y: 43, winkel: -18, verzoegerung: 0.95, inhalt: <DekoGeist farbe={GEIST_FARBEN[1]!} groesse={28} /> },
+];
+
+function DekoGeist({ farbe, groesse }: { farbe: string; groesse: number }) {
+  return (
+    <svg viewBox="0 0 40 40" width={groesse} height={groesse} aria-hidden="true">
+      <path
+        d="M4,34 L4,17 Q4,4 20,4 Q36,4 36,17 L36,34 L30,29 L24,34 L20,29 L16,34 L10,29 Z"
+        fill={farbe}
+      />
+      <circle cx="14" cy="17" r="4.2" fill="white" />
+      <circle cx="26" cy="17" r="4.2" fill="white" />
+      <circle cx="14" cy="17" r="2" fill="#1e293b" />
+      <circle cx="26" cy="17" r="2" fill="#1e293b" />
+    </svg>
+  );
+}
+
+function DekoStern({ groesse }: { groesse: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={groesse} height={groesse} fill={PILLE_FARBE} aria-hidden="true">
+      <path d="M12 2l2.5 6.9H21l-5.6 4.4 2.1 7.1L12 16.2 6.5 20.4l2.1-7.1L3 8.9h6.5z" />
+    </svg>
+  );
+}
+
 const istRichtung = (wert: string): wert is Richtung =>
   wert === 'up' || wert === 'down' || wert === 'left' || wert === 'right';
 
-export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
+export function Geisterjagd({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+  // Nach „Nochmal" direkt weiterspielen statt wieder über den
+  // Startbildschirm zu gehen — der gehört nur ans Betreten des Spiels.
+  const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesSpiel(saatAus('geisterjagd', Date.now())));
   const bereich = useRef<HTMLDivElement>(null);
 
@@ -73,10 +113,13 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
       if (!istRichtung(aktion)) return;
       bewege(aktion);
     },
-    { bereich, aktiv: !z.vorbei },
+    { bereich, aktiv: gestartet && !z.vorbei },
   );
 
-  useGameLoop((dt) => setZ((alt) => zeitFortschritt(alt, dt)), { fps: 60, running: !z.vorbei });
+  useGameLoop((dt) => setZ((alt) => zeitFortschritt(alt, dt)), {
+    fps: 60,
+    running: gestartet && !z.vorbei,
+  });
 
   useEffect(() => {
     onScore(z.score);
@@ -115,6 +158,12 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
   ]);
 
   const laeuft = useLaeuft(z.spieler.position.x, z.spieler.position.y);
+
+  // Erst ab 50 melden: Jeder eingesammelte Punkt gibt zehn Zähler, ein Popup
+  // je Punkt wäre ein Dauerflimmern quer über das Labyrinth. Die Kraftpille
+  // (50) und der gefressene Geist (200) sind es dagegen wert — vorher gab es
+  // dafür nur einen Ton.
+  const gewinn = usePunktegewinn(z.score, 50);
 
   /**
    * Das Labyrinth wird nur neu gezeichnet, wenn sich wirklich etwas darin
@@ -175,6 +224,21 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
     [z.labyrinth, z.punkte, z.kraftpillen, breite, hoehe],
   );
 
+  if (!gestartet) {
+    return (
+      <Startbildschirm
+        titel="Ghost Chase"
+        untertitel="Sammle alles ein — und lauf den Geistern davon!"
+        bestScore={bestScore}
+        verlauf="linear-gradient(160deg, #1e1b4b 0%, #4338ca 45%, #a21caf 100%)"
+        deko={DEKO}
+        Symbol={GeisterjagdIcon}
+        knopfFarbe="#4338ca"
+        onStart={() => setGestartet(true)}
+      />
+    );
+  }
+
   // Alles in Prozent statt in Pixeln: Eine Verschiebung um 100 % ist bei
   // einer kachelgroßen Figur genau eine Kachel — dadurch stimmt die
   // Anordnung bei jeder Feldgröße, ohne dass irgendwo gemessen werden muss.
@@ -194,7 +258,7 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
       <div className="spielbuehne">
       <div
         ref={bereich}
-        className="spielbrett relative touch-none"
+        className="spielbrett spielbrett-rahmen relative touch-none"
         style={
           {
             maxWidth: breite * MAX_ZELLE_PX,
@@ -205,6 +269,7 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
         aria-label={`Labyrinth, Level ${z.level}, ${z.leben} Leben, ${z.score} Punkte.${z.gewonnen ? ' Alle Geister gefressen, gewonnen!' : z.vorbei ? ' Spiel vorbei.' : ''}`}
       >
         {raster}
+        <Punktegewinn gewinn={gewinn} />
 
         <div
           className="absolute ease-linear"

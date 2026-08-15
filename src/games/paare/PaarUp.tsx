@@ -158,7 +158,7 @@ export function PaarUp({ onScore, onGameOver, settings, bestScore, istErsteRunde
             onClick={() => beiLevelWechsel(z.level - 1)}
             disabled={z.level <= 1}
             aria-label="Voriges Level"
-            className="spielknopf rounded-lg border border-rand bg-flaeche px-2 py-1 text-base leading-none disabled:opacity-30"
+            className="spielknopf text-base leading-none"
           >
             ‹
           </button>
@@ -167,7 +167,7 @@ export function PaarUp({ onScore, onGameOver, settings, bestScore, istErsteRunde
             type="button"
             onClick={() => beiLevelWechsel(z.level + 1)}
             aria-label="Nächstes Level"
-            className="spielknopf rounded-lg border border-rand bg-flaeche px-2 py-1 text-base leading-none"
+            className="spielknopf text-base leading-none"
           >
             ›
           </button>
@@ -179,7 +179,7 @@ export function PaarUp({ onScore, onGameOver, settings, bestScore, istErsteRunde
 
       <div className="spielbuehne">
         <div
-          className="spielbrett grid gap-2"
+          className="spielbrett spielbrett-rahmen grid gap-2 p-2"
           style={
             {
               gridTemplateColumns: `repeat(${z.spalten}, minmax(0, 1fr))`,

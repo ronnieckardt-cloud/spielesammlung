@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { useInput } from '../../core/useInput';
+import { Steuerkreuz } from '../../core/Steuerkreuz';
+import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
@@ -102,16 +104,23 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
     running: gestartet && !z.vorbei,
   });
 
+  // Die vier Himmelsrichtungen des Eingabe-Bausteins heißen im Spiel anders.
+  // Eine Abbildung für Tastatur, Wischen **und** Steuerkreuz.
+  const beiKreuz = useCallback((eingabe: 'up' | 'down' | 'left' | 'right') => {
+    const richtungen: Record<typeof eingabe, Richtung> = {
+      up: 'hoch',
+      down: 'runter',
+      left: 'links',
+      right: 'rechts',
+    };
+    setZ((alt) => richtungWaehlen(alt, richtungen[eingabe]));
+  }, []);
+
   useInput(
     (eingabe) => {
-      const richtungen: Partial<Record<typeof eingabe, Richtung>> = {
-        up: 'hoch',
-        down: 'runter',
-        left: 'links',
-        right: 'rechts',
-      };
-      const richtung = richtungen[eingabe];
-      if (richtung) setZ((alt) => richtungWaehlen(alt, richtung));
+      if (eingabe === 'up' || eingabe === 'down' || eingabe === 'left' || eingabe === 'right') {
+        beiKreuz(eingabe);
+      }
     },
     // Kein Wiederholen bei gehaltener Taste: die Richtung gilt ohnehin bis
     // zur nächsten Eingabe, mehrfaches Auslösen brächte nichts.
@@ -127,6 +136,10 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
     punkteVorherRef.current = z.punkte;
     if (differenz > 0) sfx(differenz > 10 ? 'stufe' : 'gut');
   }, [z.punkte]);
+
+  // Der Zuwachs war bisher nur am Zähler oben zu sehen, nicht am Ort des
+  // Geschehens. Jeder Apfel zählt, deshalb Schwelle 1.
+  const gewinn = usePunktegewinn(z.punkte);
 
   useEffect(() => {
     if (z.vorbei) {
@@ -152,14 +165,15 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
         {z.punkte}
       </output>
 
-      <div className="spielbuehne">
+      <div className="spielbuehne relative">
+        <Punktegewinn gewinn={gewinn} />
         {/* Ein SVG über dem ganzen Brett statt 289 einzelner Kacheln: Nur so
             hängt der Körper wirklich zusammen. Vorher lag zwischen zwei
             Gliedern immer eine Fuge — sie konnten sich gar nicht berühren. */}
         <svg
           ref={feldRef}
           viewBox={`0 0 ${BREITE} ${HOEHE}`}
-          className="spielbrett touch-none rounded-xl border border-rand bg-flaeche"
+          className="spielbrett spielbrett-rahmen touch-none bg-flaeche"
           style={{ '--vz': BREITE / HOEHE } as CSSProperties}
           role="img"
           aria-label={`Spielfeld. Schlange ${z.schlange.length} Glieder lang, ${z.punkte} Punkte.${z.vorbei ? ' Vorbei.' : ''}`}
@@ -179,46 +193,10 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
         </svg>
       </div>
 
-      <div className="grid grid-cols-3 gap-0.5" role="group" aria-label="Steuerung">
-        <div className="size-12" aria-hidden="true" />
-        <button
-          type="button"
-          onClick={() => setZ((alt) => richtungWaehlen(alt, 'hoch'))}
-          disabled={z.vorbei}
-          aria-label="Nach oben"
-          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
-        >
-          <span aria-hidden="true">↑</span>
-        </button>
-        <div className="size-12" aria-hidden="true" />
-        <button
-          type="button"
-          onClick={() => setZ((alt) => richtungWaehlen(alt, 'links'))}
-          disabled={z.vorbei}
-          aria-label="Nach links"
-          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
-        >
-          <span aria-hidden="true">←</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setZ((alt) => richtungWaehlen(alt, 'runter'))}
-          disabled={z.vorbei}
-          aria-label="Nach unten"
-          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
-        >
-          <span aria-hidden="true">↓</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setZ((alt) => richtungWaehlen(alt, 'rechts'))}
-          disabled={z.vorbei}
-          aria-label="Nach rechts"
-          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
-        >
-          <span aria-hidden="true">→</span>
-        </button>
-      </div>
+      {/* Der gemeinsame Baustein statt einer Kopie. Die Kopie hier hatte
+          weder `touch-none` noch die Unterdrückung des Kontextmenüs — langes
+          Drücken auf einen Pfeil öffnete auf dem iPhone das Auswahlmenü. */}
+      <Steuerkreuz kompakt onRichtung={beiKreuz} aktiv={!z.vorbei} />
 
       <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
         Pfeiltasten, Wischen oder die Knöpfe steuern. Rote Äpfel machen dich

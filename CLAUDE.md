@@ -95,6 +95,8 @@ Ein neues Spiel wird an genau einer Stelle bekannt gemacht:
 | `rng(saat)` / `schritt(saat)` / `saatAus(...)` | Zufall aus einer Startzahl. `rng` für laufende Nutzung, `schritt` für reine Logik, die ihre Saat selbst mitführt. **Nie `Math.random`** — sonst ergibt dieselbe Levelnummer nicht dasselbe Rätsel. |
 | `sfx(name)` | Kurze Töne über die Web Audio API, keine Dateien. Ob Ton erlaubt ist, meldet die Hülle über `sfxEinstellen`. |
 | `<Steuerkreuz onRichtung aktiv>` | Vier Tasten zum Antippen (oben/unten/links/rechts), mit Wiederholung bei Halten — Ergänzung zum Wischen, nicht Ersatz. Auf Handys ist eine Taste oft zuverlässiger als eine Wischgeste. |
+| `<Startbildschirm titel untertitel bestScore verlauf deko Symbol knopfFarbe onStart>` | Das Titelbild eines Spiels. Acht Spiele hatten sich denselben Aufbau einzeln zusammengesetzt, vier hatten gar keinen. |
+| `<Punktegewinn>` + `usePunktegewinn(punkte, schwelle?)` | Das „+N" über dem Feld. Erkennt Zuwächse selbst und zeigt sie an. |
 | `<Komboherz kombo ruhig>` | Serien-Anzeige: ein pochendes Herz mit der Zahl darin, das **mit der Serie wächst**. Benutzt von Block Burst (`kombo`) und Line Fall (`vierfachStreak`). |
 
 Zum Kombo-Herz: Der Schlag ist ein echter Doppelschlag (laut, leise,
@@ -1090,6 +1092,77 @@ die muss eigens auf 0, sonst steht eine Kachel erst unsichtbar herum und
 springt dann auf. Und der Auftritt gehört an die Kachel-Umhüllung, nicht an
 den Knopf: Tailwind setzt `active:scale-95` über die eigenständige
 `scale`-Eigenschaft, eine Animation darauf würde sie überschreiben.
+
+
+## Aufgeräumt nach dem Audit
+
+**Alle vierzehn Spiele haben jetzt einen Startbildschirm.** Der gemeinsame
+Teil steht in `core/Startbildschirm.tsx`; ein Spiel liefert nur noch
+Verlauf, Deko-Teile und Untertitel. Vorher hatten acht Spiele denselben
+Aufbau je einzeln abgetippt (mit kleinen Abweichungen: mal `<h1>`, mal
+`<h2>`, mal mit 🏆, mal ohne `autoFocus`), und vier hatten gar keinen —
+obwohl `bestScore` und `istErsteRunde` längst in `GameProps` bereitliegen.
+Die Schnittstelle musste dafür nicht angefasst werden, die Felder wurden nur
+nie benutzt.
+
+**Das „+N" über dem Feld** ist jetzt ein Baustein (`core/Punktegewinn.tsx`)
+und läuft in Block Burst, Line Fall, Ghost Chase und Snake Rush. Bei Ghost
+Chase mit Schwelle 50: Jeder eingesammelte Punkt gibt zehn Zähler, ein Popup
+je Punkt wäre ein Dauerflimmern quer über das Labyrinth — erst Kraftpille
+und gefressener Geist sind eine Meldung wert. Line Fall zeigte die Punktzahl
+vorher überhaupt nicht im Spielbereich.
+
+**Ein Knopfstil statt fünf.** `.spielknopf` bringt jetzt Radius, Rand,
+Fläche, Antipp-Reaktion und die Deaktiv-Blässe selbst mit; die Spiele setzen
+nur noch die Klasse. **Wichtig: `inline-flex`, nicht `inline-grid`** — ein
+Knopf wie „← Zurück" hat zwei Kinder, und ein Raster stapelt sie
+untereinander. `.spielknopf-gross` ist die Variante für den Weiter-Knopf,
+ohne Rand (die Knöpfe bringen ihre eigene kräftige Füllung mit).
+
+**Ein Brett-Look statt vier.** `.spielbrett-rahmen` gibt allen Brettern
+denselben Radius und Rahmen. Der Rahmen ist ein **innerer Schatten**, kein
+`border`: `.spielbrett` rechnet seine Breite aus `100cqw`/`100cqh`, und ein
+echter Rand addiert zwei Pixel — auf 375 × 560 kann genau das den Ausschlag
+geben. Die Rahmenfarbe kommt aus `--spielfarbe`.
+
+**Color Pour benutzt endlich das gemeinsame Gerüst** (`.spielseite`,
+`.spielbuehne`/`.spielbrett`, `.nur-bei-platz`). Es war das einzige Spiel,
+das scrollen durfte, und rechnete seine Brettgröße selbst.
+
+**Die nachgebauten Steuerkreuze sind weg.** Snake Rush und Merge Up hatten
+den Baustein von Hand kopiert, weil sie eine flachere Anordnung brauchen —
+den Kopien fehlten `touch-none`, `select-none` und die Unterdrückung des
+Kontextmenüs, und dadurch öffnete langes Drücken auf einem Pfeil das
+iPhone-Auswahlmenü. `Steuerkreuz` kennt die Anordnung jetzt selbst
+(`kompakt`). Die Winkel-Trefffläche gibt es dort bewusst nicht: In der
+flachen Anordnung liegt die Mitte des Kastens genau auf dem Pfeil nach
+unten.
+
+Nachgemessen: **alle vierzehn Spiele passen auf 375 × 560 ohne Scrollen.**
+
+## Ausliefern
+
+Läuft auf dem **Hetzner-Webpaket** unter `spiele.klarvorteil.de`, nicht mehr
+auf Netlify. Grund: Das Netlify-Freikontingent lief am 15.08.2026 voll — die
+Seite antwortete mit HTTP 503 (`usage_exceeded`) und Deploys wurden
+abgelehnt. Das Webpaket ist ohnehin bezahlt und hat kein Kontingent.
+
+`.github/workflows/ausliefern.yml` baut bei jedem Push auf `main`, lässt die
+Tests laufen und lädt `dist/` per FTPS hoch. Die Zugangsdaten liegen als
+GitHub-Secrets (`FTP_HOST`, `FTP_BENUTZER`, `FTP_PASSWORT`, `FTP_ZIEL`).
+
+**Vorsicht beim `FTP_ZIEL`:** Der Abgleich löscht auf dem Server alles, was
+nicht mehr im Bau vorkommt. Zeigt der Pfad aufs Stammverzeichnis, löscht er
+die ganze Webseite — deshalb der Prüfschritt im Ablauf.
+
+`public/.htaccess` setzt die eine Regel, auf die es ankommt: `no-cache` für
+`sw.js`, `index.html` und das Manifest. Kommt die `sw.js` aus dem
+Zwischenspeicher, bemerkt ein installiertes iPad eine neue Fassung nicht.
+Eine Umschreibung auf `index.html` braucht die App **nicht** — die Adresse
+steht hinter dem Rautezeichen, der Server sieht immer nur `/`.
+
+`netlify.toml` bleibt vorerst liegen, damit während des Umzugs beide Wege
+funktionieren.
 
 ## Befehle
 

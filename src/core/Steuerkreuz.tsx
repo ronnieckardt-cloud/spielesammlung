@@ -25,9 +25,26 @@ type Richtung = 'up' | 'down' | 'left' | 'right';
 export function Steuerkreuz({
   onRichtung,
   aktiv = true,
+  kompakt = false,
 }: {
   onRichtung: (richtung: Richtung) => void;
   aktiv?: boolean;
+  /**
+   * Flachere Anordnung in zwei Reihen statt drei: oben der Pfeil nach oben,
+   * darunter links/unten/rechts nebeneinander. Spart rund 50 Pixel Höhe.
+   *
+   * Snake Rush und Merge Up hatten sich diese Anordnung von Hand nachgebaut,
+   * weil bei ihnen die Höhe knapp ist. Statt zwei Kopien mitzuschleppen
+   * kennt der Baustein sie jetzt selbst — den Kopien fehlten nämlich
+   * `touch-none`, `select-none` und die Unterdrückung des Kontextmenüs, und
+   * dadurch öffnete langes Drücken auf einem Pfeil das iPhone-Auswahlmenü.
+   *
+   * Die Winkel-Trefffläche (siehe `aufFlaeche`) gibt es hier **nicht**: In
+   * dieser Anordnung liegt die Mitte des Kastens genau auf dem Pfeil nach
+   * unten, ein Totbereich dort wäre also unsinnig. Nötig ist sie hier auch
+   * nicht — es bleiben nur zwei von sechs Feldern frei statt fünf von neun.
+   */
+  kompakt?: boolean;
 }) {
   const start = useRef<number | undefined>(undefined);
   const folge = useRef<number | undefined>(undefined);
@@ -108,18 +125,33 @@ export function Steuerkreuz({
 
   const platz = <div className="size-12" aria-hidden="true" />;
 
+  const gemeinsam = {
+    className: `grid touch-none grid-cols-3 gap-0.5 select-none ${kompakt ? '' : 'grid-rows-3'}`,
+    style: { touchAction: 'none' } as const,
+    role: 'group',
+    'aria-label': 'Steuerkreuz',
+    onPointerUp: loslassen,
+    onPointerLeave: loslassen,
+    onPointerCancel: loslassen,
+    // Ohne das öffnet langes Drücken auf einem Pfeil das iPhone-Auswahlmenü.
+    onContextMenu: (e: { preventDefault: () => void }) => e.preventDefault(),
+  };
+
+  if (kompakt) {
+    return (
+      <div {...gemeinsam}>
+        {platz}
+        {taste('up', 'Nach oben', '↑')}
+        {platz}
+        {taste('left', 'Nach links', '←')}
+        {taste('down', 'Nach unten', '↓')}
+        {taste('right', 'Nach rechts', '→')}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className="grid touch-none grid-cols-3 grid-rows-3 gap-0.5 select-none"
-      style={{ touchAction: 'none' }}
-      role="group"
-      aria-label="Steuerkreuz"
-      onPointerDown={aufFlaeche}
-      onPointerUp={loslassen}
-      onPointerLeave={loslassen}
-      onPointerCancel={loslassen}
-      onContextMenu={(e) => e.preventDefault()}
-    >
+    <div {...gemeinsam} onPointerDown={aufFlaeche}>
       {platz}
       {taste('up', 'Nach oben', '↑')}
       {platz}

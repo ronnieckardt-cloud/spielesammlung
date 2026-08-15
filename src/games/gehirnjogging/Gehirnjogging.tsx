@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { sfx } from '../../core/sfx';
+import { Startbildschirm } from '../../core/Startbildschirm';
+import type { DekoTeil } from '../../core/Startbildschirm';
 import type { GameProps } from '../../core/types';
+import { GehirnjoggingIcon } from './Icon';
 import { KopfrechnenAnzeige } from './KopfrechnenAnzeige';
 import { aufgabeAbschliessen, naechsteAufgabe, neuesLevel } from './logik';
 import type { Zustand } from './logik';
@@ -20,7 +23,32 @@ const VARIANTEN_NAMEN: Record<Zustand['variante'], string> = {
   muster: 'Muster erkennen',
 };
 
-export function Gehirnjogging({ onScore, onGameOver, settings }: GameProps) {
+/** Rechenzeichen als Deko — feste Liste, kein Zufall. */
+const DEKO: readonly DekoTeil[] = [
+  { x: 9, y: 12, winkel: -12, verzoegerung: 0, inhalt: <Zeichen text="+" groesse={34} /> },
+  { x: 85, y: 10, winkel: 14, verzoegerung: 0.6, inhalt: <Zeichen text="×" groesse={28} /> },
+  { x: 87, y: 71, winkel: -8, verzoegerung: 1.2, inhalt: <Zeichen text="−" groesse={38} /> },
+  { x: 5, y: 74, winkel: 10, verzoegerung: 0.35, inhalt: <Zeichen text="÷" groesse={30} /> },
+  { x: 92, y: 42, winkel: 20, verzoegerung: 1.65, inhalt: <Zeichen text="=" groesse={24} /> },
+  { x: 3, y: 44, winkel: -20, verzoegerung: 0.9, inhalt: <Zeichen text="?" groesse={32} /> },
+];
+
+function Zeichen({ text, groesse }: { text: string; groesse: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="block font-black text-white/45"
+      style={{ fontSize: groesse, lineHeight: 1 }}
+    >
+      {text}
+    </span>
+  );
+}
+
+export function Gehirnjogging({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+  // Nach „Nochmal" (= nächstes Level) direkt weiterspielen — der
+  // Startbildschirm gehört nur ans Betreten des Spiels.
+  const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
   // Nur für Kopfrechnen/Muster: welche der vier Zahlen wurde angeklickt.
   // Merk-Folgen führt seine Eingabe selbst, siehe MerkfolgenAnzeige.
@@ -67,6 +95,21 @@ export function Gehirnjogging({ onScore, onGameOver, settings }: GameProps) {
     setZ(neuesLevel(geklemmt));
   }, []);
 
+  if (!gestartet) {
+    return (
+      <Startbildschirm
+        titel="Brain Blitz"
+        untertitel="Rechnen, merken, Muster erkennen."
+        bestScore={bestScore}
+        verlauf="linear-gradient(160deg, #f59e0b 0%, #db2777 48%, #6d28d9 100%)"
+        deko={DEKO}
+        Symbol={GehirnjoggingIcon}
+        knopfFarbe="#be185d"
+        onStart={() => setGestartet(true)}
+      />
+    );
+  }
+
   const aufgabe = z.aufgaben[z.index];
   if (!aufgabe) return null;
 
@@ -81,7 +124,7 @@ export function Gehirnjogging({ onScore, onGameOver, settings }: GameProps) {
             onClick={() => beiLevelWechsel(z.level - 1)}
             disabled={z.level <= 1}
             aria-label="Voriges Level"
-            className="rounded-lg border border-rand bg-flaeche spielknopf px-2 py-1 text-base leading-none disabled:opacity-30"
+            className="spielknopf text-base leading-none"
           >
             ‹
           </button>
@@ -90,7 +133,7 @@ export function Gehirnjogging({ onScore, onGameOver, settings }: GameProps) {
             type="button"
             onClick={() => beiLevelWechsel(z.level + 1)}
             aria-label="Nächstes Level"
-            className="rounded-lg border border-rand bg-flaeche spielknopf px-2 py-1 text-base leading-none"
+            className="spielknopf text-base leading-none"
           >
             ›
           </button>
@@ -151,7 +194,7 @@ export function Gehirnjogging({ onScore, onGameOver, settings }: GameProps) {
           type="button"
           onClick={beiWeiter}
           autoFocus
-          className="rounded-lg px-6 py-3 font-semibold text-grund"
+          className="spielknopf spielknopf-gross text-grund"
           style={{ backgroundColor: 'var(--color-fokus)' }}
         >
           Weiter

@@ -379,7 +379,7 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
         />
         <div
           ref={rasterRef}
-          className="spielbrett grid touch-none gap-1"
+          className="spielbrett spielbrett-rahmen grid touch-none gap-1 p-1"
           style={
             {
               gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))`,

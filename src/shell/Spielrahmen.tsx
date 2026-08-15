@@ -147,7 +147,7 @@ export function Spielrahmen({
         <button
           type="button"
           onClick={onExit}
-          className="spielknopf rounded-lg border border-rand bg-flaeche px-3 py-2 text-sm font-medium hover:bg-flaeche-hoch"
+          className="spielknopf text-sm font-medium"
         >
           <span aria-hidden="true">←</span> Zurück
         </button>

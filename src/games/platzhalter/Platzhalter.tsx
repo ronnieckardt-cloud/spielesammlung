@@ -5,7 +5,10 @@ import { useInput } from '../../core/useInput';
 import { Steuerkreuz } from '../../core/Steuerkreuz';
 import { saatAus } from '../../core/rng';
 import { sfx } from '../../core/sfx';
+import { Startbildschirm } from '../../core/Startbildschirm';
+import type { DekoTeil } from '../../core/Startbildschirm';
 import type { GameProps } from '../../core/types';
+import { PlatzhalterIcon } from './Icon';
 import { bewegen, neuesSpiel, START_ZEIT, zeitLaufen } from './logik';
 import type { Richtung } from './logik';
 import { Sternenschlucker } from './Figur';
@@ -25,7 +28,27 @@ const istRichtung = (wert: string): wert is Richtung =>
  * trägt: Es benutzt alle vier gemeinsamen Bausteine (Uhr, Eingabe, Zufall,
  * Ton) und meldet Punkte und Ende ausschließlich über seine Props.
  */
-export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
+/** Sterne und kleine Sternenschlucker als Deko — feste Liste, kein Zufall. */
+const DEKO: readonly DekoTeil[] = [
+  { x: 9, y: 13, winkel: -12, verzoegerung: 0, inhalt: <Stern groesse={26} /> },
+  { x: 85, y: 10, winkel: 14, verzoegerung: 0.6, inhalt: <Stern groesse={18} /> },
+  { x: 88, y: 72, winkel: -8, verzoegerung: 1.2, inhalt: <Sternenschlucker groesse={44} /> },
+  { x: 5, y: 74, winkel: 10, verzoegerung: 0.35, inhalt: <Stern groesse={22} /> },
+  { x: 92, y: 42, winkel: 20, verzoegerung: 1.6, inhalt: <Stern groesse={15} /> },
+  { x: 3, y: 44, winkel: -22, verzoegerung: 0.9, inhalt: <Sternenschlucker groesse={34} /> },
+];
+
+/** Ein einzelner Stern fürs Titelbild. */
+function Stern({ groesse }: { groesse: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={groesse} height={groesse} fill={ZIEL_FARBE} aria-hidden="true">
+      <path d="M12 2l2.5 6.9H21l-5.6 4.4 2.1 7.1L12 16.2 6.5 20.4l2.1-7.1L3 8.9h6.5z" />
+    </svg>
+  );
+}
+
+export function Platzhalter({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+  const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState(() => neuesSpiel(saatAus('platzhalter', Date.now())));
   const brett = useRef<HTMLDivElement>(null);
 
@@ -37,10 +60,10 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
       if (!istRichtung(aktion)) return;
       bewege(aktion);
     },
-    { bereich: brett, wiederholen: ['up', 'down', 'left', 'right'], aktiv: !z.vorbei },
+    { bereich: brett, wiederholen: ['up', 'down', 'left', 'right'], aktiv: gestartet && !z.vorbei },
   );
 
-  useGameLoop((dt) => setZ((alt) => zeitLaufen(alt, dt)), { fps: 20, running: !z.vorbei });
+  useGameLoop((dt) => setZ((alt) => zeitLaufen(alt, dt)), { fps: 20, running: gestartet && !z.vorbei });
 
   useEffect(() => {
     onScore(z.punkte);
@@ -55,6 +78,21 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
     // onGameOver darf nur einmal kommen — deshalb hängt das nur an "vorbei".
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [z.vorbei]);
+
+  if (!gestartet) {
+    return (
+      <Startbildschirm
+        titel="Star Dash"
+        untertitel="Fang die Sterne, bevor die Zeit abläuft!"
+        bestScore={bestScore}
+        verlauf="linear-gradient(165deg, #1e1b4b 0%, #1d4ed8 45%, #0ea5e9 100%)"
+        deko={DEKO}
+        Symbol={PlatzhalterIcon}
+        knopfFarbe="#1d4ed8"
+        onStart={() => setGestartet(true)}
+      />
+    );
+  }
 
   const anteil = Math.max(0, Math.min(1, z.restZeit / START_ZEIT));
   const knapp = z.restZeit <= 5;
@@ -84,7 +122,7 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
       <div className="spielbuehne">
       <div
         ref={brett}
-        className="spielbrett grid touch-none gap-2"
+        className="spielbrett spielbrett-rahmen grid touch-none gap-2 p-1.5"
         style={
           {
             gridTemplateColumns: `repeat(${z.breite}, minmax(0, 1fr))`,

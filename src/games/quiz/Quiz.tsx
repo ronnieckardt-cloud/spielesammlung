@@ -153,7 +153,7 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
             onClick={() => beiLevelWechsel(z.level - 1)}
             disabled={z.level <= 1}
             aria-label="Voriges Level"
-            className="rounded-lg border border-rand bg-flaeche spielknopf px-2 py-1 text-base leading-none disabled:opacity-30"
+            className="spielknopf text-base leading-none"
           >
             ‹
           </button>
@@ -162,7 +162,7 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
             type="button"
             onClick={() => beiLevelWechsel(z.level + 1)}
             aria-label="Nächstes Level"
-            className="rounded-lg border border-rand bg-flaeche spielknopf px-2 py-1 text-base leading-none"
+            className="spielknopf text-base leading-none"
           >
             ›
           </button>
@@ -258,7 +258,7 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
           type="button"
           onClick={beiWeiter}
           autoFocus
-          className="rounded-lg px-6 py-3 font-semibold text-grund"
+          className="spielknopf spielknopf-gross text-grund"
           style={{ backgroundColor: 'var(--color-fokus)' }}
         >
           Weiter

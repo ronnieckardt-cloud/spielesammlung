@@ -5,6 +5,7 @@ import { useInput } from '../../core/useInput';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
 import { Komboherz } from '../../core/Komboherz';
+import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import type { GameProps } from '../../core/types';
 import {
   BREITE,
@@ -289,6 +290,11 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
     onScore(z.punkte);
   }, [z.punkte, onScore]);
 
+  // Line Fall zeigte die Punktzahl bisher gar nicht im Spielbereich — nur in
+  // der Kopfzeile der Hülle. Das Popup über dem Brett bringt den Gewinn
+  // dorthin, wo man ohnehin hinsieht, und kostet keine Höhe.
+  const gewinn = usePunktegewinn(z.punkte);
+
   useEffect(() => {
     const differenz = z.zeilenGesamt - zeilenVorherRef.current;
     zeilenVorherRef.current = z.zeilenGesamt;
@@ -350,6 +356,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
         {/* Dasselbe Kombo-Herz wie in Block Burst. Hier zählt es die Serie
             von Vierfach-Löschungen — die ist selten, und genau deshalb darf
             sie auffallen. */}
+        <Punktegewinn gewinn={gewinn} />
         <Komboherz
           kombo={z.vierfachStreak}
           ruhig={settings.reducedMotion}
@@ -358,7 +365,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
         />
         <div
           ref={feldRef}
-          className="spielbrett relative touch-none rounded-lg border border-rand bg-rand"
+          className="spielbrett spielbrett-rahmen relative touch-none bg-rand"
           style={
             {
               maxWidth: BREITE * ZELLE_PX,
@@ -411,7 +418,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
           type="button"
           onClick={() => anwenden('drehenUhr')}
           disabled={z.vorbei}
-          className="spielknopf rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf text-sm"
         >
           <span aria-hidden="true">↺</span> Drehen
         </button>
@@ -419,7 +426,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
           type="button"
           onClick={() => anwenden('hartFallen')}
           disabled={z.vorbei}
-          className="spielknopf rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf text-sm"
         >
           <span aria-hidden="true">⬇</span> Fallen
         </button>
@@ -427,7 +434,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
           type="button"
           onClick={() => anwenden('halten')}
           disabled={z.vorbei || z.halteBenutzt}
-          className="spielknopf rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf text-sm"
         >
           <span aria-hidden="true">⇄</span> Halten
         </button>

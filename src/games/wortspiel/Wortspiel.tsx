@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { sfx } from '../../core/sfx';
+import { Startbildschirm } from '../../core/Startbildschirm';
+import type { DekoTeil } from '../../core/Startbildschirm';
 import type { GameProps } from '../../core/types';
+import { WortspielIcon } from './Icon';
 import { antwortWaehlen, naechstesWort, neuesLevel } from './logik';
 import type { Zustand } from './logik';
 
@@ -14,7 +17,32 @@ const FALSCH_FARBE = '#ef4444';
  */
 let naechsteLevelNummer = 1;
 
-export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
+/** Buchstabenplättchen als Deko — feste Liste, kein Zufall. */
+const DEKO: readonly DekoTeil[] = [
+  { x: 8, y: 12, winkel: -12, verzoegerung: 0, inhalt: <Plaettchen buchstabe="W" groesse={40} /> },
+  { x: 85, y: 10, winkel: 14, verzoegerung: 0.6, inhalt: <Plaettchen buchstabe="O" groesse={32} /> },
+  { x: 87, y: 71, winkel: -8, verzoegerung: 1.2, inhalt: <Plaettchen buchstabe="R" groesse={44} /> },
+  { x: 5, y: 74, winkel: 10, verzoegerung: 0.35, inhalt: <Plaettchen buchstabe="T" groesse={36} /> },
+  { x: 92, y: 42, winkel: 20, verzoegerung: 1.65, inhalt: <Plaettchen buchstabe="ß" groesse={26} /> },
+  { x: 3, y: 44, winkel: -20, verzoegerung: 0.9, inhalt: <Plaettchen buchstabe="Ä" groesse={30} /> },
+];
+
+function Plaettchen({ buchstabe, groesse }: { buchstabe: string; groesse: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="grid place-items-center rounded-lg bg-white/90 font-black text-rose-700 shadow-lg"
+      style={{ width: groesse, height: groesse, fontSize: groesse * 0.55 }}
+    >
+      {buchstabe}
+    </span>
+  );
+}
+
+export function Wortspiel({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+  // Nach „Nochmal" (= nächstes Level) direkt weiterspielen — der
+  // Startbildschirm gehört nur ans Betreten des Spiels.
+  const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
 
   useEffect(() => {
@@ -47,6 +75,21 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
     setZ(neuesLevel(geklemmt));
   }, []);
 
+  if (!gestartet) {
+    return (
+      <Startbildschirm
+        titel="Word Play"
+        untertitel="Welches Wort ist richtig geschrieben?"
+        bestScore={bestScore}
+        verlauf="linear-gradient(160deg, #be123c 0%, #9333ea 50%, #1d4ed8 100%)"
+        deko={DEKO}
+        Symbol={WortspielIcon}
+        knopfFarbe="#be123c"
+        onStart={() => setGestartet(true)}
+      />
+    );
+  }
+
   const wort = z.woerter[z.index];
   if (!wort) return null;
 
@@ -61,7 +104,7 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
             onClick={() => beiLevelWechsel(z.level - 1)}
             disabled={z.level <= 1}
             aria-label="Voriges Level"
-            className="rounded-lg border border-rand bg-flaeche spielknopf px-2 py-1 text-base leading-none disabled:opacity-30"
+            className="spielknopf text-base leading-none"
           >
             ‹
           </button>
@@ -70,7 +113,7 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
             type="button"
             onClick={() => beiLevelWechsel(z.level + 1)}
             aria-label="Nächstes Level"
-            className="rounded-lg border border-rand bg-flaeche spielknopf px-2 py-1 text-base leading-none"
+            className="spielknopf text-base leading-none"
           >
             ›
           </button>
@@ -163,7 +206,7 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
           type="button"
           onClick={beiWeiter}
           autoFocus
-          className="rounded-lg px-6 py-3 font-semibold text-grund"
+          className="spielknopf spielknopf-gross text-grund"
           style={{ backgroundColor: 'var(--color-fokus)' }}
         >
           Weiter

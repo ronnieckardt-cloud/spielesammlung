@@ -226,7 +226,7 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
       <svg
         ref={svgRef}
         viewBox={`0 0 ${FELD_BREITE} ${FELD_HOEHE}`}
-        className="spielbrett touch-none rounded-2xl border border-rand bg-flaeche"
+        className="spielbrett spielbrett-rahmen touch-none bg-flaeche"
         style={{ '--vz': FELD_BREITE / FELD_HOEHE } as CSSProperties}
         onPointerDown={anlegen}
         onPointerMove={zielen}
