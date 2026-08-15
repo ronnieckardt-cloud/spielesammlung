@@ -75,6 +75,34 @@
   animation: pulsieren 1.1s ease-in-out infinite;
 }
 
+/* Wandernder Lichtschimmer über den Menü-Kacheln (Startseite) — läuft alle
+   paar Sekunden einmal quer drüber, mit eigenem Zeitversatz je Kachel
+   (--glanz-verzoegerung), damit nicht alle gleichzeitig aufblitzen. */
+@keyframes kachel-glanz {
+  0%,
+  18% {
+    transform: translateX(-130%) rotate(20deg);
+  }
+  38%,
+  100% {
+    transform: translateX(230%) rotate(20deg);
+  }
+}
+
+.kachel-glanz {
+  position: absolute;
+  inset: -60%;
+  background: linear-gradient(
+    75deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 58%
+  );
+  animation: kachel-glanz 5s ease-in-out infinite;
+  animation-delay: var(--glanz-verzoegerung, 0s);
+  pointer-events: none;
+}
+
 /* Zerbröseln für auflösende Reihen/Spalten (Blockblitz) — jede Zelle bricht
    mit eigenem Zeitversatz auseinander (--verzoegerung), nicht alle auf
    einmal. */

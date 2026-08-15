@@ -1,18 +1,13 @@
-/** Eigenes Symbol statt Emoji — ein schreibender Stift. */
+/** Eigenes Symbol statt Emoji — bunter Stift beim Schreiben. */
 export function WortspielIcon({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M4 20l.9-4.4L15.4 5.1a1.9 1.9 0 012.7 0l1.2 1.2a1.9 1.9 0 010 2.7L8.8 19.5 4 20z" />
-      <path d="M13.6 6.9l3 3" />
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path d="M4 20l.9-4.4 3.5 3.5L4 20z" fill="#fde68a" />
+      <path d="M4.9 15.6l9.5-9.5 3.5 3.5-9.5 9.5z" fill="#facc15" />
+      <path
+        d="M14.4 6.1l1.9-1.9a1.9 1.9 0 012.7 0l.8.8a1.9 1.9 0 010 2.7l-1.9 1.9z"
+        fill="#ffffff"
+      />
     </svg>
   );
 }

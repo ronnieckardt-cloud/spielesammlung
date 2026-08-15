@@ -1,18 +1,15 @@
-/** Eigenes Symbol statt Emoji — ein Funken-Stern, passend zu "Star Dash". */
+/** Eigenes Symbol statt Emoji — großer Funken-Stern mit kleinem Begleitfunken. */
 export function PlatzhalterIcon({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M12 3c0 4.2-1.1 7.2-4.2 9C10.9 13.8 12 16.8 12 21c0-4.2 1.1-7.2 4.2-9-3.1-1.8-4.2-4.8-4.2-9z" />
-      <path d="M4.5 16.5c0 1.6-.5 2.7-1.6 3.4.9.5 1.4 1.4 1.6 2.6" />
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path
+        d="M12 2c0 4.6-1.2 7.8-4.6 9.8C10.8 13.8 12 17 12 21.6c0-4.6 1.2-7.8 4.6-9.8C13.2 9.8 12 6.6 12 2z"
+        fill="#ffffff"
+      />
+      <path
+        d="M18.3 14.2c0 1.9-.6 3.2-2 4 1.4.8 2 2.1 2 4 0-1.9.6-3.2 2-4-1.4-.8-2-2.1-2-4z"
+        fill="#facc15"
+      />
     </svg>
   );
 }

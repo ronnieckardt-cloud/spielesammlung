@@ -115,11 +115,22 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
 
-Kachel-Symbole sind eigene, kleine SVG-Icons (`games/<name>/Icon.tsx`),
-keine Emojis — Strich-Icons, `stroke="currentColor"`, 24×24 Viewbox, weiß auf
-der Akzentfarbe. Das Kachelmenü selbst zeigt bewusst **nur** das Icon, ohne
-Titel oder Beschreibungstext (wie eine Reihe kleiner App-Symbole) — Titel und
-Bestwert stehen weiterhin im `aria-label` für Screenreader.
+Kachel-Symbole sind eigene, kleine SVG-Icons (`games/<name>/Icon.tsx`), keine
+Emojis, 24×24 Viewbox. Bewusst **nicht** einfarbig (erste Fassung war reines
+`stroke="currentColor"` — Rückmeldung: sieht altbacken/zu einfach aus) —
+jetzt gefüllte Formen mit zwei bis drei festen Hex-Farben je Icon, wie eine
+kleine Mini-Illustration der eigentlichen Spielszene (z. B. Color Pour zeigt
+ein Glas mit echten Farbschichten, Block Burst bunte Einzelblöcke). Das
+Kachelmenü selbst zeigt Icon **und** Name (Name als kleine Beschriftung unter
+der Kachel, kein Beschreibungstext mehr) — nach kurzem Test ganz ohne Namen
+war die Rückmeldung, dass man dann nicht erkennt, was ein Symbol bedeutet.
+Bestwert steht weiterhin nur im `aria-label` für Screenreader, nicht sichtbar.
+
+Kachel-Hintergrund ist ein Farbverlauf aus der Akzentfarbe (heller/dunkler
+über `color-mix()`, kein zweites Hex pro Spiel nötig), dazu ein farbiger
+Schlagschatten und ein wandernder Lichtschimmer (`.kachel-glanz` in
+`index.css`, `--glanz-verzoegerung` je Kachel versetzt, damit nicht alle
+gleichzeitig aufblitzen) — sonst wirkte die Startseite zu flach/grau.
 
 Ausnahme auf ausdrücklichen Wunsch: Die Spielfigur in Sternenfang
 (`games/platzhalter/Platzhalter.tsx`, Komponente `KatzenGesicht`) ist

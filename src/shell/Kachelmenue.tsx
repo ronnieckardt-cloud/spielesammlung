@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { spiele } from '../core/registry';
 import { bestwert } from './speicher';
 
@@ -40,24 +41,35 @@ export function Kachelmenue({
         </nav>
       </header>
 
-      {/* Bewusst nur Icon-Kacheln, ohne Namen oder Beschreibung — wie eine
-          Reihe kleiner App-Symbole. Name und Bestwert bleiben für
-          Screenreader über aria-label erhalten. */}
-      <ul className="grid grid-cols-4 gap-4 sm:grid-cols-5">
-        {spiele.map((spiel) => {
+      {/* Icon-Kacheln wie kleine App-Symbole vom Handy-Startbildschirm —
+          Farbverlauf statt Volltonfarbe, wandernder Glanz, Name als kleine
+          Beschriftung darunter (kein Untertitel mehr, nur der Name). */}
+      <ul className="grid grid-cols-3 gap-x-4 gap-y-5 sm:grid-cols-4 md:grid-cols-5">
+        {spiele.map((spiel, i) => {
           const beste = bestwert(spiel.id);
           const Icon = spiel.Icon;
           return (
-            <li key={spiel.id}>
+            <li key={spiel.id} className="flex flex-col items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => onSpielen(spiel.id)}
                 aria-label={`${spiel.title} — ${beste > 0 ? `beste Punktzahl ${beste}` : 'noch nicht gespielt'}`}
-                style={{ backgroundColor: spiel.accent }}
-                className="flex aspect-square w-full items-center justify-center rounded-2xl text-white shadow-sm transition-transform active:scale-95"
+                style={{
+                  background: `linear-gradient(150deg, color-mix(in srgb, ${spiel.accent} 100%, white 30%), ${spiel.accent} 55%, color-mix(in srgb, ${spiel.accent} 100%, black 22%))`,
+                  boxShadow: `0 6px 16px -6px color-mix(in srgb, ${spiel.accent} 70%, transparent)`,
+                }}
+                className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-2xl text-white transition-transform active:scale-95"
               >
-                <Icon className="size-8 sm:size-9" />
+                <span
+                  aria-hidden="true"
+                  className="kachel-glanz"
+                  style={{ '--glanz-verzoegerung': `${i * 0.6}s` } as CSSProperties}
+                />
+                <Icon className="relative size-9 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)] sm:size-10" />
               </button>
+              <span className="max-w-full truncate text-xs font-medium text-gedaempft">
+                {spiel.title}
+              </span>
             </li>
           );
         })}
