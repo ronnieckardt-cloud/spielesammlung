@@ -1867,6 +1867,86 @@ Fluchtpunkt und die Reihe wirkt auseinandergerissen.
 der 1,7-Hz-Grenze des Projekts). Eine leere Fläche liest sich als Fehler,
 ein Platzhalter in der Form dessen, was gleich kommt, als „gleich da".
 
+## Navigation und Seitenaufteilung
+
+Stufe 2 des Qualitäts-Umbaus. Lange stand hier bewusst **keine**
+Reiterleiste: Bei elf Spielen hätte sie sieben davon hinter einem Klick
+versteckt, und die App passte auf einen Bildschirm. Diese Rechnung hat sich
+umgedreht.
+
+Nachgemessen bei zwanzig Spielen: Die Startseite scrollte, die Wortmarke
+schob sich beim Scrollen **unter die Statusleiste**, und Bestenliste und
+Duelle lagen als schmale Zeilen unter der Falz. Dazu kamen Fortschritt und
+Erfolge als eigene Bereiche. Ab hier kostet eine Leiste weniger, als sie
+einbringt.
+
+Fünf Punkte: **Start, Spiele, Rangliste, Fortschritt, Mehr.** Ab sechs wird
+jedes Ziel schmaler als ein Daumen. Konto, Einstellungen und Duelle liegen
+deshalb hinter „Mehr" — und lassen dessen Punkt leuchten, sonst stünde man
+auf der Kontoseite vor einer Leiste, in der nichts hervorgehoben ist.
+
+Der aktive Punkt ist an **drei** Dingen erkennbar: Farbe, gefülltes Symbol
+und ein Kissen dahinter. Farbe allein wäre für ein farbfehlsichtiges Kind
+kein Merkmal — und „wo bin ich?" ist genau die Frage, die eine Navigation
+beantworten muss.
+
+**Die Startseite ist jetzt eine Zentrale, kein Regal.** Sie beantwortet von
+oben nach unten vier Fragen in der Reihenfolge, in der ein Kind sie stellt:
+„Bin ich das?" (Begrüßung, Stufe) — „Wo war ich?" (Weiterspielen, der
+größte Knopf der Seite) — „Was kann ich als Nächstes holen?" (drei offene
+Ziele) — „Was gibt's noch?" (acht Kacheln, der Rest hinter einem Knopf).
+Das vollständige Raster liegt auf einer eigenen Seite; die Reihenfolge dort
+bleibt fest.
+
+**Sterne statt „Neu".** Vorher trug jede ungespielte Kachel ein oranges
+„Neu" — bei zwanzig Spielen zwanzig Fähnchen gleichzeitig, die lauter
+schrien als die Symbole darunter. Wenn alles neu ist, ist nichts neu. Jetzt
+stehen dort die verdienten Sterne. Der Unterschied ist grundsätzlich: „Neu"
+beschreibt eine **Abwesenheit** und verschwindet, sobald man etwas tut;
+Sterne beschreiben einen **Besitz** und wachsen. Drei blasse Sterne sagen
+genauso deutlich „hier ist noch nichts" — und zusätzlich, wie viel es zu
+holen gibt.
+
+**Der Farbbruch ist zu.** Die Hüllenseiten (`Seite.tsx`) lagen auf fast
+schwarzem Grund, während die Startseite kräftig bunt war — der auffälligste
+Bruch der ganzen App, es wirkte wie zwei Programme. Sie bekommen jetzt einen
+gedämpften Abkömmling desselben Verlaufs. Bewusst dunkel gehalten und nicht
+der volle Verlauf: Ihre Farbtokens (`text-gedaempft`, `border-rand`) sind
+für dunklen Grund ausgelegt und wären auf dem hellen kontrastarm.
+
+### Die Falle, die eine ganze Stunde gekostet hätte
+
+**`body` braucht `height`, nicht `min-height` — und `#wurzel` muss die
+Flex-Kette weiterreichen.**
+
+Die Leiste war zunächst schlicht unsichtbar. Sie stand brav am Ende des
+Inhalts, und der war zweieinhalb Bildschirme lang. Zwei Ursachen, beide
+lehrreich:
+
+1. Mit `min-height: 100dvh` wächst der Körper mit seinem Inhalt. Ein Kind
+   mit `flex: 1` bekommt dadurch **nie** eine feste Höhe, und ein
+   `overflow-y: auto` darin hat nichts, woran es sich begrenzen könnte —
+   statt innen zu scrollen, schiebt der Inhalt die Seite auseinander.
+2. `#wurzel` war ein gewöhnlicher `div` ohne Stil. Damit war die Flex-Kette
+   zwischen `body` und der App unterbrochen, und jedes `flex-1` darunter
+   lief ins Leere. Dazu gehört `min-height: 0` — Flex-Kinder haben von sich
+   aus `min-height: auto` und schrumpfen deshalb nie unter ihren Inhalt.
+
+*Merksatz:* Ein innerer Scrollbereich funktioniert nur, wenn **jedes**
+Glied der Kette von `body` bis dorthin eine begrenzte Höhe hat.
+
+Nebenbei ist damit auch verlässlich, dass ein Spiel genau eine
+Bildschirmhöhe bekommt — vorher hing das daran, dass der Inhalt zufällig
+hineinpasste.
+
+**Ein laufendes Spiel bekommt keine Leiste.** Sie würde bei Dash City oder
+Ghost Chase Höhe kosten, und wer mitten im Sprung versehentlich „Rangliste"
+trifft, verliert die Runde.
+
+Nachgemessen bei 375, 768 und 1920 Pixeln: kein waagerechter Überlauf,
+nichts ragt heraus, die Leiste sitzt auf allen fünf Seiten exakt auf der
+Unterkante.
+
 ## Ausliefern
 
 Läuft auf **Netlify** unter `florian-spielesammlung.netlify.app`. Das ist

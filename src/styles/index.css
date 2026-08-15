@@ -167,7 +167,24 @@
 
   body {
     margin: 0;
-    min-height: 100dvh;
+    /*
+     * **`height`, nicht `min-height`** — und das ist keine Kosmetik.
+     *
+     * Mit `min-height` wächst der Körper mit seinem Inhalt. Ein Kind mit
+     * `flex: 1` bekommt dadurch nie eine feste Höhe, und ein
+     * `overflow-y: auto` darin hat nichts, woran es sich begrenzen könnte:
+     * Statt innen zu scrollen, schiebt der Inhalt die Seite auseinander.
+     * Genau daran ist die untere Navigationsleiste beim ersten Versuch
+     * unsichtbar geblieben — sie stand brav am Ende des Inhalts, und der
+     * war zweieinhalb Bildschirme lang.
+     *
+     * Mit fester Höhe und `overflow: hidden` scrollt ab jetzt immer ein
+     * *innerer* Bereich, und was daneben liegt (Leiste, Kopfzeile), steht
+     * fest. Das ist auch die Voraussetzung dafür, dass Spiele verlässlich
+     * genau eine Bildschirmhöhe bekommen.
+     */
+    height: 100dvh;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     /* Abstand zu Aussparung und Wischbalken bei Handys. Gehört hierher und
@@ -195,6 +212,19 @@
     /* Kein grauer Blitz beim Antippen — die Spiele geben ihre eigene
        Rückmeldung. */
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Der Wurzelknoten muss die Flex-Kette **weiterreichen**. Ohne das ist
+     er ein gewöhnlicher Block, der zu seinem Inhalt wächst — und jedes
+     `flex-1` und `min-h-0` darunter läuft ins Leere, weil es keine feste
+     Höhe gibt, auf die es sich beziehen könnte. `min-height: 0` ist der
+     Teil, den man leicht vergisst: Flex-Kinder haben von sich aus
+     `min-height: auto` und schrumpfen deshalb nie unter ihren Inhalt. */
+  #wurzel {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
   }
 
   /* Tastaturbedienung muss immer sichtbar sein. */
@@ -928,6 +958,29 @@
 
 .karte-atmet {
   animation: karte-atmet 2s ease-in-out infinite;
+}
+
+/* --------------------------------------------------------------------
+   Seitenwechsel
+   --------------------------------------------------------------------
+   Vorher wurde eine Seite schlagartig durch die nächste ersetzt. Das ist
+   der Unterschied zwischen „Dokument gewechselt" und „App bedient": Ohne
+   Übergang muss das Auge jedes Mal neu suchen, wo es gelandet ist.
+
+   Bewusst sehr kurz und sehr klein (250 ms, 8 Pixel). Ein auffälliger
+   Übergang ist beim ersten Mal schön und beim zwanzigsten im Weg — und
+   zwischen Start und Spiele wechselt man ständig. Der Keyframe endet im
+   Ruhezustand, sonst bliebe die Seite bei „weniger Bewegung" um acht
+   Pixel verschoben stehen. */
+@keyframes seite-rein {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.seiten-auftritt {
+  animation: seite-rein var(--zeit-mittel) var(--kurve) both;
 }
 
 .ruhig .kachel-rein,

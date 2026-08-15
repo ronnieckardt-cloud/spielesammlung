@@ -2,12 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { spielFinden } from './core/registry';
 import { sfxEinstellen } from './core/sfx';
 import type { Einstellungen } from './core/types';
-import { Kachelmenue } from './shell/Kachelmenue';
+import { StartSeite } from './shell/StartSeite';
+import { SpieleSeite } from './shell/SpieleSeite';
+import { FortschrittSeite } from './shell/FortschrittSeite';
+import { MehrSeite } from './shell/MehrSeite';
 import { Spielrahmen } from './shell/Spielrahmen';
 import { EinstellungenSeite } from './shell/EinstellungenSeite';
 import { BestenlisteSeite } from './shell/BestenlisteSeite';
 import { KontoSeite } from './shell/KontoSeite';
 import { DuellSeite } from './shell/DuellSeite';
+import { Unternavigation, type NavZiel } from './shell/Unternavigation';
 import { einstellungenLesen, einstellungenSchreiben } from './shell/speicher';
 import { abgleichen, duelleHolen, kontoBeobachten, kontoLaden } from './shell/konto';
 import type { Duell, Konto } from './shell/konto';
@@ -20,6 +24,9 @@ import type { Duell, Konto } from './shell/konto';
 
 export type Ansicht =
   | { art: 'menue' }
+  | { art: 'spiele' }
+  | { art: 'fortschritt' }
+  | { art: 'mehr' }
   | { art: 'spiel'; id: string }
   | { art: 'einstellungen' }
   | { art: 'bestenliste' }
@@ -32,6 +39,9 @@ function ansichtAusAdresse(): Ansicht {
   if (teile[0] === 'spiel' && teile[1] && spielFinden(teile[1])) {
     return { art: 'spiel', id: teile[1] };
   }
+  if (teile[0] === 'spiele') return { art: 'spiele' };
+  if (teile[0] === 'fortschritt') return { art: 'fortschritt' };
+  if (teile[0] === 'mehr') return { art: 'mehr' };
   if (teile[0] === 'einstellungen') return { art: 'einstellungen' };
   if (teile[0] === 'bestenliste') return { art: 'bestenliste' };
   if (teile[0] === 'konto') return { art: 'konto' };
@@ -44,6 +54,12 @@ function adresseFuer(ansicht: Ansicht): string {
   switch (ansicht.art) {
     case 'spiel':
       return `#/spiel/${ansicht.id}`;
+    case 'spiele':
+      return '#/spiele';
+    case 'fortschritt':
+      return '#/fortschritt';
+    case 'mehr':
+      return '#/mehr';
     case 'einstellungen':
       return '#/einstellungen';
     case 'bestenliste':
@@ -58,6 +74,40 @@ function adresseFuer(ansicht: Ansicht): string {
       return '#/';
   }
 }
+
+/**
+ * Welcher Punkt der unteren Leiste zu welcher Ansicht gehört.
+ *
+ * Konto, Einstellungen und Duelle liegen hinter „Mehr" und lassen deshalb
+ * dessen Punkt leuchten. Sonst stünde man auf der Kontoseite vor einer
+ * Leiste, in der **nichts** hervorgehoben ist — und die Frage „wo bin ich?",
+ * die eine Navigation beantworten soll, bliebe offen.
+ */
+function navZielFuer(ansicht: Ansicht): NavZiel {
+  switch (ansicht.art) {
+    case 'spiele':
+      return 'spiele';
+    case 'bestenliste':
+      return 'bestenliste';
+    case 'fortschritt':
+      return 'fortschritt';
+    case 'mehr':
+    case 'konto':
+    case 'einstellungen':
+    case 'duelle':
+      return 'mehr';
+    default:
+      return 'start';
+  }
+}
+
+const NAV_ANSICHT: Record<NavZiel, Ansicht> = {
+  start: { art: 'menue' },
+  spiele: { art: 'spiele' },
+  bestenliste: { art: 'bestenliste' },
+  fortschritt: { art: 'fortschritt' },
+  mehr: { art: 'mehr' },
+};
 
 export default function App() {
   const [ansicht, setAnsicht] = useState<Ansicht>(ansichtAusAdresse);
@@ -104,6 +154,8 @@ export default function App() {
 
   const zumMenue = useCallback(() => zeige({ art: 'menue' }), [zeige]);
   const zumKonto = useCallback(() => zeige({ art: 'konto' }), [zeige]);
+  const zuMehr = useCallback(() => zeige({ art: 'mehr' }), [zeige]);
+  const spielen = useCallback((id: string) => zeige({ art: 'spiel', id }), [zeige]);
 
   useEffect(() => {
     einstellungenSchreiben(einstellungen);
@@ -117,43 +169,15 @@ export default function App() {
     document.title = spiel ? `${spiel.title} — Spielesammlung` : 'Spielesammlung';
   }, [spiel]);
 
+  /*
+   * Ein laufendes Spiel bekommt den ganzen Bildschirm — ohne Leiste. Sie
+   * würde bei Dash City oder Ghost Chase wertvolle Höhe kosten, und wer
+   * mitten im Sprung versehentlich „Rangliste" trifft, verliert die Runde.
+   * Der Ausstieg läuft dort über den Zurück-Knopf in der Kopfzeile.
+   */
   if (spiel) {
     return (
-      <Spielrahmen
-        key={spiel.id}
-        spiel={spiel}
-        einstellungen={einstellungen}
-        onExit={zumMenue}
-      />
-    );
-  }
-
-  if (ansicht.art === 'einstellungen') {
-    return (
-      <EinstellungenSeite
-        einstellungen={einstellungen}
-        onAendern={setEinstellungen}
-        onZurueck={zumMenue}
-      />
-    );
-  }
-
-  if (ansicht.art === 'bestenliste') {
-    return <BestenlisteSeite konto={konto} onZurueck={zumMenue} onKonto={zumKonto} />;
-  }
-
-  if (ansicht.art === 'konto') {
-    return <KontoSeite konto={konto} onZurueck={zumMenue} />;
-  }
-
-  if (ansicht.art === 'duelle') {
-    return (
-      <DuellSeite
-        konto={konto}
-        onZurueck={zumMenue}
-        onKonto={zumKonto}
-        onSpielen={(id) => zeige({ art: 'duell', id })}
-      />
+      <Spielrahmen key={spiel.id} spiel={spiel} einstellungen={einstellungen} onExit={zumMenue} />
     );
   }
 
@@ -168,15 +192,75 @@ export default function App() {
     );
   }
 
+  const inhalt = (() => {
+    switch (ansicht.art) {
+      case 'spiele':
+        return <SpieleSeite onSpielen={spielen} />;
+      case 'fortschritt':
+        return <FortschrittSeite />;
+      case 'mehr':
+        return (
+          <MehrSeite
+            konto={konto}
+            onKonto={zumKonto}
+            onDuelle={() => zeige({ art: 'duelle' })}
+            onEinstellungen={() => zeige({ art: 'einstellungen' })}
+          />
+        );
+      case 'einstellungen':
+        return (
+          <EinstellungenSeite
+            einstellungen={einstellungen}
+            onAendern={setEinstellungen}
+            onZurueck={zuMehr}
+          />
+        );
+      case 'bestenliste':
+        return <BestenlisteSeite konto={konto} onZurueck={zumMenue} onKonto={zumKonto} />;
+      case 'konto':
+        return <KontoSeite konto={konto} onZurueck={zuMehr} />;
+      case 'duelle':
+        return (
+          <DuellSeite
+            konto={konto}
+            onZurueck={zuMehr}
+            onKonto={zumKonto}
+            onSpielen={(id) => zeige({ art: 'duell', id })}
+          />
+        );
+      default:
+        return (
+          <StartSeite
+            konto={konto}
+            onSpielen={spielen}
+            onAlleSpiele={() => zeige({ art: 'spiele' })}
+            onKonto={zumKonto}
+          />
+        );
+    }
+  })();
+
   return (
-    <Kachelmenue
-      konto={konto}
-      onSpielen={(id) => zeige({ art: 'spiel', id })}
-      onEinstellungen={() => zeige({ art: 'einstellungen' })}
-      onBestenliste={() => zeige({ art: 'bestenliste' })}
-      onDuelle={() => zeige({ art: 'duelle' })}
-      onKonto={zumKonto}
-    />
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/*
+       * Die Seite scrollt in **ihrem eigenen** Bereich, die Leiste steht
+       * daneben im Layout. Ein `position: fixed` an der Leiste würde am
+       * Seitenende Inhalt verdecken, den man mit einem Abstandhalter wieder
+       * freiräumen müsste — der auf iPhones mit Aussparung dann falsch hoch
+       * ist. So kann das gar nicht passieren.
+       *
+       * Der `key` setzt beim Seitenwechsel zweierlei zurück: die
+       * Scrollposition (sonst landet man auf der neuen Seite in der Mitte)
+       * und den Auftritt, damit er wirklich jedes Mal läuft.
+       */}
+      <div key={ansicht.art} className="min-h-0 flex-1 overflow-y-auto">
+        {inhalt}
+      </div>
+      <Unternavigation
+        aktiv={navZielFuer(ansicht)}
+        onWechsel={(ziel) => zeige(NAV_ANSICHT[ziel])}
+      />
+    </div>
   );
 }
 
@@ -215,7 +299,9 @@ function Duellrunde({
 
   if (duell === null) {
     return (
-      <p className="grid flex-1 place-items-center p-6 text-sm text-gedaempft">Duell wird geladen …</p>
+      <p className="grid flex-1 place-items-center p-6 text-sm text-gedaempft">
+        Duell wird geladen …
+      </p>
     );
   }
 
