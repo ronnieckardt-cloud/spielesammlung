@@ -26,10 +26,8 @@ import { Roehrchen } from './Roehrchen';
 import { farbpaletteFuerLevel } from './farben';
 import type { FarbEintrag } from './farben';
 
-type Tempo = 'normal' | 'schnell' | 'aus';
-const DAUER_MS: Record<Tempo, number> = { normal: 950, schnell: 380, aus: 0 };
-const TEMPO_BESCHRIFTUNG: Record<Tempo, string> = { normal: 'Normal', schnell: 'Schnell', aus: 'Aus' };
-const NAECHSTES_TEMPO: Record<Tempo, Tempo> = { normal: 'schnell', schnell: 'aus', aus: 'normal' };
+/** Feste Dauer der Gieß-Animation — läuft immer, kein Knopf zum An-/Abstellen. */
+const GIESS_DAUER_MS = 950;
 
 const SCHICHTHOEHE = ROEHRCHEN_HOEHE / KAPAZITAET;
 
@@ -66,9 +64,8 @@ function beschreibung(
   return `${basis}, von unten nach oben: ${inhalt.map((f) => palette[f]?.name ?? '').join(', ')}`;
 }
 
-export function Farbsortierer({ onScore, onGameOver, settings }: GameProps) {
+export function Farbsortierer({ onScore, onGameOver }: GameProps) {
   const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
-  const [tempo, setTempo] = useState<Tempo>(settings.reducedMotion ? 'aus' : 'normal');
   const [guss, setGuss] = useState<Guss | null>(null);
 
   // Welche Farben dieses Level zeigt — aus der Levelnummer gemischt, damit
@@ -97,12 +94,9 @@ export function Farbsortierer({ onScore, onGameOver, settings }: GameProps) {
       const nachherVon = nachher.roehrchen[quelleVorher]!;
       const vorherNach = z.roehrchen[index]!;
       const nachherNach = nachher.roehrchen[index]!;
-      const dauerMs = DAUER_MS[tempo];
 
       setZ(nachher);
       sfx('gut');
-
-      if (dauerMs === 0) return; // Tempo "aus": sofort da, keine Animation nötig
 
       setGuss({
         von: quelleVorher,
@@ -113,10 +107,10 @@ export function Farbsortierer({ onScore, onGameOver, settings }: GameProps) {
         anzahl: nachherNach.length - vorherNach.length,
         anzahlRoehrchen: z.roehrchen.length,
         t: 0,
-        dauerMs,
+        dauerMs: GIESS_DAUER_MS,
       });
     },
-    [z, guss, tempo],
+    [z, guss],
   );
 
   useGameLoop(
@@ -224,13 +218,6 @@ export function Farbsortierer({ onScore, onGameOver, settings }: GameProps) {
             className="rounded-lg border border-rand bg-flaeche px-3 py-1.5 disabled:opacity-40"
           >
             + Röhrchen
-          </button>
-          <button
-            type="button"
-            onClick={() => setTempo((t) => NAECHSTES_TEMPO[t])}
-            className="rounded-lg border border-rand bg-flaeche px-3 py-1.5"
-          >
-            Tempo: {TEMPO_BESCHRIFTUNG[tempo]}
           </button>
         </div>
       </div>

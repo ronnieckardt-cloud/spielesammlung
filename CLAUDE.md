@@ -155,6 +155,13 @@ versucht deshalb genau dasselbe Level erneut.
 - Bewusst kein Muster mehr auf den Farbschichten (war testweise drin,
   Rückmeldung: sieht unruhig aus). Nicht-visuelle Unterscheidung läuft über
   die Farbnamen im `aria-label` jedes Röhrchens.
+- Die Gieß-Animation läuft immer mit fester Dauer (`GIESS_DAUER_MS`), kein
+  Tempo-Knopf mehr. Der frühere Knopf war lokaler `useState`, der bei jeder
+  neuen Runde (Komponente wird komplett neu gemountet) auf
+  `settings.reducedMotion` zurückgesetzt wurde — auf Geräten, bei denen die
+  Systemeinstellung „weniger Bewegung" an ist, stand er dadurch nach jedem
+  Level wieder auf „aus" und musste manuell zurückgestellt werden. Jetzt
+  läuft die Animation immer, ohne Rücksicht auf diese Einstellung.
 
 ## Blockblitz — Besonderheiten
 
@@ -169,6 +176,25 @@ versucht deshalb genau dasselbe Level erneut.
   Zieh-Effekt nach jedem Zug neu auf.
 - Tempo/Position des fliegenden Teils: `zug.y - VERSATZ_Y` hebt es über den
   Finger, `ankerZentriertAuf()` (`geometrie.ts`) zentriert es aufs Ziel.
+- Tablett-Kästen sind `size-24` (96px), nicht `size-20` — bei 16px
+  Zellgröße plus Zwischenraum braucht das größte Teil (5er-Linie) 88px,
+  das passte im alten, kleineren Kasten nicht sauber rein.
+- Das fliegende Teil beim Ziehen (`TeilAnzeige` mit `zellgroesse`) benutzt
+  jetzt dieselbe gemessene Zellgröße wie das Raster (`rasterZellgroesse`,
+  über `getBoundingClientRect()`), nicht mehr eine feste `zellgroesse={24}`
+  — vorher wirkte das gezogene Teil kleiner als es später auf dem Feld
+  tatsächlich ist.
+- Auflösen einer Reihe/Spalte: `blitzZellen` ist eine `Map<Zellenschlüssel,
+  Zeitversatz>`, nicht mehr nur ein `Set` — jede Zelle zerbröselt mit
+  eigenem, diagonal gestaffeltem Zeitversatz (`(x + y) * ZERBROESELN_VERSATZ_MS`),
+  über die CSS-Variable `--verzoegerung` an `animation-delay` gereicht
+  (`index.css`). Bei „weniger Bewegung" ist der Versatz 0 — die
+  `.ruhig`-Regel kollabiert nur `animation-duration`, nicht `-delay`, das
+  muss also selbst auf 0 gesetzt werden.
+- Kurzes „+N"-Punkte-Popup (`punkte-auftauchen` in `index.css`) erscheint
+  genau beim Auflösen, über dem Spielfeld zentriert — Punkte gab es vorher
+  auch schon (`punkteFuerZug`), aber ohne direkte Rückmeldung am Ort des
+  Geschehens wirkte es unsichtbar.
 
 ## Reihenfall — Besonderheiten
 

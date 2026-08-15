@@ -75,20 +75,69 @@
   animation: pulsieren 1.1s ease-in-out infinite;
 }
 
-/* Kurzes Aufblitzen für auflösende Reihen/Spalten (Blockblitz). */
+/* Zerbröseln für auflösende Reihen/Spalten (Blockblitz) — jede Zelle bricht
+   mit eigenem Zeitversatz auseinander (--verzoegerung), nicht alle auf
+   einmal. */
 @keyframes aufloesen-blitz {
   0% {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) rotate(0deg);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.12) rotate(-4deg);
   }
   100% {
     opacity: 0;
-    transform: scale(1.15);
+    transform: scale(0.35) rotate(14deg);
   }
 }
 
 .aufloesen-blitz {
-  animation: aufloesen-blitz 0.32s ease-out forwards;
+  animation: aufloesen-blitz 0.38s ease-in forwards;
+  animation-delay: var(--verzoegerung, 0ms);
+}
+
+/* Kleine Krümel, die beim Zerbröseln wegspritzen — Richtung je Krümel über
+   --kx/--ky, Zeitversatz wie die Zelle selbst über --verzoegerung. */
+@keyframes kruemel-fallen {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--kx, 6px), var(--ky, 10px)) scale(0.2);
+  }
+}
+
+.kruemel {
+  animation: kruemel-fallen 0.42s ease-in forwards;
+  animation-delay: var(--verzoegerung, 0ms);
+}
+
+/* Kurz auftauchendes Punkte-Popup beim Auflösen (Blockblitz). */
+@keyframes punkte-auftauchen {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.85);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0) scale(1.08);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-28px) scale(1);
+  }
+}
+
+.punkte-auftauchen {
+  animation: punkte-auftauchen 0.9s ease-out forwards;
 }
 
 /* Der React-Wurzelknoten füllt den Rest der Seite. */

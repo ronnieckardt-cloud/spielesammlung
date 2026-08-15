@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
@@ -9,6 +9,7 @@ import {
   legen,
   neuesSpiel,
   passtAn,
+  punkteFuerZug,
   teilLegen,
   volleZeilenUndSpalten,
 } from './logik';
@@ -18,7 +19,10 @@ import { blockFarbe } from './farben';
 
 const VERSATZ_Y = 60; // Pixel, um die das gezogene Teil über den Finger gehoben wird
 const SCHWELLE_TIPP = 8; // Pixel Bewegung, unterhalb derer ein Antippen statt Ziehen gilt
-const BLITZ_DAUER_MS = 320;
+const FALLBACK_ZELLGROESSE = 40; // bevor das Raster zum ersten Mal gemessen wurde
+const ZERBROESELN_VERSATZ_MS = 28; // Zeitversatz je Diagonal-Schritt beim Auflösen
+const ZERBROESELN_DAUER_MS = 420; // Dauer einer einzelnen Zelle, siehe index.css
+const PUNKTE_ANZEIGE_DAUER_MS = 900;
 
 type ZugZustand = {
   pointerId: number;
@@ -61,7 +65,10 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
   const [z, setZ] = useState<Zustand>(() => neuesSpiel(saatAus('blockblitz', Date.now())));
   const [zug, setZug] = useState<ZugZustand | null>(null);
   const [ausgewaehlt, setAusgewaehlt] = useState<number | null>(null);
-  const [blitzZellen, setBlitzZellen] = useState<ReadonlySet<string> | null>(null);
+  // Zellenschlüssel → Zeitversatz in ms, für das gestaffelte Zerbröseln.
+  const [blitzZellen, setBlitzZellen] = useState<ReadonlyMap<string, number> | null>(null);
+  const [punkteAnzeige, setPunkteAnzeige] = useState<{ id: number; text: string } | null>(null);
+  const punkteAnzeigeId = useRef(0);
   const rasterRef = useRef<HTMLDivElement>(null);
 
   // Immer der aktuelle Stand, ohne dass platzieren() dafür seine Identität
@@ -80,17 +87,34 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
 
       const nachLegen = legen(aktuell.raster, teil.form, ankerX, ankerY, teil.farbe);
       const { zeilen, spalten } = volleZeilenUndSpalten(nachLegen);
+      const anzahlLinien = zeilen.length + spalten.length;
 
-      if (zeilen.length + spalten.length > 0) {
-        const positionen = new Set<string>();
+      if (anzahlLinien > 0) {
+        // Diagonal versetzt, wie beim wirklichen Zerbröseln — nicht alle Zellen
+        // auf einmal. Bei "weniger Bewegung" kein Versatz, alles sofort weg.
+        const positionen = new Map<string, number>();
         for (let y = 0; y < HOEHE; y++) {
           for (let x = 0; x < BREITE; x++) {
-            if (zeilen.includes(y) || spalten.includes(x)) positionen.add(`${x},${y}`);
+            if (zeilen.includes(y) || spalten.includes(x)) {
+              positionen.set(`${x},${y}`, settings.reducedMotion ? 0 : (x + y) * ZERBROESELN_VERSATZ_MS);
+            }
           }
         }
+        const maxVersatz = Math.max(0, ...positionen.values());
         setBlitzZellen(positionen);
-        window.setTimeout(() => setBlitzZellen(null), settings.reducedMotion ? 0 : BLITZ_DAUER_MS);
+        window.setTimeout(
+          () => setBlitzZellen(null),
+          settings.reducedMotion ? 0 : maxVersatz + ZERBROESELN_DAUER_MS,
+        );
         sfx('stufe');
+
+        const zugPunkte = punkteFuerZug(teil.form.length, anzahlLinien, aktuell.kombo + 1);
+        punkteAnzeigeId.current += 1;
+        const dieseId = punkteAnzeigeId.current;
+        setPunkteAnzeige({ id: dieseId, text: `+${zugPunkte}` });
+        window.setTimeout(() => {
+          setPunkteAnzeige((p) => (p?.id === dieseId ? null : p));
+        }, PUNKTE_ANZEIGE_DAUER_MS);
       } else {
         sfx('gut');
       }
@@ -180,12 +204,15 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
   }, [z.vorbei]);
 
   // Vorschau während des Ziehens: Zielzellen und ob dort eine Linie fertig würde.
+  // Dieselbe gemessene Zellgröße benutzt auch das fliegende Teil weiter unten,
+  // damit es beim Ziehen genauso groß erscheint wie später auf dem Feld.
   const ziehendesTeil = zug ? z.tablett[zug.tablettIndex] : null;
+  const rasterRect = zug && rasterRef.current ? rasterRef.current.getBoundingClientRect() : null;
+  const rasterZellgroesse = rasterRect ? rasterRect.width / BREITE : FALLBACK_ZELLGROESSE;
   let vorschauAnker: { ankerX: number; ankerY: number } | null = null;
-  if (zug && ziehendesTeil && rasterRef.current) {
-    const rect = rasterRef.current.getBoundingClientRect();
-    const rasterX = (zug.x - rect.left) / (rect.width / BREITE);
-    const rasterY = (zug.y - VERSATZ_Y - rect.top) / (rect.height / HOEHE);
+  if (zug && ziehendesTeil && rasterRect) {
+    const rasterX = (zug.x - rasterRect.left) / (rasterRect.width / BREITE);
+    const rasterY = (zug.y - VERSATZ_Y - rasterRect.top) / (rasterRect.height / HOEHE);
     vorschauAnker = ankerZentriertAuf(ziehendesTeil.form, rasterX, rasterY);
   }
   const vorschauGueltig =
@@ -214,51 +241,78 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
         )}
       </div>
 
-      <div
-        ref={rasterRef}
-        className="grid w-full max-w-sm touch-none gap-1"
-        style={{ gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))` }}
-        role="img"
-        aria-label={`Spielfeld, ${BREITE} mal ${HOEHE} Felder. ${z.raster.flat().filter((c) => c !== null).length} von ${BREITE * HOEHE} belegt.`}
-      >
-        {Array.from({ length: BREITE * HOEHE }, (_, i) => {
-          const x = i % BREITE;
-          const y = Math.floor(i / BREITE);
-          const schluessel = `${x},${y}`;
-          const belegtFarbe = z.raster[y]![x];
-          const istVorschau = vorschauZellen.has(schluessel);
-          const istVorschauLinie =
-            istVorschau && vorschauGueltig && (vorschauZeilen.includes(y) || vorschauSpalten.includes(x));
-          const leer = belegtFarbe === null && !istVorschau;
+      <div className="relative w-full max-w-sm">
+        <div
+          ref={rasterRef}
+          className="grid touch-none gap-1"
+          style={{ gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))` }}
+          role="img"
+          aria-label={`Spielfeld, ${BREITE} mal ${HOEHE} Felder. ${z.raster.flat().filter((c) => c !== null).length} von ${BREITE * HOEHE} belegt.`}
+        >
+          {Array.from({ length: BREITE * HOEHE }, (_, i) => {
+            const x = i % BREITE;
+            const y = Math.floor(i / BREITE);
+            const schluessel = `${x},${y}`;
+            const belegtFarbe = z.raster[y]![x];
+            const istVorschau = vorschauZellen.has(schluessel);
+            const istVorschauLinie =
+              istVorschau && vorschauGueltig && (vorschauZeilen.includes(y) || vorschauSpalten.includes(x));
+            const leer = belegtFarbe === null && !istVorschau;
+            const blitzVersatz = blitzZellen?.get(schluessel);
 
-          let farbe: string | undefined;
-          if (istVorschau) farbe = vorschauGueltig ? blockFarbe(ziehendesTeil!.farbe) : '#ef4444';
-          else if (belegtFarbe !== null) farbe = blockFarbe(belegtFarbe);
+            let farbe: string | undefined;
+            if (istVorschau) farbe = vorschauGueltig ? blockFarbe(ziehendesTeil!.farbe) : '#ef4444';
+            else if (belegtFarbe !== null) farbe = blockFarbe(belegtFarbe);
 
-          return (
-            <button
-              key={i}
-              type="button"
-              aria-hidden="true"
-              tabIndex={-1}
-              onClick={beiZelleKlick(x, y)}
-              className={`relative aspect-square rounded-md ${leer ? 'border border-rand bg-flaeche' : ''}`}
-              style={
-                farbe
-                  ? {
-                      backgroundColor: farbe,
-                      opacity: istVorschau ? 0.65 : 1,
-                      boxShadow: istVorschauLinie ? '0 0 0 2px white inset' : undefined,
-                    }
-                  : undefined
-              }
-            >
-              {blitzZellen?.has(schluessel) && (
-                <span className="aufloesen-blitz absolute inset-0 rounded-md bg-white" />
-              )}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={i}
+                type="button"
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={beiZelleKlick(x, y)}
+                className={`relative aspect-square rounded-md ${leer ? 'border border-rand bg-flaeche' : ''}`}
+                style={
+                  farbe
+                    ? {
+                        backgroundColor: farbe,
+                        opacity: istVorschau ? 0.65 : 1,
+                        boxShadow: istVorschauLinie ? '0 0 0 2px white inset' : undefined,
+                      }
+                    : undefined
+                }
+              >
+                {blitzVersatz !== undefined && (
+                  <>
+                    <span
+                      className="aufloesen-blitz absolute inset-0 rounded-md bg-white"
+                      style={{ '--verzoegerung': `${blitzVersatz}ms` } as CSSProperties}
+                    />
+                    <span
+                      className="kruemel absolute top-1/2 left-1/2 size-1.5 rounded-full bg-white"
+                      style={{ '--verzoegerung': `${blitzVersatz}ms`, '--kx': '-10px', '--ky': '8px' } as CSSProperties}
+                    />
+                    <span
+                      className="kruemel absolute top-1/2 left-1/2 size-1.5 rounded-full bg-white"
+                      style={{ '--verzoegerung': `${blitzVersatz}ms`, '--kx': '9px', '--ky': '11px' } as CSSProperties}
+                    />
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {punkteAnzeige && (
+          <div
+            key={punkteAnzeige.id}
+            aria-hidden="true"
+            className="punkte-auftauchen pointer-events-none absolute inset-0 grid place-items-center text-4xl font-extrabold text-fokus"
+            style={{ textShadow: '0 2px 10px rgba(0,0,0,0.6)' }}
+          >
+            {punkteAnzeige.text}
+          </div>
+        )}
       </div>
 
       <div className="flex justify-center gap-4">
@@ -269,7 +323,7 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
             disabled={!teil || z.vorbei}
             onPointerDown={teil ? beiTablettPointerDown(i) : undefined}
             aria-label={teil ? `Teil ${i + 1}, ${teil.form.length} Felder` : `Platz ${i + 1}, leer`}
-            className={`grid size-20 touch-none place-items-center rounded-xl border transition-transform disabled:opacity-30 ${
+            className={`grid size-24 touch-none place-items-center rounded-xl border transition-transform disabled:opacity-30 ${
               ausgewaehlt === i || zug?.tablettIndex === i
                 ? 'border-fokus bg-flaeche-hoch -translate-y-1'
                 : 'border-rand bg-flaeche'
@@ -291,7 +345,7 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
           className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-flaeche/90 p-1.5 shadow-lg"
           style={{ left: zug.x, top: zug.y - VERSATZ_Y }}
         >
-          <TeilAnzeige teil={ziehendesTeil} zellgroesse={24} />
+          <TeilAnzeige teil={ziehendesTeil} zellgroesse={rasterZellgroesse} />
         </div>
       )}
 
