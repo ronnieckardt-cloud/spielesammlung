@@ -39,11 +39,18 @@ function Plaettchen({ buchstabe, groesse }: { buchstabe: string; groesse: number
   );
 }
 
-export function Wortspiel({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+export function Wortspiel({
+  onScore,
+  onGameOver,
+  settings,
+  bestScore,
+  istErsteRunde,
+  level: festesLevel,
+}: GameProps) {
   // Nach „Nochmal" (= nächstes Level) direkt weiterspielen — der
   // Startbildschirm gehört nur ans Betreten des Spiels.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechsteLevelNummer));
 
   useEffect(() => {
     onScore(z.punkte);
@@ -52,7 +59,7 @@ export function Wortspiel({ onScore, onGameOver, settings, bestScore, istErsteRu
   useEffect(() => {
     if (z.vorbei) {
       sfx(z.richtigeAnzahl === z.woerter.length ? 'stufe' : 'ende');
-      naechsteLevelNummer = z.level + 1;
+      if (festesLevel === undefined) naechsteLevelNummer = z.level + 1;
       onGameOver(z.punkte);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,6 +77,9 @@ export function Wortspiel({ onScore, onGameOver, settings, bestScore, istErsteRu
   const beiWeiter = useCallback(() => setZ((alt) => naechstesWort(alt)), []);
 
   const beiLevelWechsel = useCallback((neu: number) => {
+    // Im Duell steht das Level fest — sonst könnte man sich das
+    // leichteste aussuchen und der Vergleich wäre wertlos.
+    if (festesLevel !== undefined) return;
     const geklemmt = Math.max(1, neu);
     naechsteLevelNummer = geklemmt;
     setZ(neuesLevel(geklemmt));
@@ -102,7 +112,7 @@ export function Wortspiel({ onScore, onGameOver, settings, bestScore, istErsteRu
           <button
             type="button"
             onClick={() => beiLevelWechsel(z.level - 1)}
-            disabled={z.level <= 1}
+            disabled={z.level <= 1 || festesLevel !== undefined}
             aria-label="Voriges Level"
             className="spielknopf text-base leading-none"
           >
@@ -112,6 +122,7 @@ export function Wortspiel({ onScore, onGameOver, settings, bestScore, istErsteRu
           <button
             type="button"
             onClick={() => beiLevelWechsel(z.level + 1)}
+            disabled={festesLevel !== undefined}
             aria-label="Nächstes Level"
             className="spielknopf text-base leading-none"
           >

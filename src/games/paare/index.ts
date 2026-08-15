@@ -9,5 +9,7 @@ export const paare: GameApi = {
   accent: '#6366f1',
   Icon: PaarUpIcon,
   iconVollflaechig: true,
+  // Gleiche Levelnummer ergibt dasselbe Rätsel — damit duellfähig.
+  duellFaehig: true,
   Component: PaarUp,
 };

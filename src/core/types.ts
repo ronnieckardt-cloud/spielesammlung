@@ -35,6 +35,19 @@ export type GameProps = {
    * ihn dann überspringen und direkt weiterspielen lassen. Zurück ins Menü
    * und erneut hinein ergibt wieder `true`. */
   istErsteRunde: boolean;
+  /**
+   * Ein **festgelegtes** Level. Nur im Duell gesetzt; sonst `undefined`.
+   *
+   * Spiele, bei denen gleiche Levelnummer schon immer dasselbe Rätsel
+   * bedeutet, spielen dann genau dieses Level, merken sich hinterher **kein**
+   * nächstes Level und lassen die Level-Pfeile nicht zu. Genau das macht ein
+   * Duell fair: Beide bekommen dieselbe Aufgabe.
+   *
+   * Absichtlich optional und ohne jede Wirkung, wenn ein Spiel es nicht
+   * liest — kein bestehendes Spiel musste sich dafür ändern, und die Hülle
+   * bietet ein Duell nur bei Spielen mit `duellFaehig` an.
+   */
+  level?: number;
 };
 
 export type GameApi = {
@@ -52,5 +65,14 @@ export type GameApi = {
    * keinen Farbverlauf mehr darunter. Ohne Angabe (der Normalfall) ist das
    * Icon ein kleines Zeichen, das mittig auf der Akzentfarbe sitzt. */
   iconVollflaechig?: boolean;
+  /**
+   * `true`, wenn dieses Spiel `GameProps.level` auswertet — wenn also
+   * gleiche Levelnummer bei allen dasselbe Rätsel ergibt.
+   *
+   * Nur solche Spiele bietet die Hülle im Duell an. Bei einem Spiel mit
+   * frischem Zufall je Runde (Snake Rush, Block Burst) hinge der Sieg am
+   * Glück statt am Können, und ein Duell wäre nichts wert.
+   */
+  duellFaehig?: boolean;
   Component: React.FC<GameProps>;
 };

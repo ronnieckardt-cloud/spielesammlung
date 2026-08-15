@@ -9,5 +9,7 @@ export const gehirnjogging: GameApi = {
   accent: '#f59e0b',
   Icon: GehirnjoggingIcon,
   iconVollflaechig: true,
+  // Gleiche Levelnummer ergibt dasselbe Rätsel — damit duellfähig.
+  duellFaehig: true,
   Component: Gehirnjogging,
 };

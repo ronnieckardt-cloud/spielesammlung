@@ -9,5 +9,7 @@ export const wortspiel: GameApi = {
   accent: '#ec4899',
   Icon: WortspielIcon,
   iconVollflaechig: true,
+  // Gleiche Levelnummer ergibt dasselbe Rätsel — damit duellfähig.
+  duellFaehig: true,
   Component: Wortspiel,
 };

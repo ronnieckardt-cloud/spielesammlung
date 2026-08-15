@@ -125,12 +125,14 @@ export function Kachelmenue({
   onSpielen,
   onEinstellungen,
   onBestenliste,
+  onDuelle,
   onKonto,
 }: {
   konto: Konto | null;
   onSpielen: (id: string) => void;
   onEinstellungen: () => void;
   onBestenliste: () => void;
+  onDuelle: () => void;
   onKonto: () => void;
 }) {
   // Frisch bei jedem Rendern gelesen, genau wie `bestwert` unten. Beim
@@ -334,6 +336,24 @@ export function Kachelmenue({
             />
           </svg>
           <span className="flex-1 font-bold">Bestenliste</span>
+          <span aria-hidden="true" className="text-lg text-white/60">
+            ›
+          </span>
+        </button>
+
+        {/* Duelle stehen gleich neben der Bestenliste: Beides beantwortet
+            dieselbe Frage — „wie stehe ich gegen die anderen da?" —, nur
+            einmal gegen alle und einmal gegen einen bestimmten. */}
+        <button
+          type="button"
+          onClick={onDuelle}
+          className="rein-von-unten mt-2 flex min-h-11 w-full items-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-left text-white shadow-lg backdrop-blur-sm transition-transform duration-100 ease-out active:scale-[0.985]"
+          style={{ animationDelay: '300ms' }}
+        >
+          <span aria-hidden="true" className="text-xl">
+            ⚔️
+          </span>
+          <span className="flex-1 font-bold">Duelle</span>
           <span aria-hidden="true" className="text-lg text-white/60">
             ›
           </span>

@@ -59,9 +59,15 @@ const DEKO: readonly DekoTeil[] = FARBEN.slice(0, 4).map((f, i) => ({
   ),
 }));
 
-export function FlowLink({ onScore, onGameOver, bestScore, istErsteRunde }: GameProps) {
+export function FlowLink({
+  onScore,
+  onGameOver,
+  bestScore,
+  istErsteRunde,
+  level: festesLevel,
+}: GameProps) {
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(naechstesLevel));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechstesLevel));
   const brettRef = useRef<SVGSVGElement>(null);
   const gemeldet = useRef(false);
   const { breite, hoehe } = z.raetsel;
@@ -123,7 +129,7 @@ export function FlowLink({ onScore, onGameOver, bestScore, istErsteRunde }: Game
     sfx('stufe');
     // „Nochmal" spielt das nächste Level — dasselbe Rätsel ein zweites Mal
     // zu lösen wäre sinnlos, man weiß ja noch, wie es geht.
-    naechstesLevel = z.level + 1;
+    if (festesLevel === undefined) naechstesLevel = z.level + 1;
     const uhr = window.setTimeout(
       () => onGameOver(punkteFuerZuege(z.level, z.raetsel.paare.length, z.zuege), true),
       FEIER_MS,

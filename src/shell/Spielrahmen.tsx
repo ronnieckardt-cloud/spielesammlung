@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Einstellungen, GameApi } from '../core/types';
 import { bestwert, ergebnisEintragen, zuletztGespieltMerken } from './speicher';
-import { ergebnisMelden } from './konto';
+import { duellMelden, ergebnisMelden } from './konto';
+import type { Duell } from './konto';
+import { fremdePunkte, standFuer, standText } from './duell';
 import { spielfarbenStil, toenung } from './spielfarbe';
 
 type Ende = {
@@ -11,6 +13,8 @@ type Ende = {
   gewonnen: boolean;
   /** Platz unter allen Angemeldeten — kommt erst nach, wenn der Server antwortet. */
   platz?: { platz: number; teilnehmer: number };
+  /** Stand des Duells, wenn die Runde eines war. Kommt ebenfalls nach. */
+  duell?: Duell;
 };
 
 /**
@@ -68,10 +72,19 @@ function useHochzaehlen(ziel: number, ruhig: boolean): number {
 export function Spielrahmen({
   spiel,
   einstellungen,
+  duell,
+  ichBin,
   onExit,
 }: {
   spiel: GameApi;
   einstellungen: Einstellungen;
+  /**
+   * Gesetzt, wenn diese Runde ein Duell ist. Dann bekommt das Spiel ein
+   * **festes Level**, und das Ergebnis geht zusätzlich ans Duell.
+   */
+  duell?: { id: string; level: number };
+  /** Die eigene Benutzer-Id — nur fürs Auswerten des Duellstands. */
+  ichBin?: string;
   onExit: () => void;
 }) {
   const [punkte, setPunkte] = useState(0);
@@ -105,8 +118,18 @@ export function Spielrahmen({
           setEnde((alt) => (alt ? { ...alt, platz } : alt));
         }
       });
+
+      // Ein Duell zählt zusätzlich für sich. Die Runde selbst ist ganz
+      // normal in der Bestenliste gelandet — gespielt ist gespielt.
+      if (duell) {
+        void duellMelden(duell.id, wert).then((stand) => {
+          if (stand && marke === endeMarke.current) {
+            setEnde((alt) => (alt ? { ...alt, duell: stand } : alt));
+          }
+        });
+      }
     },
-    [spiel.id],
+    [spiel.id, duell],
   );
 
   const nochmal = useCallback(() => {
@@ -195,6 +218,7 @@ export function Spielrahmen({
           settings={einstellungen}
           bestScore={beste}
           istErsteRunde={runde === 0}
+          level={duell?.level}
         />
 
         {ende && (
@@ -251,22 +275,39 @@ export function Spielrahmen({
                 </p>
               )}
 
+              {/* Der Duellstand. Steht bewusst unter der eigenen Punktzahl
+                  und nicht darüber: Erst sieht man, was man selbst geschafft
+                  hat, dann was es gegen den anderen wert war. */}
+              {ende.duell && ichBin && (
+                <p className="dialog-auf mt-3 rounded-xl bg-white/10 px-3 py-2 text-sm font-bold">
+                  {standText(standFuer(ende.duell, ichBin))}
+                  {fremdePunkte(ende.duell, ichBin) !== null &&
+                    ` — ${fremdePunkte(ende.duell, ichBin)} für den Gegner`}
+                </p>
+              )}
+
               <div className="mt-6 flex flex-col gap-2.5">
-                <button
-                  type="button"
-                  autoFocus
-                  onClick={nochmal}
-                  className="rounded-xl px-4 py-3.5 text-lg font-extrabold text-grund transition-transform active:scale-95"
-                  style={{ backgroundColor: spiel.accent }}
-                >
-                  Nochmal
-                </button>
+                {/* Im Duell gibt es kein „Nochmal": Jede Seite spielt ihr
+                    Level genau einmal, sonst könnte man beliebig oft
+                    nachbessern. */}
+                {!duell && (
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={nochmal}
+                    className="rounded-xl px-4 py-3.5 text-lg font-extrabold text-grund transition-transform active:scale-95"
+                    style={{ backgroundColor: spiel.accent }}
+                  >
+                    Nochmal
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onExit}
+                  autoFocus={!!duell}
                   className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 font-medium transition-transform hover:bg-white/10 active:scale-95"
                 >
-                  Zurück zum Menü
+                  {duell ? 'Fertig' : 'Zurück zum Menü'}
                 </button>
               </div>
             </div>

@@ -86,9 +86,16 @@ function wegrichtung(stueck: Form, a: Punkt, b: Punkt): Punkt {
   return { x: normale.x * vorzeichen, y: normale.y * vorzeichen };
 }
 
-export function EvenCut({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+export function EvenCut({
+  onScore,
+  onGameOver,
+  settings,
+  bestScore,
+  istErsteRunde,
+  level: festesLevel,
+}: GameProps) {
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(naechstesLevel));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechstesLevel));
   /** Der Wisch, während er noch läuft. */
   const [zug, setZug] = useState<{ von: Punkt; bis: Punkt } | null>(null);
   /** Eine Bildfolge später auf true — erst dann rutschen die Stücke weg. */
@@ -156,7 +163,7 @@ export function EvenCut({ onScore, onGameOver, settings, bestScore, istErsteRund
     gemeldet.current = true;
     // „Nochmal" spielt das nächste Level, nicht dasselbe noch einmal —
     // dieselben fünf Formen ein zweites Mal zu schneiden wäre langweilig.
-    naechstesLevel = z.level + 1;
+    if (festesLevel === undefined) naechstesLevel = z.level + 1;
     sfx('ende');
     onGameOver(z.punkte);
   }, [z.vorbei, z.punkte, z.level, onGameOver]);

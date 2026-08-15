@@ -7,9 +7,10 @@ import { Spielrahmen } from './shell/Spielrahmen';
 import { EinstellungenSeite } from './shell/EinstellungenSeite';
 import { BestenlisteSeite } from './shell/BestenlisteSeite';
 import { KontoSeite } from './shell/KontoSeite';
+import { DuellSeite } from './shell/DuellSeite';
 import { einstellungenLesen, einstellungenSchreiben } from './shell/speicher';
-import { abgleichen, kontoBeobachten, kontoLaden } from './shell/konto';
-import type { Konto } from './shell/konto';
+import { abgleichen, duelleHolen, kontoBeobachten, kontoLaden } from './shell/konto';
+import type { Duell, Konto } from './shell/konto';
 
 /**
  * Die Hülle. Sie entscheidet, was zu sehen ist, und hält die Einstellungen.
@@ -22,7 +23,9 @@ export type Ansicht =
   | { art: 'spiel'; id: string }
   | { art: 'einstellungen' }
   | { art: 'bestenliste' }
-  | { art: 'konto' };
+  | { art: 'konto' }
+  | { art: 'duelle' }
+  | { art: 'duell'; id: string };
 
 function ansichtAusAdresse(): Ansicht {
   const teile = window.location.hash.replace(/^#\/?/, '').split('/');
@@ -32,6 +35,8 @@ function ansichtAusAdresse(): Ansicht {
   if (teile[0] === 'einstellungen') return { art: 'einstellungen' };
   if (teile[0] === 'bestenliste') return { art: 'bestenliste' };
   if (teile[0] === 'konto') return { art: 'konto' };
+  if (teile[0] === 'duelle') return { art: 'duelle' };
+  if (teile[0] === 'duell' && teile[1]) return { art: 'duell', id: teile[1] };
   return { art: 'menue' };
 }
 
@@ -45,6 +50,10 @@ function adresseFuer(ansicht: Ansicht): string {
       return '#/bestenliste';
     case 'konto':
       return '#/konto';
+    case 'duelle':
+      return '#/duelle';
+    case 'duell':
+      return `#/duell/${ansicht.id}`;
     default:
       return '#/';
   }
@@ -137,13 +146,100 @@ export default function App() {
     return <KontoSeite konto={konto} onZurueck={zumMenue} />;
   }
 
+  if (ansicht.art === 'duelle') {
+    return (
+      <DuellSeite
+        konto={konto}
+        onZurueck={zumMenue}
+        onKonto={zumKonto}
+        onSpielen={(id) => zeige({ art: 'duell', id })}
+      />
+    );
+  }
+
+  if (ansicht.art === 'duell') {
+    return (
+      <Duellrunde
+        duellId={ansicht.id}
+        konto={konto}
+        einstellungen={einstellungen}
+        onFertig={() => zeige({ art: 'duelle' })}
+      />
+    );
+  }
+
   return (
     <Kachelmenue
       konto={konto}
       onSpielen={(id) => zeige({ art: 'spiel', id })}
       onEinstellungen={() => zeige({ art: 'einstellungen' })}
       onBestenliste={() => zeige({ art: 'bestenliste' })}
+      onDuelle={() => zeige({ art: 'duelle' })}
       onKonto={zumKonto}
+    />
+  );
+}
+
+/**
+ * Eine Duell-Runde: erst das Duell laden, dann ganz normal spielen.
+ *
+ * Das Laden steht hier und nicht im `Spielrahmen`: Der soll weiterhin nichts
+ * vom Netz wissen und einfach ein Spiel anzeigen. Er bekommt am Ende nur
+ * Spiel, Level und die Duell-Id gereicht.
+ */
+function Duellrunde({
+  duellId,
+  konto,
+  einstellungen,
+  onFertig,
+}: {
+  duellId: string;
+  konto: Konto | null;
+  einstellungen: Einstellungen;
+  onFertig: () => void;
+}) {
+  const [duell, setDuell] = useState<Duell | null | 'fehlt'>(null);
+
+  useEffect(() => {
+    let abgemeldet = false;
+    void duelleHolen().then((liste) => {
+      if (abgemeldet) return;
+      setDuell(liste?.find((d) => d.id === duellId) ?? 'fehlt');
+    });
+    return () => {
+      abgemeldet = true;
+    };
+  }, [duellId]);
+
+  const spiel = duell && duell !== 'fehlt' ? spielFinden(duell.spiel) : undefined;
+
+  if (duell === null) {
+    return (
+      <p className="grid flex-1 place-items-center p-6 text-sm text-gedaempft">Duell wird geladen …</p>
+    );
+  }
+
+  if (duell === 'fehlt' || !spiel) {
+    return (
+      <div className="grid flex-1 place-items-center gap-4 p-6 text-center">
+        <p className="text-sm text-gedaempft">
+          Dieses Duell ist gerade nicht erreichbar. Vielleicht ist kein Internet da?
+        </p>
+        <button type="button" onClick={onFertig} className="spielknopf">
+          Zurück zu den Duellen
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <Spielrahmen
+      key={duell.id}
+      spiel={spiel}
+      einstellungen={einstellungen}
+      duell={{ id: duell.id, level: duell.level }}
+      ichBin={konto?.benutzerId}
+      onExit={onFertig}
     />
   );
 }

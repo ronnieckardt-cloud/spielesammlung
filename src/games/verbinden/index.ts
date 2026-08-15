@@ -9,5 +9,7 @@ export const verbinden: GameApi = {
   accent: '#818cf8',
   Icon: VerbindenIcon,
   iconVollflaechig: true,
+  // Gleiche Levelnummer ergibt dasselbe Rätsel — damit duellfähig.
+  duellFaehig: true,
   Component: FlowLink,
 };

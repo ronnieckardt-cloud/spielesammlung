@@ -91,15 +91,25 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
   );
 }
 
-export function PaarUp({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+export function PaarUp({
+  onScore,
+  onGameOver,
+  settings,
+  bestScore,
+  istErsteRunde,
+  level: festesLevel,
+}: GameProps) {
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesSpiel(naechsteLevelNummer));
+  const [z, setZ] = useState<Zustand>(() => neuesSpiel(festesLevel ?? naechsteLevelNummer));
 
   const beiKarte = useCallback((position: number) => {
     setZ((alt) => aufdecken(alt, position));
   }, []);
 
   const beiLevelWechsel = useCallback((level: number) => {
+    // Im Duell steht das Level fest — sonst könnte man sich das
+    // leichteste aussuchen und der Vergleich wäre wertlos.
+    if (festesLevel !== undefined) return;
     const ziel = Math.max(1, level);
     naechsteLevelNummer = ziel;
     setZ(neuesSpiel(ziel));
@@ -136,7 +146,7 @@ export function PaarUp({ onScore, onGameOver, settings, bestScore, istErsteRunde
     if (!z.vorbei) return;
     sfx('stufe');
     // Nach einem geschafften Level geht „Nochmal" ins nächste.
-    naechsteLevelNummer = z.level + 1;
+    if (festesLevel === undefined) naechsteLevelNummer = z.level + 1;
     onGameOver(z.punkte, true);
     // onGameOver darf nur einmal kommen — deshalb hängt das nur an "vorbei".
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,7 +166,7 @@ export function PaarUp({ onScore, onGameOver, settings, bestScore, istErsteRunde
           <button
             type="button"
             onClick={() => beiLevelWechsel(z.level - 1)}
-            disabled={z.level <= 1}
+            disabled={z.level <= 1 || festesLevel !== undefined}
             aria-label="Voriges Level"
             className="spielknopf text-base leading-none"
           >
@@ -166,6 +176,7 @@ export function PaarUp({ onScore, onGameOver, settings, bestScore, istErsteRunde
           <button
             type="button"
             onClick={() => beiLevelWechsel(z.level + 1)}
+            disabled={festesLevel !== undefined}
             aria-label="Nächstes Level"
             className="spielknopf text-base leading-none"
           >

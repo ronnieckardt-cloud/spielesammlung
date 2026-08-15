@@ -9,5 +9,7 @@ export const farbsortierer: GameApi = {
   accent: '#a855f7',
   Icon: FarbsortiererIcon,
   iconVollflaechig: true,
+  // Gleiche Levelnummer ergibt dasselbe Rätsel — damit duellfähig.
+  duellFaehig: true,
   Component: Farbsortierer,
 };

@@ -159,11 +159,12 @@ export function Farbsortierer({
   settings,
   bestScore,
   istErsteRunde,
+  level: festesLevel,
 }: GameProps) {
   // Nach „Nochmal" (= nächstes Level) direkt weiterspielen statt wieder
   // über den Startbildschirm zu gehen — der gehört nur ans Betreten.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechsteLevelNummer));
   const [guss, setGuss] = useState<Guss | null>(null);
 
   // Welche Farben dieses Level zeigt — aus der Levelnummer gemischt, damit
@@ -231,7 +232,7 @@ export function Farbsortierer({
       sfx('ende');
       // "Nochmal" im Vorbei-Bildschirm der Hülle startet damit automatisch
       // das nächste Level, nicht wieder dasselbe.
-      naechsteLevelNummer = z.level + 1;
+      if (festesLevel === undefined) naechsteLevelNummer = z.level + 1;
       onGameOver(punkteFuerLoesung(z.zuege, z.farbenAnzahl));
     }
     // Absichtlich nur an geloest/guss gebunden — onGameOver darf nur einmal kommen.
@@ -283,6 +284,9 @@ export function Farbsortierer({
   // gezielt ansteuern können, nicht nur der Reihe nach durchspielen.
   const beiLevelWechsel = useCallback(
     (neu: number) => {
+    // Im Duell steht das Level fest — sonst könnte man sich das
+    // leichteste aussuchen und der Vergleich wäre wertlos.
+    if (festesLevel !== undefined) return;
       if (guss) return;
       const geklemmt = Math.max(1, neu);
       naechsteLevelNummer = geklemmt;
@@ -332,7 +336,7 @@ export function Farbsortierer({
           <button
             type="button"
             onClick={() => beiLevelWechsel(z.level + 1)}
-            disabled={!!guss}
+            disabled={!!guss || festesLevel !== undefined}
             aria-label="Nächstes Level"
             className="spielknopf text-base leading-none transition-transform active:scale-95"
           >

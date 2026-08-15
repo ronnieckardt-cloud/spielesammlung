@@ -97,11 +97,18 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
   );
 }
 
-export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+export function Quiz({
+  onScore,
+  onGameOver,
+  settings,
+  bestScore,
+  istErsteRunde,
+  level: festesLevel,
+}: GameProps) {
   // Nach „Nochmal" (= nächstes Level) direkt weiterspielen statt wieder
   // über den Startbildschirm zu gehen — der gehört nur ans Betreten.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechsteLevelNummer));
 
   useEffect(() => {
     onScore(z.punkte);
@@ -110,7 +117,7 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
   useEffect(() => {
     if (z.vorbei) {
       sfx(z.richtigeAnzahl === z.fragen.length ? 'stufe' : 'ende');
-      naechsteLevelNummer = z.level + 1;
+      if (festesLevel === undefined) naechsteLevelNummer = z.level + 1;
       onGameOver(z.punkte);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,6 +135,9 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
   const beiWeiter = useCallback(() => setZ((alt) => naechsteFrage(alt)), []);
 
   const beiLevelWechsel = useCallback((neu: number) => {
+    // Im Duell steht das Level fest — sonst könnte man sich das
+    // leichteste aussuchen und der Vergleich wäre wertlos.
+    if (festesLevel !== undefined) return;
     const geklemmt = Math.max(1, neu);
     naechsteLevelNummer = geklemmt;
     setZ(neuesLevel(geklemmt));
@@ -151,7 +161,7 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
           <button
             type="button"
             onClick={() => beiLevelWechsel(z.level - 1)}
-            disabled={z.level <= 1}
+            disabled={z.level <= 1 || festesLevel !== undefined}
             aria-label="Voriges Level"
             className="spielknopf text-base leading-none"
           >
@@ -161,6 +171,7 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
           <button
             type="button"
             onClick={() => beiLevelWechsel(z.level + 1)}
+            disabled={festesLevel !== undefined}
             aria-label="Nächstes Level"
             className="spielknopf text-base leading-none"
           >

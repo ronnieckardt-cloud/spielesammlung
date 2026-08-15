@@ -167,6 +167,57 @@ export async function ergebnisMelden(
   return null;
 }
 
+// ---------------------------------------------------------------------
+// Duelle
+// ---------------------------------------------------------------------
+
+export type Duell = server.Duell;
+
+/**
+ * Duelle laufen bewusst **nicht** über die Ausgangsschlange.
+ *
+ * Ein Duellergebnis ohne Netz nachzureichen klingt erst gut, wäre aber
+ * heikel: Der Gegner sähe tagelang „hat noch nicht gespielt", obwohl längst
+ * gespielt wurde. Ein Duell braucht deshalb im Moment des Meldens Netz —
+ * und wenn keins da ist, sagt die App das offen, statt so zu tun als ob.
+ * Die normale Bestenliste dagegen ist weiterhin voll offline-fähig.
+ */
+export async function duelleHolen(): Promise<Duell[] | null> {
+  const gueltig = await gueltigeSitzung();
+  if (!gueltig) return null;
+  try {
+    return await server.duelleHolen(gueltig);
+  } catch {
+    return null;
+  }
+}
+
+export async function duellStarten(spiel: string, gegnerName: string): Promise<Duell> {
+  const gueltig = await gueltigeSitzung();
+  if (!gueltig) throw new Error('Dafür musst du angemeldet sein.');
+  return await server.duellStarten(gueltig, spiel, gegnerName);
+}
+
+export async function duellMelden(duellId: string, punkte: number): Promise<Duell | null> {
+  const gueltig = await gueltigeSitzung();
+  if (!gueltig) return null;
+  try {
+    return await server.duellMelden(gueltig, duellId, punkte);
+  } catch {
+    return null;
+  }
+}
+
+export async function spielerNamenHolen(): Promise<string[]> {
+  const gueltig = await gueltigeSitzung();
+  if (!gueltig) return [];
+  try {
+    return await server.spielerNamenHolen(gueltig);
+  } catch {
+    return [];
+  }
+}
+
 export type Bestenlisten = {
   gesamt: server.Gesamteintrag[];
   spitze: server.Spitzeneintrag[];

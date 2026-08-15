@@ -45,11 +45,18 @@ function Zeichen({ text, groesse }: { text: string; groesse: number }) {
   );
 }
 
-export function Gehirnjogging({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+export function Gehirnjogging({
+  onScore,
+  onGameOver,
+  settings,
+  bestScore,
+  istErsteRunde,
+  level: festesLevel,
+}: GameProps) {
   // Nach „Nochmal" (= nächstes Level) direkt weiterspielen — der
   // Startbildschirm gehört nur ans Betreten des Spiels.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechsteLevelNummer));
   // Nur für Kopfrechnen/Muster: welche der vier Zahlen wurde angeklickt.
   // Merk-Folgen führt seine Eingabe selbst, siehe MerkfolgenAnzeige.
   const [ausgewaehlt, setAusgewaehlt] = useState<number | null>(null);
@@ -61,7 +68,7 @@ export function Gehirnjogging({ onScore, onGameOver, settings, bestScore, istErs
   useEffect(() => {
     if (z.vorbei) {
       sfx(z.richtigeAnzahl === z.aufgaben.length ? 'stufe' : 'ende');
-      naechsteLevelNummer = z.level + 1;
+      if (festesLevel === undefined) naechsteLevelNummer = z.level + 1;
       onGameOver(z.punkte);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -90,6 +97,9 @@ export function Gehirnjogging({ onScore, onGameOver, settings, bestScore, istErs
   const beiWeiter = useCallback(() => setZ((alt) => naechsteAufgabe(alt)), []);
 
   const beiLevelWechsel = useCallback((neu: number) => {
+    // Im Duell steht das Level fest — sonst könnte man sich das
+    // leichteste aussuchen und der Vergleich wäre wertlos.
+    if (festesLevel !== undefined) return;
     const geklemmt = Math.max(1, neu);
     naechsteLevelNummer = geklemmt;
     setZ(neuesLevel(geklemmt));
@@ -122,7 +132,7 @@ export function Gehirnjogging({ onScore, onGameOver, settings, bestScore, istErs
           <button
             type="button"
             onClick={() => beiLevelWechsel(z.level - 1)}
-            disabled={z.level <= 1}
+            disabled={z.level <= 1 || festesLevel !== undefined}
             aria-label="Voriges Level"
             className="spielknopf text-base leading-none"
           >
@@ -132,6 +142,7 @@ export function Gehirnjogging({ onScore, onGameOver, settings, bestScore, istErs
           <button
             type="button"
             onClick={() => beiLevelWechsel(z.level + 1)}
+            disabled={festesLevel !== undefined}
             aria-label="Nächstes Level"
             className="spielknopf text-base leading-none"
           >

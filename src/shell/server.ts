@@ -244,6 +244,101 @@ export async function eigenePlaetzeHolen(sitzung: Sitzung): Promise<EigenerPlatz
   )) as EigenerPlatz[];
 }
 
+// ---------------------------------------------------------------------
+// Duelle
+// ---------------------------------------------------------------------
+
+export type Duell = {
+  id: string;
+  spiel: string;
+  /** Beide spielen genau dieses Level — das macht das Duell fair. */
+  level: number;
+  herausforderer: string;
+  herausfordererName: string;
+  gegner: string;
+  gegnerName: string;
+  punkteHerausforderer: number | null;
+  punkteGegner: number | null;
+  erstelltAm: string;
+};
+
+type DuellRoh = {
+  id: string;
+  spiel: string;
+  level: number;
+  herausforderer: string;
+  herausforderer_name: string;
+  gegner: string;
+  gegner_name: string;
+  punkte_herausforderer: number | null;
+  punkte_gegner: number | null;
+  erstellt_am: string;
+};
+
+function alsDuell(r: DuellRoh): Duell {
+  return {
+    id: r.id,
+    spiel: r.spiel,
+    level: r.level,
+    herausforderer: r.herausforderer,
+    herausfordererName: r.herausforderer_name,
+    gegner: r.gegner,
+    gegnerName: r.gegner_name,
+    punkteHerausforderer: r.punkte_herausforderer,
+    punkteGegner: r.punkte_gegner,
+    erstelltAm: r.erstellt_am,
+  };
+}
+
+/** Alle Duelle, an denen man selbst beteiligt ist. */
+export async function duelleHolen(sitzung: Sitzung): Promise<Duell[]> {
+  const zeilen = (await anfragen('/rest/v1/spiel_duell_liste?select=*&order=erstellt_am.desc&limit=40', {
+    merkmal: sitzung.zugriffsmerkmal,
+  })) as DuellRoh[];
+  return zeilen.map(alsDuell);
+}
+
+/**
+ * Ein Duell starten.
+ *
+ * Das Level würfelt der **Server**. Käme es aus der App, könnte man sich
+ * sein Lieblingslevel aussuchen und dem Gegner ein schweres geben.
+ */
+export async function duellStarten(
+  sitzung: Sitzung,
+  spiel: string,
+  gegnerName: string,
+): Promise<Duell> {
+  const roh = (await anfragen('/rest/v1/rpc/spiel_duell_starten', {
+    method: 'POST',
+    merkmal: sitzung.zugriffsmerkmal,
+    body: JSON.stringify({ p_spiel: spiel, p_gegner_name: gegnerName }),
+  })) as DuellRoh;
+  return alsDuell(roh);
+}
+
+/** Sein Ergebnis für ein Duell eintragen. Jede Seite genau einmal. */
+export async function duellMelden(
+  sitzung: Sitzung,
+  duellId: string,
+  punkte: number,
+): Promise<Duell> {
+  const roh = (await anfragen('/rest/v1/rpc/spiel_duell_melden', {
+    method: 'POST',
+    merkmal: sitzung.zugriffsmerkmal,
+    body: JSON.stringify({ p_duell: duellId, p_punkte: punkte }),
+  })) as DuellRoh;
+  return alsDuell(roh);
+}
+
+/** Die Namen aller Mitspieler — für die Gegnerwahl. */
+export async function spielerNamenHolen(sitzung: Sitzung): Promise<string[]> {
+  const zeilen = (await anfragen('/rest/v1/spiel_profil?select=id,name&order=name.asc&limit=100', {
+    merkmal: sitzung.zugriffsmerkmal,
+  })) as { id: string; name: string }[];
+  return zeilen.filter((z) => z.id !== sitzung.benutzerId).map((z) => z.name);
+}
+
 /** Die Gesamtwertung über alle Spiele, nach Platzierungspunkten. */
 export async function gesamtwertungHolen(sitzung: Sitzung): Promise<Gesamteintrag[]> {
   const zeilen = (await anfragen(

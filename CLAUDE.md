@@ -406,11 +406,8 @@ Von Ronni selbst ausgesucht, aus einer Liste von Vorschlägen:
     schneiden (Vorbild: Perfect Slice).
 25. ✅ Flow Link — gleichfarbige Punkte verbinden, ohne sich zu kreuzen,
     am Ende ist das Gitter voll (Vorbild: Flow Free).
-26. **Duell** — zwei Angemeldete spielen dasselbe Level, wer mehr Punkte
-    hat, gewinnt. Ronnis Wunsch, ausdrücklich **nach** Flow Connect.
-    Funktioniert ohne neue Spiellogik in allen Spielen, bei denen gleiche
-    Levelnummer schon gleiches Rätsel bedeutet — seit Even Cut und Flow Link
-    sind das neun.
+26. ✅ **Duell** — zwei Angemeldete spielen dasselbe Level, wer mehr Punkte
+    hat, gewinnt. Siehe eigenen Abschnitt unten.
 27. **Tap Rush** — Ronnis Idee: Zeit vorher wählen (5, 10, 20, 60 Sekunden),
     dann so oft wie möglich tippen. Die Optik eskaliert mit dem Tempo: grün,
     rot, Regenbogen. Achtung, die Puls-Grenze aus dem Audit gilt auch hier —
@@ -1189,6 +1186,55 @@ flachen Anordnung liegt die Mitte des Kastens genau auf dem Pfeil nach
 unten.
 
 Nachgemessen: **alle vierzehn Spiele passen auf 375 × 560 ohne Scrollen.**
+
+## Das Duell
+
+Zwei Angemeldete spielen **dasselbe Level**, der höhere Punktestand gewinnt.
+Rundenbasiert, nicht gleichzeitig: Niemand muss warten, bis der andere online
+ist — und es kommt ohne Dauerverbindung aus, also ohne den einen Baustein,
+den dieses Projekt bewusst nicht hat.
+
+**Die Schnittstelle wurde dafür erweitert**, zum zweiten Mal überhaupt (nach
+`gewonnen` bei `onGameOver`). Beide Zusätze sind optional und ändern für
+bestehende Spiele nichts:
+
+- `GameProps.level?: number` — ein **festgelegtes** Level. Ist es gesetzt,
+  spielt das Spiel genau dieses, merkt sich hinterher **kein** nächstes und
+  sperrt seine Level-Pfeile.
+- `GameApi.duellFaehig?: boolean` — sagt der Hülle, dass dieses Spiel
+  `level` auch wirklich auswertet.
+
+**Nur duellfähige Spiele werden angeboten**, zurzeit sieben: Color Pour,
+Quiz Time, Brain Blitz, Word Play, Pair Up, Even Cut, Flow Link. Bei einem
+Spiel mit frischem Zufall je Runde (Snake Rush, Block Burst, Ring Rise) hinge
+der Sieg am Glück statt am Können, und ein Duell wäre nichts wert. Blade Toss
+fällt ebenfalls raus: Dort steigt das Level **innerhalb** einer Runde.
+
+Weitere Entscheidungen und warum:
+
+- **Das Level würfelt der Server**, nicht die App. Käme es von dort, könnte
+  man sich sein Lieblingslevel aussuchen und dem Gegner ein schweres geben.
+- **Kein „Nochmal" im Duell.** Jede Seite spielt ihr Level genau einmal,
+  sonst könnte man beliebig oft nachbessern. Die Funktion
+  `spiel_duell_melden` lehnt einen zweiten Versuch derselben Person ab —
+  die App-Seite allein wäre keine Sicherung.
+- **Duelle laufen nicht über die Ausgangsschlange.** Ein Ergebnis später
+  nachzureichen klingt erst gut, wäre aber heikel: Der Gegner sähe tagelang
+  „hat noch nicht gespielt", obwohl längst gespielt wurde. Ein Duell braucht
+  im Moment des Meldens Netz, und wenn keins da ist, sagt die App das offen.
+  Die normale Bestenliste bleibt voll offline-fähig.
+- Eine Duellrunde zählt **zusätzlich** ganz normal für die Bestenliste.
+  Gespielt ist gespielt.
+- Höchstens zehn offene Herausforderungen je Person — sonst könnte jemand
+  einem anderen hundert Duelle in die Liste schütten.
+- `spiel_duell` hat **keine** insert/update-Regel. Angelegt und geändert wird
+  ausschließlich über die beiden `security definer`-Funktionen, die selbst
+  prüfen, wer da ruft. Der Sicherheitsprüfer meldet die beiden deshalb als
+  Warnung — das ist hier genau die Absicht, wie bei `spiel_ergebnis_melden`.
+- `shell/duell.ts` rechnet die **Sicht** aus: Dieselbe Zeile bedeutet für den
+  Herausforderer etwas anderes als für den Gegner. Genau da entstehen sonst
+  die Fehler, bei denen jemand „gewonnen" liest, obwohl er verloren hat —
+  dafür gibt es eigene Tests.
 
 ## Anmeldung und Bestenliste über alle Geräte
 

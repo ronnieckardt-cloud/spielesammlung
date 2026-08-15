@@ -9,5 +9,7 @@ export const quiz: GameApi = {
   accent: '#22c55e',
   Icon: QuizIcon,
   iconVollflaechig: true,
+  // Gleiche Levelnummer ergibt dasselbe Rätsel — damit duellfähig.
+  duellFaehig: true,
   Component: Quiz,
 };

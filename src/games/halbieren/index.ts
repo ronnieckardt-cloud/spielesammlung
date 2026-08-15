@@ -9,5 +9,7 @@ export const halbieren: GameApi = {
   accent: '#14b8a6',
   Icon: HalbierenIcon,
   iconVollflaechig: true,
+  // Gleiche Levelnummer ergibt dasselbe Rätsel — damit duellfähig.
+  duellFaehig: true,
   Component: EvenCut,
 };
