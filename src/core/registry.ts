@@ -7,6 +7,9 @@ import { geisterjagd } from '../games/geisterjagd';
 import { quiz } from '../games/quiz';
 import { gehirnjogging } from '../games/gehirnjogging';
 import { wortspiel } from '../games/wortspiel';
+import { schlange } from '../games/schlange';
+import { mergeup } from '../games/mergeup';
+import { bubblepop } from '../games/bubblepop';
 
 /**
  * Die einzige Liste aller Spiele. Ein neues Spiel wird hier eingetragen —
@@ -21,6 +24,9 @@ export const spiele: readonly GameApi[] = [
   quiz,
   gehirnjogging,
   wortspiel,
+  schlange,
+  mergeup,
+  bubblepop,
 ];
 
 export function spielFinden(id: string): GameApi | undefined {

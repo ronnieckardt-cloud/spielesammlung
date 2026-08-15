@@ -24,6 +24,9 @@ Dann <http://localhost:5180> öffnen.
 | **Quiz Time** | spielbar |
 | **Gehirnjogging** | spielbar |
 | **Word Play** | spielbar |
+| **Snake Rush** | spielbar |
+| **Merge Up** | spielbar |
+| **Bubble Pop** | spielbar |
 
 Der Platzhalter ist kein richtiges Spiel, sondern der Beweis, dass das
 Grundgerüst trägt: Er benutzt alle gemeinsamen Bausteine und meldet Punkte

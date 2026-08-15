@@ -136,6 +136,9 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `quiz` | Quiz Time |
 | `gehirnjogging` | Gehirnjogging (Name bewusst unverändert) |
 | `wortspiel` | Word Play |
+| `schlange` | Snake Rush |
+| `mergeup` | Merge Up |
+| `bubblepop` | Bubble Pop |
 
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
@@ -475,6 +478,77 @@ versucht deshalb genau dasselbe Level erneut.
   Rechtschreibfalle (ß/ss, ie/i, Doppelkonsonanten, Dehnungs-h, v/f,
   Fremdwort-Schreibung). Zufällige Vertauschungen hätten oft unsinnige,
   offensichtlich falsche Wörter ergeben statt lehrreicher Fehler.
+
+## Snake Rush — Besonderheiten
+
+- `logik.ts`: Bewegung läuft über `zeitFortschritt(z, dt)` — die Zeit wird
+  angesammelt, bis ein voller Takt (`taktS`) zusammen ist, dann geht es ein
+  Feld weiter. Dadurch ist das Tempo unabhängig von der Bildrate. Die
+  Schleife holt mehrere fällige Takte nach, falls es einmal geruckelt hat;
+  `useGameLoop` deckelt das ohnehin schon.
+- An den Rändern läuft die Schlange auf der anderen Seite weiter, statt zu
+  sterben — bewusst gnädiger als das Original, weil es sich flüssiger
+  spielt und den einzigen echten Fehler (in sich selbst laufen) klarer macht.
+- Der Kopf darf auf das Feld ziehen, das der Schwanz im selben Schritt
+  freigibt. Deshalb wird in `feldWechseln` erst gekürzt und dann auf
+  Kollision geprüft — andersherum stirbt man bei jeder engen Kurve.
+- Richtungswechsel werden gepuffert (`gepuffert`) und erst beim nächsten
+  Feldwechsel gültig; die Gegenrichtung wird verworfen. Geprüft wird gegen
+  die *aktuelle* Richtung, nicht gegen eine schon gepufferte — sonst
+  schluckt eine schnelle Doppeleingabe (rechts, dann hoch) die zweite.
+- Goldstücke erscheinen alle `GOLD_JE_FUTTER` Futter, geben Zusatzpunkte und
+  verschwinden nach `GOLD_DAUER_SCHRITTE` Schritten wieder. Immer nur eines
+  gleichzeitig, sonst häufen sie sich bei schnellem Spiel.
+- `freiesFeld` zählt erst alle freien Felder und wählt dann eines, statt
+  blind zu würfeln und bei Treffern zu wiederholen — begrenzter Aufwand auch
+  bei fast vollem Feld, und für eine gegebene Saat immer dasselbe Ergebnis.
+
+## Merge Up — Besonderheiten
+
+- Kacheln tragen eine **Stufe**, nicht den angezeigten Wert: Stufe 3 wird als
+  8 angezeigt (`wertVonStufe` = 2^Stufe). Verschmelzen ist dadurch ein
+  simples `stufe + 1`, und die Farbzuordnung ist ein Griff in eine Liste.
+- Alle vier Richtungen laufen durch **eine** Funktion (`reiheSchieben`, immer
+  nach links). `schieben` dreht das Raster vorher passend und danach zurück.
+  Das spart drei fast gleiche Fassungen, in denen sich leicht ein Fehler
+  versteckt. Achtung beim Ändern: `drehen` dreht **gegen** den Uhrzeigersinn,
+  dabei wird aus „hoch" **eine** Drehung und aus „runter" **drei** — genau da
+  war in der ersten Fassung ein Vertauscher drin, den erst die Tests fanden.
+- Jede Kachel verschmilzt nur einmal pro Zug (2,2,2,2 → 4,4, nicht 8), und
+  das vordere Paar zuerst — beides ist getestet.
+- Ein Zug, der nichts bewegt, ist kein Zug: es kommt keine neue Kachel dazu.
+  Sonst wäre wiederholtes Drücken gegen eine Wand eine Strafe.
+- 2048 setzt `gewonnen`, beendet die Runde aber **nicht** — man darf
+  weiterspielen, solange noch ein Zug geht. `onGameOver` bekommt `gewonnen`
+  mit, die Hülle zeigt dann „🎉 Gewonnen!".
+- Farben in `farben.ts` sind bewusst eine eigene, kräftige Reihe (Blau →
+  Grün → Gelb → Rot → Violett), nicht die beigen Töne des Originals.
+
+## Bubble Pop — Besonderheiten
+
+- Wabenraster im „odd-r"-Versatz: jede ungerade Zeile ist eine halbe Kugel
+  nach rechts versetzt. Die gesamte Nachbarschaftslogik steckt in **einer**
+  Funktion (`nachbarn` in `logik.ts`) — der Versatz entscheidet, ob die
+  oberen/unteren Nachbarn nach links oder rechts greifen. Ein
+  Vorzeichenfehler fällt im Spiel kaum auf, deshalb prüft ein Test, dass die
+  Nachbarschaft **gegenseitig** ist (wer mein Nachbar ist, hat mich auch als
+  Nachbarn). Das ist der eigentliche Prüfstein bei Wabenrastern.
+- `geometrie.ts` rechnet die Flugbahn Schritt für Schritt ab und spiegelt an
+  den Seitenwänden — als reine Funktion, damit sich das Abprallen ohne
+  Browser testen lässt. Ein Test schießt viele Winkel durch und prüft, dass
+  keiner in einem schon belegten Feld landet.
+- `naechstesFeld` prüft die geschätzte Zeile **und ihre Nachbarzeilen** — der
+  Versatz macht eine direkte Umrechnung unzuverlässig.
+- Nach dem Platzen einer Gruppe fallen alle Kugeln, die den Halt zur
+  obersten Zeile verlieren (`haengendeKugeln`, Flutfüllung von oben). Sie
+  geben doppelte Punkte — das belohnt Schüsse, die eine tragende Kugel
+  treffen, statt nur die größte Gruppe zu suchen.
+- Nachschub von oben kommt nur nach Schüssen **ohne** Treffer
+  (`NACHSCHUB_NACH_SCHUESSEN`) — ein Treffer soll belohnt werden, nicht
+  zusätzlich die Wabe herunterdrücken.
+- Neue Kugeln werden nur aus Farben gezogen, die noch im Feld liegen
+  (`vorhandeneFarben`) — sonst bekommt man irgendwann eine Farbe ins Rohr,
+  die es gar nicht mehr gibt, und der Schuss ist zwangsläufig verschenkt.
 
 ## Befehle
 
