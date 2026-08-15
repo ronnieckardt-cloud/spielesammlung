@@ -20,7 +20,7 @@ Dann <http://localhost:5180> öffnen.
 | **Farbsortierer** | spielbar |
 | **Blockblitz** | spielbar |
 | **Reihenfall** | spielbar |
-| Geisterjagd | geplant |
+| **Geisterjagd** | spielbar |
 
 Der Platzhalter ist kein richtiges Spiel, sondern der Beweis, dass das
 Grundgerüst trägt: Er benutzt alle gemeinsamen Bausteine und meldet Punkte

@@ -109,7 +109,7 @@ kurz zusammenfassen, was fertig ist.
    nie in der Session angekommen)
 3. ✅ Blockblitz
 4. ✅ Reihenfall
-5. ⬜ Geisterjagd
+5. ✅ Geisterjagd
 
 Danach zusätzlich geplant (noch nicht begonnen):
 
@@ -188,6 +188,34 @@ versucht deshalb genau dasselbe Level erneut.
   Kommentar dort.
 - Farben bewusst anders zugeordnet als beim Original (`farben.ts`) — jedes
   der sieben Teile hat eine andere Farbe als in der klassischen Zuordnung.
+
+## Geisterjagd — Besonderheiten
+
+- `labyrinth.ts`: Das Labyrinth ist ein reines Textraster (`ROHES_LABYRINTH`)
+  — hier ändern, wenn ein anderes Layout gewünscht ist. Alle Zeilen müssen
+  gleich lang sein, genau eine Zeile hat an beiden Rändern kein `#` (der
+  Tunnel), genau ein `P` und genau vier `G`. Ein Flood-Fill-Test
+  (`labyrinth.test.ts`) prüft nach jeder Änderung, dass wirklich jedes
+  begehbare Feld erreichbar ist — Tippfehler im Raster fliegen damit sofort
+  auf, nicht erst beim Spielen.
+- Bewegung ist kachelweise wie bei Sternenfang, nicht in Pixeln.
+  „Richtungswechsel nur an Kreuzungen" ergibt sich von selbst, weil jede
+  Position ohnehin eine ganze Kachel ist — es gibt kein Zwischen-Kachel.
+- Vier eigene Zielberechnungen (`jagdZiel` in `logik.ts`), alle einzeln
+  getestet: Geist 0 verfolgt direkt, Geist 1 zielt vier Felder vor den
+  Spieler, Geist 2 spiegelt Geist 0 durch einen Punkt vor dem Spieler
+  (klassische „Inky"-Formel), Geist 3 verfolgt nur aus der Ferne und zieht
+  sich aus der Nähe zurück. Kein Geist kehrt an Kreuzungen um, außer in
+  einer echten Sackgasse (`geistRichtungWaehlen`).
+- Streuen/Jagen nach eigener Zeittabelle (`MODUS_ZEITTABELLE`), nicht die
+  Original-Werte. Beim Wechsel kehren nicht-ängstliche, nicht-heimkehrende
+  Geister sofort um — klassisches, absichtlich beibehaltenes Verhalten.
+- Auf ausdrücklichen Wunsch trotzdem **keine** Pac-Man-Optik: eigene
+  Spielfigur (Pfeil/Chevron, dreht sich in Laufrichtung, `figuren.tsx`),
+  eigene Geister-Silhouette und -Farben (`farben.ts`).
+- Steuerung über `useInput` (Wischen + Tastatur) **und** den gemeinsamen
+  `Steuerkreuz`-Baustein — hier passt er, weil es wirklich nur die vier
+  Richtungen braucht.
 
 ## Befehle
 
