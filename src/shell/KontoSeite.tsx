@@ -46,7 +46,7 @@ function Einladen() {
 
   const adresse = `${window.location.origin}${window.location.pathname}`;
   const nachricht =
-    `Komm in Florians Spielesammlung! 🎮\n\n${adresse}\n\n` +
+    `Komm zu Flow Games! 🎮\n\n${adresse}\n\n` +
     `Tipp oben rechts auf „Anmelden", dann auf „Ich brauche ein neues Konto".\n` +
     `Einladungscode: ${EINLADUNGSCODE}\n\n` +
     `Eine E-Mail-Adresse brauchst du nicht — nur einen Spielnamen und ein Passwort.`;
@@ -54,7 +54,7 @@ function Einladen() {
   const teilen = async () => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Florians Spielesammlung', text: nachricht });
+        await navigator.share({ title: 'Flow Games', text: nachricht });
         return;
       }
       await navigator.clipboard.writeText(nachricht);

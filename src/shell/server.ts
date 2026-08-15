@@ -36,7 +36,7 @@ const OEFFENTLICHER_SCHLUESSEL = 'sb_publishable_Vg-LOTrjkbhR--mBbWUjCg_ByOTOkfQ
  *
  * Die Domain ist bewusst eine eigene und nicht die von FitHold: In dieser
  * Datenbank liegen beide Apps, und so ist auf einen Blick zu sehen, welches
- * Konto zur Spielesammlung gehört.
+ * Konto zu Flow Games gehört.
  */
 const NAMENS_DOMAIN = 'spieler.klarvorteil.de';
 

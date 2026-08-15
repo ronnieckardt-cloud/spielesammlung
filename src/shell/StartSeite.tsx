@@ -84,6 +84,49 @@ function Weiterkarte({ spiel, onSpielen }: { spiel: GameApi; onSpielen: (id: str
 }
 
 /**
+ * Die Wortmarke „FLOW GAMES".
+ *
+ * **Bewusst nicht die große `.wortmarke`-Maschinerie aus der Startseite von
+ * früher.** Die baut ihre Räumlichkeit aus gestapelten Schatten, und deren
+ * Kommentar sagt es selbst: Unter etwa 20 Pixeln Schriftgröße wird die
+ * Extrusion ein bis zwei Pixel hoch und liest sich als schmutzige Kante.
+ * Hier steht die Marke klein in einer Zeile mit dem Kontoknopf — also eine
+ * eigene, flache Lösung.
+ *
+ * „FLOW" trägt den Farbverlauf, „GAMES" steht ruhig daneben. Ein Wortpaar,
+ * bei dem **beide** Teile leuchten, hat keine Betonung mehr; so hat es
+ * einen Anfang, den das Auge zuerst trifft.
+ */
+function Wortmarke() {
+  return (
+    <span className="flex min-w-0 items-baseline gap-1.5" aria-label="Flow Games">
+      <span
+        aria-hidden="true"
+        className="text-base font-black tracking-tight"
+        style={{
+          background: 'linear-gradient(100deg, #ffd23c, #ff9f45 45%, #ff5d8f)',
+          WebkitBackgroundClip: 'text',
+          backgroundClip: 'text',
+          color: 'transparent',
+          // Kein `text-shadow` an eingeclipptem Text — der wird hinter der
+          // durchsichtigen Füllung gezeichnet und scheint hindurch. Dieselbe
+          // Falle wie bei Tap Rush und der alten Wortmarke.
+          filter: 'drop-shadow(0 2px 4px rgb(0 0 0 / 0.45))',
+        }}
+      >
+        FLOW
+      </span>
+      <span
+        aria-hidden="true"
+        className="text-[13px] font-black tracking-[0.18em] text-white/75 uppercase"
+      >
+        Games
+      </span>
+    </span>
+  );
+}
+
+/**
  * Der Einstieg nach Florianville.
  *
  * Steht **über** der Weiterspielen-Karte und ist die größte Fläche der
@@ -172,12 +215,7 @@ export function StartSeite({
     <BunterGrund>
       <header className="rein-von-oben mb-4">
         <div className="mb-3 flex min-h-11 items-center justify-between gap-2">
-          <span
-            aria-hidden="true"
-            className="min-w-0 truncate text-[11px] font-black tracking-[0.22em] text-white/55 uppercase"
-          >
-            Florians Spielesammlung
-          </span>
+          <Wortmarke />
           <Kontoknopf konto={konto} onKonto={onKonto} />
         </div>
 

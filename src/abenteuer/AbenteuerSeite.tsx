@@ -96,7 +96,7 @@ export function AbenteuerSeite({
     abenteuerSchreiben({ sterne: [...gesammeltRef.current], mission: m });
   }, []);
 
-  /** Schreibt Erfahrung in denselben Fortschritt wie die Spielesammlung. */
+  /** Schreibt Erfahrung in denselben Fortschritt wie der Rest von Flow Games. */
   const xpGeben = useCallback((xp: number) => {
     if (xp <= 0) return;
     const f = fortschrittLesen();

@@ -171,7 +171,7 @@ export default function App() {
   const spiel = ansicht.art === 'spiel' ? spielFinden(ansicht.id) : undefined;
 
   useEffect(() => {
-    document.title = spiel ? `${spiel.title} — Spielesammlung` : 'Spielesammlung';
+    document.title = spiel ? `${spiel.title} — Flow Games` : 'Flow Games';
   }, [spiel]);
 
   /*

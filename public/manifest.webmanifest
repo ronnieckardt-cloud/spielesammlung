@@ -1,7 +1,7 @@
 {
-  "name": "Spielesammlung",
-  "short_name": "Spiele",
-  "description": "Eine Sammlung kleiner Spiele für den Browser. Läuft offline.",
+  "name": "Flow Games",
+  "short_name": "Flow Games",
+  "description": "Kleine, hochwertige Spiele für den Browser. Läuft offline.",
   "lang": "de",
   "start_url": "/",
   "scope": "/",
