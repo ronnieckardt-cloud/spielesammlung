@@ -820,6 +820,12 @@ Ganzflächige Hell-Dunkel-Wechsel sind grundsätzlich tabu.
   Ein Test prüft für Level 1 bis 40, dass jede Stufe eine **gerade**
   Kartenzahl hat (sonst bliebe eine Karte übrig) und nie mehr Paare
   verlangt, als es Motive gibt.
+- Ein Fehlgriff bekommt einen **roten Rand mit weichem Schein**
+  (`.karte-falsch`), solange die beiden Karten offen liegen — also knapp
+  eine Sekunde. Vorher unterschied er sich optisch in nichts von einem
+  Treffer, man merkte ihn nur am Ton. Bewusst als Übergang und nicht als
+  Keyframe-Animation: Der Rand soll genau so lange stehen, wie die Karten
+  liegen, und nicht nach fester Zeit ablaufen.
 - **Die Logik kennt keine Uhr.** Ein Fehlgriff setzt nur `fehlgriff: true`;
   die Anzeige wartet `ZUDECKEN_MS` und ruft dann `schliessen`. Solange
   zwei Karten offen liegen, sind weitere Tipps wirkungslos — sonst könnte

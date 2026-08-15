@@ -191,6 +191,8 @@ export function PaarUp({ onScore, onGameOver, settings, bestScore, istErsteRunde
         >
           {z.karten.map((karte, i) => {
             const offen = karte.gefunden || z.offen.includes(i);
+            // Nur die beiden Karten, die gerade nicht zusammenpassen.
+            const falsch = z.fehlgriff && z.offen.includes(i);
             const motiv = MOTIVE[karte.motiv]!;
             return (
               <button
@@ -198,10 +200,14 @@ export function PaarUp({ onScore, onGameOver, settings, bestScore, istErsteRunde
                 type="button"
                 onClick={() => beiKarte(i)}
                 disabled={offen || z.offen.length >= 2}
-                aria-label={offen ? `${motiv.name}${karte.gefunden ? ', gefunden' : ''}` : 'Verdeckte Karte'}
+                aria-label={
+                  offen
+                    ? `${motiv.name}${karte.gefunden ? ', gefunden' : falsch ? ', passt nicht' : ''}`
+                    : 'Verdeckte Karte'
+                }
                 className={`karte-huelle aspect-3/4 min-h-0 w-full ${
                   karte.gefunden ? 'karte-erledigt' : ''
-                }`}
+                } ${falsch ? 'karte-falsch' : ''}`}
               >
                 <span className={`karte-dreher ${offen ? 'karte-offen' : ''}`}>
                   {/* Rückseite: das, was man sieht, solange die Karte liegt. */}

@@ -536,6 +536,20 @@
   box-shadow: inset 0 0 0 2px #22c55e;
 }
 
+/* Passt ein Paar nicht zusammen, bekommen genau diese beiden Karten einen
+   roten Rand, solange sie offen liegen — also knapp eine Sekunde, bis sie
+   sich wieder zudecken. Vorher unterschied sich ein Fehlgriff optisch in
+   nichts von einem Treffer, man merkte es nur am Ton.
+
+   Als Übergang, nicht als Keyframe-Animation: Der Rand soll so lange
+   stehen, wie die Karten liegen, und nicht nach fester Zeit ablaufen. */
+.karte-falsch .karte-vorderseite {
+  box-shadow:
+    inset 0 0 0 3px #ef4444,
+    0 0 14px rgba(239, 68, 68, 0.55);
+  transition: box-shadow 0.12s ease-out;
+}
+
 /* Quiz Time, Word Play und Brain Blitz: Rückmeldung auf eine Antwort.
    Zehn Aufgaben je Runde, und bisher wechselte dabei nur die Farbe von
    Rahmen und Hintergrund — zehnmal passierte optisch also fast nichts.
