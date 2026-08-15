@@ -187,11 +187,19 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    /* Abstand zu Aussparung und Wischbalken bei Handys. Gehört hierher und
-       nicht an die einzelnen Seiten — sonst überschreibt es deren Ränder. */
+    /* Abstand zur Aussparung links und rechts. Gehört hierher, weil es
+       jede Seite gleich betrifft.
+
+       **Unten steht hier bewusst nichts mehr.** Vorher gab es hier ein
+       `padding-bottom: env(safe-area-inset-bottom)` — und die
+       Navigationsleiste bringt denselben Abstand noch einmal selbst mit.
+       Doppelt gerechnet blieb unter der Leiste ein Streifen Körper-
+       Hintergrund stehen, und der ist fast schwarz: genau der „schwarze
+       Rand", der in der installierten App auffiel. Den Abstand nach unten
+       setzt jetzt das jeweils unterste Element — die Leiste oder
+       `.spielseite`. */
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    padding-bottom: env(safe-area-inset-bottom);
     background-color: var(--color-grund);
     color: var(--color-text);
     font-family:
@@ -600,6 +608,28 @@
    Die 3,25rem entsprechen etwa der Höhe dieser Leiste auf dem iPhone. */
 .spielseite {
   padding-bottom: max(3.25rem, calc(env(safe-area-inset-bottom) + 2.5rem));
+}
+
+/* **In der installierten App gibt es diese Leiste nicht.**
+
+   Der Zuschlag oben ist im Browser richtig und in der PWA falsch: Dort
+   reserviert er gut fünfzig Pixel für eine Adressleiste, die gar nicht
+   existiert — und unten bleibt ein toter schwarzer Streifen. Genau das
+   war die Rückmeldung („als wenn die denkt, dass da unten die
+   Browserleiste ist").
+
+   Zwei Wege zur selben Erkennung, weil einer allein nicht reicht:
+   `display-mode: standalone` ist der Standard, `html.eigenstaendig`
+   setzt `main.tsx` aus Apples eigenem `navigator.standalone` — auf
+   älteren iOS-Fassungen ist das der verlässlichere von beiden. */
+@media (display-mode: standalone) {
+  .spielseite {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+  }
+}
+
+html.eigenstaendig .spielseite {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
 }
 
 /* Apples Richtlinie nennt 44 × 44 Punkte als kleinste sicher treffbare

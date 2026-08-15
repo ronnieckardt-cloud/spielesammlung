@@ -3,6 +3,20 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './styles/index.css';
 
+/*
+ * Läuft die App als installierte PWA?
+ *
+ * Apple hat dafür seit jeher `navigator.standalone`; der Standardweg ist
+ * die Medienabfrage `display-mode: standalone`. Beide werden geprüft, weil
+ * genau hier ein Unterschied sichtbar wird: Im Browser muss unten Platz
+ * für Safaris schwebende Adressleiste bleiben, in der installierten App
+ * wäre derselbe Platz ein toter schwarzer Streifen.
+ */
+const eigenstaendig =
+  (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+  (typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches);
+document.documentElement.classList.toggle('eigenstaendig', eigenstaendig);
+
 const wurzel = document.getElementById('wurzel');
 if (!wurzel) throw new Error('Element #wurzel fehlt in index.html');
 
