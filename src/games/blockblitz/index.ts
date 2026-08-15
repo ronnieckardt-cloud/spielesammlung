@@ -8,5 +8,6 @@ export const blockblitz: GameApi = {
   title: 'Block Burst',
   accent: '#38bdf8',
   Icon: BlockblitzIcon,
+  iconVollflaechig: true,
   Component: Blockblitz,
 };

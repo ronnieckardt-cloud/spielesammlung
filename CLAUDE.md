@@ -46,6 +46,7 @@ type GameApi = {
   title: string;
   accent: string;  // Farbe der Kachel
   Icon: React.FC<{ className?: string }>;  // eigenes SVG, kein Emoji
+  iconVollflaechig?: boolean;  // true = fertiges App-Symbol, füllt die Kachel selbst
   Component: React.FC<GameProps>;
 };
 
@@ -159,6 +160,34 @@ Kachel-Hintergrund ist ein Farbverlauf aus der Akzentfarbe (heller/dunkler
 Schlagschatten — sonst wirkte die Startseite zu flach/grau. Ein wandernder
 Lichtschimmer war testweise drin, wurde aber wieder entfernt (Rückmeldung:
 lenkt ab, wenn er ständig hintereinander über die Kacheln läuft).
+
+**Fertige App-Symbole (`iconVollflaechig: true`).** Rückmeldung zu den
+kleinen Zeichen auf farbigem Grund: „einfach nur son kleines Symbol
+draufgemacht … ich will, dass es aussieht wie eine echte App, mit dem
+Schriftzug und so." Ein Spiel kann deshalb statt eines Zeichens ein
+komplettes App-Symbol mitbringen: eigener Farbverlauf, eigene runde Ecken,
+Glanzlichter, Schriftzug — es füllt die Kachel ganz aus, die Hülle legt
+keinen Verlauf mehr darunter (nur noch den farbigen Schatten). Erste und
+bisher einzige Umsetzung: **Block Burst** (`games/blockblitz/Icon.tsx`), als
+Vorlage für die übrigen Spiele gedacht. Zu beachten:
+
+- viewBox `0 0 64 64` (statt 24×24 wie bei den Zeichen-Icons) — mehr Platz
+  für Details. `rx="16"` entspricht bei 64 Breite genau `rounded-2xl` auf
+  der 64px-Kachel und skaliert überall mit.
+- Verlaufs- und clipPath-`id`s sind fest vergeben. Das Symbol kann mehrfach
+  auf einer Seite stehen (Menü und Bestenliste); die Definitionen sind dann
+  identisch, das Bild also überall gleich.
+- Der Schriftzug bekommt `textLength` + `lengthAdjust="spacingAndGlyphs"` —
+  so passt er auch dann in die Kachel, wenn ein Gerät eine andere Schrift
+  einsetzt.
+- Einzelne leere Rasterfelder sahen bei großer Anzeige wie Lücken aus,
+  deshalb ist das Brett bis auf das Feld mit dem Funken voll.
+- Wer so ein Symbol einbaut, muss an drei Stellen denken: `index.ts`
+  (`iconVollflaechig: true`), `Kachelmenue.tsx` und `BestenlisteSeite.tsx`
+  prüfen das Feld bereits selbst — dort ist nichts mehr zu tun. Der
+  Startbildschirm des Spiels sollte das Symbol dann aber freistehend zeigen
+  (`<Icon className="size-32 rounded-[2rem] shadow-2xl" />`) statt in einem
+  mattierten Kasten, siehe `Blockblitz.tsx`.
 
 Kachelmenü ist bewusst `flex flex-wrap` mit **fester** Kachelgröße
 (`size-16`), keine responsive Grid-Spaltenzahl mehr — Rückmeldung: Kacheln

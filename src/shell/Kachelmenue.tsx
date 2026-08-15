@@ -99,6 +99,9 @@ export function Kachelmenue({
           {spiele.map((spiel) => {
             const beste = bestwert(spiel.id);
             const Icon = spiel.Icon;
+            // Fertige App-Symbole bringen Hintergrund und Ecken selbst mit —
+            // von der Hülle kommt dann nur noch der farbige Schatten.
+            const vollflaechig = spiel.iconVollflaechig === true;
             return (
               <li key={spiel.id} className="flex w-20 flex-col items-center gap-1.5">
                 <button
@@ -106,12 +109,18 @@ export function Kachelmenue({
                   onClick={() => onSpielen(spiel.id)}
                   aria-label={`${spiel.title} — ${beste > 0 ? `beste Punktzahl ${beste}` : 'noch nicht gespielt'}`}
                   style={{
-                    background: `linear-gradient(150deg, color-mix(in srgb, ${spiel.accent} 100%, white 30%), ${spiel.accent} 55%, color-mix(in srgb, ${spiel.accent} 100%, black 22%))`,
+                    background: vollflaechig
+                      ? undefined
+                      : `linear-gradient(150deg, color-mix(in srgb, ${spiel.accent} 100%, white 30%), ${spiel.accent} 55%, color-mix(in srgb, ${spiel.accent} 100%, black 22%))`,
                     boxShadow: `0 6px 16px -6px color-mix(in srgb, ${spiel.accent} 70%, transparent)`,
                   }}
                   className="grid size-16 place-items-center rounded-2xl text-white transition-transform active:scale-95"
                 >
-                  <Icon className="size-7 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />
+                  {vollflaechig ? (
+                    <Icon className="size-full" />
+                  ) : (
+                    <Icon className="size-7 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />
+                  )}
                 </button>
                 <span className="w-full text-center text-[11px] leading-tight font-medium text-white/90">
                   {spiel.title}

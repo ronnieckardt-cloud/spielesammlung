@@ -23,13 +23,18 @@ export function BestenlisteSeite({ onZurueck }: { onZurueck: () => void }) {
               className="rounded-karte border border-rand border-l-4 bg-flaeche p-4"
             >
               <h2 className="flex items-center gap-2 font-semibold">
-                <span
-                  aria-hidden="true"
-                  style={{ backgroundColor: spiel.accent }}
-                  className="grid size-7 shrink-0 place-items-center rounded-lg text-white"
-                >
-                  <Icon className="size-4" />
-                </span>
+                {/* Fertige App-Symbole stehen für sich, siehe Kachelmenue. */}
+                {spiel.iconVollflaechig ? (
+                  <Icon className="size-7 shrink-0 rounded-lg" />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    style={{ backgroundColor: spiel.accent }}
+                    className="grid size-7 shrink-0 place-items-center rounded-lg text-white"
+                  >
+                    <Icon className="size-4" />
+                  </span>
+                )}
                 {spiel.title}
               </h2>
               {eintraege.length === 0 ? (

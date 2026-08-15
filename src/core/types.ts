@@ -45,7 +45,12 @@ export type GameApi = {
   /** Farbe der Kachel, als CSS-Farbe. */
   accent: string;
   /** Eigenes SVG-Symbol auf der Kachel — kein Emoji, damit es zum Rest der
-   * eigenen Optik passt. Zeichnet in `currentColor`, Größe kommt von außen. */
+   * eigenen Optik passt. Größe kommt immer von außen. */
   Icon: React.FC<{ className?: string }>;
+  /** `true`, wenn das Icon ein fertiges App-Symbol ist: eigener Hintergrund,
+   * eigene runde Ecken, füllt die Kachel ganz aus. Die Hülle legt dann
+   * keinen Farbverlauf mehr darunter. Ohne Angabe (der Normalfall) ist das
+   * Icon ein kleines Zeichen, das mittig auf der Akzentfarbe sitzt. */
+  iconVollflaechig?: boolean;
   Component: React.FC<GameProps>;
 };
