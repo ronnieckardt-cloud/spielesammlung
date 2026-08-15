@@ -156,6 +156,8 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `messerwurf` | Blade Toss |
 | `viererreihe` | Drop Four |
 | `farbringe` | Ring Rise |
+| `halbieren` | Even Cut |
+| `verbinden` | Flow Link |
 
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
@@ -400,17 +402,20 @@ Vorgezogen, weil Ronni es ausdrücklich zuerst wollte:
 Von Ronni selbst ausgesucht, aus einer Liste von Vorschlägen:
 
 23. ✅ Ring Rise — Kugel durch drehende Farbringe (Vorbild: Color Switch).
-24. Perfect Slice — mit einem Wisch eine Form in zwei möglichst gleiche
-    Hälften schneiden. Der knifflige Teil ist reine Geometrie (Polygon an
-    einer Geraden teilen, Flächeninhalt) und gehört getestet in eine eigene
-    Datei.
-25. Flow Connect — gleichfarbige Punkte verbinden, ohne sich zu kreuzen,
-    am Ende ist das Gitter voll. Braucht einen Erzeuger, der garantiert
-    lösbare Bretter liefert.
+24. ✅ Even Cut — mit einem Wisch eine Form in zwei gleiche Hälften
+    schneiden (Vorbild: Perfect Slice).
+25. ✅ Flow Link — gleichfarbige Punkte verbinden, ohne sich zu kreuzen,
+    am Ende ist das Gitter voll (Vorbild: Flow Free).
 26. **Duell** — zwei Angemeldete spielen dasselbe Level, wer mehr Punkte
     hat, gewinnt. Ronnis Wunsch, ausdrücklich **nach** Flow Connect.
     Funktioniert ohne neue Spiellogik in allen Spielen, bei denen gleiche
-    Levelnummer schon gleiches Rätsel bedeutet.
+    Levelnummer schon gleiches Rätsel bedeutet — seit Even Cut und Flow Link
+    sind das neun.
+27. **Tap Rush** — Ronnis Idee: Zeit vorher wählen (5, 10, 20, 60 Sekunden),
+    dann so oft wie möglich tippen. Die Optik eskaliert mit dem Tempo: grün,
+    rot, Regenbogen. Achtung, die Puls-Grenze aus dem Audit gilt auch hier —
+    über Farbton und Deckkraft steuern, nicht über Blinken, und keine
+    ganzflächigen Hell-Dunkel-Wechsel.
 
 Danach, in dieser Reihenfolge:
 
@@ -1311,6 +1316,65 @@ Regel oben: das Prinzip ist frei, der Name nicht. Interne `id` ist
   Blade Toss: `useInput` meldet ein Antippen erst beim Loslassen, zusammen
   mit `onPointerDown` käme jeder Tipp zweimal an — und ein doppelter Sprung
   wirft die Kugel viel zu hoch.
+
+## Even Cut — Besonderheiten
+
+Eine Form, ein Wisch, zwei möglichst gleiche Hälften. Vorbild ist Perfect
+Slice; der Name ist wie immer ein eigener. Interne `id` ist `halbieren`.
+
+- **Alle Formen sind konvex, und das ist eine Bedingung, keine
+  Bequemlichkeit.** Nur bei einer konvexen Form ergibt ein gerader Schnitt
+  **genau zwei** Teile. Bei einer eingedellten Form (Stern, Mond) kann
+  dieselbe Gerade drei oder mehr Stücke abtrennen — dann stimmt weder die
+  Anzeige noch die Wertung. Abwechslung kommt stattdessen über Eckenzahl,
+  Streckung und Drehung.
+- Der Erzeuger verteilt die Ecken **winkelmäßig aufsteigend** auf einem
+  gedehnten Kreis und ändert nur ihren Abstand zur Mitte. Damit ist die Form
+  von selbst konvex; ein Zufallshaufen von Punkten bräuchte eine
+  Hüllenberechnung, die niemand gebraucht.
+- **Ohne Drehung wäre das Spiel trivial** — bei jeder ungedrehten Form liegt
+  eine Symmetrieachse waagerecht oder senkrecht, man könnte immer stumpf
+  gerade durchziehen.
+- Der schärfste Test ist „**nichts darf verloren gehen**": 40 Formen mal 12
+  zufällige Geraden, und jedes Mal muss die Summe der beiden Stücke wieder
+  die ganze Fläche ergeben. Ein Fehler in der Klipp-Schleife fällt bei einem
+  einzelnen sauberen Schnitt gar nicht auf, hier sofort.
+- Dazu ein Test, der für **jede** Form per Einschachtelung eine wirklich
+  halbierende Gerade findet — ohne diese Zusicherung wäre das Spiel unfair.
+- Punkte sind absichtlich streng: Ab zehn Prozent Abweichung gibt es nichts
+  mehr. Ein Schnitt „irgendwo durch" soll sich nicht schon wie ein Treffer
+  anfühlen.
+
+## Flow Link — Besonderheiten
+
+Gleichfarbige Punkte verbinden, ohne sich zu kreuzen — und am Ende muss
+jedes Feld belegt sein. Interne `id` ist `verbinden`.
+
+- **Erst die Lösung bauen, dann die Aufgabe daraus ableiten.** Ein
+  ausgedachtes Rätsel kann unlösbar sein (beim Farbsortierer braucht es
+  dafür einen eigenen Suchlauf). Hier wird zuerst ein Weg gebaut, der jedes
+  Feld genau einmal berührt, dann in Stücke zerschnitten; die Stückenden
+  werden die Punkte. Lösbar **und** vollständig füllbar, ohne einen einzigen
+  Suchlauf.
+- Der Weg entsteht aus dem Schlangenweg plus vielen **Rückbissen**
+  („backbite"): ein Wegende nehmen, einen beliebigen Gitternachbarn suchen,
+  das Stück dahinter umdrehen. Das Ergebnis ist immer wieder ein gültiger
+  Weg — das Verfahren **kann** gar keinen ungültigen Zustand erzeugen. Genau
+  deshalb ist es hier richtig.
+- Jedes Stück bekommt mindestens zwei Felder, sonst lägen beide Punkte eines
+  Paares aufeinander.
+- **„Alle Felder voll" ist die eigentliche Aufgabe.** Ohne diese Bedingung
+  wäre fast jedes Brett mit ein paar geraden Strichen erledigt.
+- Läuft man über einen fremden Weg, wird der dort **gekappt** statt den Zug
+  zu verbieten. Alles andere fühlt sich an, als klemme das Spiel.
+- Farbe ist nicht das einzige Merkmal: Jeder Punkt trägt ein Zeichen (Kreis,
+  Quadrat, Dreieck, Raute, Kreuz, Stern). Die beiden Punkte eines Paares
+  liegen weit auseinander — man kann sie also nicht nebeneinanderhalten und
+  Farbtöne vergleichen.
+- Dass es neben dem gedachten Weg noch andere Lösungen geben kann, ist
+  ausdrücklich in Ordnung: Für ein Kind zählt „alle verbunden und alles
+  voll". Bei Nonogrammen wäre das anders — deshalb steht Pixel Paint
+  weiterhin auf der zurückgestellten Liste.
 
 ## Wenn Animationen „einfach weg" sind
 

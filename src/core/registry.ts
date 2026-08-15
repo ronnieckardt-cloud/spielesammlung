@@ -14,6 +14,8 @@ import { paare } from '../games/paare';
 import { messerwurf } from '../games/messerwurf';
 import { viererreihe } from '../games/viererreihe';
 import { farbringe } from '../games/farbringe';
+import { halbieren } from '../games/halbieren';
+import { verbinden } from '../games/verbinden';
 
 /**
  * Die einzige Liste aller Spiele. Ein neues Spiel wird hier eingetragen —
@@ -35,6 +37,8 @@ export const spiele: readonly GameApi[] = [
   messerwurf,
   viererreihe,
   farbringe,
+  halbieren,
+  verbinden,
 ];
 
 export function spielFinden(id: string): GameApi | undefined {
