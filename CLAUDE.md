@@ -24,6 +24,16 @@ Versionsnummer ist der einzige Auslöser, der den Speicher wirklich leert.
 Genau das ist einmal passiert (mehrere Deploys ohne Versionssprung, Florians
 iPad zeigte tagelang die alte Fassung).
 
+Selbst mit hochgezählter Version kam ein Update auf iOS-Geräten (iPad,
+iPhone) trotzdem nicht zuverlässig an — ein einfaches Neuladen half nicht
+immer, manuelles Löschen der Website-Daten war der einzige verlässliche Weg.
+Deshalb lädt sich die Seite jetzt **selbst** neu, sobald ein neuer Service
+Worker übernimmt (`main.tsx`: `controllerchange`-Listener +
+`registration.update()` bei jedem Laden und beim Zurückkommen aus dem
+Hintergrund) — kein manuelles Eingreifen mehr nötig. Der Schutz
+`hatteSchonEinenWorker` verhindert einen unnötigen Neustart beim allerersten
+Besuch (da gibt es ja noch nichts Altes zu ersetzen).
+
 ## Die Schnittstelle
 
 Der wichtigste Punkt im ganzen Projekt. Ein Spiel liegt in

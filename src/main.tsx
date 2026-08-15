@@ -15,7 +15,33 @@ createRoot(wurzel).render(
 // Offline-Betrieb nur in der gebauten Fassung — beim Entwickeln würde der
 // Zwischenspeicher ständig alte Dateien ausliefern.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  // Ob beim Start schon ein Service Worker die Seite führte — nur dann ist
+  // ein späterer Wechsel wirklich eine *neue* Fassung und kein Ersteinbau.
+  const hatteSchonEinenWorker = !!navigator.serviceWorker.controller;
+  let neuGeladen = false;
+
+  // Sobald eine neue Fassung übernommen hat (Service Worker ruft
+  // skipWaiting()/clients.claim()), automatisch neu laden — ohne dass
+  // jemand von Hand Speicher oder Browserdaten löschen muss. Das war
+  // vorher der Fall: Deploys kamen auf installierten Geräten oft tagelang
+  // nicht an, weil dafür ein manueller Cache-Reset nötig war.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hatteSchonEinenWorker || neuGeladen) return;
+    neuGeladen = true;
+    window.location.reload();
+  });
+
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js');
+    navigator.serviceWorker.register('/sw.js').then((registration) => {
+      // Aktiv nach einer neuen Fassung fragen statt nur auf die (oft seltene)
+      // automatische Prüfung des Browsers zu warten.
+      void registration.update();
+
+      // Kommt die App aus dem Hintergrund zurück (z. B. Tab-Wechsel auf dem
+      // iPad), gleich nochmal nachfragen.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') void registration.update();
+      });
+    });
   });
 }
