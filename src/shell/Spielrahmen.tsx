@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Einstellungen, GameApi } from '../core/types';
 import { bestwert, ergebnisEintragen, zuletztGespieltMerken } from './speicher';
+import { ergebnisMelden } from './konto';
 import { spielfarbenStil, toenung } from './spielfarbe';
 
-type Ende = { punkte: number; beste: number; rekord: boolean; gewonnen: boolean };
+type Ende = {
+  punkte: number;
+  beste: number;
+  rekord: boolean;
+  gewonnen: boolean;
+  /** Platz unter allen Angemeldeten — kommt erst nach, wenn der Server antwortet. */
+  platz?: { platz: number; teilnehmer: number };
+};
 
 /**
  * Rahmen um ein laufendes Spiel: Kopfzeile mit Punktestand und Zurück-Knopf,
@@ -72,6 +80,9 @@ export function Spielrahmen({
 
   // Schutz davor, dass ein Spiel das Ende versehentlich zweimal meldet.
   const rundeLaeuft = useRef(true);
+  // Zählt jede beendete Runde. Eine spät eintreffende Antwort aus einer
+  // früheren Runde darf nicht am Dialog der aktuellen kleben.
+  const endeMarke = useRef(0);
 
   const beiPunkten = useCallback((wert: number) => setPunkte(wert), []);
 
@@ -81,9 +92,19 @@ export function Spielrahmen({
       rundeLaeuft.current = false;
 
       const vorher = bestwert(spiel.id);
-      const liste = ergebnisEintragen(spiel.id, wert);
+      const { liste, schluessel } = ergebnisEintragen(spiel.id, wert);
       setPunkte(wert);
       setEnde({ punkte: wert, beste: liste[0]?.punkte ?? wert, rekord: wert > vorher, gewonnen });
+
+      // Der Platz kommt **nachträglich** dazu. Der Dialog steht sofort, ohne
+      // auf das Netz zu warten — das ist der ganze Sinn der Warteschlange.
+      // Ohne Konto oder ohne Netz kommt schlicht nichts zurück.
+      const marke = ++endeMarke.current;
+      void ergebnisMelden(schluessel).then((platz) => {
+        if (platz && marke === endeMarke.current) {
+          setEnde((alt) => (alt ? { ...alt, platz } : alt));
+        }
+      });
     },
     [spiel.id],
   );
@@ -181,7 +202,12 @@ export function Spielrahmen({
             role="dialog"
             aria-modal="true"
             aria-label="Spiel beendet"
-            className="dialog-grund-auf absolute inset-0 grid place-items-center bg-grund/85 p-4 backdrop-blur-sm"
+            // `z-20` ist nicht schmückend, sondern nötig: `.spielbuehne > *`
+            // gibt dem Brett `z-index: 1`, und ein positioniertes Element mit
+            // Stufe 1 wird über einem mit `auto` gezeichnet — ganz gleich,
+            // was weiter unten im Baum steht. Ohne diese Zeile lag das Brett
+            // über dem Rundenende, in **jedem** Spiel mit Bühne.
+            className="dialog-grund-auf absolute inset-0 z-20 grid place-items-center bg-grund/85 p-4 backdrop-blur-sm"
           >
             {/* Der Moment, in dem man auf sein Ergebnis schaut — deshalb in
                 der Farbe des Spiels statt im grauen Systemkasten. */}
@@ -207,6 +233,24 @@ export function Spielrahmen({
               ) : (
                 <p className="mt-3 text-sm text-gedaempft">Beste Punktzahl: {ende.beste}</p>
               )}
+
+              {/* Kommt nach, sobald der Server geantwortet hat — und nur,
+                  wenn jemand angemeldet ist. Der Auftritt ist bewusst
+                  auffällig: Das ist der ganze Reiz daran, ein Konto zu haben.
+                  „Platz 1" bekommt dazu einen eigenen Satz, „Platz 1 von 8"
+                  liest sich sonst kleiner als es ist. */}
+              {ende.platz && (
+                <p className="dialog-auf mt-3 rounded-xl bg-white/10 px-3 py-2 text-sm font-bold">
+                  {ende.platz.platz === 1 ? (
+                    <>🥇 Du bist die Nummer 1 von {ende.platz.teilnehmer}!</>
+                  ) : (
+                    <>
+                      Platz {ende.platz.platz} von {ende.platz.teilnehmer}
+                    </>
+                  )}
+                </p>
+              )}
+
               <div className="mt-6 flex flex-col gap-2.5">
                 <button
                   type="button"

@@ -57,6 +57,22 @@ export type Bestenlisteneintrag = {
   ich: boolean;
 };
 
+/** Ein Treppchenplatz — wie oben, plus die Spiel-id. */
+export type Spitzeneintrag = Bestenlisteneintrag & { spiel: string };
+
+/** Der eigene Platz in einem Spiel, auch außerhalb des Treppchens. */
+export type EigenerPlatz = { spiel: string; punkte: number; platz: number };
+
+/** Eine Zeile der Gesamtwertung über alle Spiele. */
+export type Gesamteintrag = {
+  name: string;
+  /** Platzierungspunkte, nicht Spielpunkte — siehe Ansicht `spiel_gesamtwertung`. */
+  punkte: number;
+  gespielteSpiele: number;
+  siege: number;
+  ich: boolean;
+};
+
 /**
  * Umlaute und Sonderzeichen fest auf ASCII abbilden.
  *
@@ -117,6 +133,27 @@ function alsSitzung(roh: Record<string, unknown>, name: string): Sitzung {
   };
 }
 
+/**
+ * Ein neues Konto anlegen.
+ *
+ * Läuft über eine Funktion auf dem Server, nicht direkt gegen Supabase.
+ * Zwei Gründe: Nur mit dem Dienstschlüssel lässt sich ein Konto **ohne
+ * Bestätigungsmail** anlegen (die Adresse ist ja erfunden, niemand bekäme
+ * je eine Mail) — und der Dienstschlüssel darf niemals ins ausgelieferte
+ * JavaScript. Dort wird auch der Einladungscode geprüft.
+ */
+export async function registrieren(name: string, passwort: string, code: string): Promise<void> {
+  const antwort = await fetch(`${URL_BASIS}/functions/v1/spiel-registrieren`, {
+    method: 'POST',
+    headers: { apikey: OEFFENTLICHER_SCHLUESSEL, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, passwort, code }),
+  });
+  const inhalt = (await antwort.json().catch(() => ({}))) as { fehler?: string };
+  if (!antwort.ok) {
+    throw new ServerFehler(inhalt.fehler ?? 'Das hat gerade nicht geklappt.');
+  }
+}
+
 export async function anmelden(name: string, passwort: string): Promise<Sitzung> {
   const roh = (await anfragen('/auth/v1/token?grant_type=password', {
     method: 'POST',
@@ -172,18 +209,26 @@ export async function ergebnisMelden(
   return zeilen[0] ?? null;
 }
 
-/** Die besten zehn eines Spiels. */
-export async function bestenlisteHolen(
-  sitzung: Sitzung,
-  spielId: string,
-): Promise<Bestenlisteneintrag[]> {
+/**
+ * Die besten Drei **aller** Spiele auf einmal.
+ *
+ * Bewusst eine einzige Abfrage statt vierzehn: Die Bestenlisten-Seite zeigt
+ * je Spiel ein kurzes Treppchen, und vierzehn Anfragen hintereinander wären
+ * auf einem Handy im Funkloch eine halbe Ewigkeit.
+ *
+ * Der Filter `platz=lte.3` läuft im Ansichts-Ergebnis, nicht davor —
+ * Postgres schiebt keine Bedingung durch eine Fensterfunktion. Die Plätze
+ * stimmen also, es sind wirklich die drei Besten je Spiel.
+ */
+export async function spitzenreiterHolen(sitzung: Sitzung): Promise<Spitzeneintrag[]> {
   const zeilen = (await anfragen(
-    `/rest/v1/spiel_bestenliste?spiel=eq.${spielId}` +
-      '&select=name,punkte,platz,spieler&order=platz.asc&limit=10',
+    '/rest/v1/spiel_bestenliste?platz=lte.3&select=spiel,name,punkte,platz,spieler' +
+      '&order=spiel.asc,platz.asc&limit=200',
     { merkmal: sitzung.zugriffsmerkmal },
-  )) as { name: string; punkte: number; platz: number; spieler: string }[];
+  )) as { spiel: string; name: string; punkte: number; platz: number; spieler: string }[];
 
   return zeilen.map((z) => ({
+    spiel: z.spiel,
     name: z.name,
     punkte: z.punkte,
     platz: z.platz,
@@ -191,10 +236,16 @@ export async function bestenlisteHolen(
   }));
 }
 
+/** Die eigenen Plätze je Spiel — auch die außerhalb des Treppchens. */
+export async function eigenePlaetzeHolen(sitzung: Sitzung): Promise<EigenerPlatz[]> {
+  return (await anfragen(
+    `/rest/v1/spiel_bestenliste?spieler=eq.${sitzung.benutzerId}&select=spiel,punkte,platz`,
+    { merkmal: sitzung.zugriffsmerkmal },
+  )) as EigenerPlatz[];
+}
+
 /** Die Gesamtwertung über alle Spiele, nach Platzierungspunkten. */
-export async function gesamtwertungHolen(
-  sitzung: Sitzung,
-): Promise<{ name: string; punkte: number; gespielteSpiele: number; siege: number; ich: boolean }[]> {
+export async function gesamtwertungHolen(sitzung: Sitzung): Promise<Gesamteintrag[]> {
   const zeilen = (await anfragen(
     '/rest/v1/spiel_gesamtwertung?select=spieler,name,punkte,gespielte_spiele,siege' +
       '&order=punkte.desc&limit=20',

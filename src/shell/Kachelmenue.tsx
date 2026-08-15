@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import type { GameApi } from '../core/types';
 import { spiele } from '../core/registry';
 import { bestwert, zuletztGespielt } from './speicher';
+import type { Konto } from './konto';
 
 /**
  * Schwebende Farbflecken im Hintergrund der Startseite — feste Liste, rein
@@ -76,15 +77,61 @@ function Weiterkarte({ spiel, onSpielen }: { spiel: GameApi; onSpielen: (id: str
   );
 }
 
+/**
+ * Wer gerade spielt — oder die Einladung, sich anzumelden.
+ *
+ * Steht bewusst **oben links neben dem Zahnrad** und nicht als eigene große
+ * Karte: Angemeldet zu sein ändert am Spielen nichts, es ist eine
+ * Nebeninformation. Wichtig ist nur, dass Florian auf einen Blick sieht,
+ * unter welchem Namen seine Punkte laufen — sonst spielt er versehentlich
+ * eine Woche lang unangemeldet.
+ */
+function Kontoknopf({ konto, onKonto }: { konto: Konto | null; onKonto: () => void }) {
+  if (!konto) {
+    return (
+      <button
+        type="button"
+        onClick={onKonto}
+        className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 text-xs font-bold text-white transition-colors hover:bg-white/25 active:bg-white/30"
+      >
+        <span aria-hidden="true">👤</span> Anmelden
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onKonto}
+      aria-label={`Konto von ${konto.name}`}
+      className="flex min-h-11 min-w-0 shrink items-center gap-2 rounded-full px-1 text-white transition-colors hover:bg-white/10 active:bg-white/20"
+    >
+      {/* Der erste Buchstabe als Zeichen — bis es Avatare gibt, ist das die
+          schnellste Art zu erkennen, wer angemeldet ist. */}
+      <span
+        aria-hidden="true"
+        className="grid size-8 shrink-0 place-items-center rounded-full bg-white/25 text-sm font-black"
+      >
+        {konto.name.slice(0, 1).toUpperCase()}
+      </span>
+      <span className="min-w-0 truncate text-xs font-bold">{konto.name}</span>
+    </button>
+  );
+}
+
 /** Die Startseite: eine Kachel je Spiel. */
 export function Kachelmenue({
+  konto,
   onSpielen,
   onEinstellungen,
   onBestenliste,
+  onKonto,
 }: {
+  konto: Konto | null;
   onSpielen: (id: string) => void;
   onEinstellungen: () => void;
   onBestenliste: () => void;
+  onKonto: () => void;
 }) {
   // Frisch bei jedem Rendern gelesen, genau wie `bestwert` unten. Beim
   // Zurückkommen aus einem Spiel wird das Menü ohnehin neu aufgebaut, es
@@ -138,12 +185,17 @@ export function Kachelmenue({
               passt auf einem 375er-Handy nichts mehr daneben — deshalb
               darüber statt rechts. Links der Fortschritt, damit die Leiste
               nicht leer wirkt, rechts das Zahnrad. */}
-          <div className="mb-2 flex min-h-11 items-center justify-between gap-3">
-            <span className="text-xs font-medium text-white/75">
+          <div className="mb-2 flex min-h-11 items-center justify-between gap-2">
+            {/* Auf einem 375er-Handy wird es hier eng: Fortschritt, Konto und
+                Zahnrad teilen sich eine Zeile. Der Fortschritt ist das am
+                wenigsten Wichtige und gibt deshalb als Erster nach. */}
+            <span className="min-w-0 truncate text-xs font-medium text-white/75">
               {angespielt > 0
                 ? `${angespielt} von ${spiele.length} Spielen ausprobiert`
                 : 'Läuft auch ohne Internet'}
             </span>
+
+            <Kontoknopf konto={konto} onKonto={onKonto} />
 
             {/* Einstellungen tritt zurück: kein Rand, keine Füllung, nur das
                 Zahnrad — man muss da nicht ständig rein. Die Trefferfläche

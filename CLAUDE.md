@@ -390,14 +390,43 @@ sehr schönes Rätsel, aber es braucht einen Löser, der für jedes erzeugte
 Bild beweist, dass es genau *eine* Lösung hat. Das ist die aufwendigste
 Einzelsache auf der ganzen Liste.
 
-Erst danach:
+Vorgezogen, weil Ronni es ausdrücklich zuerst wollte:
 
-22. Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer ist
-    der/die Beste. Braucht Supabase (bringt fertige Anmeldung mit) — war von
-    Anfang an als "später" vorgesehen. Das ist ein Eingriff in die Hülle
-    (`shell/`), nicht in ein einzelnes Spiel: erst angehen, wenn die Spiele
-    durch sind, dann mit Ronni gemeinsam planen (welche Daten genau, wie
-    Kinder-tauglich das Passwort sein muss).
+22. ✅ Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer
+    ist der/die Beste. Siehe eigenen Abschnitt „Anmeldung und Bestenliste"
+    weiter unten.
+
+Danach, in dieser Reihenfolge:
+
+23. Qualität der bestehenden Spiele — der Feinschliff, der beim schnellen
+    Bauen liegen geblieben ist.
+24. Die drei offenen Spiele oben (Box Push, Schatzsuche, Wortsuche).
+25. Battle: zwei Angemeldete treten im selben Spiel gegeneinander an.
+    Baut auf der Anmeldung auf; die Tabellen dafür stehen noch nicht.
+26. Avatare, die mit dem Level mehr Teile freischalten.
+
+Und dann die große Richtung, die Ronni vorgegeben hat: **3-D-Spiele** und
+**Retro-Klassiker** in eigener Umsetzung. Von ihm selbst genannt:
+
+- **Öl Imperium** (C64/Amiga, 1984) — Wirtschaftsspiel: Land kaufen, bohren,
+  Öl verkaufen, Preise schwanken. Reines Rechnen und Entscheiden, kein
+  Reaktionsspiel — passt gut zu einem Handy und ist technisch billig.
+  Wäre das erste Spiel der Sammlung, das über mehrere Runden läuft.
+- **Wings of Fury** (Amiga, 1987) — Seitenscroller mit Flugzeug vom
+  Flugzeugträger. Deutlich aufwendiger: Scrolling, Physik, Gegner.
+
+Weitere Kandidaten aus derselben Ecke, noch nicht mit Ronni besprochen:
+Boulder Dash (Graben und Steine), Lode Runner (Leitern und Löcher),
+Pipe Mania (Rohre legen), Bomberman-Prinzip, Kaiser (Handelsspiel wie Öl
+Imperium), Archon. Bei allen gilt die Namensregel oben: Prinzip frei,
+Name und Optik nicht.
+
+**Zu 3-D:** Das ist der einzige Punkt, der die Technikentscheidung von
+Seite eins berührt — „kein Spiel-Framework, keine Bibliothek ohne
+Rückfrage". Echtes 3-D hieße WebGL, und das hieße realistisch three.js.
+Vorher mit Ronni klären. Ein Zwischenschritt ohne jede neue Bibliothek ist
+möglich und für ein Handy oft die bessere Wahl: Isometrie (2,5-D) mit dem
+vorhandenen Canvas — sieht räumlich aus, rechnet aber flach.
 
 ## Farbsortierer — Besonderheiten
 
@@ -1139,6 +1168,95 @@ flachen Anordnung liegt die Mitte des Kastens genau auf dem Pfeil nach
 unten.
 
 Nachgemessen: **alle vierzehn Spiele passen auf 375 × 560 ohne Scrollen.**
+
+## Anmeldung und Bestenliste über alle Geräte
+
+Mehrere Kinder, ein Spielname statt einer E-Mail-Adresse, eine Bestenliste
+über alle. Läuft über **Supabase**, und zwar im schon vorhandenen
+FitHold-Projekt (`wotdzumntewqmwrtykyb`) — Ronnis Wunsch, kein zweites
+Projekt. Alles Eigene trägt deshalb das Präfix `spiel_`; FitHolds Tabellen
+werden nicht angefasst.
+
+**Der eiserne Grundsatz: `localStorage` ist die Wahrheit, der Server ist ein
+Spiegel.** Kein Spielablauf wartet je auf das Netz, und wer sich nie
+anmeldet, bekommt exakt die App von vorher. `GameApi`/`GameProps` sind
+unverändert geblieben — kein einziges Spiel weiß von alldem.
+
+Vier Dateien, klar getrennt:
+
+| Datei | Darf | Darf nicht |
+|---|---|---|
+| `shell/server.ts` | HTTP zu Supabase | irgendetwas speichern |
+| `shell/speicher.ts` | `localStorage` | ins Netz |
+| `shell/konto.ts` | beides zusammenbinden | anzeigen |
+| `shell/KontoSeite.tsx` | anzeigen | rechnen |
+
+Die wichtigsten Entscheidungen und **warum**:
+
+- **Kein `@supabase/supabase-js`.** Gebraucht werden fünf Endpunkte. Der
+  entscheidende Grund ist aber nicht die Größe: Die Bibliothek legt ihre
+  Sitzung in eigenen `localStorage`-Schlüsseln ab und bringt einen eigenen
+  Erneuerungs-Zeitgeber mit. Das bricht die Regel, dass `speicher.ts` der
+  einzige Ort mit `localStorage`-Zugriff ist. Man müsste ihr also ohnehin
+  einen eigenen Speicher unterschieben — und hätte dann die Bibliothek
+  *und* den Eigenbau.
+- **Der Name wird zur Adresse** (`jörg` → `joerg@spieler.klarvorteil.de`).
+  Supabase Auth kennt Passwörter nur zusammen mit einer E-Mail-Adresse. Die
+  Umlaut-Abbildung in `alsAdresse` muss **verlässlich** sein: Aus „Jörg"
+  muss immer dieselbe Adresse werden, sonst kommt er nach einem
+  Browserwechsel nicht mehr in sein Konto.
+- **Registriert wird über eine Edge Function** (`spiel-registrieren`), nicht
+  direkt. Nur mit dem Dienstschlüssel lässt sich ein Konto ohne
+  Bestätigungsmail anlegen — die Adresse ist ja erfunden, niemand bekäme je
+  eine Mail. Der Dienstschlüssel darf niemals ins ausgelieferte JavaScript.
+  Dort wird auch der Einladungscode geprüft (`FLORIAN2026`, höchstens fünf
+  neue Konten am Tag).
+- **Der öffentliche Schlüssel steht im Bundle und das ist richtig so.** Was
+  jemand damit darf, entscheiden allein die Zugriffsregeln in der Datenbank.
+  `auth.users` ist projektweit — die Regeln hängen deshalb an der
+  Mitgliedschaft in `spiel_profil`, **nicht** an „ist angemeldet".
+  Sonst käme jedes FitHold-Konto an die Spieldaten.
+- **Ausgangsschlange statt Warten.** `ergebnisEintragen` schreibt die Runde
+  sofort lokal *und* in eine Warteschlange und gibt deren Schlüssel zurück.
+  Der Rahmen fragt damit den Platz ab; klappt es nicht, bleibt der Eintrag
+  liegen und geht beim nächsten Start, beim `online`-Ereignis oder beim
+  Zurückkommen in die App mit hoch. Jeder Eintrag hat einen eigenen
+  Schlüssel und der Server darauf eine Eindeutigkeitsregel — ein zweiter
+  Versuch ist deshalb völlig ungefährlich.
+- Der Schlüssel muss **von der Runde** kommen, nicht „irgendeiner dieses
+  Spiels aus der Schlange". Sonst zeigt der Dialog den Platz einer alten,
+  offline aufgelaufenen Runde.
+- **Die Sperre in `abgleichen` steht vor dem ersten `await`.** Dahinter wäre
+  sie wirkungslos — Start, Netzrückkehr und Rundenende können in derselben
+  Millisekunde auslösen.
+- **Abmelden steht klein und unten.** Ohne E-Mail-Adresse gibt es kein
+  „Passwort vergessen". Wer sich abmeldet und das Passwort nicht mehr weiß,
+  kommt nicht zurück. Aus demselben Grund lässt „alle Punktestände löschen"
+  die Sitzung ausdrücklich stehen — dafür gibt es einen Test.
+- **Wenn die Anmeldung direkt nach dem Anlegen scheitert**, bekommt das Kind
+  einen eigenen Satz („Dein Konto ist fertig … melde dich an"). Ohne den
+  liefe der zweite Versuch auf „Diesen Namen hat schon jemand", und niemand
+  verstünde warum.
+- Die Bestenlisten-Seite holt alles in **drei** Anfragen nebeneinander, nicht
+  in sechzehn hintereinander: Gesamtwertung, die besten Drei **aller** Spiele
+  auf einmal (`platz=lte.3` — Postgres schiebt keine Bedingung durch eine
+  Fensterfunktion, die Plätze stimmen also) und die eigenen Plätze.
+  Der letzte Stand liegt im Speicher; ohne Netz steht eine echte Liste da
+  und darunter „Stand: gestern 18:04" statt eines hängenden Ladekreisels.
+- Spiele **ohne** Eintrag stehen nicht als vierzehn leere Kästen da, sondern
+  unten in einer Zeile („Hier ist der erste Platz noch frei: …").
+- `bestwert()` ist jetzt das Maximum aus Gerät und Server. Die Bedeutung
+  ändert sich (über alle Geräte statt nur dieses), die Signatur nicht — für
+  Block Bursts Startbildschirm bleibt alles wie es war.
+
+**Ein Fund nebenbei, der alle Spiele betraf:** Das Rundenende lag *unter*
+dem Spielbrett. `.spielbuehne > *` gibt dem Brett `z-index: 1`, und ein
+positioniertes Element mit Stufe 1 wird über einem mit `auto` gezeichnet —
+ganz gleich, was weiter unten im Baum steht. Der Dialog in `Spielrahmen.tsx`
+braucht deshalb ein eigenes `z-20`.
+
+**Noch nicht gebaut:** Battle, Co-op, Avatare. Die Tabellen dafür gibt es
+noch nicht.
 
 ## Ausliefern
 
