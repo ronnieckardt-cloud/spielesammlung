@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { useInput } from '../../core/useInput';
 import { Steuerkreuz } from '../../core/Steuerkreuz';
@@ -59,7 +60,7 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
   const knapp = z.restZeit <= 5;
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-5 p-4">
+    <div className="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-hidden p-3 spielseite">
       <div className="w-full max-w-sm">
         <div className="mb-1 flex items-baseline justify-between text-sm text-gedaempft">
           <span>Zeit</span>
@@ -80,10 +81,17 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
         </div>
       </div>
 
+      <div className="spielbuehne">
       <div
         ref={brett}
-        className="grid w-full max-w-sm touch-none gap-2"
-        style={{ gridTemplateColumns: `repeat(${z.breite}, minmax(0, 1fr))` }}
+        className="spielbrett grid touch-none gap-2"
+        style={
+          {
+            gridTemplateColumns: `repeat(${z.breite}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${z.hoehe}, minmax(0, 1fr))`,
+            '--vz': z.breite / z.hoehe,
+          } as CSSProperties
+        }
         role="img"
         aria-label={`Spielfeld. Dein ${FIGUR_NAME} ist in Reihe ${z.spieler.y + 1}, Spalte ${z.spieler.x + 1}. Der Stern ist in Reihe ${z.ziel.y + 1}, Spalte ${z.ziel.x + 1}.`}
       >
@@ -96,7 +104,7 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
             <div
               key={i}
               aria-hidden="true"
-              className="grid aspect-square place-items-center overflow-visible rounded-xl border border-rand bg-flaeche"
+              className="grid place-items-center overflow-visible rounded-xl border border-rand bg-flaeche"
               style={
                 istSpieler
                   ? { borderColor: AKZENT }
@@ -118,10 +126,11 @@ export function Platzhalter({ onScore, onGameOver, settings }: GameProps) {
           );
         })}
       </div>
+      </div>
 
       <Steuerkreuz onRichtung={bewege} aktiv={!z.vorbei} />
 
-      <p className="max-w-sm text-center text-sm text-gedaempft">
+      <p className="nur-bei-platz max-w-sm text-center text-sm text-gedaempft">
         Fang mit deinem {FIGUR_NAME} die Sterne ein, bevor die Zeit abläuft.
         <br />
         Pfeiltasten, das Kreuz unten oder wischen.

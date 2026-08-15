@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { useInput } from '../../core/useInput';
 import { Steuerkreuz } from '../../core/Steuerkreuz';
@@ -99,7 +100,7 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
   const zelleHoehe = 100 / hoehe;
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4">
+    <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3 spielseite">
       <div className="flex items-center justify-center gap-6 text-sm text-gedaempft">
         <span>Level {z.level}</span>
         <span aria-label={`${z.leben} von ${STARTLEBEN} Leben`}>
@@ -108,10 +109,16 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
         </span>
       </div>
 
+      <div className="spielbuehne">
       <div
         ref={bereich}
-        className="relative w-full touch-none"
-        style={{ maxWidth: breite * MAX_ZELLE_PX, aspectRatio: `${breite} / ${hoehe}` }}
+        className="spielbrett relative touch-none"
+        style={
+          {
+            maxWidth: breite * MAX_ZELLE_PX,
+            '--vz': breite / hoehe,
+          } as CSSProperties
+        }
         role="img"
         aria-label={`Labyrinth, Level ${z.level}, ${z.leben} Leben, ${z.score} Punkte.${z.gewonnen ? ' Alle Geister gefressen, gewonnen!' : z.vorbei ? ' Spiel vorbei.' : ''}`}
       >
@@ -183,9 +190,11 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
         ))}
       </div>
 
+      </div>
+
       <Steuerkreuz onRichtung={bewege} aktiv={!z.vorbei} />
 
-      <p className="max-w-sm text-center text-xs text-gedaempft">
+      <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
         Pfeiltasten, Wischen oder das Kreuz oben bewegen. Die großen Sterne
         machen die Geister kurz ängstlich — dann kannst du sie fangen. Frisst
         du alle vier auf einmal, ist die Runde sofort gewonnen!

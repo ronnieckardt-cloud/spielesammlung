@@ -152,7 +152,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
     .join('. ');
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4">
+    <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3 spielseite">
       <output
         aria-live="off"
         key={z.punkte}
@@ -170,17 +170,24 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
         {z.gewonnen && <span className="ml-2">🎉 2048 geschafft!</span>}
       </p>
 
+      <div className="spielbuehne">
       <div
         ref={feldRef}
-        className="grid w-full max-w-sm touch-none gap-2 rounded-2xl bg-flaeche p-2"
-        style={{ gridTemplateColumns: `repeat(${GROESSE}, minmax(0, 1fr))` }}
+        className="spielbrett grid touch-none gap-2 rounded-2xl bg-flaeche p-2"
+        style={
+          {
+            gridTemplateColumns: `repeat(${GROESSE}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${GROESSE}, minmax(0, 1fr))`,
+            '--vz': 1,
+          } as CSSProperties
+        }
         role="img"
         aria-label={`Spielfeld. ${beschreibung}.${z.vorbei ? ' Vorbei.' : ''}`}
       >
         {z.raster.flat().map((feld, i) => (
           <div
             key={i}
-            className="grid aspect-square place-items-center rounded-xl bg-flaeche-hoch"
+            className="grid place-items-center rounded-xl bg-flaeche-hoch"
           >
             {feld !== null && (
               <div
@@ -203,6 +210,8 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
         ))}
       </div>
 
+      </div>
+
       <div className="grid grid-cols-3 gap-2" role="group" aria-label="Steuerung">
         <span />
         <button
@@ -210,7 +219,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
           onClick={() => anwenden('hoch')}
           disabled={z.vorbei}
           aria-label="Nach oben schieben"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">↑</span>
         </button>
@@ -220,7 +229,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
           onClick={() => anwenden('links')}
           disabled={z.vorbei}
           aria-label="Nach links schieben"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">←</span>
         </button>
@@ -229,7 +238,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
           onClick={() => anwenden('runter')}
           disabled={z.vorbei}
           aria-label="Nach unten schieben"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">↓</span>
         </button>
@@ -238,13 +247,13 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
           onClick={() => anwenden('rechts')}
           disabled={z.vorbei}
           aria-label="Nach rechts schieben"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">→</span>
         </button>
       </div>
 
-      <p className="max-w-sm text-center text-xs text-gedaempft">
+      <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
         Pfeiltasten, Wischen oder die Knöpfe schieben alle Kacheln. Zwei
         gleiche verschmelzen zur doppelten. Ziel ist die 2048 — danach darfst
         du weiterspielen, solange noch ein Zug geht.

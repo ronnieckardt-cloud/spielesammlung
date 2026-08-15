@@ -59,7 +59,7 @@ export function Steuerkreuz({
       onPointerLeave={loslassen}
       onPointerCancel={loslassen}
       onContextMenu={(e) => e.preventDefault()}
-      className="grid size-18 touch-none select-none place-items-center rounded-xl border border-rand bg-flaeche text-4xl active:bg-flaeche-hoch disabled:opacity-40 transition-transform active:scale-95"
+      className="spielknopf grid size-18 touch-none select-none place-items-center rounded-xl border border-rand bg-flaeche text-4xl active:bg-flaeche-hoch disabled:opacity-40 transition-transform active:scale-95"
     >
       <span aria-hidden="true">{symbol}</span>
     </button>

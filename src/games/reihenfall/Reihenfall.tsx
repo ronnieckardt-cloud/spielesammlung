@@ -232,31 +232,46 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4">
+    <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3 spielseite">
       <div className="flex w-full items-center justify-center gap-6 text-sm text-gedaempft">
         <span>Level {z.level}</span>
         <span>Zeilen {z.zeilenGesamt}</span>
       </div>
 
-      <div className="flex items-start justify-center gap-3">
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-xs text-gedaempft">Halten</span>
-          <div className="grid size-14 place-items-center rounded-lg border border-rand bg-flaeche transition-transform active:scale-95">
+      {/* Halten und Vorschau als schmale Zeile über dem Brett. Nebeneinander
+          nahmen sie dem Brett die Breite weg — auf einem kleinen Handy blieb
+          davon fast nichts übrig. */}
+      <div className="flex w-full max-w-xs items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-gedaempft">Halten</span>
+          <div className="grid size-10 place-items-center rounded-lg border border-rand bg-flaeche">
             {z.haltePosition && <MiniTeil typ={z.haltePosition} abgedunkelt={z.halteBenutzt} />}
           </div>
-          <span className="text-[10px] text-gedaempft">C</span>
         </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-gedaempft">Nächste</span>
+          {z.warteschlange.slice(0, 3).map((typ, i) => (
+            <div key={i} className="grid size-9 place-items-center rounded-lg border border-rand bg-flaeche">
+              <MiniTeil typ={typ} />
+            </div>
+          ))}
+        </div>
+      </div>
 
+      <div className="spielbuehne">
         <div
           ref={feldRef}
-          className="relative touch-none rounded-lg border border-rand bg-rand"
-          style={{
-            width: BREITE * ZELLE_PX,
-            height: HOEHE * ZELLE_PX,
-            display: 'grid',
-            gridTemplateColumns: `repeat(${BREITE}, ${ZELLE_PX}px)`,
-            gap: 1,
-          }}
+          className="spielbrett relative touch-none rounded-lg border border-rand bg-rand"
+          style={
+            {
+              maxWidth: BREITE * ZELLE_PX,
+              '--vz': BREITE / HOEHE,
+              display: 'grid',
+              gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))`,
+              gridTemplateRows: `repeat(${HOEHE}, minmax(0, 1fr))`,
+              gap: 1,
+            } as CSSProperties
+          }
           role="img"
           aria-label={`Spielfeld, Level ${z.level}, ${z.zeilenGesamt} Zeilen geschafft.${z.vorbei ? ' Spiel vorbei.' : ''}`}
         >
@@ -290,16 +305,6 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
               darüber ihr Rundenende-Fenster, das stand doppelt. */}
         </div>
 
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-xs text-gedaempft">Nächste</span>
-          <div className="flex flex-col gap-2">
-            {z.warteschlange.slice(0, 3).map((typ, i) => (
-              <div key={i} className="grid size-11 place-items-center rounded-lg border border-rand bg-flaeche transition-transform active:scale-95">
-                <MiniTeil typ={typ} />
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       <div className="flex gap-2">
@@ -307,7 +312,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
           type="button"
           onClick={() => anwenden('drehenUhr')}
           disabled={z.vorbei}
-          className="rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">↺</span> Drehen
         </button>
@@ -315,7 +320,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
           type="button"
           onClick={() => anwenden('hartFallen')}
           disabled={z.vorbei}
-          className="rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">⬇</span> Fallen
         </button>
@@ -323,13 +328,13 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
           type="button"
           onClick={() => anwenden('halten')}
           disabled={z.vorbei || z.halteBenutzt}
-          className="rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">⇄</span> Halten
         </button>
       </div>
 
-      <p className="max-w-sm text-center text-xs text-gedaempft">
+      <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
         Pfeiltasten oder Wischen bewegen, X oder Antippen dreht, Leertaste
         oder schnelles Wischen nach unten lässt hart fallen. Aktuell:{' '}
         {z.aktuell ? TEIL_NAMEN[z.aktuell.typ] : '–'}.

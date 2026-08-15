@@ -61,7 +61,7 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
             onClick={() => beiLevelWechsel(z.level - 1)}
             disabled={z.level <= 1}
             aria-label="Voriges Level"
-            className="rounded-lg border border-rand bg-flaeche px-2 py-1 text-base leading-none disabled:opacity-30"
+            className="rounded-lg border border-rand bg-flaeche spielknopf px-2 py-1 text-base leading-none disabled:opacity-30"
           >
             ‹
           </button>
@@ -70,7 +70,7 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
             type="button"
             onClick={() => beiLevelWechsel(z.level + 1)}
             aria-label="Nächstes Level"
-            className="rounded-lg border border-rand bg-flaeche px-2 py-1 text-base leading-none"
+            className="rounded-lg border border-rand bg-flaeche spielknopf px-2 py-1 text-base leading-none"
           >
             ›
           </button>

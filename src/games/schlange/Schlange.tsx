@@ -147,7 +147,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
   const koerper = new Map(z.schlange.slice(1).map((p, i) => [`${p.x},${p.y}`, i]));
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4">
+    <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3 spielseite">
       <output
         aria-live="off"
         key={z.punkte}
@@ -157,10 +157,17 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
         {z.punkte}
       </output>
 
+      <div className="spielbuehne">
       <div
         ref={feldRef}
-        className="grid w-full max-w-md touch-none gap-px rounded-xl border border-rand bg-rand p-px"
-        style={{ gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))` }}
+        className="spielbrett grid touch-none gap-px rounded-xl border border-rand bg-rand p-px"
+        style={
+          {
+            gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${HOEHE}, minmax(0, 1fr))`,
+            '--vz': BREITE / HOEHE,
+          } as CSSProperties
+        }
         role="img"
         aria-label={`Spielfeld. Schlange ${z.schlange.length} Glieder lang, ${z.punkte} Punkte.${z.vorbei ? ' Vorbei.' : ''}`}
       >
@@ -187,7 +194,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           }
 
           return (
-            <div key={i} className="relative aspect-square bg-flaeche">
+            <div key={i} className="relative bg-flaeche">
               {inhalt && <div className="absolute inset-[8%]" style={inhalt} />}
               {istFutter && (
                 <div
@@ -206,6 +213,8 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
         })}
       </div>
 
+      </div>
+
       <div className="grid grid-cols-3 gap-2" role="group" aria-label="Steuerung">
         <span />
         <button
@@ -213,7 +222,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'hoch'))}
           disabled={z.vorbei}
           aria-label="Nach oben"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">↑</span>
         </button>
@@ -223,7 +232,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'links'))}
           disabled={z.vorbei}
           aria-label="Nach links"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">←</span>
         </button>
@@ -232,7 +241,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'runter'))}
           disabled={z.vorbei}
           aria-label="Nach unten"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">↓</span>
         </button>
@@ -241,13 +250,13 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'rechts'))}
           disabled={z.vorbei}
           aria-label="Nach rechts"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">→</span>
         </button>
       </div>
 
-      <p className="max-w-sm text-center text-xs text-gedaempft">
+      <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
         Pfeiltasten, Wischen oder die Knöpfe steuern. Rote Äpfel machen dich
         länger und schneller, goldene geben Extrapunkte — sie liegen aber nur
         kurz. An den Rändern läufst du auf der anderen Seite weiter.

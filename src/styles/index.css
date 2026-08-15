@@ -281,6 +281,73 @@
   animation: dialog-grund-auf 0.18s ease-out;
 }
 
+/* Spielbildschirme sollen immer ganz aufs Bild passen — auf kleinen Handys
+   musste man sonst scrollen, um an die unteren Steuertasten zu kommen, und
+   sah dann das Spielfeld nicht mehr.
+
+   `.spielbuehne` ist der Platz, der nach Punktestand, Steuerung und
+   Hilfetext übrig bleibt; `min-height: 0` ist dabei entscheidend, sonst
+   schrumpft ein Flex-Kind nie unter seine Inhaltsgröße.
+
+   `.spielbrett` füllt diesen Platz und behält dabei sein Seitenverhältnis
+   (`--verhaeltnis`). Es schrumpft also mit, statt die Steuerung aus dem
+   Bild zu drücken. */
+.spielbuehne {
+  display: flex;
+  /* Basis 0, nicht auto: Die Bühne bekommt ihre Höhe aus dem, was nach
+     Punktestand und Steuerung übrig bleibt — nicht aus ihrem Inhalt. Mit
+     `auto` und der Größen-Eindämmung unten wäre der Inhalt unsichtbar und
+     die Bühne damit null hoch. */
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  /* Macht die Bühne zum Größen-Container: Erst dadurch sind cqh/cqw unten
+     echte Längen. Mit `height: 100%` allein klappt es nicht — die Höhe
+     eines Flex-Kindes steht erst nach der Breite fest, das Brett fiel
+     deshalb auf seine Inhaltsgröße zusammen (bei Line Fall auf 11 Pixel). */
+  container-type: size;
+}
+
+/* `--vz` ist das Seitenverhältnis als reine Zahl (Breite geteilt durch
+   Höhe). Die Breite ist der kleinere der beiden Werte „ganze Bühnenbreite"
+   und „was bei voller Bühnenhöhe erlaubt ist" — damit passt das Brett immer
+   in beide Richtungen. Ein bloßes `max-width` reicht nicht: Wenn es greift,
+   bleibt die Höhe trotzdem stehen und das Brett wird verzerrt. */
+.spielbrett {
+  width: min(100cqw, calc(100cqh * var(--vz, 1)));
+  aspect-ratio: var(--vz, 1);
+  margin: auto;
+}
+
+/* Luft nach unten auf jedem Spielbildschirm.
+
+   Safaris schwebende Adressleiste liegt am unteren Rand ÜBER dem Inhalt und
+   wird von `env(safe-area-inset-bottom)` NICHT mitgerechnet — das deckt nur
+   die Aussparung für den Wischbalken ab. Ohne diesen Zuschlag tippt man
+   statt auf die unterste Reihe (Tablett, Steuertasten) auf Safaris Leiste.
+   Die 3,25rem entsprechen etwa der Höhe dieser Leiste auf dem iPhone. */
+.spielseite {
+  padding-bottom: max(3.25rem, calc(env(safe-area-inset-bottom) + 2.5rem));
+}
+
+/* Apples Richtlinie nennt 44 × 44 Punkte als kleinste sicher treffbare
+   Fläche. Mehrere Knöpfe lagen darunter (die Level-Pfeile bei rund 24 × 22),
+   was für einen Kinderfinger auf dem Tablet zu klein ist. */
+.spielknopf {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+/* Hilfetext ist auf kurzen Bildschirmen der erste Kandidat zum Weglassen —
+   die Regeln liest man einmal, die Steuerung braucht man immer. */
+@media (max-height: 720px) {
+  .nur-bei-platz {
+    display: none;
+  }
+}
+
 /* Der React-Wurzelknoten füllt den Rest der Seite. */
 #wurzel {
   display: flex;

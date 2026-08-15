@@ -57,7 +57,7 @@ function TeilAnzeige({ teil, zellgroesse }: { teil: Teil; zellgroesse: number })
         return (
           <div
             key={i}
-            className="rounded-[3px]"
+            className={`rounded-[3px] ${gefuellt ? 'glanzstein' : ''}`}
             style={{ backgroundColor: gefuellt ? blockFarbe(teil.farbe) : 'transparent' }}
           />
         );
@@ -349,12 +349,7 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
 
   return (
     <div
-      className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4"
-      // Extra Luft unten, über die reine Geräte-Aussparung hinaus: Safaris
-      // eigene (schwebende) Adressleiste liegt am unteren Rand über der
-      // Seite, ohne dass CSS ihre Höhe kennt — ohne diesen Puffer landet das
-      // Tablett dahinter und Antippen trifft die Browserleiste statt das Spiel.
-      style={{ paddingBottom: 'max(2.5rem, calc(env(safe-area-inset-bottom) + 2rem))' }}
+      className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3"
     >
       <div className="flex flex-col items-center gap-1">
         <output
@@ -375,11 +370,17 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
         </span>
       </div>
 
-      <div className="relative w-full max-w-sm">
+      <div className="spielbuehne relative">
         <div
           ref={rasterRef}
-          className="grid touch-none gap-1"
-          style={{ gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))` }}
+          className="spielbrett grid touch-none gap-1"
+          style={
+            {
+              gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))`,
+              gridTemplateRows: `repeat(${HOEHE}, minmax(0, 1fr))`,
+              '--vz': BREITE / HOEHE,
+            } as CSSProperties
+          }
           role="img"
           aria-label={`Spielfeld, ${BREITE} mal ${HOEHE} Felder. ${z.raster.flat().filter((c) => c !== null).length} von ${BREITE * HOEHE} belegt.`}
         >
@@ -412,7 +413,7 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
                 aria-hidden="true"
                 tabIndex={-1}
                 onClick={beiZelleKlick(x, y)}
-                className={`relative aspect-square rounded-md ${leer ? 'border border-rand bg-flaeche' : 'glanzstein'} ${istVorschauLinie ? 'vorschau-linie-puls' : ''} ${istHinweis ? 'linie-moeglich' : ''}`}
+                className={`relative rounded-md ${leer ? 'border border-rand bg-flaeche' : 'glanzstein'} ${istVorschauLinie ? 'vorschau-linie-puls' : ''} ${istHinweis ? 'linie-moeglich' : ''}`}
                 style={
                   farbe
                     ? {
@@ -475,7 +476,7 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
         ))}
       </div>
 
-      <p className="max-w-sm text-center text-sm text-gedaempft">
+      <p className="nur-bei-platz max-w-sm text-center text-sm text-gedaempft">
         Ziehen oder antippen und ein Zielfeld antippen. Volle Reihen und
         Spalten lösen sich auf.
       </p>
