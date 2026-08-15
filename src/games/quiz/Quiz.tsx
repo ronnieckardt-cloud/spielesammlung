@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
 import { antwortWaehlen, naechsteFrage, neuesLevel } from './logik';
 import type { Zustand } from './logik';
+import { QuizIcon } from './Icon';
 
 const RICHTIG_FARBE = '#22c55e';
 const FALSCH_FARBE = '#ef4444';
@@ -13,7 +15,90 @@ const FALSCH_FARBE = '#ef4444';
  */
 let naechsteLevelNummer = 1;
 
-export function Quiz({ onScore, onGameOver, settings }: GameProps) {
+/**
+ * Schwebende geometrische Formen im Hintergrund des Startbildschirms —
+ * angelehnt an typische Quiz-Apps (bunte Kreise, Dreiecke, Quadrate), rein
+ * dekorativ. Feste Liste, siehe Blockblitz-Startbildschirm für die Vorlage.
+ */
+const DEKO_FORMEN: readonly {
+  x: number;
+  y: number;
+  groesse: number;
+  farbe: string;
+  winkel: number;
+  verzoegerung: number;
+  dreieck?: boolean;
+}[] = [
+  { x: 9, y: 12, groesse: 26, farbe: '#ef4444', winkel: 0, verzoegerung: 0, dreieck: true },
+  { x: 87, y: 14, groesse: 22, farbe: '#facc15', winkel: 0, verzoegerung: 0.6 },
+  { x: 80, y: 78, groesse: 20, farbe: '#3b82f6', winkel: 45, verzoegerung: 1.1 },
+  { x: 9, y: 80, groesse: 30, farbe: '#22c55e', winkel: 0, verzoegerung: 0.3, dreieck: true },
+  { x: 92, y: 46, groesse: 16, farbe: '#facc15', winkel: 45, verzoegerung: 1.6 },
+  { x: 4, y: 48, groesse: 18, farbe: '#ef4444', winkel: 0, verzoegerung: 0.9 },
+];
+
+/**
+ * Titelbild angelehnt an typische Quiz-Apps — kräftiger Blau-Lila-Verlauf,
+ * bunte geometrische Formen, große runde Schrift. Eigene Gestaltung, siehe
+ * Blockblitz-Startbildschirm für die Vorlage.
+ */
+function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: () => void }) {
+  return (
+    <div
+      className="relative flex flex-1 flex-col items-center justify-center gap-7 overflow-hidden p-6 text-center"
+      style={{ background: 'linear-gradient(160deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%)' }}
+    >
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        {DEKO_FORMEN.map((f, i) => (
+          <span
+            key={i}
+            className={`block-schweben absolute opacity-90 ${f.dreieck ? '' : 'rounded-md'}`}
+            style={
+              {
+                left: `${f.x}%`,
+                top: `${f.y}%`,
+                width: f.groesse,
+                height: f.groesse,
+                backgroundColor: f.farbe,
+                clipPath: f.dreieck ? 'polygon(50% 0%, 0% 100%, 100% 100%)' : undefined,
+                animationDelay: `${f.verzoegerung}s`,
+                '--grundwinkel': `${f.winkel}deg`,
+              } as CSSProperties
+            }
+          />
+        ))}
+      </div>
+
+      <div className="relative grid size-28 place-items-center rounded-[2rem] bg-white/15 shadow-2xl ring-1 ring-white/35 backdrop-blur-sm">
+        <QuizIcon className="size-16 drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" />
+      </div>
+
+      <div className="relative">
+        <h1
+          className="text-5xl leading-none font-black tracking-tight text-white"
+          style={{ textShadow: '0 4px 0 rgba(0,0,0,0.22), 0 10px 24px rgba(0,0,0,0.35)' }}
+        >
+          Quiz Time
+        </h1>
+        <p className="mt-3 text-sm font-semibold text-white/85">
+          {bestScore > 0 ? `🏆 Beste Punktzahl: ${bestScore}` : 'Bereit für ein paar Fragen?'}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onStart}
+        autoFocus
+        className="startknopf-puls relative rounded-2xl bg-white px-14 py-4 text-xl font-extrabold text-violet-700 shadow-2xl transition-transform active:scale-95"
+      >
+        Spielen
+      </button>
+    </div>
+  );
+}
+
+export function Quiz({ onScore, onGameOver, settings, bestScore }: GameProps) {
+  const [gestartet, setGestartet] = useState(false);
   const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
 
   useEffect(() => {
@@ -50,6 +135,10 @@ export function Quiz({ onScore, onGameOver, settings }: GameProps) {
   if (!frage) return null;
 
   const beantwortet = z.ausgewaehlt !== null;
+
+  if (!gestartet) {
+    return <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />;
+  }
 
   return (
     <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-4">

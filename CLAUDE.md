@@ -228,6 +228,12 @@ versucht deshalb genau dasselbe Level erneut.
   Systemeinstellung „weniger Bewegung" an ist, stand er dadurch nach jedem
   Level wieder auf „aus" und musste manuell zurückgestellt werden. Jetzt
   läuft die Animation immer, ohne Rücksicht auf diese Einstellung.
+- Eigener Startbildschirm (`Startbildschirm` in `Farbsortierer.tsx`,
+  gleiche `gestartet`-Vorlage wie Blockblitz): heller Verlauf
+  Türkis→Blau→Lila→Pink statt dunklem Hintergrund, schwebende Farbtropfen
+  (`DEKO_TROPFEN`), angelehnt an die Optik typischer
+  Wassersortier-Puzzles im App Store — eigene Gestaltung, kein Nachbau
+  eines bestimmten Spiels.
 
 ## Blockblitz — Besonderheiten
 
@@ -276,13 +282,27 @@ versucht deshalb genau dasselbe Level erneut.
   (`sfx('klick')`), einer je Zeitstufe, nicht je Zelle — sonst wird es bei
   großen Auflösungen zu viel.
 - Eigener Startbildschirm vor der ersten Runde (`Startbildschirm` in
-  `Blockblitz.tsx`, `gestartet`-State): großes Icon im selben
-  Farbverlauf-Stil wie die Menü-Kachel, Name, `bestScore` aus den Props
-  (kein direkter Storage-Zugriff), großer „Spielen"-Knopf. `AKZENT` ist als
-  eigene Konstante dupliziert, nicht aus `index.ts` importiert — ein Import
-  von dort würde einen Kreis ergeben, da `index.ts` selbst `Blockblitz.tsx`
-  importiert. Bei einem neuen Startbildschirm für ein anderes Spiel diesen
-  Aufbau als Vorlage nehmen.
+  `Blockblitz.tsx`, `gestartet`-State, gleich nach allen Hooks per
+  `if (!gestartet) return <Startbildschirm .../>` — Hooks müssen trotzdem
+  immer laufen, deshalb kein früherer Ausstieg). Erste Fassung sah aus wie
+  eine vergrößerte Menü-Kachel und wurde als „sieht genau gleich aus"
+  zurückgewiesen — jetzt ein eigenständiger, kräftig-bunter Farbverlauf
+  (nicht der dunkle App-Hintergrund, explizit so gewünscht: „ich will nicht,
+  dass es alles mit 'nem schwarzen Hintergrund ist"), schwebende
+  Deko-Blöcke (`DEKO_BLOECKE`, feste Liste, `.block-schweben` in
+  `index.css`), dickere Schrift mit Schlagschatten, glänzend-pulsierender
+  „Spielen"-Knopf (`.startknopf-puls`). `bestScore` kommt aus den Props
+  (kein direkter Storage-Zugriff). Bei einem neuen Startbildschirm für ein
+  anderes Spiel diesen Aufbau als Vorlage nehmen (siehe Farbsortierer,
+  Reihenfall, Quiz — schon so gemacht) — angelehnt an die grobe Stimmung
+  bekannter Spiele im selben Genre (verlangt: „so ähnlich, nicht
+  hundertprozentig"), nie an deren konkretes Logo/Branding.
+- Zieh-Vorschau für eine volle Reihe/Spalte blinkt jetzt deutlich
+  (`.vorschau-linie-puls` in `index.css`, ersetzt den vorherigen statischen
+  weißen Rand) — Wunsch war „dass man sich das besser merkt". Läuft über
+  dieselbe globale `.ruhig`-Kollabierung wie alle anderen Animationen, ohne
+  Sonderfall: anders als beim Zerbröseln gibt es hier kein
+  `--verzoegerung`, das separat auf 0 gesetzt werden müsste.
 
 ## Reihenfall — Besonderheiten
 
@@ -305,6 +325,12 @@ versucht deshalb genau dasselbe Level erneut.
   Kommentar dort.
 - Farben bewusst anders zugeordnet als beim Original (`farben.ts`) — jedes
   der sieben Teile hat eine andere Farbe als in der klassischen Zuordnung.
+- Eigener Startbildschirm (`Startbildschirm` in `Reihenfall.tsx`, gleiche
+  `gestartet`-Vorlage wie Blockblitz): dunkles, aber bewusst nicht
+  schwarzes Indigo/Violett mit feinem Neon-Raster
+  (`repeating-linear-gradient`) und schwebenden Blöcken in klassischen
+  Tetromino-Farben (`DEKO_BLOECKE`) — angelehnt an die Stimmung von Tetris,
+  ohne dessen Logo/Branding nachzubauen.
 
 ## Geisterjagd — Besonderheiten
 
@@ -369,6 +395,11 @@ versucht deshalb genau dasselbe Level erneut.
   beantwortet wurde — unabhängig davon, ob richtig oder falsch geklickt
   wurde. So bleibt auch bei einer falschen Antwort ein Lerneffekt. Ein Test
   prüft nur, dass jede Frage eine nicht-leere Erklärung hat.
+- Eigener Startbildschirm (`Startbildschirm` in `Quiz.tsx`, gleiche
+  `gestartet`-Vorlage wie Blockblitz): kräftiger Blau-Lila-Verlauf mit
+  schwebenden geometrischen Formen (Kreis, Quadrat, Dreieck per
+  `clip-path`, `DEKO_FORMEN`) — angelehnt an die Optik typischer
+  Quiz-Apps im App Store.
 
 ## Gehirnjogging — Besonderheiten
 

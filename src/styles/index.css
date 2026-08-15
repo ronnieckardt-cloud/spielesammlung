@@ -158,6 +158,58 @@
   animation: punkte-auftauchen 0.9s ease-out forwards;
 }
 
+/* Sanft schwebende Deko-Blöcke auf dem Blockblitz-Startbildschirm — Winkel
+   je Block über --grundwinkel, damit nicht alle gleich kippen. */
+@keyframes block-schweben {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--grundwinkel, 0deg));
+  }
+  50% {
+    transform: translateY(-14px) rotate(calc(var(--grundwinkel, 0deg) + 6deg));
+  }
+}
+
+.block-schweben {
+  animation: block-schweben 3.4s ease-in-out infinite;
+}
+
+/* Leichtes, einladendes Pulsieren am Spielen-Knopf auf dem Startbildschirm. */
+@keyframes startknopf-puls {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.35);
+  }
+  50% {
+    transform: scale(1.045);
+    box-shadow: 0 14px 30px -8px rgba(0, 0, 0, 0.45);
+  }
+}
+
+.startknopf-puls {
+  animation: startknopf-puls 1.8s ease-in-out infinite;
+}
+
+/* Deutliches Aufblinken der Zellen, die beim Loslassen eine Reihe/Spalte
+   voll machen würden (Blockblitz-Vorschau) — soll auffallen, nicht nur ein
+   dünner Rand sein. */
+@keyframes vorschau-linie-puls {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px white inset;
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: 0 0 0 3px white inset;
+    filter: brightness(1.45);
+  }
+}
+
+.vorschau-linie-puls {
+  animation: vorschau-linie-puls 0.5s ease-in-out infinite;
+}
+
 /* Der React-Wurzelknoten füllt den Rest der Seite. */
 #wurzel {
   display: flex;

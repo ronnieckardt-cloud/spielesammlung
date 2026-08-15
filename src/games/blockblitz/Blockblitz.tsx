@@ -18,11 +18,6 @@ import { ankerZentriertAuf, formGroesse } from './geometrie';
 import { blockFarbe } from './farben';
 import { BlockblitzIcon } from './Icon';
 
-// Muss zur accent-Farbe in index.ts passen — Spiele kennen ihre eigene
-// GameApi nicht (Import von dort würde einen Kreis mit index.ts ergeben),
-// deshalb hier als eigene, kleine Konstante dupliziert statt importiert.
-const AKZENT = '#38bdf8';
-
 const VERSATZ_Y = 60; // Pixel, um die das gezogene Teil über den Finger gehoben wird
 const SCHWELLE_TIPP = 8; // Pixel Bewegung, unterhalb derer ein Antippen statt Ziehen gilt
 const FALLBACK_ZELLGROESSE = 40; // bevor das Raster zum ersten Mal gemessen wurde
@@ -70,31 +65,82 @@ function TeilAnzeige({ teil, zellgroesse }: { teil: Teil; zellgroesse: number })
   );
 }
 
-/** Ruhiges Titelbild vor der ersten Runde — Icon, Name, Bestleistung, Start. */
+/**
+ * Schwebende Deko-Blöcke im Hintergrund des Startbildschirms — feste Liste,
+ * kein Zufall nötig (rein dekorativ, keine Spiellogik, muss nicht
+ * reproduzierbar sein). Position in Prozent, Größe/Winkel/Verzögerung von
+ * Hand für eine unregelmäßige, nicht symmetrische Verteilung gewählt.
+ */
+const DEKO_BLOECKE: readonly {
+  x: number;
+  y: number;
+  groesse: number;
+  farbe: string;
+  winkel: number;
+  verzoegerung: number;
+}[] = [
+  { x: 8, y: 12, groesse: 30, farbe: '#facc15', winkel: 14, verzoegerung: 0 },
+  { x: 86, y: 8, groesse: 22, farbe: '#f472b6', winkel: -18, verzoegerung: 0.5 },
+  { x: 80, y: 78, groesse: 36, farbe: '#2dd4bf', winkel: 10, verzoegerung: 0.9 },
+  { x: 10, y: 80, groesse: 26, farbe: '#38bdf8', winkel: -8, verzoegerung: 1.3 },
+  { x: 92, y: 42, groesse: 18, farbe: '#facc15', winkel: 22, verzoegerung: 0.2 },
+  { x: 4, y: 46, groesse: 20, farbe: '#f472b6', winkel: -6, verzoegerung: 1.7 },
+  { x: 55, y: 6, groesse: 16, farbe: '#2dd4bf', winkel: 30, verzoegerung: 1.0 },
+];
+
+/**
+ * Farbenfrohes Titelbild vor der ersten Runde — bewusst nicht der übliche
+ * dunkle App-Hintergrund, sondern ein eigener, kräftiger Farbverlauf mit
+ * schwebenden Blöcken, wie bei typischen, poliert wirkenden Puzzle-Spielen.
+ * Eigene Gestaltung, keine kopierten Bilder oder Logos.
+ */
 function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: () => void }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6 text-center">
-      <div
-        className="grid size-24 place-items-center rounded-[1.75rem]"
-        style={{
-          background: `linear-gradient(150deg, color-mix(in srgb, ${AKZENT} 100%, white 30%), ${AKZENT} 55%, color-mix(in srgb, ${AKZENT} 100%, black 22%))`,
-          boxShadow: `0 14px 32px -12px color-mix(in srgb, ${AKZENT} 75%, transparent)`,
-        }}
-      >
-        <BlockblitzIcon className="size-14 text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />
+    <div
+      className="relative flex flex-1 flex-col items-center justify-center gap-7 overflow-hidden p-6 text-center"
+      style={{ background: 'linear-gradient(160deg, #4338ca 0%, #7c3aed 38%, #db2777 72%, #f97316 100%)' }}
+    >
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        {DEKO_BLOECKE.map((b, i) => (
+          <span
+            key={i}
+            className="block-schweben absolute rounded-xl opacity-80"
+            style={
+              {
+                left: `${b.x}%`,
+                top: `${b.y}%`,
+                width: b.groesse,
+                height: b.groesse,
+                backgroundColor: b.farbe,
+                animationDelay: `${b.verzoegerung}s`,
+                '--grundwinkel': `${b.winkel}deg`,
+              } as CSSProperties
+            }
+          />
+        ))}
       </div>
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Block Burst</h1>
-        <p className="mt-1.5 text-sm text-gedaempft">
-          {bestScore > 0 ? `Beste Punktzahl: ${bestScore}` : 'Noch nicht gespielt'}
+
+      <div className="relative grid size-28 place-items-center rounded-[2rem] bg-white/20 shadow-2xl ring-1 ring-white/40 backdrop-blur-sm">
+        <BlockblitzIcon className="size-16 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" />
+      </div>
+
+      <div className="relative">
+        <h1
+          className="text-5xl leading-none font-black tracking-tight text-white"
+          style={{ textShadow: '0 4px 0 rgba(0,0,0,0.22), 0 10px 24px rgba(0,0,0,0.35)' }}
+        >
+          Block Burst
+        </h1>
+        <p className="mt-3 text-sm font-semibold text-white/85">
+          {bestScore > 0 ? `🏆 Beste Punktzahl: ${bestScore}` : 'Bereit für deine erste Runde?'}
         </p>
       </div>
+
       <button
         type="button"
         onClick={onStart}
         autoFocus
-        className="rounded-xl px-12 py-4 text-lg font-bold text-white shadow-lg transition-transform active:scale-95"
-        style={{ backgroundColor: AKZENT }}
+        className="startknopf-puls relative rounded-2xl bg-white px-14 py-4 text-xl font-extrabold text-violet-700 shadow-2xl transition-transform active:scale-95"
       >
         Spielen
       </button>
@@ -345,7 +391,7 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore }: GamePro
                 aria-hidden="true"
                 tabIndex={-1}
                 onClick={beiZelleKlick(x, y)}
-                className={`relative aspect-square rounded-md ${leer ? 'border border-rand bg-flaeche' : ''}`}
+                className={`relative aspect-square rounded-md ${leer ? 'border border-rand bg-flaeche' : ''} ${istVorschauLinie ? 'vorschau-linie-puls' : ''}`}
                 style={
                   farbe
                     ? {

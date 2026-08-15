@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { useInput } from '../../core/useInput';
 import { sfx } from '../../core/sfx';
@@ -17,6 +18,7 @@ import {
 } from './logik';
 import type { Aktion, TeilTyp, Zustand } from './logik';
 import { TEIL_NAMEN, reihenfallFarbe } from './farben';
+import { ReihenfallIcon } from './Icon';
 
 const ZELLE_PX = 22;
 
@@ -52,7 +54,97 @@ function MiniTeil({ typ, abgedunkelt = false }: { typ: TeilTyp; abgedunkelt?: bo
   );
 }
 
-export function Reihenfall({ onScore, onGameOver, settings }: GameProps) {
+/**
+ * Fallende Blöcke im Hintergrund des Startbildschirms, in klassischen
+ * Tetromino-Farben — feste Liste, rein dekorativ, siehe
+ * Blockblitz-Startbildschirm für dasselbe Muster.
+ */
+const DEKO_BLOECKE: readonly {
+  x: number;
+  y: number;
+  groesse: number;
+  farbe: string;
+  winkel: number;
+  verzoegerung: number;
+}[] = [
+  { x: 10, y: 12, groesse: 24, farbe: '#22d3ee', winkel: 6, verzoegerung: 0 },
+  { x: 86, y: 16, groesse: 20, farbe: '#facc15', winkel: -10, verzoegerung: 0.7 },
+  { x: 80, y: 76, groesse: 26, farbe: '#a855f7', winkel: 4, verzoegerung: 1.2 },
+  { x: 8, y: 80, groesse: 22, farbe: '#4ade80', winkel: -6, verzoegerung: 0.4 },
+  { x: 92, y: 46, groesse: 16, farbe: '#f87171', winkel: 12, verzoegerung: 1.7 },
+  { x: 4, y: 48, groesse: 18, farbe: '#60a5fa', winkel: -4, verzoegerung: 1.0 },
+  { x: 55, y: 8, groesse: 14, farbe: '#fb923c', winkel: 20, verzoegerung: 0.2 },
+];
+
+/**
+ * Titelbild angelehnt an klassische Stapel-Puzzles wie Tetris — dunkles,
+ * aber nicht schwarzes Blau mit Neon-Raster und bunten Tetromino-Farben,
+ * blockige Schrift. Eigene Gestaltung, siehe Blockblitz-Startbildschirm für
+ * die Vorlage.
+ */
+function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: () => void }) {
+  return (
+    <div
+      className="relative flex flex-1 flex-col items-center justify-center gap-7 overflow-hidden p-6 text-center"
+      style={{
+        background:
+          'linear-gradient(180deg, #1e1b4b 0%, #312e81 55%, #4c1d95 100%),' +
+          'repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0 1px, transparent 1px 34px),' +
+          'repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0 1px, transparent 1px 34px)',
+        backgroundBlendMode: 'normal, normal, normal',
+      }}
+    >
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        {DEKO_BLOECKE.map((b, i) => (
+          <span
+            key={i}
+            className="block-schweben absolute rounded-md opacity-90"
+            style={
+              {
+                left: `${b.x}%`,
+                top: `${b.y}%`,
+                width: b.groesse,
+                height: b.groesse,
+                backgroundColor: b.farbe,
+                boxShadow: `0 0 14px ${b.farbe}`,
+                animationDelay: `${b.verzoegerung}s`,
+                '--grundwinkel': `${b.winkel}deg`,
+              } as CSSProperties
+            }
+          />
+        ))}
+      </div>
+
+      <div className="relative grid size-28 place-items-center rounded-2xl bg-white/10 shadow-2xl ring-1 ring-white/25 backdrop-blur-sm">
+        <ReihenfallIcon className="size-16 drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" />
+      </div>
+
+      <div className="relative">
+        <h1
+          className="text-5xl leading-none font-black tracking-tight text-white"
+          style={{ textShadow: '0 4px 0 rgba(0,0,0,0.35), 0 0 24px rgba(96,165,250,0.5)' }}
+        >
+          Line Fall
+        </h1>
+        <p className="mt-3 text-sm font-semibold text-white/80">
+          {bestScore > 0 ? `🏆 Beste Punktzahl: ${bestScore}` : 'Bereit, Reihen zu räumen?'}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onStart}
+        autoFocus
+        className="startknopf-puls relative rounded-2xl bg-white px-14 py-4 text-xl font-extrabold text-indigo-700 shadow-2xl transition-transform active:scale-95"
+      >
+        Spielen
+      </button>
+    </div>
+  );
+}
+
+export function Reihenfall({ onScore, onGameOver, settings, bestScore }: GameProps) {
+  const [gestartet, setGestartet] = useState(false);
   const [z, setZ] = useState<Zustand>(() => neuesSpiel(saatAus('reihenfall', Date.now())));
   const feldRef = useRef<HTMLDivElement>(null);
   const zeilenVorherRef = useRef(0);
@@ -130,6 +222,10 @@ export function Reihenfall({ onScore, onGameOver, settings }: GameProps) {
   const geisterZellen = new Set(
     geist ? zellenVonStein(geist).filter((p) => p.y >= 0).map((p) => `${p.x},${p.y}`) : [],
   );
+
+  if (!gestartet) {
+    return <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />;
+  }
 
   return (
     <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4">

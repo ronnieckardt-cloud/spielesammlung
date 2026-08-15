@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
@@ -25,6 +26,7 @@ import { FarbMusterDefs } from './FarbMusterDefs';
 import { Roehrchen } from './Roehrchen';
 import { farbpaletteFuerLevel } from './farben';
 import type { FarbEintrag } from './farben';
+import { FarbsortiererIcon } from './Icon';
 
 /** Feste Dauer der Gieß-Animation — läuft immer, kein Knopf zum An-/Abstellen. */
 const GIESS_DAUER_MS = 950;
@@ -64,7 +66,86 @@ function beschreibung(
   return `${basis}, von unten nach oben: ${inhalt.map((f) => palette[f]?.name ?? '').join(', ')}`;
 }
 
-export function Farbsortierer({ onScore, onGameOver }: GameProps) {
+/**
+ * Schwebende Farbtropfen im Hintergrund des Startbildschirms — feste Liste,
+ * rein dekorativ, siehe Blockblitz-Startbildschirm für dasselbe Muster.
+ */
+const DEKO_TROPFEN: readonly {
+  x: number;
+  y: number;
+  groesse: number;
+  farbe: string;
+  verzoegerung: number;
+}[] = [
+  { x: 10, y: 14, groesse: 26, farbe: '#fb923c', verzoegerung: 0 },
+  { x: 88, y: 10, groesse: 20, farbe: '#facc15', verzoegerung: 0.6 },
+  { x: 82, y: 80, groesse: 32, farbe: '#2dd4bf', verzoegerung: 1.1 },
+  { x: 8, y: 78, groesse: 22, farbe: '#f472b6', verzoegerung: 0.3 },
+  { x: 92, y: 44, groesse: 16, farbe: '#facc15', verzoegerung: 1.6 },
+  { x: 4, y: 46, groesse: 18, farbe: '#fb923c', verzoegerung: 0.9 },
+];
+
+/**
+ * Farbenfrohes Titelbild, angelehnt an typische Wassersortier-Puzzles im
+ * App Store — helle Verläufe, schwebende Tropfen, kein dunkler Hintergrund.
+ * Eigene Gestaltung, siehe Blockblitz-Startbildschirm für die Vorlage.
+ */
+function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: () => void }) {
+  return (
+    <div
+      className="relative flex flex-1 flex-col items-center justify-center gap-7 overflow-hidden p-6 text-center"
+      style={{ background: 'linear-gradient(160deg, #14b8a6 0%, #0ea5e9 45%, #a855f7 78%, #ec4899 100%)' }}
+    >
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        {DEKO_TROPFEN.map((t, i) => (
+          <span
+            key={i}
+            className="block-schweben absolute rounded-full opacity-80"
+            style={
+              {
+                left: `${t.x}%`,
+                top: `${t.y}%`,
+                width: t.groesse,
+                height: t.groesse,
+                backgroundColor: t.farbe,
+                animationDelay: `${t.verzoegerung}s`,
+                '--grundwinkel': '0deg',
+              } as CSSProperties
+            }
+          />
+        ))}
+      </div>
+
+      <div className="relative grid size-28 place-items-center rounded-full bg-white/20 shadow-2xl ring-1 ring-white/40 backdrop-blur-sm">
+        <FarbsortiererIcon className="size-16 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" />
+      </div>
+
+      <div className="relative">
+        <h1
+          className="text-5xl leading-none font-black tracking-tight text-white"
+          style={{ textShadow: '0 4px 0 rgba(0,0,0,0.18), 0 10px 24px rgba(0,0,0,0.3)' }}
+        >
+          Color Pour
+        </h1>
+        <p className="mt-3 text-sm font-semibold text-white/85">
+          {bestScore > 0 ? `🏆 Beste Punktzahl: ${bestScore}` : 'Bereit, die Farben zu sortieren?'}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onStart}
+        autoFocus
+        className="startknopf-puls relative rounded-2xl bg-white px-14 py-4 text-xl font-extrabold text-teal-600 shadow-2xl transition-transform active:scale-95"
+      >
+        Spielen
+      </button>
+    </div>
+  );
+}
+
+export function Farbsortierer({ onScore, onGameOver, bestScore }: GameProps) {
+  const [gestartet, setGestartet] = useState(false);
   const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
   const [guss, setGuss] = useState<Guss | null>(null);
 
@@ -175,6 +256,10 @@ export function Farbsortierer({ onScore, onGameOver }: GameProps) {
   const strahlSichtbar =
     !!guss && !!flug && !!kante && Math.abs(flug.winkelGrad) > 85 && giessAnteil < 1;
   const wackeln = guss ? Math.sin(guss.t * 46) * 2 : 0;
+
+  if (!gestartet) {
+    return <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />;
+  }
 
   return (
     <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-4">
