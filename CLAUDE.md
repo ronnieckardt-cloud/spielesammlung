@@ -562,6 +562,30 @@ versucht deshalb genau dasselbe Level erneut.
 - `freiesFeld` zählt erst alle freien Felder und wählt dann eines, statt
   blind zu würfeln und bei Treffern zu wiederholen — begrenzter Aufwand auch
   bei fast vollem Feld, und für eine gegebene Saat immer dasselbe Ergebnis.
+- Das Brett ist **ein SVG**, keine 289 Kacheln. Die Schlange bestand vorher
+  aus einzelnen Kacheln mit einer Fuge dazwischen — sie konnten sich also
+  gar nicht berühren, und übrig blieb ein grüner Streifen. Jetzt ist der
+  Körper ein durchgehender Linienzug aus vier Schichten (Schatten, dunkle
+  Kante, Fläche, helle Lichtkante leicht nach oben versetzt); die Kurven
+  entstehen von selbst durch `stroke-linejoin="round"`, es braucht keine
+  Eckvarianten. Dazu Querringe auf den geraden Gliedern, ein Kopf mit zwei
+  Augen und Zunge, ein spitz auslaufender Schwanz. Ronni hat die Machart aus
+  vier gerenderten Varianten ausgewählt.
+- `geometrie.ts` trägt den kniffligen Teil: `versatz` rechnet einen
+  Rand-Umschlag als **einen** Schritt (16 → 0 ist +1, nicht −16), `laeufe`
+  zerlegt die Kette an Umschlägen in Teilstücke. Ohne das malt ein einziger
+  Pfad beim Tunneln quer über das ganze Feld. 17 Tests dazu.
+- **Zeichenreihenfolge beachten:** erst alle dunklen Kanten, dann alle
+  Flächen. Zeichnet man den Schwanz stückweise fertig, malt dessen schmale
+  Kante einen sichtbaren Ring quer über den breiten Körper.
+- Das Goldstück ist ein **Stern**, der Apfel ein Kreis. Vorher waren beide
+  Kreise und nur an der Farbe zu unterscheiden — das verstieß gegen die
+  Regel, dass Farbe nie das einzige Merkmal sein darf.
+- Die Keyframes `schlange-zuengelt` und `schlange-schluckt` enden bei 100 %
+  im Ruhezustand. `.ruhig` kürzt nur die Dauer, das Element bleibt auf dem
+  Schlussbild stehen — stünde die Zunge dort draußen, hinge sie bei
+  „weniger Bewegung" dauerhaft heraus. Zusätzlich setzt die Anzeige die
+  Klassen bei `reducedMotion` gar nicht erst.
 
 ## Merge Up — Besonderheiten
 

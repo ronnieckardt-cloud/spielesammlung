@@ -29,8 +29,10 @@ const tasten: Record<string, Aktion> = {
 };
 
 type Optionen = {
-  /** Element für Wischgesten. Ohne Angabe gilt das ganze Fenster. */
-  bereich?: RefObject<HTMLElement | null>;
+  /** Element für Wischgesten. Ohne Angabe gilt das ganze Fenster.
+   *  `Element` statt `HTMLElement`, weil Snake Rush sein Brett als SVG
+   *  zeichnet — gebraucht wird hier ohnehin nur addEventListener. */
+  bereich?: RefObject<Element | null>;
   /** Aktionen, die bei gehaltener Taste wiederholt werden. */
   wiederholen?: Aktion[];
   /** Wartezeit bis zur ersten Wiederholung, in Millisekunden. */

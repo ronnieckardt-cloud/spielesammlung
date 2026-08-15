@@ -348,6 +348,71 @@
   }
 }
 
+/* Snake Rush: Der Kopf staucht sich kurz, wenn die Schlange frisst — die
+   Klasse läuft über `key={laenge}` bei jedem neuen Glied neu an.
+
+   Beide Keyframes hier enden bei 100 % im Ruhezustand. Das ist Absicht:
+   `.ruhig` kürzt nur die Dauer auf 0,01 ms, das Element bleibt danach auf
+   dem 100-%-Bild stehen. Stünde die Zunge dort draußen, würde sie bei
+   „weniger Bewegung" dauerhaft heraushängen. Zusätzlich werden beide
+   Klassen bei `reducedMotion` gar nicht erst gesetzt.
+
+   `transform-box: fill-box` ist bei SVG nötig, sonst bezieht sich der
+   Ursprung auf die viewBox und der Kopf würde zur Feldecke skalieren. */
+@keyframes schlange-schluckt {
+  0% {
+    scale: 1;
+  }
+  40% {
+    scale: 1.22;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+.schlange-schluckt {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: schlange-schluckt 0.22s ease-out;
+}
+
+@keyframes schlange-zuengelt {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  6%,
+  14% {
+    opacity: 1;
+  }
+  20% {
+    opacity: 0;
+  }
+}
+
+.schlange-zuengelt {
+  animation: schlange-zuengelt 2.4s ease-in-out infinite;
+}
+
+/* Ruhigeres Pulsieren als `.pulsiert` — für das Goldstück, das ohnehin
+   auffällt und nicht zappeln soll. */
+@keyframes pulsiert-sanft {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.12;
+  }
+}
+
+.pulsiert-sanft {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulsiert-sanft 1.4s ease-in-out infinite;
+}
+
 /* Der React-Wurzelknoten füllt den Rest der Seite. */
 #wurzel {
   display: flex;

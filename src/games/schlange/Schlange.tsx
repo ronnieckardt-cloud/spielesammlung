@@ -8,11 +8,8 @@ import type { GameProps } from '../../core/types';
 import { BREITE, HOEHE, neuesSpiel, richtungWaehlen, zeitFortschritt } from './logik';
 import type { Richtung, Zustand } from './logik';
 import { SchlangeIcon } from './Icon';
+import { Apfel, Goldstern, Kopf, Koerper, Raster, Ringe } from './figuren';
 
-const KOPF_FARBE = '#22c55e';
-const KOERPER_FARBE = '#4ade80';
-const FUTTER_FARBE = '#f43f5e';
-const GOLD_FARBE = '#facc15';
 
 /**
  * Schwebende Deko-Punkte im Hintergrund des Startbildschirms — feste Liste,
@@ -97,7 +94,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
   // Startbildschirm zu gehen — der gehört nur ans Betreten des Spiels.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesSpiel(saatAus('schlange', Date.now())));
-  const feldRef = useRef<HTMLDivElement>(null);
+  const feldRef = useRef<SVGSVGElement>(null);
   const punkteVorherRef = useRef(0);
 
   useGameLoop((dt) => setZ((alt) => zeitFortschritt(alt, dt)), {
@@ -143,8 +140,6 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
     return <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />;
   }
 
-  const kopf = z.schlange[0]!;
-  const koerper = new Map(z.schlange.slice(1).map((p, i) => [`${p.x},${p.y}`, i]));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3 spielseite">
@@ -158,61 +153,30 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
       </output>
 
       <div className="spielbuehne">
-      <div
-        ref={feldRef}
-        className="spielbrett grid touch-none gap-px rounded-xl border border-rand bg-rand p-px"
-        style={
-          {
-            gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))`,
-            gridTemplateRows: `repeat(${HOEHE}, minmax(0, 1fr))`,
-            '--vz': BREITE / HOEHE,
-          } as CSSProperties
-        }
-        role="img"
-        aria-label={`Spielfeld. Schlange ${z.schlange.length} Glieder lang, ${z.punkte} Punkte.${z.vorbei ? ' Vorbei.' : ''}`}
-      >
-        {Array.from({ length: BREITE * HOEHE }, (_, i) => {
-          const x = i % BREITE;
-          const y = Math.floor(i / BREITE);
-          const schluessel = `${x},${y}`;
-          const istKopf = kopf.x === x && kopf.y === y;
-          const gliedIndex = koerper.get(schluessel);
-          const istFutter = z.futter.x === x && z.futter.y === y;
-          const istGold = !!z.gold && z.gold.x === x && z.gold.y === y;
-
-          let inhalt: CSSProperties | undefined;
-          if (istKopf) {
-            inhalt = { backgroundColor: KOPF_FARBE, borderRadius: '35%' };
-          } else if (gliedIndex !== undefined) {
-            // Zum Schwanz hin etwas durchsichtiger — macht die Laufrichtung
-            // auf einen Blick erkennbar.
-            inhalt = {
-              backgroundColor: KOERPER_FARBE,
-              opacity: Math.max(0.45, 1 - gliedIndex / (z.schlange.length + 4)),
-              borderRadius: '30%',
-            };
-          }
-
-          return (
-            <div key={i} className="relative bg-flaeche">
-              {inhalt && <div className="absolute inset-[8%]" style={inhalt} />}
-              {istFutter && (
-                <div
-                  className="absolute inset-[18%] rounded-full"
-                  style={{ backgroundColor: FUTTER_FARBE, boxShadow: `0 0 6px ${FUTTER_FARBE}` }}
-                />
-              )}
-              {istGold && (
-                <div
-                  className="pulsiert absolute inset-[14%] rounded-full"
-                  style={{ backgroundColor: GOLD_FARBE, boxShadow: `0 0 10px ${GOLD_FARBE}` }}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
+        {/* Ein SVG über dem ganzen Brett statt 289 einzelner Kacheln: Nur so
+            hängt der Körper wirklich zusammen. Vorher lag zwischen zwei
+            Gliedern immer eine Fuge — sie konnten sich gar nicht berühren. */}
+        <svg
+          ref={feldRef}
+          viewBox={`0 0 ${BREITE} ${HOEHE}`}
+          className="spielbrett touch-none rounded-xl border border-rand bg-flaeche"
+          style={{ '--vz': BREITE / HOEHE } as CSSProperties}
+          role="img"
+          aria-label={`Spielfeld. Schlange ${z.schlange.length} Glieder lang, ${z.punkte} Punkte.${z.vorbei ? ' Vorbei.' : ''}`}
+        >
+          <Raster breite={BREITE} hoehe={HOEHE} />
+          <Apfel ort={z.futter} />
+          {z.gold && <Goldstern ort={z.gold} ruhig={settings.reducedMotion} />}
+          <Koerper schlange={z.schlange} />
+          <Ringe schlange={z.schlange} />
+          {/* key auf die Länge: Beim Fressen läuft die Schluck-Animation neu an. */}
+          <Kopf
+            key={z.schlange.length}
+            kopf={z.schlange[0]!}
+            richtung={z.richtung}
+            ruhig={settings.reducedMotion}
+          />
+        </svg>
       </div>
 
       <div className="grid grid-cols-3 gap-0.5" role="group" aria-label="Steuerung">
