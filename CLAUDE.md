@@ -1784,10 +1784,55 @@ groß und mittig sitzt.
 
 ## Ausliefern
 
-Läuft auf dem **Hetzner-Webpaket** unter `spiele.klarvorteil.de`, nicht mehr
-auf Netlify. Grund: Das Netlify-Freikontingent lief am 15.08.2026 voll — die
-Seite antwortete mit HTTP 503 (`usage_exceeded`) und Deploys wurden
-abgelehnt. Das Webpaket ist ohnehin bezahlt und hat kein Kontingent.
+Läuft auf **Netlify** unter `florian-spielesammlung.netlify.app`. Das ist
+die Adresse, die Florian benutzt.
+
+**Hier stand vorübergehend, die App laufe auf dem Hetzner-Webpaket unter
+`spiele.klarvorteil.de`. Das war nie wahr, und der Irrtum ist es wert,
+festgehalten zu werden.** Auslöser war ein echtes Problem: Am 15.08.2026
+antwortete Netlify mit HTTP 503 (`usage_exceeded`), das Freikontingent war
+voll. Daraufhin wurde der Umzug vorbereitet *und gleich als erledigt
+notiert*. Nachgemessen war davon nichts fertig:
+
+- `spiele.klarvorteil.de` gab es gar nicht — **NXDOMAIN**, kein
+  DNS-Eintrag.
+- Der Hochlade-Schritt in `ausliefern.yml` hängt an
+  `vars.HETZNER_AKTIV == 'ja'`; die Variable war nie gesetzt, ebenso wenig
+  die vier FTP-Secrets. Jeder Lauf meldete brav „success", weil nur der
+  Prüfteil lief — der Hochlade-Job stand daneben auf **skipped**.
+- Das Kontingent bei Netlify hatte sich längst wieder gefangen: HTTP 200.
+
+Es liefen also drei Deploys „erfolgreich" ins Leere, und Florians Gerät
+blieb auf v35 stehen. *Merksatz: Ein grüner Haken bei GitHub sagt nur, dass
+kein Schritt fehlgeschlagen ist — nicht, dass einer gelaufen ist.
+Übersprungene Jobs zählen als Erfolg.* Nach einem Deploy gehört deshalb
+immer eine Gegenprobe an der **echten Adresse** dazu:
+
+```bash
+curl -s https://florian-spielesammlung.netlify.app/sw.js | grep -o "spielesammlung-v[0-9]*"
+```
+
+Zweiter Fund derselben Art: `.netlify/state.json` im Projekt zeigte auf
+`bright-malabi-4b190b` — eine leere Wegwerf-Seite, die mit 404 antwortet.
+Ein Deploy von Hand aus diesem Ordner wäre dort gelandet, nicht bei
+Florian. Steht jetzt richtig auf `florian-spielesammlung`
+(`9d35f7b3-64b4-4d7d-ae3c-3c1a31855ae5`).
+
+Ausgeliefert wird von Hand, weil Ronni ausdrücklich nichts selbst anstoßen
+will („ich will nichts selber anstoßen"). Sein Netlify-Token liegt lokal
+unter `~/Library/Preferences/netlify/config.json`, das CLI läuft über
+`npx`:
+
+```bash
+npm test && npm run build
+npx netlify-cli deploy --prod --dir=dist
+```
+
+Der Weg über das Hetzner-Webpaket bleibt vorbereitet, ist aber **nicht in
+Betrieb**. Zum Scharfschalten fehlen: ein DNS-Eintrag für
+`spiele.klarvorteil.de`, die vier Secrets (`FTP_HOST`, `FTP_BENUTZER`,
+`FTP_PASSWORT`, `FTP_ZIEL`) und die Variable `HETZNER_AKTIV=ja`. Alle drei
+kann nur Ronni setzen.
 
 `.github/workflows/ausliefern.yml` baut bei jedem Push auf `main`, lässt die
 Tests laufen und lädt `dist/` per FTPS hoch. Die Zugangsdaten liegen als
