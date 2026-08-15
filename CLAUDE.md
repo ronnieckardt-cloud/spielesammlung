@@ -155,6 +155,7 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `paare` | Pair Up |
 | `messerwurf` | Blade Toss |
 | `viererreihe` | Drop Four |
+| `farbringe` | Ring Rise |
 
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
@@ -395,6 +396,21 @@ Vorgezogen, weil Ronni es ausdrücklich zuerst wollte:
 22. ✅ Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer
     ist der/die Beste. Siehe eigenen Abschnitt „Anmeldung und Bestenliste"
     weiter unten.
+
+Von Ronni selbst ausgesucht, aus einer Liste von Vorschlägen:
+
+23. ✅ Ring Rise — Kugel durch drehende Farbringe (Vorbild: Color Switch).
+24. Perfect Slice — mit einem Wisch eine Form in zwei möglichst gleiche
+    Hälften schneiden. Der knifflige Teil ist reine Geometrie (Polygon an
+    einer Geraden teilen, Flächeninhalt) und gehört getestet in eine eigene
+    Datei.
+25. Flow Connect — gleichfarbige Punkte verbinden, ohne sich zu kreuzen,
+    am Ende ist das Gitter voll. Braucht einen Erzeuger, der garantiert
+    lösbare Bretter liefert.
+26. **Duell** — zwei Angemeldete spielen dasselbe Level, wer mehr Punkte
+    hat, gewinnt. Ronnis Wunsch, ausdrücklich **nach** Flow Connect.
+    Funktioniert ohne neue Spiellogik in allen Spielen, bei denen gleiche
+    Levelnummer schon gleiches Rätsel bedeutet.
 
 Danach, in dieser Reihenfolge:
 
@@ -1257,6 +1273,44 @@ braucht deshalb ein eigenes `z-20`.
 
 **Noch nicht gebaut:** Battle, Co-op, Avatare. Die Tabellen dafür gibt es
 noch nicht.
+
+## Ring Rise — Besonderheiten
+
+Ronnis Wunsch nach einem Spiel „wie Color Switch". Der Name ist bewusst ein
+anderer — „Color Switch" heißt ein bekanntes Vorbild, und hier gilt die
+Regel oben: das Prinzip ist frei, der Name nicht. Interne `id` ist
+`farbringe`.
+
+- **Die Welt wächst nach oben.** In der ganzen Logik ist ein größeres `y`
+  weiter oben; erst die Anzeige dreht das um (`bildY` in `RingRise.tsx`).
+  Das spart die Vorzeichenfehler, die sonst zwischen „fällt" und „steigt"
+  ständig entstehen.
+- **Ein Ring ist ein Tor, kein Schlauch.** Die erste Fassung prüfte unten
+  *und* oben — und war damit unspielbar: Unten und oben liegen einander
+  gegenüber, das sind bei vier Bögen immer **zwei verschiedene** Farben.
+  Beide zu treffen ginge nur, wenn sich der Ring während der Durchquerung um
+  exakt eine halbe Umdrehung dreht. Jetzt zählt nur der untere Rand, und
+  zwei kleine weiße Striche zeigen diese Stelle an — eine Regel, die man
+  erraten muss, fühlt sich unfair an, auch wenn sie es nicht ist.
+- **Der Farbwechsler hängt direkt über seinem Ring**, nicht in der Mitte
+  zwischen zweien. In der Mitte bekam man die neue Farbe siebzehn Einheiten
+  vor dem nächsten Tor — weniger, als ein Sprung trägt. Man konnte gar nicht
+  mehr abwarten, sondern raste zwangsläufig hinein.
+- **Farbe ist nicht das einzige Merkmal.** Jede der vier Farben hat ein
+  eigenes Strichmuster (durchgezogen, lang, kurz, gepunktet), und die Kugel
+  trägt dasselbe Muster als Ring um sich herum. Bei einem Spiel, das aus der
+  einen Frage „passt meine Farbe dorthin?" besteht, wäre reine
+  Farbunterscheidung für farbfehlsichtige Kinder unspielbar — und Rot/Grün
+  ist die häufigste Schwäche.
+- **Der wichtigste Test ist ein einfacher Spieler.** Er schwebt unter dem
+  nächsten Ring und schießt erst hoch, wenn seine Farbe unten steht. Beide
+  Konstruktionsfehler oben hat genau dieser Test aufgedeckt, nicht das
+  Ausprobieren im Browser: Er kam über einen einzigen Ring nicht hinaus.
+  Jetzt schafft er je nach Saat 4 bis 42 Ringe.
+- Eigener Tastatur-Listener statt `useInput`, gleiche Begründung wie bei
+  Blade Toss: `useInput` meldet ein Antippen erst beim Loslassen, zusammen
+  mit `onPointerDown` käme jeder Tipp zweimal an — und ein doppelter Sprung
+  wirft die Kugel viel zu hoch.
 
 ## Wenn Animationen „einfach weg" sind
 
