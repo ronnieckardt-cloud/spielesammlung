@@ -239,7 +239,18 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
   const feldRef = useRef<HTMLDivElement>(null);
   const zeilenVorherRef = useRef(0);
 
-  useGameLoop((dt) => setZ((alt) => zeitFortschritt(alt, dt)), { fps: 30, running: !z.vorbei });
+  /*
+   * `gestartet` gehört mit in die Bedingung — und das ist kein Feinschliff.
+   *
+   * Ohne es lief die Schleife **hinter dem Startbildschirm weiter**: Der
+   * Stein fiel, der Stapel wuchs, und wer sich den Titel eine Weile ansah,
+   * tippte auf „Spielen" und stand vor einem halb vollen Feld — im
+   * schlimmsten Fall vor einer schon verlorenen Runde.
+   */
+  useGameLoop((dt) => setZ((alt) => zeitFortschritt(alt, dt)), {
+    fps: 30,
+    running: gestartet && !z.vorbei,
+  });
 
   const anwenden = (aktion: Aktion) => setZ((alt) => aktionAnwenden(alt, aktion));
 

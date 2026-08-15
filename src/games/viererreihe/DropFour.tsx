@@ -101,9 +101,23 @@ function Startbildschirm({
   );
 }
 
+/**
+ * Die zuletzt gewählte Stufe.
+ *
+ * **Modulweit, nicht im Zustand** — „Nochmal" hängt das Spiel per
+ * `key={runde}` komplett neu ein, jeder Zustand darin ist danach weg.
+ * Vorher stand hier fest `'mittel'`: Wer auf „Schwer" spielte und
+ * „Nochmal" tippte, saß wieder auf Mittel, und die Stufenwahl war für
+ * den Rest der Sitzung unerreichbar. Dieselbe Lösung wie in Even Cut und
+ * Flow Link, wo sie sich bewährt hat.
+ */
+let zuletztGewaehlteStufe: Stufe = 'mittel';
+
 export function DropFour({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
-  const [stufe, setStufe] = useState<Stufe | null>(istErsteRunde ? null : 'mittel');
-  const [z, setZ] = useState<Zustand>(() => neuesSpiel('mittel'));
+  const [stufe, setStufe] = useState<Stufe | null>(
+    istErsteRunde ? null : zuletztGewaehlteStufe,
+  );
+  const [z, setZ] = useState<Zustand>(() => neuesSpiel(zuletztGewaehlteStufe));
 
   const beiSpalte = useCallback((x: number) => {
     // Nur wenn der Mensch am Zug ist — sonst könnte man dem Computer
@@ -151,6 +165,8 @@ export function DropFour({ onScore, onGameOver, settings, bestScore, istErsteRun
       <Startbildschirm
         bestScore={bestScore}
         onStart={(gewaehlt) => {
+          // Auch für das nächste „Nochmal" merken.
+          zuletztGewaehlteStufe = gewaehlt;
           setStufe(gewaehlt);
           setZ(neuesSpiel(gewaehlt));
         }}

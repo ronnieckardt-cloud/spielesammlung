@@ -150,7 +150,15 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
 
     const auf = (e: PointerEvent) => {
       if (!zeiger || e.pointerId !== zeiger.id) return;
-      const kurz = e.timeStamp - zeiger.zeit < 350;
+      /*
+       * 700 ms, nicht 350 — und der Wert ist im Projekt schon einmal
+       * gemessen worden: `core/useInput.ts` hat genau die 350 ms als zu
+       * kurz für ein Kind verworfen und auf 700 gesetzt. Hier stand die
+       * alte Zahl noch, weil Dash City seine Steuerung selbst mitbringt.
+       * Ein Finger, der eine halbe Sekunde liegt, wollte springen — und
+       * fiel bisher stillschweigend durch.
+       */
+      const kurz = e.timeStamp - zeiger.zeit < 700;
       const klein =
         Math.max(Math.abs(e.clientX - zeiger.x), Math.abs(e.clientY - zeiger.y)) < WISCH_SCHWELLE;
       const schonGewischt = zeiger.fertig;
@@ -199,6 +207,7 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
     if (!gestartet) return;
     let abgebrochen = false;
     let bild = 0;
+    let messenAbmelden: (() => void) | null = null;
     let letzte = performance.now();
 
     setLaedt(true);
@@ -216,6 +225,16 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
         };
         messen();
         window.addEventListener('resize', messen);
+        /*
+         * **Merken, um ihn wieder abzumelden.** Der Listener hing vorher
+         * bis zum Neuladen der Seite und hielt über seine Closure die
+         * komplette 3-D-Szene fest — je „Nochmal" eine weitere. Auf einem
+         * iPad sind das nach ein paar Runden mehrere Sätze Geometrien und
+         * Texturen im Grafikspeicher, die niemand mehr freigibt. Genau
+         * dieselbe Sorte Fehler wie der nicht zurückgegebene Zeichen-
+         * kontext, an dem Dash City schon einmal gestorben ist.
+         */
+        messenAbmelden = () => window.removeEventListener('resize', messen);
         setLaedt(false);
 
         let letztePunkte = -1;
@@ -287,6 +306,7 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
     return () => {
       abgebrochen = true;
       cancelAnimationFrame(bild);
+      messenAbmelden?.();
       szeneRef.current?.aufraeumen();
       szeneRef.current = null;
     };

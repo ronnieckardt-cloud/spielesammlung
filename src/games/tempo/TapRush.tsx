@@ -109,9 +109,22 @@ function Startbildschirm({
   );
 }
 
+/**
+ * Die zuletzt gewählte Rundenlänge.
+ *
+ * **Modulweit, nicht im Zustand** — „Nochmal" hängt das Spiel per
+ * `key={runde}` komplett neu ein. Vorher standen hier fest zehn Sekunden:
+ * Wer eine Minute wählte und „Nochmal" tippte, bekam zehn Sekunden, und
+ * die Auswahl war für den Rest der Sitzung weg. Gerade hier wiegt das
+ * schwer — die Rundenlänge **ist** die Spielentscheidung.
+ */
+let zuletztGewaehlteDauer: number = DAUERN[1]!;
+
 export function TapRush({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
-  const [dauer, setDauer] = useState<number | null>(istErsteRunde ? null : DAUERN[1]!);
-  const [z, setZ] = useState<Zustand>(() => neuesSpiel(DAUERN[1]!));
+  const [dauer, setDauer] = useState<number | null>(
+    istErsteRunde ? null : zuletztGewaehlteDauer,
+  );
+  const [z, setZ] = useState<Zustand>(() => neuesSpiel(zuletztGewaehlteDauer));
   const gemeldet = useRef(false);
 
   useGameLoop((dt) => setZ((alt) => takt(alt, dt)), {
@@ -146,6 +159,8 @@ export function TapRush({ onScore, onGameOver, settings, bestScore, istErsteRund
       <Startbildschirm
         bestScore={bestScore}
         onStart={(gewaehlt) => {
+          // Auch für das nächste „Nochmal" merken.
+          zuletztGewaehlteDauer = gewaehlt;
           setDauer(gewaehlt);
           setZ(neuesSpiel(gewaehlt));
         }}
