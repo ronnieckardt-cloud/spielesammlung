@@ -6,6 +6,7 @@ import { reihenfall } from '../games/reihenfall';
 import { geisterjagd } from '../games/geisterjagd';
 import { quiz } from '../games/quiz';
 import { gehirnjogging } from '../games/gehirnjogging';
+import { wortspiel } from '../games/wortspiel';
 
 /**
  * Die einzige Liste aller Spiele. Ein neues Spiel wird hier eingetragen —
@@ -19,6 +20,7 @@ export const spiele: readonly GameApi[] = [
   geisterjagd,
   quiz,
   gehirnjogging,
+  wortspiel,
 ];
 
 export function spielFinden(id: string): GameApi | undefined {

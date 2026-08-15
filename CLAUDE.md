@@ -119,7 +119,11 @@ Danach zusätzlich geplant:
    (Farbfolge nachtippen), Muster erkennen. Level (und mehr) aus der
    Levelnummer erzeugt wie beim Farbsortierer, Variante reihum per
    Levelnummer, Schwierigkeit steigt mit dem Level.
-8. ⬜ Wortspiel — Konzept noch offen
+8. ✅ Wortspiel — Fokus Rechtschreibung: von vier Schreibweisen die richtige
+   erkennen, Fehlschreibungen zeigen typische deutsche Rechtschreibfallen
+   (ß/ss, ie/i, Doppelkonsonanten, Dehnungs-h, Fremdwörter). Level = Runde
+   wie beim Quiz, Schwierigkeit steigt mit dem Level (welcher Teil des
+   Wortpools erlaubt ist).
 9. Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer ist
    der/die Beste. Braucht Supabase (bringt fertige Anmeldung mit) — war von
    Anfang an als "später" vorgesehen, jetzt konkret gewünscht. Das ist ein
@@ -270,6 +274,27 @@ versucht deshalb genau dasselbe Level erneut.
   das Zurücksetzen von `ausgewaehlt` an `[z.index, z.level]`, nicht nur am
   Index, und `MerkfolgenAnzeige` bekommt `key={`${z.level}-${z.index}`}`,
   damit sie in genau diesem Fall wirklich neu mountet.
+
+## Wortspiel — Besonderheiten
+
+- `woerter.ts`: reine Daten (ca. 90 Wörter), nichts Logisches drin — Aufbau
+  bewusst wie `fragen.ts` beim Quiz: vier Antworten, `richtig` als fester
+  Index (nicht zur Laufzeit gemischt). Jedes Wort hat zusätzlich eine
+  `stufe` (1-3) und eine `regel` — eine kurze Erklärung, die nach der
+  Antwort immer erscheint, richtig oder falsch geklickt. Ein Test prüft nur
+  Struktur (vier eindeutige Antworten, gültiger Index, keine doppelt
+  vorkommende richtige Schreibweise im ganzen Pool) — Rechtschreibung
+  selbst kann kein Test prüfen, das bleibt beim sorgfältigen Schreiben.
+- Anders als beim Quiz steigt die Schwierigkeit mit dem Level: bis Level 20
+  nur Stufe 1 (kurze, häufige Wörter), bis Level 50 zusätzlich Stufe 2
+  (Umlaute, Doppelkonsonanten, Dehnungs-h), danach auch Stufe 3 (lange
+  Wörter, Fremdwörter, Fugenlaute) — `maxStufeFuerLevel` in `logik.ts`.
+  `neuesLevel` filtert den Pool auf die erlaubte Stufe, bevor gemischt wird.
+- Die Fehlschreibungen sind von Hand gebaut, keine zufällig erzeugten
+  Buchstabendreher — jede zeigt eine echte, typische deutsche
+  Rechtschreibfalle (ß/ss, ie/i, Doppelkonsonanten, Dehnungs-h, v/f,
+  Fremdwort-Schreibung). Zufällige Vertauschungen hätten oft unsinnige,
+  offensichtlich falsche Wörter ergeben statt lehrreicher Fehler.
 
 ## Befehle
 
