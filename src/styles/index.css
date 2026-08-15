@@ -462,6 +462,42 @@
   animation: konfetti-flug 0.8s ease-out forwards;
 }
 
+/* Das Kombo-Herz (Block Burst, Line Fall — siehe core/Komboherz.tsx).
+
+   Ein echter Doppelschlag: laut, leise, dann eine lange Pause. Ein
+   gleichmäßiges Auf und Ab liest sich als zappelndes Symbol, erst der
+   Doppelschlag als Herzschlag. Knapp ein Schlag je Sekunde, also weit
+   unter der Grenze, ab der Blinken unangenehm wird — und es ist eine
+   kleine Fläche, kein ganzflächiger Wechsel.
+
+   Endet bei 100 % in Ruhelage, wie alle Keyframes hier. */
+@keyframes herz-pocht {
+  0% {
+    scale: 1;
+  }
+  10% {
+    scale: 1.2;
+  }
+  22% {
+    scale: 1;
+  }
+  32% {
+    scale: 1.11;
+  }
+  44% {
+    scale: 1;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+.herz-pocht {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: herz-pocht 1.1s ease-in-out infinite;
+}
+
 /* Pair Up: Karten schlagen um, statt einfach ihr Bild zu wechseln.
 
    Aufbau ist der übliche Dreh-Kniff: Ein Behälter mit `perspective`, darin

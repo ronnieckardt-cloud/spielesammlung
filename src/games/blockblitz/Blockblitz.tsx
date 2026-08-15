@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
+import { Komboherz } from '../../core/Komboherz';
 import type { GameProps } from '../../core/types';
 import {
   BREITE,
@@ -361,16 +362,18 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
         >
           {z.punkte}
         </output>
-        <span
-          className={`rounded-full bg-flaeche-hoch px-3 py-1 text-sm font-bold text-fokus transition-opacity ${
-            z.kombo >= 2 ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          🔥 Kombo ×{z.kombo}
-        </span>
       </div>
 
       <div className="spielbuehne relative">
+        {/* Statt eines Textbandes ein pochendes Herz, das mit der Serie
+            wächst — man merkt am Rand des Blickfelds, dass etwas läuft,
+            ohne die Zahl lesen zu müssen. Liegt über der oberen rechten
+            Ecke des Feldes und kostet deshalb keine Höhe. */}
+        <Komboherz
+          kombo={z.kombo}
+          ruhig={settings.reducedMotion}
+          className="absolute -top-2 right-0 z-10"
+        />
         <div
           ref={rasterRef}
           className="spielbrett grid touch-none gap-1"

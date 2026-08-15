@@ -94,6 +94,15 @@ Ein neues Spiel wird an genau einer Stelle bekannt gemacht:
 | `rng(saat)` / `schritt(saat)` / `saatAus(...)` | Zufall aus einer Startzahl. `rng` für laufende Nutzung, `schritt` für reine Logik, die ihre Saat selbst mitführt. **Nie `Math.random`** — sonst ergibt dieselbe Levelnummer nicht dasselbe Rätsel. |
 | `sfx(name)` | Kurze Töne über die Web Audio API, keine Dateien. Ob Ton erlaubt ist, meldet die Hülle über `sfxEinstellen`. |
 | `<Steuerkreuz onRichtung aktiv>` | Vier Tasten zum Antippen (oben/unten/links/rechts), mit Wiederholung bei Halten — Ergänzung zum Wischen, nicht Ersatz. Auf Handys ist eine Taste oft zuverlässiger als eine Wischgeste. |
+| `<Komboherz kombo ruhig>` | Serien-Anzeige: ein pochendes Herz mit der Zahl darin, das **mit der Serie wächst**. Benutzt von Block Burst (`kombo`) und Line Fall (`vierfachStreak`). |
+
+Zum Kombo-Herz: Der Schlag ist ein echter Doppelschlag (laut, leise,
+Pause), kein gleichmäßiges Auf und Ab — erst dadurch liest es sich als
+Herzschlag statt als zappelndes Symbol. Knapp ein Schlag je Sekunde, also
+weit unter der 1,7-Hz-Grenze. Beide Spiele hängen es als Aufsatz über die
+obere rechte Ecke des Feldes und **nicht** in die Kopfzeile: Dort ist der
+Platz nach oben knapp, und 86 Pixel feste Höhe hätten auf einem kleinen
+Handy genau das Scrollen zurückgebracht, das mühsam abgestellt wurde.
 
 Änderungen an diesen Bausteinen betreffen alle Spiele — **vorher fragen.**
 
@@ -351,9 +360,30 @@ Reihenfolge nach Aufwand und Abwechslung:
 16. Flow Connect — gleichfarbige Punkte verbinden, ohne sich zu kreuzen.
 17. Mini Golf — Winkel und Stärke, Bande, Loch.
 
+Dazu ausgewählt aus einer zweiten Ideenliste — nach der Frage „was brauchen
+wir am meisten und kostet nicht zu viel Aufwand". Die vier schließen je eine
+Lücke, die keines der bisherigen Spiele abdeckt:
+
+18. Drop Four — vier in einer Reihe **gegen den Computer**. Bis hierher
+    spielt man in allen Spielen allein gegen sich selbst; das ist die
+    größte Lücke in der Sammlung. Nicht „Vier gewinnt": Das ist in
+    Deutschland ein geschützter Handelsname, dieselbe Überlegung wie bei
+    Pair Up.
+19. Box Push — Kisten auf Zielfelder schieben (Sokoban-Prinzip). Das erste
+    Spiel, in dem man einen Zug wirklich *verbauen* kann.
+20. Schatzsuche — Minensuchen mit Kristallen statt Bomben. Reines
+    Schlussfolgern aus Zahlen.
+21. Wortsuche — versteckte Wörter im Buchstabengitter. Kleiner Aufwand,
+    ergänzt Word Play um etwas Ruhiges.
+
+Bewusst zurückgestellt, obwohl gut bewertet: **Pixel Paint** (Nonogramme) —
+sehr schönes Rätsel, aber es braucht einen Löser, der für jedes erzeugte
+Bild beweist, dass es genau *eine* Lösung hat. Das ist die aufwendigste
+Einzelsache auf der ganzen Liste.
+
 Erst danach:
 
-18. Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer ist
+22. Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer ist
     der/die Beste. Braucht Supabase (bringt fertige Anmeldung mit) — war von
     Anfang an als "später" vorgesehen. Das ist ein Eingriff in die Hülle
     (`shell/`), nicht in ein einzelnes Spiel: erst angehen, wenn die Spiele
@@ -381,6 +411,17 @@ versucht deshalb genau dasselbe Level erneut.
 - Anzeige merged aufeinanderfolgende gleichfarbige Schichten zu einem
   einzigen Block (`Roehrchen.tsx`) — sonst sieht jede Schichtgrenze wie ein
   Neuanfang aus, auch bei zwei gleichen Farben übereinander.
+- **Farben in Hell und Dunkel geteilt** (`farben.ts`). Vorher lagen alle
+  acht auf derselben Helligkeitsstufe — nebeneinander im Röhrchen sah das
+  flau aus, weil sich nur der Farbton unterschied. Rückmeldung: „mehr
+  Kontraste, so hellgelb und dunkellila, nicht nur so normale Farben."
+  `farbpaletteFuerLevel` zieht jetzt **abwechselnd** aus beiden Töpfen,
+  jedes Level hat also von sich aus beide Stufen; würde einfach aus allen
+  acht gezogen, käme irgendwann ein Level mit vier dunklen Farben heraus.
+  Wichtig dabei: `dunkel` ist nur das untere Ende des Verlaufs **innerhalb**
+  einer Schicht, keine zweite Farbe. Bei den hellen Tönen bleibt es deshalb
+  hell — mit einem kräftigen Absacker wurde aus Hellgelb unten ein Oliv,
+  und der ganze Sinn der Aufteilung war dahin.
 - Bewusst kein Muster mehr auf den Farbschichten (war testweise drin,
   Rückmeldung: sieht unruhig aus). Nicht-visuelle Unterscheidung läuft über
   die Farbnamen im `aria-label` jedes Röhrchens.

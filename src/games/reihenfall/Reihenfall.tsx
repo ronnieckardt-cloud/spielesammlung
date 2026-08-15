@@ -4,6 +4,7 @@ import { useGameLoop } from '../../core/useGameLoop';
 import { useInput } from '../../core/useInput';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
+import { Komboherz } from '../../core/Komboherz';
 import type { GameProps } from '../../core/types';
 import {
   BREITE,
@@ -344,7 +345,16 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
         </div>
       </div>
 
-      <div className="spielbuehne">
+      <div className="spielbuehne relative">
+        {/* Dasselbe Kombo-Herz wie in Block Burst. Hier zählt es die Serie
+            von Vierfach-Löschungen — die ist selten, und genau deshalb darf
+            sie auffallen. */}
+        <Komboherz
+          kombo={z.vierfachStreak}
+          ruhig={settings.reducedMotion}
+          beschriftung="Vierfach"
+          className="absolute -top-2 right-0 z-10"
+        />
         <div
           ref={feldRef}
           className="spielbrett relative touch-none rounded-lg border border-rand bg-rand"
