@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { useInput } from '../../core/useInput';
@@ -116,6 +116,65 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
 
   const laeuft = useLaeuft(z.spieler.position.x, z.spieler.position.y);
 
+  /**
+   * Das Labyrinth wird nur neu gezeichnet, wenn sich wirklich etwas darin
+   * ändert — also wenn ein Punkt oder eine Kraftpille gefressen wurde.
+   *
+   * Ohne das war dies die mit Abstand teuerste Stelle im ganzen Projekt:
+   * 21 × 22 = 462 Zellen, und weil die Spielschleife sechzigmal je Sekunde
+   * einen frischen Zustand liefert, wurden sie alle sechzigmal je Sekunde
+   * neu abgeglichen — rund 28 000 React-Elemente in der Sekunde für ein
+   * Raster, das sich fast nie ändert. Auf einem iPad hieß das Ruckler und
+   * warmer Akku.
+   *
+   * `z.labyrinth` ist über die ganze Runde dasselbe Objekt, `z.punkte` und
+   * `z.kraftpillen` wechseln ihre Identität nur beim Fressen — die drei
+   * Abhängigkeiten reichen also aus.
+   */
+  const raster = useMemo(
+    () => (
+      <div
+        className="absolute inset-0 grid"
+        style={{
+          gridTemplateColumns: `repeat(${breite}, 1fr)`,
+          gridTemplateRows: `repeat(${hoehe}, 1fr)`,
+        }}
+      >
+        {Array.from({ length: breite * hoehe }, (_, i) => {
+          const x = i % breite;
+          const y = Math.floor(i / breite);
+          const wand = istWand(z.labyrinth, x, y);
+          const schl = schluessel(x, y);
+          const hatPunkt = z.punkte.has(schl);
+          const hatPille = z.kraftpillen.has(schl);
+          return (
+            <div key={i} className="relative">
+              {wand && (
+                <div
+                  className="absolute inset-[1px] rounded-[3px]"
+                  style={{ backgroundColor: WAND_FARBE }}
+                />
+              )}
+              {hatPunkt && (
+                <div className="absolute inset-0 grid place-items-center">
+                  <div className="size-[5px] rounded-full" style={{ backgroundColor: PUNKT_FARBE }} />
+                </div>
+              )}
+              {hatPille && (
+                <div className="pulsiert absolute inset-0 grid place-items-center">
+                  <svg viewBox="0 0 24 24" className="size-3.5" fill={PILLE_FARBE} aria-hidden="true">
+                    <path d="M12 2l2.5 6.9H21l-5.6 4.4 2.1 7.1L12 16.2 6.5 20.4l2.1-7.1L3 8.9h6.5z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    ),
+    [z.labyrinth, z.punkte, z.kraftpillen, breite, hoehe],
+  );
+
   // Alles in Prozent statt in Pixeln: Eine Verschiebung um 100 % ist bei
   // einer kachelgroßen Figur genau eine Kachel — dadurch stimmt die
   // Anordnung bei jeder Feldgröße, ohne dass irgendwo gemessen werden muss.
@@ -145,41 +204,7 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
         role="img"
         aria-label={`Labyrinth, Level ${z.level}, ${z.leben} Leben, ${z.score} Punkte.${z.gewonnen ? ' Alle Geister gefressen, gewonnen!' : z.vorbei ? ' Spiel vorbei.' : ''}`}
       >
-        <div
-          className="absolute inset-0 grid"
-          style={{
-            gridTemplateColumns: `repeat(${breite}, 1fr)`,
-            gridTemplateRows: `repeat(${hoehe}, 1fr)`,
-          }}
-        >
-          {Array.from({ length: breite * hoehe }, (_, i) => {
-            const x = i % breite;
-            const y = Math.floor(i / breite);
-            const wand = istWand(z.labyrinth, x, y);
-            const schl = schluessel(x, y);
-            const hatPunkt = z.punkte.has(schl);
-            const hatPille = z.kraftpillen.has(schl);
-            return (
-              <div key={i} className="relative">
-                {wand && (
-                  <div className="absolute inset-[1px] rounded-[3px]" style={{ backgroundColor: WAND_FARBE }} />
-                )}
-                {hatPunkt && (
-                  <div className="absolute inset-0 grid place-items-center">
-                    <div className="size-[5px] rounded-full" style={{ backgroundColor: PUNKT_FARBE }} />
-                  </div>
-                )}
-                {hatPille && (
-                  <div className="pulsiert absolute inset-0 grid place-items-center">
-                    <svg viewBox="0 0 24 24" className="size-3.5" fill={PILLE_FARBE} aria-hidden="true">
-                      <path d="M12 2l2.5 6.9H21l-5.6 4.4 2.1 7.1L12 16.2 6.5 20.4l2.1-7.1L3 8.9h6.5z" />
-                    </svg>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {raster}
 
         <div
           className="absolute ease-linear"

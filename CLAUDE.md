@@ -91,6 +91,7 @@ Ein neues Spiel wird an genau einer Stelle bekannt gemacht:
 |---|---|
 | `useGameLoop(update, { fps, running })` | Fester Zeitschritt über `requestAnimationFrame`. Pausiert selbsttätig bei `visibilitychange` und holt lange Pausen **nicht** auf. Der Rechenkern `takt()` ist rein und getestet. |
 | `useInput(beiAktion, optionen)` | Tastatur, Wischen und Antippen vereinheitlicht zu `up/down/left/right/rotate/drop/select`, mit eigener Tastenwiederholung (Verzögerung, dann schnelle Folge). |
+| `sfx(name, halbtoene?)` | Kurze Töne. Das zweite Argument hebt den Ton an — für Serien. |
 | `rng(saat)` / `schritt(saat)` / `saatAus(...)` | Zufall aus einer Startzahl. `rng` für laufende Nutzung, `schritt` für reine Logik, die ihre Saat selbst mitführt. **Nie `Math.random`** — sonst ergibt dieselbe Levelnummer nicht dasselbe Rätsel. |
 | `sfx(name)` | Kurze Töne über die Web Audio API, keine Dateien. Ob Ton erlaubt ist, meldet die Hülle über `sfxEinstellen`. |
 | `<Steuerkreuz onRichtung aktiv>` | Vier Tasten zum Antippen (oben/unten/links/rechts), mit Wiederholung bei Halten — Ergänzung zum Wischen, nicht Ersatz. Auf Handys ist eine Taste oft zuverlässiger als eine Wischgeste. |
@@ -984,6 +985,111 @@ dieselbe Überlegung wie bei Pair Up.
   dieser Stein?" beantwortet, reicht Farbe allein nicht.
 - Die ganze **Spalte** ist anklickbar, nicht nur die freie Zelle — ein Kind
   tippt irgendwo in die Spalte, nicht auf ein bestimmtes Loch.
+
+
+## Was aus dem großen Audit umgesetzt wurde
+
+Drei Agenten haben Konsistenz, Startseite und Technik durchgesehen. Die
+wichtigsten Umsetzungen und **warum sie so und nicht anders sind**:
+
+**Der Farb-Bruch** (`shell/spielfarbe.ts`). Die Spielfelder wirkten grau,
+während Startseite und Startbildschirme bunt sind. Die Ursache war nicht der
+Grundton — der liegt schon leicht im Blau —, sondern die fehlende
+*Zuordnung*. Gelöst mit zwei Griffen an zwei Dateien: Die Kopfzeile bekommt
+einen Verlauf in der Spielfarbe (genau an dieser Kante passierte der Bruch),
+und die vier Farbtokens werden lokal mit 8 % der Spielfarbe gemischt. Das
+wirkt in jedem Element, **ohne dass ein einziges Spiel angefasst wird**.
+
+Dabei zwei Fallen: Die Beimischung muss gegen `--basis-*` rechnen, nicht
+gegen `--color-*` — sonst bezieht sie sich auf ihr eigenes Ergebnis und
+schaukelt sich bei jedem verschachtelten Element weiter auf. Und drei Spiele
+brauchen eine Ersatzfarbe (`ERSATZFARBE`), weil ihr `accent` schon belegt
+ist: Quiz Time (das Richtig-Grün), Star Dash (die Fokusfarbe), Ghost Chase
+(weder Blau noch Rot sind frei).
+
+**Leitplanke:** Farbe gehört hinter, neben und über das Brett, **nie auf die
+Brettfläche**. Bei Block Burst unterscheiden sich vier Zustände einer Zelle
+fast nur über die Helligkeit; die leere Zelle muss der dunkelste Punkt im
+Bild bleiben.
+
+**Bubble Pop zielte auf dem Handy nicht.** Der Schuss hing an
+`pointerdown` — die Kugel war also unterwegs, bevor je ein `pointermove`
+ankam, und die gerechnete Flugbahn mit den Abprallern war auf dem Hauptgerät
+**nie zu sehen**. Mit Maus fiel es nicht auf, weil der Zeiger schon vor dem
+Klick über dem Feld liegt. Jetzt: beim Berühren zielen, beim Loslassen
+schießen.
+
+**Wischen löst jetzt während der Bewegung aus**, nicht erst beim Loslassen
+(`core/useInput.ts`). Ein Kind wischt 150 bis 400 ms — genau so lange
+passierte vorher nichts. `ausgeloest` sperrt den Zeiger danach bis zum
+Loslassen, damit ein langer Wisch **einen** Zug macht und nicht bei jeder
+weiteren Fingerbewegung noch einen. Dazu erkennt ein kurzer, schneller
+Schnipser (halbe Strecke in unter 90 ms) ebenfalls als Wischen, und die
+Tipp-Grenze ist von 350 auf 700 ms hoch — in Line Fall ist Tippen das
+Drehen, und ein länger liegender Finger fiel vorher stillschweigend durch.
+
+**Das Steuerkreuz nimmt die ganze Fläche.** Vorher war es ein 3×3-Raster mit
+fünf leeren Feldern: Wer die Ecke zwischen „oben" und „rechts" traf, löste
+nichts aus — über die halbe Fläche. Jetzt entscheidet der Winkel zur Mitte,
+mit einem kleinen Totbereich in der Mitte (sonst löst ein aufgelegter Daumen
+eine zufällige Richtung aus).
+
+**Ghost Chase war die teuerste Stelle im Projekt.** 462 Zellen, sechzigmal je
+Sekunde neu abgeglichen, für ein Raster, das sich fast nie ändert — rund
+28 000 React-Elemente je Sekunde. Ein `useMemo` auf `[labyrinth, punkte,
+kraftpillen]` senkt das um über 95 %.
+
+**Tonhöhe steigt mit der Serie.** `sfx` nimmt ein optionales zweites
+Argument in Halbtönen, gedeckelt bei einer Oktave. Rückwärtskompatibel, alle
+bisherigen Aufrufe klingen unverändert. Benutzt von Block Burst (Kombo),
+Line Fall (Vierfach-Serie) und Pair Up (gefundene Paare).
+
+Nebenbei: `sfx` prüft jetzt auf `state !== 'running'` statt nur auf
+`suspended` — iOS versetzt die Tonausgabe beim App-Wechsel in `interrupted`,
+und danach blieb die App stumm.
+
+**Der Punktestand in der Kopfzeile zählt hoch**, statt zu springen
+(`useHochzaehlen` in `Spielrahmen.tsx`). Eine Datei, wirkt in allen Spielen.
+Nur nach oben — eine rückwärts zählende Zahl sähe aus wie ein Fehler.
+Vorgelesen wird der echte Wert, nicht die Zwischenzahlen.
+
+**Textauswahl und iOS-Lupe** sind global unterdrückt (`user-select`,
+`-webkit-touch-callout`). Wer beim schnellen Tippen zu lange liegen bleibt,
+bekam sonst die Lupe über dem Spielfeld.
+
+## Die Startseite
+
+Der Titel heißt „Florians Spielesammlung" und ist **zweizeilig**. Nicht aus
+Geschmack: Einzeilig passt er auf einem 375 Pixel breiten iPhone nur bis
+29,5 Pixel Schriftgröße — kleiner als die 30 Pixel vorher. Der längere Name
+hätte den Titel also schrumpfen lassen.
+
+Die räumliche Wirkung kommt aus **zwei Ebenen** (`.wortmarke-wort` in
+`index.css`): Das Grundelement macht Seitenflächen aus gestapelten Schatten
+plus eine dunkle Kontur, `::after` legt die Verlaufsfläche darüber. Beides
+auf einem Element geht nicht — `text-shadow` wird hinter der Füllung
+gezeichnet, und bei durchsichtiger Füllung (die braucht der eingeclippte
+Verlauf) scheint die Extrusion durch den Buchstaben. Keine externe
+Schriftdatei, die App läuft offline.
+
+Alles ist **mittig**, auch die letzte Kachelreihe — linksbündig hing sie
+sichtbar schief im Regal. Die Kachelgröße wächst mit dem Bildschirm
+(`--kachel`), gedeckelt bei 80 Pixel; darüber wirken sie nicht mehr wie
+App-Symbole. Die Untergrenze ist so gewählt, dass auf einem 375er-iPhone
+**vier** Kacheln je Reihe passen: Bei drei bräuchten vierzehn Spiele fünf
+Reihen, und die Seite fing an zu scrollen.
+
+Einstellungen ist ein Zahnrad ohne Rahmen (44 × 44 bleibt), die Bestenliste
+ein Band unter dem Regal, der Tastatur-Hinweis nur noch auf breiten Geräten.
+Damit endet der Inhalt bei 705 von 812 Pixeln — **107 Pixel Reserve** statt
+vorher 39, genug für die Aussparung auf einem iPhone mit Notch.
+
+Beim Öffnen fliegen Kopf, Weiterspielen-Karte und Kacheln gestaffelt ein.
+Zwei Fallen dabei: `.ruhig` kürzt nur die Dauer, **nicht die Verzögerung** —
+die muss eigens auf 0, sonst steht eine Kachel erst unsichtbar herum und
+springt dann auf. Und der Auftritt gehört an die Kachel-Umhüllung, nicht an
+den Knopf: Tailwind setzt `active:scale-95` über die eigenständige
+`scale`-Eigenschaft, eine Animation darauf würde sie überschreiben.
 
 ## Befehle
 

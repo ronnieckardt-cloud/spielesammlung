@@ -46,7 +46,13 @@ type Optionen = {
 };
 
 const WISCH_SCHWELLE = 24; // Pixel, ab denen es ein Wischen ist
-const TIPP_ZEIT = 350; // Millisekunden, bis zu denen es ein Tippen ist
+/** Kurz und schnell zählt auch als Wischen, obwohl die Strecke nicht reicht —
+ *  auf einem kleinen Feld ist genau das die häufigste Geste. */
+const SCHNIPSER_ZEIT = 90; // Millisekunden
+/** Millisekunden, bis zu denen es ein Tippen ist. Großzügig: In Line Fall
+ *  ist Tippen das Drehen, und ein Kind lässt den Finger gern etwas länger
+ *  liegen. Bei 350 ms fiel das stillschweigend durch. */
+const TIPP_ZEIT = 700;
 const WURF_STRECKE = 90; // langes Wischen nach unten = 'drop'
 
 export function useInput(beiAktion: (aktion: Aktion) => void, optionen: Optionen = {}): void {
@@ -122,35 +128,18 @@ export function useInput(beiAktion: (aktion: Aktion) => void, optionen: Optionen
 
     // --- Finger ---
     const flaeche: EventTarget = bereich?.current ?? window;
-    let zeiger: { id: number; x: number; y: number; zeit: number } | null = null;
+    /** `ausgeloest` sperrt den Zeiger, nachdem die Geste erkannt wurde. */
+    let zeiger: { id: number; x: number; y: number; zeit: number; ausgeloest: boolean } | null = null;
 
     const beiZeigerAb = (e: Event) => {
       const p = e as PointerEvent;
       if (p.pointerType === 'mouse') return; // Maus steuert über Tasten und Knöpfe
       if (schreibfeld(p.target) || knopf(p.target)) return;
-      zeiger = { id: p.pointerId, x: p.clientX, y: p.clientY, zeit: p.timeStamp };
+      zeiger = { id: p.pointerId, x: p.clientX, y: p.clientY, zeit: p.timeStamp, ausgeloest: false };
     };
 
-    const beiZeigerBewegt = (e: Event) => {
-      const p = e as PointerEvent;
-      // Verhindert, dass die Seite unter dem Finger wegscrollt.
-      if (zeiger && p.pointerId === zeiger.id && p.cancelable) p.preventDefault();
-    };
-
-    const beiZeigerAuf = (e: Event) => {
-      const p = e as PointerEvent;
-      if (!zeiger || p.pointerId !== zeiger.id) return;
-      const dx = p.clientX - zeiger.x;
-      const dy = p.clientY - zeiger.y;
-      const dauer = p.timeStamp - zeiger.zeit;
-      zeiger = null;
-
-      const weit = Math.max(Math.abs(dx), Math.abs(dy));
-      if (weit < WISCH_SCHWELLE) {
-        if (dauer <= TIPP_ZEIT) aktionRef.current(optionenRef.current.tippen);
-        return;
-      }
-
+    /** Die Geste aus Strecke und Dauer in eine Aktion übersetzen. */
+    const gesteAuswerten = (dx: number, dy: number, dauer: number) => {
       if (Math.abs(dx) > Math.abs(dy)) {
         aktionRef.current(dx > 0 ? 'right' : 'left');
       } else if (dy < 0) {
@@ -160,6 +149,57 @@ export function useInput(beiAktion: (aktion: Aktion) => void, optionen: Optionen
         const schnell = dy / Math.max(dauer, 1) > 0.9;
         aktionRef.current(dy > WURF_STRECKE || schnell ? 'drop' : 'down');
       }
+    };
+
+    const beiZeigerBewegt = (e: Event) => {
+      const p = e as PointerEvent;
+      if (!zeiger || p.pointerId !== zeiger.id) return;
+      // Verhindert, dass die Seite unter dem Finger wegscrollt.
+      if (p.cancelable) p.preventDefault();
+      if (zeiger.ausgeloest) return;
+
+      const dx = p.clientX - zeiger.x;
+      const dy = p.clientY - zeiger.y;
+      const dauer = p.timeStamp - zeiger.zeit;
+
+      // **Hier**, nicht erst beim Loslassen. Ein Kind wischt 150 bis 400
+      // Millisekunden — vorher passierte genau so lange nichts, und das
+      // fühlte sich bei jeder Richtungsänderung träge an.
+      //
+      // Zwei Wege zur Erkennung: die übliche Strecke, oder ein kurzer,
+      // schneller Schnipser. Auf einem kleinen Feld ist der Schnipser die
+      // häufigste Geste, und mit reiner Streckenmessung fiel er durch.
+      const weit = Math.max(Math.abs(dx), Math.abs(dy));
+      const schnipser = weit >= WISCH_SCHWELLE / 2 && dauer > 0 && dauer < SCHNIPSER_ZEIT;
+      if (weit < WISCH_SCHWELLE && !schnipser) return;
+
+      // Gesperrt bis zum Loslassen: Ein langer Wisch soll **einen** Zug
+      // auslösen, nicht bei jeder weiteren Fingerbewegung noch einen.
+      zeiger.ausgeloest = true;
+      gesteAuswerten(dx, dy, dauer);
+    };
+
+    const beiZeigerAuf = (e: Event) => {
+      const p = e as PointerEvent;
+      if (!zeiger || p.pointerId !== zeiger.id) return;
+      const dx = p.clientX - zeiger.x;
+      const dy = p.clientY - zeiger.y;
+      const dauer = p.timeStamp - zeiger.zeit;
+      const schonAusgeloest = zeiger.ausgeloest;
+      zeiger = null;
+
+      // Beim Loslassen bleibt nur noch das Antippen zu behandeln — das
+      // Wischen ist oben schon durch.
+      if (schonAusgeloest) return;
+
+      const weit = Math.max(Math.abs(dx), Math.abs(dy));
+      if (weit < WISCH_SCHWELLE) {
+        if (dauer <= TIPP_ZEIT) aktionRef.current(optionenRef.current.tippen);
+        return;
+      }
+      // Fällt hierher nur, wenn zwischen Auflegen und Loslassen kein
+      // einziges `pointermove` kam (kommt auf manchen Geräten vor).
+      gesteAuswerten(dx, dy, dauer);
     };
 
     const beiZeigerWeg = () => {

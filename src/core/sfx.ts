@@ -34,18 +34,40 @@ function holeKontext(): AudioContext | null {
   if (!an) return null;
   try {
     if (!kontext) kontext = new AudioContext();
-    // Browser starten den Ton erst nach einer Nutzeraktion.
-    if (kontext.state === 'suspended') void kontext.resume();
+    // Browser starten den Ton erst nach einer Nutzeraktion. `interrupted`
+    // gehört mit dazu: In diesen Zustand versetzt iOS die Tonausgabe beim
+    // App-Wechsel oder Sperren des Bildschirms. Wurde der nicht abgefragt,
+    // blieb die App nach dem Zurückkommen einfach stumm.
+    if (kontext.state !== 'running') void kontext.resume();
     return kontext;
   } catch {
     return null;
   }
 }
 
-export function sfx(name: Ton): void {
+/** Ein Halbton nach oben ist dieser Faktor. */
+const HALBTON = Math.pow(2, 1 / 12);
+
+/**
+ * Einen Ton abspielen.
+ *
+ * `halbtoene` hebt den Ton um so viele Halbtöne an — gedacht für Serien:
+ * Bei jeder weiteren Kombo klettert der Ton eine Stufe höher. Das ist der
+ * Effekt, den man aus Handyspielen am stärksten wiedererkennt, und er
+ * kostet hier fast nichts.
+ *
+ * Gedeckelt bei zwölf Halbtönen, also einer Oktave. Darüber wird es
+ * schrill, und bei einer langen Serie liefe es sonst unbegrenzt nach oben.
+ *
+ * Der Zusatz ist rückwärtskompatibel: Alle bisherigen Aufrufe ohne zweites
+ * Argument klingen unverändert.
+ */
+export function sfx(name: Ton, halbtoene = 0): void {
   const rezept = rezepte[name];
   const ctx = holeKontext();
   if (!ctx || !rezept) return;
+
+  const hebung = HALBTON ** Math.max(0, Math.min(12, halbtoene));
 
   rezept.frequenzen.forEach((frequenz, i) => {
     const start = ctx.currentTime + i * rezept.dauer;
@@ -55,7 +77,7 @@ export function sfx(name: Ton): void {
     const huellkurve = ctx.createGain();
 
     oszillator.type = rezept.form;
-    oszillator.frequency.setValueAtTime(frequenz, start);
+    oszillator.frequency.setValueAtTime(frequenz * hebung, start);
 
     // Sanft ein- und ausblenden, sonst knackt es.
     huellkurve.gain.setValueAtTime(0.0001, start);

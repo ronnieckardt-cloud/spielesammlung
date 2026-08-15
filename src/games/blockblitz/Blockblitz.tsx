@@ -198,7 +198,10 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
           () => setBlitzZellen(null),
           settings.reducedMotion ? 0 : maxVersatz + ZERBROESELN_DAUER_MS,
         );
-        sfx('stufe');
+        // Die Tonhöhe klettert mit der Serie — bei jeder weiteren
+        // Kombo eine Stufe höher. Das ist der Effekt, den man aus
+        // Handyspielen am stärksten wiedererkennt.
+        sfx('stufe', aktuell.kombo * 2);
 
         // Kleine, gestaffelte "Kratz"-Klicks passend zum Zerbröseln — ein Klick
         // je Zeitstufe, nicht je Zelle, sonst wird es bei vielen Zellen zu viel.

@@ -3,6 +3,9 @@ import type { PointerEvent } from 'react';
 
 const VERZOEGERUNG = 170; // ms bis zur ersten Wiederholung — wie bei gehaltener Taste
 const TAKT = 45; // ms zwischen den weiteren Wiederholungen
+/** Radius um die Kreuzmitte, in dem nichts ausgelöst wird. Ohne ihn löst
+ *  schon ein versehentlich aufgelegter Daumen eine zufällige Richtung aus. */
+const TOTBEREICH_PX = 14;
 
 /**
  * Absichtlich nur diese vier. Reihenfall (das erste Spiel mit Drehen/hartem
@@ -40,13 +43,46 @@ export function Steuerkreuz({
   }, [aktiv, loslassen]);
   useEffect(() => loslassen, [loslassen]);
 
+  const halten = useCallback(
+    (richtung: Richtung) => {
+      loslassen();
+      onRichtung(richtung);
+      start.current = window.setTimeout(() => {
+        folge.current = window.setInterval(() => onRichtung(richtung), TAKT);
+      }, VERZOEGERUNG);
+    },
+    [loslassen, onRichtung],
+  );
+
   const druecken = (richtung: Richtung) => (e: PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    loslassen();
-    onRichtung(richtung);
-    start.current = window.setTimeout(() => {
-      folge.current = window.setInterval(() => onRichtung(richtung), TAKT);
-    }, VERZOEGERUNG);
+    halten(richtung);
+  };
+
+  /**
+   * Die ganze Kreuzfläche nimmt Berührungen an, nicht nur die vier Pfeile.
+   *
+   * Vorher war das Kreuz ein 3×3-Raster, in dem fünf von neun Feldern leer
+   * waren: Wer die Ecke zwischen „oben" und „rechts" traf, löste nichts
+   * aus — auf einem 144 Pixel großen Kreuz über die halbe Fläche. Jetzt
+   * entscheidet der **Winkel zur Mitte**, welche Richtung gemeint war.
+   *
+   * Die Mitte selbst bleibt tot (kleiner Totbereich), sonst löst schon ein
+   * versehentliches Auflegen des Daumens eine zufällige Richtung aus.
+   */
+  const aufFlaeche = (e: PointerEvent<HTMLDivElement>) => {
+    if (!aktiv) return;
+    // Ein Pfeil-Knopf behandelt sich selbst.
+    if (e.target instanceof Element && e.target.closest('button')) return;
+    e.preventDefault();
+
+    const kasten = e.currentTarget.getBoundingClientRect();
+    const dx = e.clientX - (kasten.left + kasten.width / 2);
+    const dy = e.clientY - (kasten.top + kasten.height / 2);
+    if (Math.hypot(dx, dy) < TOTBEREICH_PX) return;
+
+    if (Math.abs(dx) > Math.abs(dy)) halten(dx > 0 ? 'right' : 'left');
+    else halten(dy > 0 ? 'down' : 'up');
   };
 
   const taste = (richtung: Richtung, beschriftung: string, symbol: string) => (
@@ -74,10 +110,15 @@ export function Steuerkreuz({
 
   return (
     <div
-      className="grid grid-cols-3 grid-rows-3 gap-0.5"
+      className="grid touch-none grid-cols-3 grid-rows-3 gap-0.5 select-none"
       style={{ touchAction: 'none' }}
       role="group"
       aria-label="Steuerkreuz"
+      onPointerDown={aufFlaeche}
+      onPointerUp={loslassen}
+      onPointerLeave={loslassen}
+      onPointerCancel={loslassen}
+      onContextMenu={(e) => e.preventDefault()}
     >
       {platz}
       {taste('up', 'Nach oben', '↑')}

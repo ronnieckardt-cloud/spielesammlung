@@ -126,7 +126,8 @@ export function PaarUp({ onScore, onGameOver, settings, bestScore, istErsteRunde
     if (z.zuege === vorZuegenRef.current) return;
     vorZuegenRef.current = z.zuege;
     const paare = gefundenePaare(z);
-    if (paare > vorPaarenRef.current) sfx('gut');
+    // Je weiter die Runde, desto höher der Treffer-Ton.
+    if (paare > vorPaarenRef.current) sfx('gut', (paare - 1) * 2);
     else sfx('schlecht');
     vorPaarenRef.current = paare;
   }, [z]);

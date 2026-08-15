@@ -292,8 +292,9 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
   useEffect(() => {
     const differenz = z.zeilenGesamt - zeilenVorherRef.current;
     zeilenVorherRef.current = z.zeilenGesamt;
-    if (differenz >= 4) sfx('stufe');
-    else if (differenz > 0) sfx('gut');
+    // Höher bei einer Serie von Vierfach-Löschungen, siehe core/sfx.ts.
+    if (differenz >= 4) sfx('stufe', Math.max(0, z.vierfachStreak - 1) * 3);
+    else if (differenz > 0) sfx('gut', differenz - 1);
   }, [z.zeilenGesamt]);
 
   useEffect(() => {

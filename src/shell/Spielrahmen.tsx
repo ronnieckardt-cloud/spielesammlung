@@ -12,6 +12,51 @@ type Ende = { punkte: number; beste: number; rekord: boolean; gewonnen: boolean 
  * Das Spiel selbst bekommt davon nichts mit — es meldet nur Punkte und
  * Spielende über seine Props.
  */
+/** Wie lange die Zahl braucht, um auf den neuen Wert zu laufen. */
+const HOCHZAEHLEN_MS = 320;
+
+/**
+ * Lässt den Punktestand auf seinen neuen Wert **laufen**, statt zu springen.
+ *
+ * Sitzt bewusst in der Hülle und nicht in den Spielen: Eine Datei, und es
+ * wirkt sofort in allen vierzehn. Bei Quiz Time (0 bis 10) sieht man kaum
+ * etwas, bei Block Burst mit Sprüngen über 500 verändert es den Eindruck
+ * deutlich.
+ *
+ * Läuft nur nach oben. Ein Rücksprung (neue Runde, Punktestand zurück auf 0)
+ * wird sofort übernommen — eine rückwärts zählende Zahl sähe aus wie ein
+ * Fehler.
+ */
+function useHochzaehlen(ziel: number, ruhig: boolean): number {
+  const [gezeigt, setGezeigt] = useState(ziel);
+  const vonRef = useRef(ziel);
+
+  useEffect(() => {
+    if (ruhig || ziel <= vonRef.current) {
+      vonRef.current = ziel;
+      setGezeigt(ziel);
+      return;
+    }
+    const von = vonRef.current;
+    const start = performance.now();
+    let bild = 0;
+
+    const schritt = (jetzt: number) => {
+      const anteil = Math.min(1, (jetzt - start) / HOCHZAEHLEN_MS);
+      // Am Anfang schnell, zum Ende hin langsam — das liest sich als
+      // „läuft aus", nicht als gleichmäßiger Zähler.
+      const weich = 1 - (1 - anteil) ** 3;
+      setGezeigt(Math.round(von + (ziel - von) * weich));
+      if (anteil < 1) bild = requestAnimationFrame(schritt);
+      else vonRef.current = ziel;
+    };
+    bild = requestAnimationFrame(schritt);
+    return () => cancelAnimationFrame(bild);
+  }, [ziel, ruhig]);
+
+  return gezeigt;
+}
+
 export function Spielrahmen({
   spiel,
   einstellungen,
@@ -73,6 +118,7 @@ export function Spielrahmen({
   const beste = bestwert(spiel.id);
 
   const farbe = toenung(spiel.id, spiel.accent);
+  const gezeigtePunkte = useHochzaehlen(punkte, einstellungen.reducedMotion);
 
   return (
     <div
@@ -111,7 +157,10 @@ export function Spielrahmen({
         <p className="text-right text-sm text-gedaempft">
           Punkte{' '}
           <output aria-live="polite" className="text-base font-bold text-text tabular-nums">
-            {punkte}
+            {/* Vorgelesen wird der echte Wert, angezeigt der hochzählende —
+                sonst läse ein Screenreader jede Zwischenzahl mit. */}
+            <span aria-hidden="true">{gezeigtePunkte}</span>
+            <span className="sr-only">{punkte}</span>
           </output>
         </p>
       </header>
