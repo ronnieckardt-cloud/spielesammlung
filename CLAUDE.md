@@ -1291,10 +1291,36 @@ Weitere Entscheidungen:
 - `aufraeumen()` gibt beim Verlassen **alles** frei. Ohne das bliebe bei
   jedem „Nochmal" ein kompletter Satz Geometrien im Grafikspeicher liegen —
   auf einem iPad nach ein paar Runden das Ende.
-- Die Kamera stand zuerst zu dicht hinter der Figur; sie nahm das untere
-  Drittel ein und man sah kaum Straße voraus. Bei einem Läufer ist Sichtweite
-  nach vorn gleichbedeutend mit **Reaktionszeit** — das ist kein Geschmack,
-  sondern Spielbarkeit.
+- **`renderer.dispose()` gibt den WebGL-Kontext nicht frei — das war ein
+  echter Fehler mit Meldung beim Nutzer.** Ronni: „Dash City lässt sich nicht
+  mehr laden, da steht was von einem sehr alten Browser, alle anderen Spiele
+  laufen weiter." Die Auslieferung war in Ordnung (alle vier Dateien
+  antworteten mit 200), das Gerät auch. Ursache: `dispose()` räumt nur die
+  Puffer der Bibliothek ab; der Zeichenkontext der Leinwand bleibt am Leben,
+  bis der Browser ihn irgendwann selbst einsammelt — und Safari lässt sich
+  damit sehr viel Zeit. Jedes „Nochmal" mountet neu und legt einen neuen an,
+  Browser erlauben aber nur acht bis sechzehn gleichzeitig. Danach wirft
+  `new WebGLRenderer()`, und man landet in der Fehlermeldung „Der 3-D-Teil
+  lässt sich hier nicht starten" — obwohl alles heil ist. `forceContextLoss()`
+  vor `dispose()` gibt ihn sofort zurück. *Merksatz:* Wer einen Renderer je
+  Runde anlegt, muss den Kontext je Runde erzwungen zurückgeben.
+- **Die Kamera ist die wichtigste Einzelentscheidung im ganzen Bild.** Sie
+  stand erst zu dicht (Figur im unteren Drittel, kaum Straße voraus), danach
+  zu hoch: 3,9 Meter Höhe mit Blick auf 1,2 — also fast zwanzig Grad nach
+  unten. Genau das war Ronnis „dreidimensional sieht es noch nicht richtig
+  aus": Eine Aufsicht flacht **jede** Perspektive ab, man sah der Figur auf
+  den Scheitel, und die Straße lag als riesige graue Fläche im Bild. Jetzt
+  2,5 Meter Höhe, 6,2 Meter Abstand, Blick auf 1,75 in 18 Meter Entfernung —
+  also beinahe waagerecht. Dadurch türmen sich die Häuser, die Fluchtlinien
+  werden steil, und man sieht der Figur auf den **Rücken**. Sichtweite nach
+  vorn bleibt trotzdem gleichbedeutend mit **Reaktionszeit** — das ist kein
+  Geschmack, sondern Spielbarkeit.
+- **Laternen und Bäume am Bordstein sind der zweitwichtigste Griff.** Ein
+  Läufer wirkt schnell und räumlich, wenn dicht an der Kamera etwas
+  vorbeizieht. Häuser sind dafür zu weit weg, Hindernisse zu selten. Beide
+  stehen **neben** der Fahrbahn und können deshalb nie mit einem Hindernis
+  verwechselt werden — ein Torbogen über der Straße wäre der naheliegende
+  Griff gewesen, aber der sähe aus wie der Balken, unter dem man durchmuss.
 - **Eigene Steuerung statt `useInput`** — und das war ein echter Fehler,
   nicht Geschmack. `useInput` ist für Rasterspiele gebaut: Ein schneller
   oder weiter Wisch nach unten wird dort zu `drop` statt zu `down`. Beim
@@ -1315,9 +1341,33 @@ Weitere Entscheidungen:
 - **Die Figur ist ein Körper, keine Sammlung von Teilen.** Die erste Fassung
   hängte die Arme an Drehpunkte außerhalb des Rumpfes, dazwischen klaffte
   Luft. Bei Grundkörpern ohne Skelett ist **Überlappung** das einzige
-  Mittel: Schultern, Schulterbalken, Hals, Becken, Gelenkkugeln an jedem
-  Ansatz und Hände. Wo zwei Kugeln sich schneiden, sieht das Auge eine
-  durchgehende Form.
+  Mittel: Schultern, Schulterbalken, Hals, Gelenkkugeln an jedem Ansatz und
+  Hände. Wo zwei Kugeln sich schneiden, sieht das Auge eine durchgehende
+  Form.
+- **„Es soll keine Windel anhaben."** Die Zwischenfassung hatte an der Hüfte
+  eine *quergelegte Kapsel* in Hosenfarbe — einen Körper, der genau dort
+  **breiter** war als der Rumpf und nach beiden Seiten ausbeulte. Dazu endete
+  der Rumpf selbst in einer Halbkugel. Zwei Wölbungen übereinander an der
+  Hüfte ergeben unweigerlich dieses Bild. Drei Griffe beheben es: Der Rumpf
+  ist ein **Zylinder** mit waagerechtem Saum, die Hüfte ist **schmaler** als
+  der Rumpf und verjüngt sich nach unten, und **jedes Bein hat sein eigenes
+  Hosenbein**, das mitschwingt — man sieht den Spalt zwischen den Beinen, und
+  ein Spalt ist das genaue Gegenteil einer Windel.
+- **Der Rucksack macht den Rücken lesbar.** Man sieht die Figur den ganzen
+  Lauf über von hinten; ein Rücken ohne alles ist die langweiligste Ansicht,
+  die es gibt. Erster Versuch: heller Kasten mit dunklem Quadrat — das las
+  sich als **Haushaltsgerät**. Ein rechteckiger weißer Block mit dunkler
+  Klappe *ist* nun mal eine Waschmaschine. Was ihn zum Rucksack macht: eine
+  gewölbte Oberseite, ein durchlaufender Gurt und ein **dunkler** Korpus, von
+  dem sich die hellen Teile absetzen — nicht umgekehrt.
+- **Ein Körper, der knapp innen liegt, stößt durch.** Das Haar war ein
+  plattgedrücktes Ei zwei Millimeter unter der Kopfoberfläche. Rechnerisch
+  innen — aber eine Kugel aus zwanzig Segmenten liegt an ihrer breitesten
+  Stelle rund **drei** Millimeter innerhalb der echten Kugelfläche. Also
+  stieß das Haar an zwei Stellen durch den Kopf, und die Figur hatte
+  aufgemalte Augenbrauen. Jetzt eine Kugelkappe **sechs Millimeter außen**,
+  gedreht in den Nacken: gleichmäßiger Abstand, das kann nicht passieren.
+  *Merksatz:* Bei facettierten Körpern nie knapp innen liegen — außen legen.
 - **Jedes Hindernis sagt über seine Form, was zu tun ist**, nicht über die
   Farbe: Hürde = flache Absperrung mit Beinen (drüber), Balken = Schild an
   zwei Pfosten, unten offen (drunter), Mauer = geschlossener Container mit
@@ -1340,11 +1390,34 @@ Weitere Entscheidungen:
   die erste Ladezeit. Und Texturen sind der größte Einzelsprung in der
   Bildqualität — eine einfarbige Hauswand sieht nach Klotz aus, dieselbe
   Wand mit Fenstern nach Stadt.
-- **Die Fahrbahnstreifen sind Teil der Straßentextur**, nicht mehr 52
-  einzelne Körper. Das Vorbeiziehen entsteht durch Verschieben der Textur —
-  eine einzige Zahl je Bild statt 52 Positionen. Das Minuszeichen dabei ist
+- **Die Fahrbahnstreifen sind Teil einer Textur**, nicht mehr 52 einzelne
+  Körper. Das Vorbeiziehen entsteht durch Verschieben der Textur — eine
+  einzige Zahl je Bild statt 52 Positionen. Das Minuszeichen dabei ist
   wichtig: Ein wachsender Versatz schöbe das Muster sonst von uns weg statt
   auf uns zu.
+- **Belag und Markierung sind aber zwei getrennte Ebenen**, und das ist
+  keine Kosmetik: Beide brauchen eine völlig andere Wiederholrate. Der Grus
+  muss alle vier Meter neu anfangen, ein Strich-Lücke-Takt alle acht. Solange
+  beides in *einem* Bild steckte, gaben die Striche die Kachelgröße vor — ein
+  Kachelbild war fünfundzwanzig Meter lang, und die Körnung darin so weit
+  auseinandergezogen, dass aus Grus Flecken wurden.
+- **`(i * 97) % 256` ist kein Zufall.** So wurde die Asphaltkörnung gestreut.
+  Beide Achsen wiederholen sich nach 256 Schritten — aus 2600 Durchläufen
+  kamen also nur 256 verschiedene Punkte heraus, und der Belag hatte in
+  Wahrheit ein regelmäßiges Gitter statt einer Körnung. Jetzt ein richtiger
+  Kongruenzgenerator mit fester Saat (`wuerfel` in `texturen.ts`) —
+  deterministisch wie gefordert, aber wirklich gestreut.
+- **Eine Münze ist eine Scheibe mit Prägung, kein Ring.** Als Torus sah eine
+  Reihe davon aus dieser Kameraperspektive aus wie eine Kette Donuts. Jetzt
+  ein flacher Zylinder, dessen Geometrie einmal gekippt wird, damit die
+  Stirnflächen zur Seite zeigen; die Drehung um die Hochachse lässt ihn
+  abwechselnd flach und hochkant erscheinen.
+- **Beim Balken lag der weiße Rahmen vor dem roten Schild.** Das Schild stand
+  auf `z = +0.04`, der Rahmen bei `z = 0` mit 0,1 Tiefe — dessen vordere
+  Fläche lag also einen Zentimeter näher an der Kamera. Von vorn sah man eine
+  weiße Platte. Ausgerechnet das Hindernis, das am stärksten über seine Farbe
+  auffällt, war dadurch farblos. Die Kamera blickt in **+z**, „vorn" ist also
+  **−z** — das gilt für jedes Teil, das vor einem anderen liegen soll.
 - `MeshPhongMaterial` statt `MeshLambertMaterial`, Kantenglättung an,
   filmische Tonwertkurve (`ACESFilmicToneMapping`). Bei einer Figur aus
   lauter Kugeln ist der leichte Glanz der Unterschied zwischen „Spielfigur
