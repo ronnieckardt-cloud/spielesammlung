@@ -2041,6 +2041,65 @@ Rundenende-Dialog zeigte kurz **0** Punkte. Das ist die hochzählende Zahl am
 Anfang ihres Laufs (`useHochzaehlen`) — ein Bildschirmfoto trifft sie leicht.
 Wer hier etwas ändert: erst das zweite Foto abwarten.
 
+## Tagesaufgaben
+
+Stufe 5 des Qualitäts-Umbaus — und die einzige, bei der die Frage war,
+*welche* Art von Spieltiefe überhaupt fehlt.
+
+**Schwierigkeitsstufen wären der falsche Griff gewesen.** Nachgesehen: Fast
+jedes Spiel hat längst eine. Quiz Time, Word Play, Brain Blitz, Color Pour,
+Pair Up, Blade Toss, Box Push, Even Cut und Flow Link steigern sich über die
+Levelnummer; Snake Rush, Block Burst, Line Fall, Ghost Chase, Ring Rise,
+Bubble Pop und Dash City werden im Lauf einer Runde schwerer; Drop Four und
+Tap Rush lassen sogar direkt wählen. Ein aufgesetzter Stufenschalter hätte
+in zwanzig Spielen die Bestenlisten zerteilt — ein Ergebnis auf „leicht" ist
+mit einem auf „schwer" nicht vergleichbar — und dafür kaum etwas
+hinzugefügt.
+
+Was wirklich fehlte, ist ein **Grund, heute zu spielen**, und zwar einer,
+der über alle Spiele hinweg gilt. `shell/herausforderungen.ts`, rein und
+getestet (19 Tests).
+
+**Drei Aufgaben je Tag, aus dem Datum gewürfelt.** Gleicher Tag → dieselben
+Aufgaben, überall, ohne dass irgendetwas abgestimmt werden müsste. Ein
+Server wäre dafür nicht nur unnötig, er würde das Offline-Versprechen
+brechen. Sechs Arten: Runden, Sterne, verschiedene Spiele, Siege,
+Bestleistungen, und „spiele eine Runde *X*" — die letzte schickt einen in
+Ecken der Sammlung, in die man von allein nie geht, und genau darum geht es
+bei zwanzig Spielen.
+
+**Eine Aufgabe ist immer dabei, die sich durch bloßes Spielen erledigt**
+(„Spiele N Runden"). Ohne diese Garantie könnte ein Tag drei Aufgaben
+bringen, von denen keine sicher zu schaffen ist — dann ist das Ganze Frust
+statt Anreiz. Dafür gibt es einen Test über sechzig Tage.
+
+**Kein Spiel weiß davon.** Alle sechs Arten lassen sich aus dem ableiten,
+was die Hülle am Rundenende ohnehin kennt: welches Spiel, wie viele Sterne,
+gewonnen oder nicht, Bestleistung oder nicht. Damit bleibt die Schnittstelle
+zum dritten Mal in Folge unangetastet.
+
+Zwei Feinheiten, die beim Bauen wichtig waren:
+
+- **Der Tageswechsel passiert beim Verbuchen, nicht beim Lesen.** Sonst
+  müsste jede anzeigende Stelle daran denken, und eine, die es vergisst,
+  zeigt gestrige Zähler unter heutigen Aufgaben. `standFuerHeute` ist die
+  Absicherung für die Anzeige.
+- **Die Erfahrung der Aufgaben kommt oben drauf, und die Stufe wird danach
+  neu gerechnet.** Eine geschaffte Aufgabe kann für sich schon eine Stufe
+  heben; würde `ausbeute.neueStufe` aus dem Rundenteil übernommen, bliebe
+  genau dieser Aufstieg unbemerkt.
+
+**Geschaffte Aufgaben verschwinden nicht, sie werden grün abgehakt.** Was
+verschwindet, wirkt, als hätte man es sich eingebildet — und die Liste wäre
+am Abend leer statt voller Häkchen.
+
+*Eine Farbfalle nebenbei:* Die Erfahrungsbeträge standen zuerst in
+`--color-xp`. Im Rundenende ist das richtig (dunkler Grund, sonst nichts
+Violettes im Bild) — auf der **Startseite** ist der Hintergrund selbst
+violett, und die Zahl verschwand darin fast. *Merksatz:* Eine Farbe, die an
+einer Stelle Bedeutung trägt, muss an einer anderen trotzdem lesbar bleiben;
+im Zweifel gewinnt die Lesbarkeit.
+
 ## Ausliefern
 
 Läuft auf **Netlify** unter `florian-spielesammlung.netlify.app`. Das ist

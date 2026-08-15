@@ -1,4 +1,5 @@
 import { sterne, type Sternzahl } from './sterne';
+import { LEERER_TAG, tagesstandBereinigen, type Tagesstand } from './herausforderungen';
 
 /**
  * Fortschritt: Erfahrung, Stufe, Statistik, Serien, Erfolge.
@@ -108,6 +109,15 @@ export type Fortschritt = {
   jeSpiel: Record<string, SpielStatistik>;
   /** Die ids der bereits freigeschalteten Erfolge. */
   erfolge: string[];
+  /**
+   * Der Stand der heutigen Tagesaufgaben.
+   *
+   * Liegt bewusst **im** Fortschritt und nicht in einem eigenen Schlüssel:
+   * Beides wird zusammen gespeichert, zusammen bereinigt und von
+   * „alle Punktestände löschen" zusammen weggeräumt. Zwei Schlüssel, die
+   * immer gemeinsam angefasst werden, sind eine Fehlerquelle ohne Gewinn.
+   */
+  tages: Tagesstand;
 };
 
 export const LEERER_FORTSCHRITT: Fortschritt = {
@@ -119,6 +129,7 @@ export const LEERER_FORTSCHRITT: Fortschritt = {
   letzterTag: '',
   jeSpiel: {},
   erfolge: [],
+  tages: LEERER_TAG,
 };
 
 /**
@@ -155,6 +166,7 @@ export function fortschrittBereinigen(roh: unknown): Fortschritt {
     letzterTag: typeof q.letzterTag === 'string' ? q.letzterTag : '',
     jeSpiel,
     erfolge: Array.isArray(q.erfolge) ? q.erfolge.filter((e) => typeof e === 'string') : [],
+    tages: tagesstandBereinigen(q.tages),
   };
 }
 
@@ -394,6 +406,9 @@ export function rundeVerbuchen(
       },
     },
     erfolge: vorher.erfolge,
+    // Die Tagesaufgaben führt `herausforderungen.ts`. Hier wird der Stand
+    // nur durchgereicht, damit dieses Modul nichts über sie wissen muss.
+    tages: vorher.tages,
   };
 
   /*

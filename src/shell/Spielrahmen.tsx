@@ -19,6 +19,11 @@ import {
   type Erfolg,
   type Stufenstand,
 } from './fortschritt';
+import {
+  rundeVerbuchen as tagesRundeVerbuchen,
+  tagesaufgaben,
+  type Aufgabe,
+} from './herausforderungen';
 import { duellMelden, ergebnisMelden } from './konto';
 import type { Duell } from './konto';
 import { fremdePunkte, standFuer, standText } from './duell';
@@ -48,6 +53,8 @@ type Ende = {
   neueStufe?: number;
   /** Erfolge, die **durch diese Runde** dazugekommen sind. */
   neueErfolge: Erfolg[];
+  /** Tagesaufgaben, die **durch diese Runde** fertig geworden sind. */
+  fertigeAufgaben: Aufgabe[];
 };
 
 /**
@@ -269,19 +276,59 @@ export function Spielrahmen({
        * was dafür nötig ist, liegt ohnehin schon vor: Punkte, Sieg-Merkmal
        * und die Bestleistung vor der Runde.
        */
+      const tag = heute();
       const ausbeute = rundeVerbuchen(
         fortschrittLesen(),
-        { spielId: spiel.id, punkte: wert, gewonnen, bestwertVorher: vorher, tag: heute() },
+        { spielId: spiel.id, punkte: wert, gewonnen, bestwertVorher: vorher, tag },
         spiele.length,
       );
-      fortschrittSchreiben(ausbeute.nachher);
+
+      /*
+       * Die Tagesaufgaben laufen **nach** dem Verbuchen: Sie brauchen die
+       * Sternzahl und ob es eine Bestleistung war, und beides rechnet die
+       * Zeile darüber schon aus. Ihre Erfahrung kommt oben drauf — sonst
+       * wäre eine geschaffte Aufgabe eine Meldung ohne Gegenwert.
+       */
+      const aufgaben = tagesaufgaben(tag, spiele);
+      const tagesausbeute = tagesRundeVerbuchen(
+        ausbeute.nachher.tages,
+        aufgaben,
+        {
+          spielId: spiel.id,
+          gewonnen,
+          sterne: ausbeute.sterne,
+          bestleistung: ausbeute.bestleistung,
+        },
+        tag,
+      );
+
+      const stand = {
+        ...ausbeute.nachher,
+        xp: ausbeute.nachher.xp + tagesausbeute.xp,
+        tages: tagesausbeute.stand,
+      };
+      fortschrittSchreiben(stand);
 
       // Ein Stups im Gerät. Doppelschlag, wenn es etwas zu feiern gab.
       // Auf iPhone und iPad passiert dabei nichts — Safari kennt die
       // Schnittstelle nicht, siehe `core/haptik.ts`.
       haptik(
-        ausbeute.neueStufe !== undefined || ausbeute.neueErfolge.length > 0 ? 'jubel' : 'ende',
+        ausbeute.neueStufe !== undefined ||
+          ausbeute.neueErfolge.length > 0 ||
+          tagesausbeute.fertig.length > 0
+          ? 'jubel'
+          : 'ende',
       );
+
+      /*
+       * Die Stufe wird aus dem **Gesamtstand** gerechnet, nicht aus
+       * `ausbeute.nachher` — die Aufgaben-Erfahrung kommt erst danach dazu
+       * und kann für sich schon eine Stufe heben. Aus demselben Grund wird
+       * der Stufenaufstieg hier noch einmal gegen den Stand *vor* der Runde
+       * geprüft statt `ausbeute.neueStufe` zu übernehmen.
+       */
+      const stufeVorher = stufeAus(ausbeute.nachher.xp - ausbeute.xpGewinn).stufe;
+      const standNachher = stufeAus(stand.xp);
 
       setPunkte(wert);
       setEnde({
@@ -290,10 +337,11 @@ export function Spielrahmen({
         vorher,
         rekord: wert > vorher,
         gewonnen,
-        xpGewinn: ausbeute.xpGewinn,
-        stand: stufeAus(ausbeute.nachher.xp),
-        ...(ausbeute.neueStufe ? { neueStufe: ausbeute.neueStufe } : {}),
+        xpGewinn: ausbeute.xpGewinn + tagesausbeute.xp,
+        stand: standNachher,
+        ...(standNachher.stufe > stufeVorher ? { neueStufe: standNachher.stufe } : {}),
         neueErfolge: ausbeute.neueErfolge,
+        fertigeAufgaben: tagesausbeute.fertig,
       });
 
       // Der Platz kommt **nachträglich** dazu. Der Dialog steht sofort, ohne
@@ -386,7 +434,12 @@ export function Spielrahmen({
    * Feier-Marke würde dabei mitkopiert und das Konfetti liefe ein zweites
    * Mal los, mitten im schon offenen Dialog.
    */
-  const gefeiert = !!ende && (ende.neueStufe !== undefined || ende.neueErfolge.length > 0 || ende.rekord);
+  const gefeiert =
+    !!ende &&
+    (ende.neueStufe !== undefined ||
+      ende.neueErfolge.length > 0 ||
+      ende.fertigeAufgaben.length > 0 ||
+      ende.rekord);
 
   /*
    * Der Jubelton bei drei Sternen.
@@ -563,6 +616,39 @@ export function Spielrahmen({
                   🎉 Stufe {ende.neueStufe} erreicht!
                 </p>
               )}
+
+              {/* Geschaffte Tagesaufgaben. Sie stehen **vor** den Erfolgen:
+                  Eine Tagesaufgabe ist der Grund, aus dem man heute noch
+                  eine Runde spielt — sie gehört an die Stelle, auf die man
+                  zuerst schaut. */}
+              {ende.fertigeAufgaben.map((aufgabe, i) => (
+                <p
+                  key={aufgabe.id}
+                  className="dialog-auf mt-2 flex items-center gap-2.5 rounded-xl px-3 py-2 text-left"
+                  style={{
+                    background:
+                      'color-mix(in oklab, var(--color-erfolg) 20%, rgb(255 255 255 / 0.08))',
+                    boxShadow: 'inset 0 0 0 1px color-mix(in oklab, var(--color-erfolg) 40%, transparent)',
+                    animationDelay: `${860 + i * 130}ms`,
+                  }}
+                >
+                  <span aria-hidden="true" className="text-2xl">
+                    {aufgabe.symbol}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-bold tracking-wide text-white/65 uppercase">
+                      Tagesaufgabe geschafft
+                    </span>
+                    <span className="block text-sm font-bold">{aufgabe.text}</span>
+                  </span>
+                  <span
+                    className="shrink-0 text-sm font-black"
+                    style={{ color: 'var(--color-xp)' }}
+                  >
+                    +{aufgabe.xp}
+                  </span>
+                </p>
+              ))}
 
               {/* Frisch freigeschaltete Erfolge. Nur die **neuen** — die
                   gesammelten stehen auf der Fortschrittsseite. Ein Dialog,

@@ -1,7 +1,15 @@
 import type { GameApi } from '../core/types';
 import { spiele } from '../core/registry';
 import { bestwert, fortschrittLesen, zuletztGespielt } from './speicher';
-import { ALLE_ERFOLGE, stufeAus } from './fortschritt';
+import { heute, stufeAus } from './fortschritt';
+import {
+  istGeschafft,
+  standFuer,
+  standFuerHeute,
+  tagesaufgaben,
+  type Aufgabe,
+  type Tagesstand,
+} from './herausforderungen';
 import { BunterGrund } from './BunterGrund';
 import { Spielkachel } from './Spielkachel';
 import { Stufenkarte } from './Stufenkarte';
@@ -94,12 +102,15 @@ export function StartSeite({
   const weiter = spiele.find((s) => s.id === zuletzt);
 
   /*
-   * Die nächsten drei noch verschlossenen Erfolge. Mehr wären eine Liste
-   * statt eines Ziels — und die Reihenfolge in `ALLE_ERFOLGE` steigt bereits
-   * von leicht nach schwer, die obersten drei sind also immer die
-   * erreichbarsten.
+   * Die drei Tagesaufgaben. Sie stehen hier statt der nächsten Erfolge:
+   * Ein Erfolg wie „100 Runden gespielt" ist wochenlang dieselbe Zeile und
+   * damit kein Ziel für *heute*. Die gesammelten Erfolge stehen auf der
+   * Fortschrittsseite, dort gehören sie hin.
    */
-  const ziele = ALLE_ERFOLGE.filter((e) => !fortschritt.erfolge.includes(e.id)).slice(0, 3);
+  const tag = heute();
+  const aufgaben = tagesaufgaben(tag, spiele);
+  const tagesstand = standFuerHeute(fortschritt.tages, tag);
+  const offen = aufgaben.filter((a) => !istGeschafft(tagesstand, a)).length;
 
   /*
    * Acht Kacheln auf der Startseite: zuerst das zuletzt Gespielte, dann der
@@ -152,35 +163,25 @@ export function StartSeite({
 
       {weiter && <Weiterkarte spiel={weiter} onSpielen={onSpielen} />}
 
-      {ziele.length > 0 && (
-        <section
-          className="rein-von-unten mt-4"
-          style={{ animationDelay: '180ms' }}
-          aria-labelledby="ziele-titel"
-        >
-          <h2 id="ziele-titel" className="mb-2 px-1 text-sm font-black text-white/85">
-            Deine nächsten Ziele
+      <section
+        className="rein-von-unten mt-4"
+        style={{ animationDelay: '180ms' }}
+        aria-labelledby="ziele-titel"
+      >
+        <div className="mb-2 flex items-baseline justify-between px-1">
+          <h2 id="ziele-titel" className="text-sm font-black text-white/85">
+            Heute zu holen
           </h2>
-          <ul className="flex flex-col gap-2">
-            {ziele.map((z) => (
-              <li
-                key={z.id}
-                className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-3.5 py-2.5 backdrop-blur-sm"
-              >
-                {/* Verschlossene Ziele stehen blass da, statt zu fehlen —
-                    sonst wüsste ein Kind nicht, dass es etwas zu holen gibt. */}
-                <span aria-hidden="true" className="text-2xl opacity-45 grayscale">
-                  {z.symbol}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-white">{z.titel}</span>
-                  <span className="block text-xs text-white/70">{z.beschreibung}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+          <span className="text-xs font-bold text-white/70">
+            {offen === 0 ? '✓ alle geschafft' : `noch ${offen} von ${aufgaben.length}`}
+          </span>
+        </div>
+        <ul className="flex flex-col gap-2">
+          {aufgaben.map((a) => (
+            <Aufgabenzeile key={a.id} aufgabe={a} stand={tagesstand} />
+          ))}
+        </ul>
+      </section>
 
       <section
         className="rein-von-unten mt-4"
@@ -212,6 +213,80 @@ export function StartSeite({
         </ul>
       </section>
     </BunterGrund>
+  );
+}
+
+/**
+ * Eine Tagesaufgabe mit ihrem Stand.
+ *
+ * **Der Balken ist der Punkt.** „Spiele 4 Runden" allein ist eine
+ * Anweisung; „Spiele 4 Runden — 3 von 4" ist ein Ziel, das man fast hat.
+ * Genau dieser Unterschied bringt die vierte Runde.
+ *
+ * Geschaffte Aufgaben verschwinden nicht, sie werden grün abgehakt. Was
+ * verschwindet, wirkt, als hätte man es sich eingebildet — und die Liste
+ * wäre am Abend leer statt voller Häkchen.
+ */
+function Aufgabenzeile({ aufgabe, stand }: { aufgabe: Aufgabe; stand: Tagesstand }) {
+  const jetzt = Math.min(aufgabe.ziel, standFuer(stand, aufgabe));
+  const fertig = jetzt >= aufgabe.ziel;
+
+  return (
+    <li
+      className="flex items-center gap-3 rounded-2xl border px-3.5 py-2.5 backdrop-blur-sm"
+      style={{
+        borderColor: fertig
+          ? 'color-mix(in oklab, var(--color-erfolg) 45%, transparent)'
+          : 'rgb(255 255 255 / 0.15)',
+        background: fertig
+          ? 'color-mix(in oklab, var(--color-erfolg) 14%, rgb(255 255 255 / 0.08))'
+          : 'rgb(255 255 255 / 0.1)',
+      }}
+    >
+      <span aria-hidden="true" className={fertig ? 'text-2xl' : 'text-2xl opacity-70'}>
+        {aufgabe.symbol}
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="min-w-0 truncate text-sm font-bold text-white">{aufgabe.text}</span>
+          <span className="shrink-0 text-xs font-bold text-white/70 tabular-nums">
+            {jetzt}/{aufgabe.ziel}
+          </span>
+        </span>
+        <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-black/30">
+          <span
+            className="block h-full rounded-full"
+            style={{
+              width: `${Math.round((jetzt / aufgabe.ziel) * 100)}%`,
+              background: fertig
+                ? 'var(--color-erfolg)'
+                : 'linear-gradient(90deg, var(--color-xp), var(--color-fokus))',
+              transition: 'width var(--zeit-lang) var(--kurve)',
+            }}
+          />
+        </span>
+      </span>
+
+      {/* **Nicht** `--color-xp` hier. Das Violett ist im Rundenende richtig
+          (dunkler Grund, sonst nichts Violettes im Bild) — auf der
+          Startseite ist der Hintergrund *selbst* violett, und die Zahl
+          verschwindet darin fast. Eine Farbe, die an einer Stelle Bedeutung
+          trägt, muss an einer anderen trotzdem lesbar bleiben; im Zweifel
+          gewinnt die Lesbarkeit. */}
+      <span className="shrink-0 text-sm font-black text-white/85">
+        {fertig ? (
+          <>
+            <span aria-hidden="true" style={{ color: 'var(--color-erfolg)' }}>
+              ✓
+            </span>
+            <span className="sr-only">geschafft</span>
+          </>
+        ) : (
+          `+${aufgabe.xp}`
+        )}
+      </span>
+    </li>
   );
 }
 
