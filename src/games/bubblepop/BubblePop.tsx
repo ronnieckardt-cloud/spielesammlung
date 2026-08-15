@@ -187,7 +187,7 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
   const belegte = z.wabe.flat().filter((f) => f !== null).length;
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4">
+    <div className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3">
       <output
         aria-live="off"
         key={z.punkte}
@@ -197,11 +197,12 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
         {z.punkte}
       </output>
 
+      <div className="spielbuehne">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${FELD_BREITE} ${FELD_HOEHE}`}
-        className="w-full max-w-sm touch-none rounded-2xl border border-rand bg-flaeche"
-        style={{ aspectRatio: `${FELD_BREITE} / ${FELD_HOEHE}` }}
+        className="spielbrett touch-none rounded-2xl border border-rand bg-flaeche"
+        style={{ '--vz': FELD_BREITE / FELD_HOEHE } as CSSProperties}
         onPointerMove={zielen}
         onPointerDown={schiessen}
         role="img"
@@ -305,6 +306,7 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
           opacity="0.85"
         />
       </svg>
+      </div>
 
       <p className="text-sm text-gedaempft">
         Als Nächstes:{' '}
@@ -316,7 +318,7 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
         <span className="font-semibold text-text">{kugelName(z.naechste)}</span>
       </p>
 
-      <p className="max-w-sm text-center text-xs text-gedaempft">
+      <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
         Zum Zielen über das Feld fahren oder wischen, zum Schießen antippen.
         Drei gleiche Farben platzen; was danach den Halt verliert, fällt
         hinterher und gibt Extrapunkte. Alle Kugeln weg heißt gewonnen.
