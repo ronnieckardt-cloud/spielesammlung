@@ -17,6 +17,13 @@ jetzt noch nicht umsetzen.**
 **Keine Bibliothek dazunehmen, ohne vorher zu fragen.** Bisher bewusst
 aufgenommen: React, Tailwind, Vitest.
 
+**Vor jedem Deploy: `SPEICHER` in `public/sw.js` um eins hochzählen.** Der
+Offline-Speicher liefert sonst auf installierten PWAs (vor allem iOS) weiter
+die alte Fassung aus, selbst wenn die neue längst auf Netlify liegt — die
+Versionsnummer ist der einzige Auslöser, der den Speicher wirklich leert.
+Genau das ist einmal passiert (mehrere Deploys ohne Versionssprung, Florians
+iPad zeigte tagelang die alte Fassung).
+
 ## Die Schnittstelle
 
 Der wichtigste Punkt im ganzen Projekt. Ein Spiel liegt in
