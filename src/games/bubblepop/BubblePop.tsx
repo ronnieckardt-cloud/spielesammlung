@@ -3,7 +3,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
-import { andocken, neuesSpiel } from './logik';
+import { ANZAHL_FARBEN, andocken, neuesSpiel } from './logik';
 import type { Punkt, Zustand } from './logik';
 import {
   FELD_BREITE,
@@ -207,6 +207,20 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
         role="img"
         aria-label={`Spielfeld mit ${belegte} Kugeln. Im Rohr: ${kugelName(z.aktuell)}, danach ${kugelName(z.naechste)}.${z.vorbei ? (z.gewonnen ? ' Alle Kugeln weg, gewonnen!' : ' Vorbei.') : ''}`}
       >
+        <defs>
+          {/* Je Farbe ein Kugelverlauf: heller Punkt oben links, zum Rand
+              hin dunkler. Das lässt die flachen Kreise rund wirken. Einmal
+              hier definiert und unten mehrfach benutzt — die Farben stehen
+              fest, deshalb reichen feste ids. */}
+          {Array.from({ length: ANZAHL_FARBEN }, (_, i) => (
+            <radialGradient key={i} id={`kugel-${i}`} cx="0.35" cy="0.3" r="0.75">
+              <stop offset="0" stopColor="#ffffff" stopOpacity="0.42" />
+              <stop offset="0.35" stopColor={kugelFarbe(i)} />
+              <stop offset="1" stopColor={kugelFarbe(i)} stopOpacity="1" />
+            </radialGradient>
+          ))}
+        </defs>
+
         {/* Zielhilfe: die gerechnete Flugbahn inklusive Abprallern. */}
         {!z.vorbei && (
           <polyline
@@ -237,13 +251,19 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
             if (farbe === null) return null;
             const m = mittelpunkt({ spalte: x, zeile: y });
             return (
-              <circle
-                key={`${x},${y}`}
-                cx={m.x}
-                cy={m.y}
-                r={RADIUS * 0.94}
-                fill={kugelFarbe(farbe)}
-              />
+              <g key={`${x},${y}`}>
+                {/* Dunkler Rand als Schattenkante unter der Kugel. */}
+                <circle cx={m.x} cy={m.y + 0.35} r={RADIUS * 0.94} fill="#0b1020" opacity="0.45" />
+                <circle cx={m.x} cy={m.y} r={RADIUS * 0.94} fill={`url(#kugel-${farbe})`} />
+                <ellipse
+                  cx={m.x - RADIUS * 0.32}
+                  cy={m.y - RADIUS * 0.38}
+                  rx={RADIUS * 0.22}
+                  ry={RADIUS * 0.14}
+                  fill="#ffffff"
+                  opacity="0.85"
+                />
+              </g>
             );
           }),
         )}
@@ -274,7 +294,16 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
           strokeWidth="1.4"
           strokeLinecap="round"
         />
-        <circle cx={KANONE.x} cy={KANONE.y} r={RADIUS} fill={kugelFarbe(z.aktuell)} />
+        <circle cx={KANONE.x} cy={KANONE.y + 0.35} r={RADIUS} fill="#0b1020" opacity="0.45" />
+        <circle cx={KANONE.x} cy={KANONE.y} r={RADIUS} fill={`url(#kugel-${z.aktuell})`} />
+        <ellipse
+          cx={KANONE.x - RADIUS * 0.32}
+          cy={KANONE.y - RADIUS * 0.38}
+          rx={RADIUS * 0.24}
+          ry={RADIUS * 0.15}
+          fill="#ffffff"
+          opacity="0.85"
+        />
       </svg>
 
       <p className="text-sm text-gedaempft">
