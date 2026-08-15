@@ -115,11 +115,10 @@ Danach zusätzlich geplant:
 
 6. ✅ Quiz (Wissensquiz) — ca. 100 Multiple-Choice-Fragen, Zielgruppe
    10- bis 12-Jährige, allgemeine Wissenserweiterung.
-7. ⬜ Gehirnjogging — **mehrere Varianten im Wechsel: Kopfrechnen,
-   Merk-Folgen (Farbfolge nachtippen), Muster erkennen. 90 Level (und
-   mehr), aus der Levelnummer erzeugt wie beim Farbsortierer** — welche
-   der drei Varianten ein Level bekommt, per festem Rhythmus über die
-   Levelnummer (z. B. reihum), Schwierigkeit steigt mit dem Level.
+7. ✅ Gehirnjogging — drei Varianten im Wechsel: Kopfrechnen, Merk-Folgen
+   (Farbfolge nachtippen), Muster erkennen. Level (und mehr) aus der
+   Levelnummer erzeugt wie beim Farbsortierer, Variante reihum per
+   Levelnummer, Schwierigkeit steigt mit dem Level.
 8. ⬜ Wortspiel — Konzept noch offen
 9. Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer ist
    der/die Beste. Braucht Supabase (bringt fertige Anmeldung mit) — war von
@@ -237,6 +236,40 @@ versucht deshalb genau dasselbe Level erneut.
   beantwortet wurde — unabhängig davon, ob richtig oder falsch geklickt
   wurde. So bleibt auch bei einer falschen Antwort ein Lerneffekt. Ein Test
   prüft nur, dass jede Frage eine nicht-leere Erklärung hat.
+
+## Gehirnjogging — Besonderheiten
+
+- Drei eigenständige, reine Aufgaben-Generatoren (`kopfrechnen.ts`,
+  `merkfolgen.ts`, `muster.ts`), jeweils `aufgabe(saat, level)` — gleiche
+  Saat und Level ergeben immer dieselbe Aufgabe. `logik.ts` orchestriert nur:
+  welche Variante ein Level bekommt (`varianteFuerLevel`, reihum über die
+  Levelnummer), Level = Runde mit `AUFGABEN_PRO_LEVEL` Aufgaben derselben
+  Variante, generische `aufgabeAbschliessen`/`naechsteAufgabe` für alle drei
+  Varianten (genau wie `antwortWaehlen`/`naechsteFrage` beim Quiz).
+- Schwierigkeit steigt mit dem Level, nicht mit der Zeit: Kopfrechnen und
+  Muster erkennen haben sechs Stufen (`stufeFuerLevel`, alle 15 Level eine
+  Stufe höher, gedeckelt), Merk-Folgen verlängert die Folge alle 10 Level um
+  eins (gedeckelt bei 9 — mehr sprengt die menschliche Merkspanne).
+  Kopfrechnen-Ergebnisse werden nie negativ (auch nicht bei den
+  zweischrittigen Aufgaben ab Stufe 5), das ist Absicht, nicht Zufall.
+- Kopfrechnen und Muster erkennen teilen sich dieselbe
+  Vier-Zahlen-Antworten-Anzeige (`ZahlAntworten.tsx`) — beide haben exakt
+  dasselbe Antwortformat (`antworten`/`richtig`), nur der Aufgabentext
+  darüber unterscheidet sich.
+- Merk-Folgen führt seinen eigenen Zustand (Vorführ-Phase, Eingabe-Phase,
+  bisherige Tipps) lokal in `MerkfolgenAnzeige.tsx`, nicht im Runden-Zustand
+  — die Runden-Logik bekommt nur das fertige Ergebnis über `onFertig`.
+  Reine Prüf-Funktion `merkfolgeTippen` kennt weder Zeit noch UI. Sechs
+  eigene Kachel-Farben in einem 3×2-Raster, bewusst nicht die klassische
+  Vierteil-Scheibe. Nach jeder Aufgabe wird die richtige Folge als kleine
+  Punktereihe gezeigt, auch bei einer falschen Antwort.
+- `Gehirnjogging.tsx` hält die aktuell angeklickte Zahl (`ausgewaehlt`) für
+  Kopfrechnen/Muster separat vom generischen `Zustand.ergebnis`, weil
+  Merk-Folgen das gar nicht braucht. Beim Levelwechsel bleibt der Index
+  manchmal bei 0 (z. B. sofort das nächste Level anwählen) — deshalb hängt
+  das Zurücksetzen von `ausgewaehlt` an `[z.index, z.level]`, nicht nur am
+  Index, und `MerkfolgenAnzeige` bekommt `key={`${z.level}-${z.index}`}`,
+  damit sie in genau diesem Fall wirklich neu mountet.
 
 ## Befehle
 

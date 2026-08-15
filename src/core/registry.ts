@@ -5,6 +5,7 @@ import { blockblitz } from '../games/blockblitz';
 import { reihenfall } from '../games/reihenfall';
 import { geisterjagd } from '../games/geisterjagd';
 import { quiz } from '../games/quiz';
+import { gehirnjogging } from '../games/gehirnjogging';
 
 /**
  * Die einzige Liste aller Spiele. Ein neues Spiel wird hier eingetragen —
@@ -17,6 +18,7 @@ export const spiele: readonly GameApi[] = [
   reihenfall,
   geisterjagd,
   quiz,
+  gehirnjogging,
 ];
 
 export function spielFinden(id: string): GameApi | undefined {

@@ -22,7 +22,7 @@ Dann <http://localhost:5180> öffnen.
 | **Reihenfall** | spielbar |
 | **Geisterjagd** | spielbar |
 | **Wissensquiz** | spielbar |
-| Gehirnjogging | geplant |
+| **Gehirnjogging** | spielbar |
 
 Der Platzhalter ist kein richtiges Spiel, sondern der Beweis, dass das
 Grundgerüst trägt: Er benutzt alle gemeinsamen Bausteine und meldet Punkte
