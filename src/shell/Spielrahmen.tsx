@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Einstellungen, GameApi } from '../core/types';
 import { bestwert, ergebnisEintragen, zuletztGespieltMerken } from './speicher';
+import { spielfarbenStil, toenung } from './spielfarbe';
 
 type Ende = { punkte: number; beste: number; rekord: boolean; gewonnen: boolean };
 
@@ -71,17 +72,31 @@ export function Spielrahmen({
   // dieser Wert das nächste Mal gebraucht wird.
   const beste = bestwert(spiel.id);
 
+  const farbe = toenung(spiel.id, spiel.accent);
+
   return (
     <div
       // Genau eine Bildschirmhöhe, nicht mehr: Ohne feste Höhe wächst der
       // Rahmen mit seinem Inhalt und schiebt die unterste Reihe aus dem
       // Bild — bei textlastigen Spielen den Weiter-Knopf.
       className="mx-auto flex h-dvh min-h-0 w-full max-w-3xl flex-col overflow-hidden"
+      // Färbt die vier Grundtokens leicht in der Spielfarbe ein. Wirkt
+      // dadurch in jedem Element des Spiels, ohne dass ein Spiel etwas
+      // davon wissen muss. Siehe `spielfarbe.ts`.
+      style={spielfarbenStil(spiel.id, spiel.accent)}
     >
       <header
-        className="flex items-center gap-3 border-b border-rand px-4 pb-3"
-        // Siehe Seite.tsx — Abstand zur Statusleiste bei installierter App auf dem iPhone.
-        style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}
+        className="flex items-center gap-3 px-4 pb-3"
+        style={{
+          // Siehe Seite.tsx — Abstand zur Statusleiste bei installierter App auf dem iPhone.
+          paddingTop: 'calc(0.75rem + env(safe-area-inset-top))',
+          // Genau hier passiert der Bruch: Die Kopfzeile ist das Erste, was
+          // nach dem bunten Startbildschirm zu sehen ist. Statt grauer
+          // Trennlinie ein flacher Verlauf in der Spielfarbe und eine
+          // farbige Unterkante.
+          background: `linear-gradient(180deg, color-mix(in srgb, ${farbe} 20%, transparent), transparent)`,
+          borderBottom: `1px solid color-mix(in srgb, ${farbe} 40%, var(--color-rand))`,
+        }}
       >
         <button
           type="button"
@@ -90,7 +105,7 @@ export function Spielrahmen({
         >
           <span aria-hidden="true">←</span> Zurück
         </button>
-        <h1 className="min-w-0 flex-1 truncate font-semibold" style={{ color: spiel.accent }}>
+        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold" style={{ color: spiel.accent }}>
           {spiel.title}
         </h1>
         <p className="text-right text-sm text-gedaempft">

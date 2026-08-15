@@ -14,6 +14,19 @@
   --radius-karte: 1rem;
 }
 
+/* Die vier Grundtöne noch einmal unter eigenem Namen.
+   `shell/spielfarbe.ts` überschreibt im Spiel die `--color-*`-Tokens mit
+   einer eingefärbten Fassung; die Beimischung muss dabei gegen den
+   **ursprünglichen** Wert rechnen. Läse sie `--color-grund`, bezöge sie
+   sich auf ihr eigenes Ergebnis — die Farbe würde sich bei jedem
+   verschachtelten Element weiter aufschaukeln. */
+:root {
+  --basis-grund: #0b0f14;
+  --basis-flaeche: #151c26;
+  --basis-flaeche-hoch: #1d2634;
+  --basis-rand: #2a3546;
+}
+
 @layer base {
   html {
     color-scheme: dark;
@@ -44,6 +57,15 @@
     -webkit-font-smoothing: antialiased;
     /* Doppeltippen soll nicht zoomen. */
     touch-action: manipulation;
+    /* Wer beim schnellen Tippen einen Moment zu lange liegen bleibt, bekam
+       sonst die iOS-Lupe oder eine blaue Textauswahl über dem Spielfeld.
+       Es gibt in der ganzen App kein Eingabefeld, also gilt das überall. */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    /* Kein grauer Blitz beim Antippen — die Spiele geben ihre eigene
+       Rückmeldung. */
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Tastaturbedienung muss immer sichtbar sein. */
@@ -308,6 +330,37 @@
      eines Flex-Kindes steht erst nach der Breite fest, das Brett fiel
      deshalb auf seine Inhaltsgröße zusammen (bei Line Fall auf 11 Pixel). */
   container-type: size;
+  /* Bezugspunkt für den Schein unten. */
+  position: relative;
+}
+
+/* Der farbige Schein hinter dem Brett.
+
+   Das Brett steht damit in einem weichen Lichtkegel und bleibt selbst
+   ruhig — genau der Griff, den polierte Handyspiele benutzen, und der
+   Gegenentwurf zu „Verlauf direkt auf die Brettfläche", was die Spielsteine
+   schlechter lesbar machen würde.
+
+   Hängt an der **Bühne** und nicht am Brett: Am Brett würde er bei Bubble
+   Pop die Kanone unten und bei Line Fall die oberste Zeile mit abdunkeln.
+   `--spielfarbe` setzt `shell/Spielrahmen.tsx` je Spiel. */
+.spielbuehne::before {
+  content: '';
+  position: absolute;
+  inset: -12%;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--spielfarbe, transparent) 22%, transparent) 0%,
+    transparent 68%
+  );
+}
+
+/* Alles, was in der Bühne liegt, gehört über den Schein. */
+.spielbuehne > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* `--vz` ist das Seitenverhältnis als reine Zahl (Breite geteilt durch
@@ -460,6 +513,185 @@
   transform-box: fill-box;
   transform-origin: center;
   animation: konfetti-flug 0.8s ease-out forwards;
+}
+
+/* ===== Startseite: Wortmarke ==========================================
+
+   „Florians Spielesammlung" räumlich, ohne eine einzige externe
+   Schriftdatei — die App läuft offline, es kommt also nur infrage, was
+   Systemschriften plus CSS hergeben.
+
+   **Warum zweizeilig.** Nachgemessen: „Florians Spielesammlung" in einer
+   Zeile passt auf einem 375 Pixel breiten iPhone nur bis 29,5 Pixel
+   Schriftgröße. Das ist *kleiner* als die 30 Pixel vorher — der längere
+   Name hätte den Titel also schrumpfen lassen. Zweizeilig wächst das
+   Hauptwort auf 37,5 Pixel.
+
+   **Warum zwei Ebenen.** `text-shadow` wird hinter der Buchstabenfüllung
+   gezeichnet. Ist die Füllung durchsichtig (das ist sie, wenn ein Verlauf
+   hineingeclippt wird), scheint die Extrusion durch den Buchstaben und
+   alles wird matschig. Deshalb: Grundelement macht Seitenflächen und
+   Kontur, `::after` legt die Verlaufsfläche darüber. Als Inline-Inhalt
+   wird `::after` zuletzt gezeichnet — kein z-index nötig.
+
+   Alle Maße in `em`, damit Extrusion und Kontur beim Skalieren mitwandern. */
+.wortmarke {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+/* Der Vorspann bekommt bewusst **keine** Extrusion: Bei 15 bis 18 Pixeln
+   wäre sie 1 bis 2 Pixel hoch und läse sich als unsaubere Kante. */
+.wortmarke-vorname {
+  margin-bottom: 0.14em;
+  font-size: clamp(0.85rem, 4vw, 1.15rem);
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  /* Die Sperrung hängt rechts hinten dran; ohne Ausgleich sitzt das Wort
+     optisch links neben der Mitte. */
+  text-indent: 0.22em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.82);
+  text-shadow: 0 2px 6px rgb(0 0 0 / 0.45);
+}
+
+.wortmarke-wort {
+  position: relative;
+  display: inline-block;
+  font-size: clamp(1.9rem, 10vw, 3.25rem);
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  line-height: 0.98;
+  color: #4c1d95;
+  -webkit-text-stroke: 0.07em #2e1065;
+  paint-order: stroke fill;
+  text-shadow:
+    0 0.012em 0 #43169e,
+    0 0.024em 0 #3f1596,
+    0 0.036em 0 #3b148e,
+    0 0.048em 0 #371386,
+    0 0.06em 0 #33127e,
+    0 0.072em 0 #2f1176,
+    0 0.084em 0 #2b106e,
+    0 0.096em 0 #270f66,
+    0 0.14em 0.02em rgb(0 0 0 / 0.35),
+    0 0.22em 0.3em rgb(0 0 0 / 0.45);
+}
+
+.wortmarke-wort::after {
+  content: attr(data-text);
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  background-image: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #fff4c2 38%,
+    #ffd166 58%,
+    #f59e0b 82%,
+    #ea8a04 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* Safari braucht das zusätzlich, sonst bleibt die Füllung deckend. */
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  pointer-events: none;
+}
+
+/* ===== Startseite: Auftritt ==========================================
+
+   Alle enden bei 100 % im Ruhezustand. Zusätzlich muss hier die
+   **Verzögerung** eigens auf 0 — `.ruhig` kürzt nur die Dauer. Ohne das
+   stünde eine Kachel mit `backwards` erst unsichtbar herum und spränge
+   dann hart auf, also genau das Gegenteil von „weniger Bewegung". */
+@keyframes rein-von-oben {
+  0% {
+    opacity: 0;
+    translate: 0 -10px;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes rein-von-unten {
+  0% {
+    opacity: 0;
+    translate: 0 12px;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes kachel-rein {
+  0% {
+    opacity: 0;
+    translate: 0 14px;
+    scale: 0.86;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+.rein-von-oben {
+  animation: rein-von-oben 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.rein-von-unten {
+  animation: rein-von-unten 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+/* Gehört an die Kachel-Umhüllung, **nicht** an den Knopf darin: Tailwind
+   setzt `active:scale-95` über die eigenständige `scale`-Eigenschaft, und
+   eine Animation, die `scale` anfasst, würde sie auf demselben Element
+   überschreiben. So bleibt die Antipp-Reaktion unberührt. */
+.kachel-rein {
+  animation: kachel-rein 0.38s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: var(--verzoegerung, 0ms);
+}
+
+/* Der Abspiel-Knopf der Weiterspielen-Karte atmet: 0,5 Hz, nur Größe,
+   ±4,5 %. Weit unter der 1,7-Hz-Grenze und ohne Helligkeitswechsel. */
+@keyframes karte-atmet {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.045;
+  }
+}
+
+.karte-atmet {
+  animation: karte-atmet 2s ease-in-out infinite;
+}
+
+.ruhig .kachel-rein,
+.ruhig .rein-von-oben,
+.ruhig .rein-von-unten {
+  animation-delay: 0ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kachel-rein,
+  .rein-von-oben,
+  .rein-von-unten {
+    animation-delay: 0ms !important;
+  }
 }
 
 /* Drop Four: Der eben eingeworfene Stein fällt in seine Zelle.

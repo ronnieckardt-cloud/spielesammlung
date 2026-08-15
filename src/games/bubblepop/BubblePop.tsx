@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
@@ -111,9 +111,12 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
   const [platzend, setPlatzend] = useState<readonly Punkt[]>([]);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // Die Flugbahn hängt nur von Wabe und Winkel ab — bei jedem Rendern neu
-  // gerechnet, das ist billig genug (ein paar hundert Schritte).
-  const bahn = flugbahn(z.wabe, zielWinkel);
+  // Die Flugbahn hängt nur von Wabe und Winkel ab. Gemerkt statt bei jedem
+  // Rendern neu gerechnet: Bei einem flachen Winkel prallt die Kugel oft ab
+  // und läuft über tausend Schritte, jeder mit einer Abstandsprüfung gegen
+  // alle Nachbarn — das ist nicht mehr „billig genug", wenn es bei jeder
+  // Fingerbewegung passiert.
+  const bahn = useMemo(() => flugbahn(z.wabe, zielWinkel), [z.wabe, zielWinkel]);
 
   useEffect(() => {
     onScore(z.punkte);
@@ -151,6 +154,28 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
       if (stelle) setZielWinkel(winkelZu(stelle));
     },
     [stelleAus, z.vorbei],
+  );
+
+  /**
+   * Beim Berühren nur zielen, **nicht** schießen.
+   *
+   * Vorher hing der Schuss an `pointerdown`. Auf einem Handy heißt das: Die
+   * Kugel ist schon unterwegs, bevor je ein `pointermove` ankommt — die
+   * gerechnete Flugbahn mit den Abprallern an den Wänden war damit auf dem
+   * Hauptgerät **nie zu sehen**, und aus dem Zielspiel wurde ein Ratespiel.
+   * Mit Maus fiel es nicht auf, weil der Zeiger schon vor dem Klick über
+   * dem Feld liegt.
+   *
+   * `setPointerCapture` sorgt dafür, dass auch ein Loslassen außerhalb des
+   * Felds noch hier ankommt.
+   */
+  const anlegen = useCallback(
+    (e: ReactPointerEvent<SVGSVGElement>) => {
+      if (z.vorbei) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      zielen(e);
+    },
+    [zielen, z.vorbei],
   );
 
   const schiessen = useCallback(
@@ -203,8 +228,9 @@ export function BubblePop({ onScore, onGameOver, settings, bestScore, istErsteRu
         viewBox={`0 0 ${FELD_BREITE} ${FELD_HOEHE}`}
         className="spielbrett touch-none rounded-2xl border border-rand bg-flaeche"
         style={{ '--vz': FELD_BREITE / FELD_HOEHE } as CSSProperties}
+        onPointerDown={anlegen}
         onPointerMove={zielen}
-        onPointerDown={schiessen}
+        onPointerUp={schiessen}
         role="img"
         aria-label={`Spielfeld mit ${belegte} Kugeln. Im Rohr: ${kugelName(z.aktuell)}, danach ${kugelName(z.naechste)}.${z.vorbei ? (z.gewonnen ? ' Alle Kugeln weg, gewonnen!' : ' Vorbei.') : ''}`}
       >
