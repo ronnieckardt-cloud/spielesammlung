@@ -12,6 +12,7 @@ import { BestenlisteSeite } from './shell/BestenlisteSeite';
 import { KontoSeite } from './shell/KontoSeite';
 import { DuellSeite } from './shell/DuellSeite';
 import { Unternavigation, type NavZiel } from './shell/Unternavigation';
+import { AbenteuerSeite } from './abenteuer/AbenteuerSeite';
 import { einstellungenLesen, einstellungenSchreiben } from './shell/speicher';
 import { abgleichen, duelleHolen, kontoBeobachten, kontoLaden } from './shell/konto';
 import type { Duell, Konto } from './shell/konto';
@@ -24,6 +25,7 @@ import type { Duell, Konto } from './shell/konto';
 
 export type Ansicht =
   | { art: 'menue' }
+  | { art: 'abenteuer' }
   | { art: 'spiele' }
   | { art: 'fortschritt' }
   | { art: 'mehr' }
@@ -39,6 +41,7 @@ function ansichtAusAdresse(): Ansicht {
   if (teile[0] === 'spiel' && teile[1] && spielFinden(teile[1])) {
     return { art: 'spiel', id: teile[1] };
   }
+  if (teile[0] === 'abenteuer') return { art: 'abenteuer' };
   if (teile[0] === 'spiele') return { art: 'spiele' };
   if (teile[0] === 'fortschritt') return { art: 'fortschritt' };
   if (teile[0] === 'mehr') return { art: 'mehr' };
@@ -54,6 +57,8 @@ function adresseFuer(ansicht: Ansicht): string {
   switch (ansicht.art) {
     case 'spiel':
       return `#/spiel/${ansicht.id}`;
+    case 'abenteuer':
+      return '#/abenteuer';
     case 'spiele':
       return '#/spiele';
     case 'fortschritt':
@@ -181,6 +186,15 @@ export default function App() {
     );
   }
 
+  /*
+   * Florianville bekommt den ganzen Bildschirm — wie ein Spiel und aus
+   * demselben Grund: Die Leiste würde Höhe kosten, und wer beim Springen
+   * versehentlich „Rangliste" trifft, verliert seinen Lauf.
+   */
+  if (ansicht.art === 'abenteuer') {
+    return <AbenteuerSeite einstellungen={einstellungen} onZurueck={zumMenue} />;
+  }
+
   if (ansicht.art === 'duell') {
     return (
       <Duellrunde
@@ -234,6 +248,7 @@ export default function App() {
             konto={konto}
             onSpielen={spielen}
             onAlleSpiele={() => zeige({ art: 'spiele' })}
+            onAbenteuer={() => zeige({ art: 'abenteuer' })}
             onKonto={zumKonto}
           />
         );

@@ -83,15 +83,60 @@ function Weiterkarte({ spiel, onSpielen }: { spiel: GameApi; onSpielen: (id: str
   );
 }
 
+/**
+ * Der Einstieg nach Florianville.
+ *
+ * Steht **über** der Weiterspielen-Karte und ist die größte Fläche der
+ * Seite. Das Abenteuer ist kein einundzwanzigstes Spiel in der Reihe,
+ * sondern ein eigener Ort — es gehört nicht ins Kachelregal, sondern davor.
+ */
+function Abenteuerkarte({ onOeffnen }: { onOeffnen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOeffnen}
+      className="druckbar rein-von-unten relative w-full overflow-hidden rounded-3xl border border-white/25 p-4 text-left"
+      style={{
+        animationDelay: '40ms',
+        background: 'linear-gradient(135deg, #1d7fd4 0%, #47b96a 55%, #f2c14e 100%)',
+      }}
+    >
+      {/* Ein paar Dächer als Silhouette — sie machen aus einem Farbverlauf
+          eine Stadt, und zwar mit sechs Rechtecken. */}
+      <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-12">
+        {[6, 22, 38, 56, 72, 88].map((links, i) => (
+          <span
+            key={links}
+            className="absolute bottom-0 block rounded-t-sm bg-black/25"
+            style={{ left: `${links}%`, width: 26, height: 16 + ((i * 13) % 26) }}
+          />
+        ))}
+      </span>
+
+      <span className="relative block text-[11px] font-black tracking-[0.2em] text-white/80 uppercase">
+        Neu · Abenteuer
+      </span>
+      <span className="relative mt-0.5 block text-2xl font-black text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)]">
+        Florianville
+      </span>
+      <span className="relative mt-0.5 block text-sm text-white/90">
+        Lauf durch den Ahornweg und finde alle Sterne.
+      </span>
+    </button>
+  );
+}
+
 export function StartSeite({
   konto,
   onSpielen,
   onAlleSpiele,
+  onAbenteuer,
   onKonto,
 }: {
   konto: Konto | null;
   onSpielen: (id: string) => void;
   onAlleSpiele: () => void;
+  onAbenteuer: () => void;
   onKonto: () => void;
 }) {
   // Frisch bei jedem Rendern gelesen. Beim Zurückkommen aus einem Spiel wird
@@ -159,6 +204,10 @@ export function StartSeite({
 
       <div className="rein-von-unten mb-3" style={{ animationDelay: '60ms' }}>
         <Stufenkarte stand={stand} />
+      </div>
+
+      <div className="mb-3">
+        <Abenteuerkarte onOeffnen={onAbenteuer} />
       </div>
 
       {weiter && <Weiterkarte spiel={weiter} onSpielen={onSpielen} />}

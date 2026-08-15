@@ -2100,6 +2100,82 @@ violett, und die Zahl verschwand darin fast. *Merksatz:* Eine Farbe, die an
 einer Stelle Bedeutung trägt, muss an einer anderen trotzdem lesbar bleiben;
 im Zweifel gewinnt die Lesbarkeit.
 
+## Florianville — das Cartoon-Abenteuer (`src/abenteuer/`)
+
+Ronnis großer Auftrag: ein eigenes Cartoon-Adventure mit Stadt, Missionen,
+NPCs, Fahrzeugen, Arcade-Modus und Bossen. **Das ist Monatsarbeit**, und es
+wird nach seinem eigenen §59 gebaut: erst ein Vertical Slice, der sich schon
+wie ein fertiges Spiel anfühlt, dann die Welt erweitern.
+
+**Kein zweiter Spiel-Motor.** Phaser wäre eine zweite Engine für dasselbe
+Problem gewesen. three.js liegt bereits als eigener Brocken bereit (Dash
+City), kann 3-D *und* 2.5-D und ist offline abgesichert. Die beiden
+`szene.ts` teilen sich denselben `three`-Brocken; wer Snake Rush spielt,
+lädt weiterhin nichts davon.
+
+**Eigener Bereich, kein einundzwanzigstes Spiel.** Florianville hängt
+**nicht** an `GameApi` — ein offenes Abenteuer hat keine „Runde", die mit
+`onGameOver` endet. Es hat eine eigene Adresse (`#/abenteuer`), einen eigenen
+Vollbildmodus ohne Leiste und eine eigene Einstiegskarte über der
+Weiterspielen-Karte. Die Sammlung bleibt unangetastet.
+
+Dieselbe Dreiteilung wie bei Dash City:
+
+| Datei | Kennt | Kennt nicht |
+|---|---|---|
+| `welt.ts` | Geometrie der Zone | three.js, React |
+| `logik.ts` | Bewegung, Kollision, Aufsammeln | three.js, React, Uhr |
+| `szene.ts` | three.js | Spielregeln |
+| `AbenteuerSeite.tsx` | Schleife, Eingaben, Anzeige | beides |
+
+30 Tests auf Welt und Bewegung. Sie haben schon vor dem ersten Bild drei
+echte Fehler gefunden: **zweimal stand ein NPC in einer Hauswand** (von Hand
+gesetzte Koordinaten neben von Hand gesetzten Gebäuden), und ein
+Sammelstück, das eigentlich einen Sprung kosten sollte, war vom Boden aus
+erreichbar.
+
+### Was dabei gelernt wurde
+
+**Ein Hochformat-Handy hat kaum waagerechtes Sichtfeld — und das bestimmt
+den Grundriss.** Der erste Entwurf stellte acht Häuser auf x = ±18; am
+Rechner ein Viertel, auf dem iPhone war **kein einziges Haus im Bild**. Bei
+58° senkrecht und Seitenverhältnis 0,68 bleiben waagerecht 20,6° übrig, die
+nächste Hausecke lag bei 23°. Zwei Grad. Behoben mit 66° Sichtfeld *und*
+Häusern bei x = ±11,5. *Merksatz:* Für ein Handy muss eine Stadt **eng**
+gebaut sein — was ohnehin besser zu einem Cartoon passt als Vorortabstände.
+
+**Feste Kamerarichtung, weltbezogene Steuerung.** Der erste Entwurf ließ die
+Kamera hinter der Figur mitschwenken. Zusammen mit weltbezogenem Stick ergibt
+das eine Rückkopplung: Die Figur dreht sich zur Laufrichtung, die Kamera
+dreht hinterher, dadurch verschiebt sich, was „oben" heißt — man könnte gar
+nicht mehr gezielt abbiegen. Jetzt bleibt Norden Norden.
+
+**Beim Herausschieben aus einem Hindernis braucht es einen Hauch Luft.** Ohne
+ihn landet die Figur *exakt* auf dem Radius, das zählt als Berührung, und die
+Auflösungsschleife kommt nie zur Ruhe. Ein Zehntelmillimeter beendet das.
+
+**Cartoon-Optik: drei Griffe.** `MeshToonMaterial` (Schattierung in Stufen
+statt stufenlos), Konturlinien über die umgestülpte Hülle (`side: BackSide`,
+leicht vergrößert — eine echte Zeichenkontur ohne zweiten Renderdurchgang,
+nur an Figuren), und viel Grundhelligkeit. Ein dunkles Bild sieht nach
+Realismus aus, auch wenn die Formen rund sind.
+
+**Der Dunst muss zur Weltgröße passen.** Bei 55–110 Metern über einem nur 44
+Meter großen Viertel hatte er nichts zu tun, und statt eines Horizonts sah
+man die **Kante der Bodenfläche** als harten Strich. Jetzt 34–72.
+
+### Stand und was fehlt
+
+**Fertig:** Zone „Ahornweg" (vier Häuser, Zäune mit Gartentoren, Bäume,
+Laternen, Hecken, Mülltonnen), Bewegung mit Gehen/Rennen/Springen,
+Kollision, feste Kamera, zwölf Sammelstücke (zwei nur per Sprung), drei NPCs
+mit eigenem Aussehen, Touch-Stick und Sprungknopf, Tastatur, Ladezustand,
+Fehlerzustand.
+
+**Fehlt noch** (Ronnis Phasen 9 bis 21): Dialogsystem, Missionen, XP-Anschluss
+an den bestehenden Fortschritt, Speichern des Weltzustands, Fahrzeug,
+Minispiel, Gegner, Boss, Arcade-Modus, Story, weitere Zonen.
+
 ## Ausliefern
 
 Läuft auf **Netlify** unter `florian-spielesammlung.netlify.app`. Das ist
