@@ -111,16 +111,16 @@ kurz zusammenfassen, was fertig ist.
 4. ✅ Reihenfall
 5. ✅ Geisterjagd
 
-Danach zusätzlich geplant (noch nicht begonnen):
+Danach zusätzlich geplant:
 
-6. Gehirnjogging — Konzept noch offen
-7. Wortspiel — Konzept noch offen
-8. Quiz — **ca. 100 Fragen mit Antworten, Zielgruppe 10- bis 12-Jährige,
-   Thema allgemeine Wissenserweiterung** (kein enges Fachthema). Immer noch
-   ein eigener Inhalts-Auftrag, nur kleiner als ursprünglich gedacht. Beim
-   Anfangen klären: Themenbereiche, ob Fragen aus der Levelnummer
-   reproduzierbar gezogen werden (wie beim Farbsortierer), Mehrfachauswahl
-   oder Texteingabe.
+6. ✅ Quiz (Wissensquiz) — ca. 100 Multiple-Choice-Fragen, Zielgruppe
+   10- bis 12-Jährige, allgemeine Wissenserweiterung.
+7. ⬜ Gehirnjogging — **mehrere Varianten im Wechsel: Kopfrechnen,
+   Merk-Folgen (Farbfolge nachtippen), Muster erkennen. 90 Level (und
+   mehr), aus der Levelnummer erzeugt wie beim Farbsortierer** — welche
+   der drei Varianten ein Level bekommt, per festem Rhythmus über die
+   Levelnummer (z. B. reihum), Schwierigkeit steigt mit dem Level.
+8. ⬜ Wortspiel — Konzept noch offen
 9. Anmeldung mit Namen + Passwort, geräteübergreifende Bestenliste, wer ist
    der/die Beste. Braucht Supabase (bringt fertige Anmeldung mit) — war von
    Anfang an als "später" vorgesehen, jetzt konkret gewünscht. Das ist ein
@@ -216,6 +216,22 @@ versucht deshalb genau dasselbe Level erneut.
 - Steuerung über `useInput` (Wischen + Tastatur) **und** den gemeinsamen
   `Steuerkreuz`-Baustein — hier passt er, weil es wirklich nur die vier
   Richtungen braucht.
+
+## Wissensquiz — Besonderheiten
+
+- `fragen.ts`: reine Daten (ca. 100 Fragen, vier Antworten je Frage), nichts
+  Logisches drin — neue Fragen einfach ergänzen. Ein eigener Test prüft nur
+  die Struktur (vier nicht-leere Antworten, gültiger Richtig-Index, keine
+  Dopplung) — Faktentreue kann kein Test prüfen, das bleibt beim
+  sorgfältigen Schreiben.
+- Level = Runde, genau wie beim Farbsortierer: aus der Levelnummer werden
+  zehn Fragen gemischt gezogen (`neuesLevel` in `logik.ts`), gleiche
+  Levelnummer ergibt für alle dieselben zehn Fragen. „Nochmal" nach einer
+  Runde startet automatisch das nächste Level; Pfeile im Kopf springen
+  gezielt zu einer bestimmten Levelnummer.
+- Nach jeder Antwort sofortige Rückmeldung (richtig grün, falsch rot, die
+  tatsächlich richtige Antwort wird immer angezeigt) — man lernt auch aus
+  falschen Antworten, nicht erst am Rundenende.
 
 ## Befehle
 

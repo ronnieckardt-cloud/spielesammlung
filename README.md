@@ -21,6 +21,8 @@ Dann <http://localhost:5180> öffnen.
 | **Blockblitz** | spielbar |
 | **Reihenfall** | spielbar |
 | **Geisterjagd** | spielbar |
+| **Wissensquiz** | spielbar |
+| Gehirnjogging | geplant |
 
 Der Platzhalter ist kein richtiges Spiel, sondern der Beweis, dass das
 Grundgerüst trägt: Er benutzt alle gemeinsamen Bausteine und meldet Punkte
