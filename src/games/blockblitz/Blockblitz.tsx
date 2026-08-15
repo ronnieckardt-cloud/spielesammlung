@@ -28,6 +28,12 @@ const FALLBACK_ZELLGROESSE = 40; // bevor das Raster zum ersten Mal gemessen wur
 // eines einzigen langsamen, gemeinsamen Aufblitzens.
 const ZERBROESELN_VERSATZ_MS = 55; // Zeitversatz je Diagonal-Schritt beim Auflösen
 const ZERBROESELN_DAUER_MS = 260; // Dauer einer einzelnen Zelle, siehe index.css
+
+/** Wohin die Krümel wegspritzen. Feste Liste, damit es nicht flackert. */
+const KRUEMEL: readonly { kx: string; ky: string }[] = [
+  { kx: '-10px', ky: '8px' },
+  { kx: '9px', ky: '11px' },
+];
 const PUNKTE_ANZEIGE_DAUER_MS = 900;
 
 type ZugZustand = {
@@ -157,8 +163,21 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
   const [z, setZ] = useState<Zustand>(() => neuesSpiel(saatAus('blockblitz', Date.now())));
   const [zug, setZug] = useState<ZugZustand | null>(null);
   const [ausgewaehlt, setAusgewaehlt] = useState<number | null>(null);
-  // Zellenschlüssel → Zeitversatz in ms, für das gestaffelte Zerbröseln.
-  const [blitzZellen, setBlitzZellen] = useState<ReadonlyMap<string, number> | null>(null);
+  /**
+   * Zellenschlüssel → Zeitversatz **und Farbe**, für das gestaffelte
+   * Zerbröseln.
+   *
+   * Die Farbe muss mit, und das ist der ganze Witz: `setBlitzZellen` und
+   * `setZ` landen im selben Rendern, das Feld ist beim Start der Animation
+   * also längst leer. Ohne die mitgeführte Farbe blieb nur ein weißes
+   * Quadrat übrig — die Steine verschwanden schlagartig, und es sah aus,
+   * als gäbe es überhaupt keine Animation. Line Fall macht es mit
+   * `geloescht.zeilen[].farben` seit jeher genauso.
+   */
+  const [blitzZellen, setBlitzZellen] = useState<ReadonlyMap<
+    string,
+    { versatz: number; farbe: number }
+  > | null>(null);
   const [punkteAnzeige, setPunkteAnzeige] = useState<{ id: number; text: string } | null>(null);
   const punkteAnzeigeId = useRef(0);
   const rasterRef = useRef<HTMLDivElement>(null);
@@ -184,15 +203,21 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
       if (anzahlLinien > 0) {
         // Diagonal versetzt, wie beim wirklichen Zerbröseln — nicht alle Zellen
         // auf einmal. Bei "weniger Bewegung" kein Versatz, alles sofort weg.
-        const positionen = new Map<string, number>();
+        const positionen = new Map<string, { versatz: number; farbe: number }>();
         for (let y = 0; y < HOEHE; y++) {
           for (let x = 0; x < BREITE; x++) {
-            if (zeilen.includes(y) || spalten.includes(x)) {
-              positionen.set(`${x},${y}`, settings.reducedMotion ? 0 : (x + y) * ZERBROESELN_VERSATZ_MS);
+            // `nachLegen` ist das Feld **mit** dem gerade gelegten Teil und
+            // **vor** dem Abräumen — nur dort stehen die Farben noch drin.
+            const farbe = nachLegen[y]![x];
+            if (farbe !== null && (zeilen.includes(y) || spalten.includes(x))) {
+              positionen.set(`${x},${y}`, {
+                versatz: settings.reducedMotion ? 0 : (x + y) * ZERBROESELN_VERSATZ_MS,
+                farbe,
+              });
             }
           }
         }
-        const maxVersatz = Math.max(0, ...positionen.values());
+        const maxVersatz = Math.max(0, ...[...positionen.values()].map((p) => p.versatz));
         setBlitzZellen(positionen);
         window.setTimeout(
           () => setBlitzZellen(null),
@@ -206,7 +231,7 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
         // Kleine, gestaffelte "Kratz"-Klicks passend zum Zerbröseln — ein Klick
         // je Zeitstufe, nicht je Zelle, sonst wird es bei vielen Zellen zu viel.
         if (!settings.reducedMotion) {
-          const stufen = new Set(positionen.values());
+          const stufen = new Set([...positionen.values()].map((p) => p.versatz));
           for (const stufe of stufen) {
             if (stufe === 0) continue;
             window.setTimeout(() => sfx('klick'), stufe);
@@ -399,13 +424,13 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
             const istVorschauLinie =
               istVorschau && vorschauGueltig && (vorschauZeilen.includes(y) || vorschauSpalten.includes(x));
             const leer = belegtFarbe === null && !istVorschau;
-            const blitzVersatz = blitzZellen?.get(schluessel);
+            const blitz = blitzZellen?.get(schluessel);
             // Nur schon belegte Steine leuchten mit — die Lücke bleibt
             // dunkel und zeigt dadurch gleich, wo das Teil hinmuss.
             const istHinweis =
               belegtFarbe !== null &&
               !istVorschau &&
-              blitzVersatz === undefined &&
+              blitz === undefined &&
               (hinweisZeilen.includes(y) || hinweisSpalten.includes(x));
 
             let farbe: string | undefined;
@@ -430,20 +455,38 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
                     : undefined
                 }
               >
-                {blitzVersatz !== undefined && (
+                {blitz !== undefined && (
                   <>
+                    {/* Erst der Stein selbst — in seiner Farbe, mit Glanz.
+                        Er schrumpft und dreht sich weg. */}
+                    <span
+                      className="aufloesen-blitz glanzstein absolute inset-0 rounded-md"
+                      style={
+                        {
+                          '--verzoegerung': `${blitz.versatz}ms`,
+                          backgroundColor: blockFarbe(blitz.farbe),
+                        } as CSSProperties
+                      }
+                    />
+                    {/* Der weiße Blitz darüber macht aus dem Schrumpfen ein
+                        Aufleuchten — dieselbe Machart wie in Line Fall. */}
                     <span
                       className="aufloesen-blitz absolute inset-0 rounded-md bg-white"
-                      style={{ '--verzoegerung': `${blitzVersatz}ms` } as CSSProperties}
+                      style={{ '--verzoegerung': `${blitz.versatz}ms` } as CSSProperties}
                     />
-                    <span
-                      className="kruemel absolute top-1/2 left-1/2 size-1.5 rounded-full bg-white"
-                      style={{ '--verzoegerung': `${blitzVersatz}ms`, '--kx': '-10px', '--ky': '8px' } as CSSProperties}
-                    />
-                    <span
-                      className="kruemel absolute top-1/2 left-1/2 size-1.5 rounded-full bg-white"
-                      style={{ '--verzoegerung': `${blitzVersatz}ms`, '--kx': '9px', '--ky': '11px' } as CSSProperties}
-                    />
+                    {KRUEMEL.map((k) => (
+                      <span
+                        key={k.kx}
+                        className="kruemel absolute top-1/2 left-1/2 size-1.5 rounded-full bg-white"
+                        style={
+                          {
+                            '--verzoegerung': `${blitz.versatz}ms`,
+                            '--kx': k.kx,
+                            '--ky': k.ky,
+                          } as CSSProperties
+                        }
+                      />
+                    ))}
                   </>
                 )}
               </button>

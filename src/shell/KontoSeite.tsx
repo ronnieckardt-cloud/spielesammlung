@@ -4,6 +4,14 @@ import { abmelden, anmelden, registrieren } from './konto';
 import type { Konto } from './konto';
 
 /**
+ * Der Einladungscode. Steht auch im Klartext in der Datenbank
+ * (`spiel_einladung`); geprüft wird er dort, nicht hier. Diese Zeile ist
+ * nur die Anzeige zum Weitergeben — geheim ist er ohnehin nicht, jeder
+ * Eingeladene kennt ihn danach.
+ */
+const EINLADUNGSCODE = 'FLORIAN2026';
+
+/**
  * Anmelden und Registrieren.
  *
  * Bewusst schlicht: zwei Felder, ein Knopf. Für ein Kind gilt bei jeder
@@ -20,6 +28,63 @@ import type { Konto } from './konto';
  */
 
 type Modus = 'anmelden' | 'neu';
+
+/**
+ * Der Einladungscode zum Weitergeben.
+ *
+ * Er steht bewusst **im Klartext auf der Seite** und nicht nur in einer
+ * Datenbank: Ronni ist meistens unterwegs, wenn ein Kind fragt, und soll
+ * nicht erst irgendwo nachschlagen müssen. Missbrauch ist auch nicht
+ * schlimm — der Server lässt höchstens fünf neue Konten am Tag durch, und
+ * jeder neue Name ist am Ende nur ein weiterer Eintrag in der Bestenliste.
+ *
+ * Zwei Knöpfe, weil beides gebraucht wird: Teilen öffnet auf dem Handy
+ * direkt WhatsApp und Co., Kopieren ist der Rückfall auf dem Rechner.
+ */
+function Einladen() {
+  const [gemerkt, setGemerkt] = useState(false);
+
+  const adresse = `${window.location.origin}${window.location.pathname}`;
+  const nachricht =
+    `Komm in Florians Spielesammlung! 🎮\n\n${adresse}\n\n` +
+    `Tipp oben rechts auf „Anmelden", dann auf „Ich brauche ein neues Konto".\n` +
+    `Einladungscode: ${EINLADUNGSCODE}\n\n` +
+    `Eine E-Mail-Adresse brauchst du nicht — nur einen Spielnamen und ein Passwort.`;
+
+  const teilen = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Florians Spielesammlung', text: nachricht });
+        return;
+      }
+      await navigator.clipboard.writeText(nachricht);
+      setGemerkt(true);
+      window.setTimeout(() => setGemerkt(false), 2500);
+    } catch {
+      // Abgebrochen oder nicht erlaubt — der Code steht ja trotzdem da.
+    }
+  };
+
+  return (
+    <div className="rounded-karte border border-rand bg-flaeche p-4 text-left">
+      <h2 className="font-bold">Freunde einladen</h2>
+      <p className="mt-1 text-sm text-gedaempft">
+        Wer mitspielen will, braucht diesen Code. Er gilt für bis zu fünf neue Konten am Tag.
+      </p>
+      <p className="mt-3 rounded-xl bg-grund/60 py-3 text-center text-2xl font-black tracking-[0.2em] select-all">
+        {EINLADUNGSCODE}
+      </p>
+      <button
+        type="button"
+        onClick={teilen}
+        style={{ backgroundColor: 'var(--color-fokus)' }}
+        className="spielknopf spielknopf-gross mt-3 w-full text-grund"
+      >
+        {gemerkt ? '✓ Kopiert' : 'Einladung verschicken'}
+      </button>
+    </div>
+  );
+}
 
 export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZurueck: () => void }) {
   const [modus, setModus] = useState<Modus>('anmelden');
@@ -42,6 +107,8 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
             Deine Ergebnisse landen jetzt auf allen deinen Geräten und in der
             Bestenliste.
           </p>
+
+          <Einladen />
           {/* Klein und unten: Wer sich abmeldet und sein Passwort vergisst,
               kommt ohne Hilfe nicht mehr in sein Konto. */}
           <button
@@ -133,7 +200,7 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
               className="rounded-xl border border-rand bg-flaeche px-4 py-3 text-base"
             />
             <span className="text-xs font-normal text-gedaempft">
-              Den bekommst du von Ronni.
+              Den bekommst du von Ronni oder von jemandem, der schon dabei ist.
             </span>
           </label>
         )}

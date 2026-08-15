@@ -12,6 +12,25 @@ export const ROEHRCHEN_HOEHE = 200;
 export const ROEHRCHEN_ABSTAND = 22;
 export const MAX_SPALTEN = 6;
 
+/**
+ * Wie viel oben im Glas frei bleibt, auch wenn es voll ist.
+ *
+ * Ein bis an den Rand gefülltes Glas sieht nicht nach Flüssigkeit aus,
+ * sondern nach einem farbigen Balken — dieselbe Beobachtung, die jeder
+ * Getränkehersteller macht. Mit einem Fingerbreit Luft liest es sich sofort
+ * als „gefülltes Gefäß".
+ */
+export const LUFTRAUM_OBEN = 18;
+
+/**
+ * Die Höhe **einer** Farbschicht. Muss überall dieselbe sein: Die Anzeige
+ * rechnet Schichten in Höhen um, die Gieß-Animation rechnet Höhen zurück in
+ * Schichten. Zwei getrennte Formeln driften irgendwann auseinander.
+ */
+export function schichthoehe(kapazitaet: number): number {
+  return (ROEHRCHEN_HOEHE - LUFTRAUM_OBEN) / kapazitaet;
+}
+
 export type Punkt = { x: number; y: number };
 
 /** Ab wann wird umgebrochen — bis MAX_SPALTEN eine Reihe, sonst zwei gleich lange. */
@@ -98,10 +117,18 @@ export function ausgusskante(position: Punkt, winkelGrad: number): Punkt {
  * Reine Zeit→Zustand-Funktionen, ohne jede Kenntnis von React oder DOM —
  * dieselbe Berechnung, die die Anzeige benutzt, lässt sich hier durchtesten.
  */
-export const ANHEBEN_BIS = 0.1;
-export const HINFLIEGEN_BIS = 0.4;
-export const KIPPEN_BIS = 0.52;
-export const GIESSEN_BIS = 0.78;
+/*
+ * Das Gießen selbst ist der längste Abschnitt, und das ist Absicht: Vorher
+ * lag es zwischen 0,52 und 0,78 — bei knapp einer Sekunde Gesamtdauer also
+ * rund eine Viertelsekunde, in der das Röhrchen außerdem fast auf dem Kopf
+ * stand. Der sinkende Füllstand war da schlicht nicht zu sehen, und es
+ * wirkte, als sei die Quelle erst am Ende schlagartig leer. Jetzt bleibt
+ * über ein Drittel der Zeit fürs eigentliche Gießen.
+ */
+export const ANHEBEN_BIS = 0.09;
+export const HINFLIEGEN_BIS = 0.34;
+export const KIPPEN_BIS = 0.44;
+export const GIESSEN_BIS = 0.8;
 export const AUFRICHTEN_BIS = 0.9;
 
 const KIPP_WINKEL = -128; // Grad — genug, dass die Öffnung klar nach unten zeigt

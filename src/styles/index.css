@@ -247,16 +247,22 @@
 
 /* Ruhigerer Dauerhinweis: Diese Reihe ließe sich mit einem der Teile im
    Tablett wegmachen. Bewusst langsamer und schwächer als der Puls oben —
-   der sagt „jetzt sofort", dieser nur „hier wäre was zu holen". */
+   der sagt „jetzt sofort", dieser nur „hier wäre was zu holen".
+
+   Der Ring liegt **innen**. Das ist der Punkt, an dem die erste Fassung
+   gescheitert ist: Sie hatte einen äußeren Schein, und im Raster stoßen die
+   Zellen aneinander — die Nachbarn rechts und unten kommen später im Baum
+   und übermalen ihn einfach. Sichtbar blieb fast nichts, obwohl die Logik
+   die ganze Zeit richtig gerechnet hat. */
 @keyframes linie-moeglich {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0) inset;
     filter: brightness(1);
   }
   50% {
-    box-shadow: 0 0 6px 1px rgba(250, 204, 21, 0.75);
-    filter: brightness(1.25);
+    box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.9) inset;
+    filter: brightness(1.35);
   }
 }
 
@@ -766,23 +772,55 @@
 
    Endet bei 100 % in Ruhelage; das kurze Überschwingen davor ist das
    Aufsetzen. */
+/* Der Stein fällt in seine Spalte und federt aus.
+ *
+ * Drei Dinge machen aus „erscheint" ein „fällt": Der Fall beschleunigt
+ * (die Zeitkurve unten), beim Aufprall wird der Stein kurz platt gedrückt,
+ * und er springt zweimal immer kleiner nach. Ohne das Plattdrücken sieht
+ * selbst ein Nachfedern aus wie ein Fahrstuhl.
+ *
+ * `translate` und `scale` als eigenständige Eigenschaften, nicht als
+ * `transform`: Tailwind setzt seine Hilfsklassen genauso, ein gemeinsames
+ * `transform` würde sie überschreiben.
+ *
+ * Der Drehpunkt liegt unten — beim Stauchen soll der Stein am Boden kleben
+ * bleiben und nicht in der Luft schrumpfen. */
 @keyframes stein-faellt {
   0% {
     translate: 0 var(--fallhoehe, -300%);
+    scale: 1 1;
   }
-  70% {
+  52% {
     translate: 0 0;
+    scale: 1 1;
   }
-  82% {
-    translate: 0 -9%;
+  60% {
+    translate: 0 0;
+    scale: 1.12 0.84;
+  }
+  74% {
+    translate: 0 -15%;
+    scale: 0.96 1.05;
+  }
+  86% {
+    translate: 0 0;
+    scale: 1.06 0.95;
+  }
+  94% {
+    translate: 0 -5%;
+    scale: 1 1;
   }
   100% {
     translate: 0 0;
+    scale: 1 1;
   }
 }
 
 .stein-faellt {
-  animation: stein-faellt 0.34s cubic-bezier(0.45, 0, 0.7, 1);
+  /* Beschleunigt fallen, danach ausfedern — deshalb eine Kurve, die vorn
+     langsam anfängt und hinten schnell wird. */
+  animation: stein-faellt 0.46s cubic-bezier(0.4, 0, 0.75, 1);
+  transform-origin: center bottom;
 }
 
 /* Die vier Steine, die die Partie entscheiden, blinken ruhig weiter.
@@ -1052,18 +1090,20 @@
   flex-direction: column;
 }
 
-/* Wenn der Nutzer wenig Bewegung möchte — per Systemeinstellung oder
-   per Schalter in den Einstellungen. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
+/* Wenn wenig Bewegung gewünscht ist.
 
+   **Nur** über die Klasse, nicht zusätzlich über eine Medienabfrage. Die
+   Systemeinstellung wird trotzdem beachtet: `einstellungenLesen` in
+   `shell/speicher.ts` liest `prefers-reduced-motion` und setzt daraus den
+   Anfangswert des Schalters.
+
+   Eine zweite, ungefilterte `@media (prefers-reduced-motion: reduce)`-Regel
+   stand hier mal daneben — und die war ein echter Fehler: Auf einem iPhone
+   mit „Bewegung reduzieren" waren dadurch **alle** Animationen tot, und der
+   Schalter in den Einstellungen konnte sie nicht zurückholen. Genau so sind
+   in Block Burst das Zerbröseln und in Color Pour das Konfetti verschwunden.
+   Wer die Systemeinstellung an hat, kann jetzt trotzdem in dieser einen App
+   Bewegung erlauben; wer nichts anfasst, bekommt weiterhin Ruhe. */
 .ruhig *,
 .ruhig *::before,
 .ruhig *::after {

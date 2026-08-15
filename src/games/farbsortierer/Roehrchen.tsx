@@ -1,4 +1,4 @@
-import { ROEHRCHEN_BREITE, ROEHRCHEN_HOEHE, ROEHRCHEN_UMRISS } from './geometrie';
+import { ROEHRCHEN_BREITE, ROEHRCHEN_HOEHE, ROEHRCHEN_UMRISS, schichthoehe } from './geometrie';
 import type { FarbEintrag } from './farben';
 
 type Block = { farbe: number; einheiten: number };
@@ -42,6 +42,7 @@ export function Roehrchen({
   fertig = false,
   ruhig = false,
   teilschicht,
+  zumRandGeneigt = 0,
 }: {
   farben: readonly number[];
   kapazitaet: number;
@@ -55,14 +56,33 @@ export function Roehrchen({
   /** Zusätzliche, stufenlose Höhe oberhalb von `farben` — für die Gieß-Animation:
    *  beim Ziel wächst sie von 0 an, bei der Quelle schrumpft sie auf 0. */
   teilschicht?: { farbe: number; hoehe: number };
+  /**
+   * 0 = steht aufrecht, 1 = Öffnung zeigt nach unten.
+   *
+   * Verschiebt die Flüssigkeit zur Öffnung hin. Ohne das klebte sie beim
+   * Ausgießen am **geschlossenen** Ende — also oben am Himmel, während unten
+   * an der Öffnung leeres Glas stand. Das sah nicht nur falsch aus, es
+   * machte auch den sinkenden Füllstand unlesbar.
+   *
+   * Stufenlos und nicht als Umschalter bei 90°: Ein Sprung mitten im Kippen
+   * wäre auffälliger als der Fehler, den er behebt.
+   */
+  zumRandGeneigt?: number;
 }) {
-  const schichthoehe = ROEHRCHEN_HOEHE / kapazitaet;
+  // Oben bleibt Luft, siehe LUFTRAUM_OBEN — ein randvolles Glas sieht nach
+  // farbigem Balken aus, nicht nach Flüssigkeit.
+  const hoeheJeSchicht = schichthoehe(kapazitaet);
   const bloecke = bloeckeBauen(
     farben,
-    teilschicht && { farbe: teilschicht.farbe, einheiten: teilschicht.hoehe / schichthoehe },
+    teilschicht && { farbe: teilschicht.farbe, einheiten: teilschicht.hoehe / hoeheJeSchicht },
   );
 
-  let y = ROEHRCHEN_HOEHE;
+  // Gesamthöhe der Flüssigkeit — sie bestimmt, wo der Stapel anfängt, wenn
+  // das Röhrchen gekippt ist.
+  const gesamt = bloecke.reduce((summe, b) => summe + b.einheiten * hoeheJeSchicht, 0);
+  const neigung = Math.min(1, Math.max(0, zumRandGeneigt));
+  // Aufrecht steht die Flüssigkeit auf dem Boden, kopfüber an der Öffnung.
+  let y = (1 - neigung) * (ROEHRCHEN_HOEHE - gesamt) + gesamt;
 
   return (
     <g style={{ filter: ausgewaehlt ? 'drop-shadow(0 0 8px var(--color-fokus))' : undefined }}>
@@ -77,7 +97,7 @@ export function Roehrchen({
 
       <g clipPath="url(#roehrchen-form)">
         {bloecke.map((block, i) => {
-          const hoehe = block.einheiten * schichthoehe;
+          const hoehe = block.einheiten * hoeheJeSchicht;
           y -= hoehe;
           const oben = y;
           const eintrag = palette[block.farbe];

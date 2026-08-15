@@ -1258,6 +1258,63 @@ braucht deshalb ein eigenes `z-20`.
 **Noch nicht gebaut:** Battle, Co-op, Avatare. Die Tabellen dafür gibt es
 noch nicht.
 
+## Wenn Animationen „einfach weg" sind
+
+Ronni meldete drei Dinge auf einmal: In Block Burst löse sich keine Reihe
+mehr auf („nur kurz einmal rausgezoomt"), in Color Pour komme kein Konfetti,
+und der Hinweis-Puls sei verschwunden. Dahinter steckten **zwei** Ursachen,
+und beide sind es wert, gemerkt zu werden.
+
+**1. Die Systemeinstellung hat den Schalter überstimmt.** Neben `.ruhig`
+stand in `index.css` eine ungefilterte
+`@media (prefers-reduced-motion: reduce)`-Regel. Auf einem iPhone mit
+„Bewegung reduzieren" waren damit **alle** Animationen tot — und der
+Schalter in den Einstellungen konnte sie nicht zurückholen. Die Regel ist
+weg; die Systemeinstellung wirkt weiterhin, aber nur noch als **Startwert**
+des Schalters (`einstellungenLesen`). Wer die Systemeinstellung an hat, darf
+in dieser einen App trotzdem Bewegung erlauben.
+
+*Merksatz:* Gibt es für etwas einen Schalter in der App, darf keine
+Medienabfrage daneben dasselbe unabänderlich festlegen.
+
+**2. Block Burst zerbröselte in Weiß.** `setBlitzZellen` und `setZ` landen
+im selben Rendern — das Feld ist beim Start der Animation also längst leer,
+und übrig blieb ein weißes Quadrat, das kurz aufblitzte. Die Steine
+verschwanden schlagartig; genau das beschreibt „die Animation ist komplett
+weg". Die abgeräumten Zellen führen ihre **Farbe** jetzt mit, wie Line Fall
+es mit `geloescht.zeilen[].farben` seit jeher macht. Nachgemessen: 16
+zerbröselnde Zellen in vier verschiedenen Farben statt nur Weiß.
+
+**3. Der Hinweis-Puls war da, aber unsichtbar.** `.linie-moeglich` pulste
+über einen **äußeren** Schein. Im Raster stoßen die Zellen aneinander, die
+Nachbarn rechts und unten kommen später im Baum und übermalen ihn einfach.
+Jetzt ein innerer Ring. *Merksatz:* In einem dichten Raster ist ein äußerer
+`box-shadow` verlorene Mühe.
+
+**4. Das Rundenende lag unter dem Spielbrett.** `.spielbuehne > *` gibt dem
+Brett `z-index: 1`, und ein positioniertes Element mit Stufe 1 wird über
+einem mit `auto` gezeichnet — ganz gleich, was weiter unten im Baum steht.
+Der Dialog in `Spielrahmen.tsx` hat deshalb `z-20`. Das betraf **jedes**
+Spiel mit Bühne, aufgefallen ist es bei Blade Toss, weil dort der Stamm
+groß und mittig sitzt.
+
+## Color Pour — Glas und Gießen
+
+- **Oben bleibt Luft** (`LUFTRAUM_OBEN` in `geometrie.ts`). Ein randvolles
+  Glas liest sich als farbiger Balken, nicht als Flüssigkeit. Die Schichthöhe
+  kommt jetzt aus **einer** Funktion (`schichthoehe(kapazitaet)`), die
+  Anzeige und Gieß-Animation gemeinsam benutzen — zwei getrennte Formeln
+  wären irgendwann auseinandergedriftet.
+- **Das Gießen dauert länger.** Vorher lag der Gieß-Abschnitt zwischen 0,52
+  und 0,78 von knapp einer Sekunde, also rund eine Viertelsekunde. In der
+  Zeit war der sinkende Füllstand nicht zu sehen; es wirkte, als sei die
+  Quelle erst am Schluss schlagartig leer. Jetzt über ein Drittel der Zeit.
+- **Die Flüssigkeit rutscht zur Öffnung** (`zumRandGeneigt` an `Roehrchen`).
+  Vorher klebte sie beim Ausgießen am **geschlossenen** Ende — also oben,
+  während unten an der Ausgusskante leeres Glas stand. Stufenlos mit dem
+  Kippwinkel, nicht als Umschalter bei 90°: Ein Sprung mitten im Kippen wäre
+  auffälliger als der Fehler, den er behebt.
+
 ## Ausliefern
 
 Läuft auf dem **Hetzner-Webpaket** unter `spiele.klarvorteil.de`, nicht mehr

@@ -22,6 +22,7 @@ import {
   rasterBreite,
   rasterHoehe,
   roehrchenPosition,
+  schichthoehe,
 } from './geometrie';
 import { FarbMusterDefs } from './FarbMusterDefs';
 import { Roehrchen } from './Roehrchen';
@@ -36,7 +37,10 @@ const GIESS_DAUER_MS = 950;
 /** So lange fliegt das Konfetti über einem fertigen Röhrchen. */
 const KONFETTI_DAUER_MS = 1350;
 
-const SCHICHTHOEHE = ROEHRCHEN_HOEHE / KAPAZITAET;
+const SCHICHTHOEHE = schichthoehe(KAPAZITAET);
+
+/** Bei diesem Winkel zeigt die Öffnung ganz nach unten (siehe geometrie.ts). */
+const VOLLE_KIPPUNG_GRAD = 128;
 
 /**
  * Welches Level als Nächstes drankommt — als Modul-Variable, nicht als
@@ -417,6 +421,10 @@ export function Farbsortierer({
               kapazitaet={KAPAZITAET}
               palette={palette}
               teilschicht={{ farbe: guss.farbe, hoehe: (1 - giessAnteil) * guss.anzahl * SCHICHTHOEHE }}
+              // Je schräger, desto weiter rutscht die Flüssigkeit zur
+              // Öffnung — bei voller Kippung liegt sie ganz an der Ausguss-
+              // kante, dort wo der Strahl herauskommt.
+              zumRandGeneigt={Math.abs(flug.winkelGrad) / VOLLE_KIPPUNG_GRAD}
             />
           </g>
         )}

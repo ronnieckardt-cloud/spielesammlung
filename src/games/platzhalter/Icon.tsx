@@ -29,19 +29,27 @@ export function PlatzhalterIcon({ className }: { className?: string }) {
         <circle key={`${s.x},${s.y}`} cx={s.x} cy={s.y} r={s.r} fill="#ffffff" opacity="0.7" />
       ))}
 
-      {/* Der fallende Stern samt Schweif, genau über dem Maul — er ist
-          gleich drin. */}
-      <path d="M32 0 L32 4" stroke="#facc15" strokeWidth="2" strokeLinecap="round" opacity="0.5" />
+      {/* Der fallende Stern, genau über dem Maul — er ist gleich drin.
+          Bewusst klein: In der ersten Fassung war er fast so hoch wie die
+          Figur und drückte sie ans Schriftband. Die Figur ist der Held des
+          Symbols, der Stern nur ihr Futter. */}
       <path
-        d="M32 3 L34.1 9.2 L40.7 9.4 L35.4 13.4 L37.3 19.8 L32 16 L26.7 19.8 L28.6 13.4 L23.3 9.4 L29.9 9.2 Z"
+        d="M32 2 L33.53 5.9 L37.71 6.15 L34.47 8.8 L35.53 12.85 L32 10.6 L28.47 12.85 L29.53 8.8 L26.29 6.15 L30.47 5.9 Z"
         fill="#facc15"
       />
 
-      {/* Der Sternenschlucker, aus dem Spiel übernommen — mittig, damit das
-          Maul unter dem Stern steht. Ohne Bodenschatten: hier schwebt er
-          vor dem Nachthimmel, ein Schatten hätte nichts, worauf er fällt —
-          und er käme dem Schriftband darunter gefährlich nah. */}
-      <g transform="translate(15.5,12) scale(0.33)">
+      {/* Der Sternenschlucker, aus dem Spiel übernommen.
+          Ohne Bodenschatten: hier schwebt er vor dem Nachthimmel, ein
+          Schatten hätte nichts, worauf er fällt.
+
+          Die Zahlen sind ausgerechnet, nicht geschätzt. Die Figur füllt in
+          `Figur.tsx` das Feld x = 4…96 und y = 23…94. Bei `scale(0.36)`
+          bringt `translate(14, 8.2)` sie damit auf x = 15,4…48,6 (Mitte
+          genau 32 von 64) und y = 16,5…42,0 — also mittig und mit zwei
+          Einheiten Luft über dem Schriftband bei y = 44. Vorher saß sie
+          bündig an diesem Band; auf einem Handy sah das aus, als hinge sie
+          unten aus der Kachel heraus. */}
+      <g transform="translate(14,8.2) scale(0.36)">
         <SternenschluckerTeile mitBodenschatten={false} />
       </g>
     </AppSymbol>
