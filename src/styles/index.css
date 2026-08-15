@@ -983,6 +983,23 @@
   animation: seite-rein var(--zeit-mittel) var(--kurve) both;
 }
 
+/* Das Podest wächst von unten hoch — Gold zuletzt, weil es am höchsten
+   ist und dadurch am längsten braucht. Die Staffelung macht aus drei
+   gleichzeitig erscheinenden Säulen eine kleine Siegerehrung.
+   `transform-origin: bottom` ist der ganze Trick: Ohne ihn skaliert die
+   Säule um ihre Mitte und sinkt beim Wachsen scheinbar in den Boden. */
+@keyframes podest-hoch {
+  from {
+    opacity: 0;
+    transform: scaleY(0.55) translateY(10px);
+  }
+}
+
+.podest-auf {
+  transform-origin: bottom;
+  animation: podest-hoch var(--zeit-lang) var(--kurve-raus) both;
+}
+
 .ruhig .kachel-rein,
 .ruhig .rein-von-oben,
 .ruhig .rein-von-unten,

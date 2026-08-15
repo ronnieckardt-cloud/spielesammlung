@@ -8,7 +8,7 @@
  * Beim Veröffentlichen einer neuen Fassung die Zahl in SPEICHER erhöhen.
  */
 
-const SPEICHER = 'spielesammlung-v38';
+const SPEICHER = 'spielesammlung-v39';
 const GRUNDGERUEST = ['/', '/index.html', '/manifest.webmanifest'];
 
 /**

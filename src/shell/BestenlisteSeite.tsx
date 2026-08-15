@@ -2,12 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import type { GameApi } from '../core/types';
 import { spiele } from '../core/registry';
 import { Seite } from './Seite';
-import { bestenlisteLesen, serverlisteLesen, serverlisteSchreiben } from './speicher';
+import {
+  bestenlisteLesen,
+  fortschrittLesen,
+  serverlisteLesen,
+  serverlisteSchreiben,
+} from './speicher';
 import { bestenlistenHolen } from './konto';
 import type { Bestenlisten, Konto } from './konto';
 
 /**
- * Die Bestenliste — jetzt mit zwei Blickwinkeln.
+ * Die Bestenliste — mit zwei Blickwinkeln.
  *
  * **Alle** zeigt, wer insgesamt vorn liegt und wer je Spiel auf dem
  * Treppchen steht. Das braucht ein Konto und Netz.
@@ -33,38 +38,229 @@ function datum(iso: string): string {
 
 /** Die drei Treppchenplätze als Zeichen — Farbe ist nie das einzige Merkmal. */
 const MEDAILLEN = ['🥇', '🥈', '🥉'] as const;
+const MEDAILLENFARBE = ['var(--color-gold)', 'var(--color-silber)', 'var(--color-bronze)'] as const;
 
-function Spielkopf({ spiel }: { spiel: GameApi }) {
+/** Eine Karte im Stil der übrigen Hüllenseiten: durchscheinend, nicht schwarz. */
+function Karte({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <section
+      className={`rounded-2xl border border-white/12 bg-white/[0.06] p-4 backdrop-blur-sm ${className}`}
+      style={{ boxShadow: 'var(--schatten-2)' }}
+    >
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Das Podest für die besten Drei.
+ *
+ * **Gold steht in der Mitte und am höchsten, nicht links.** Das ist der
+ * ganze Unterschied zwischen einem Podest und einer nummerierten Liste:
+ * Eine Liste liest man von oben nach unten und muss die Zahlen vergleichen;
+ * ein Podest sieht man auf einen Blick, weil die Höhe die Information ist.
+ * Stünde Platz 1 links, wäre es wieder eine Liste — nur waagerecht.
+ *
+ * Die Reihenfolge im Markup ist trotzdem **1, 2, 3** und wird nur optisch
+ * umsortiert. Ein Vorleseprogramm liest sonst „Silber, Gold, Bronze", und
+ * das ist schlicht falsch.
+ */
+function Podest({ oben }: { oben: readonly { name: string; punkte: number; ich?: boolean }[] }) {
+  // Anzeigereihenfolge: Silber, Gold, Bronze. Fehlt jemand, rückt nichts nach —
+  // ein Podest mit zwei Stufen ist ehrlicher als eines mit einer Lücke in der Mitte.
+  const ordnung = [1, 0, 2] as const;
+  /*
+   * **Nach Platz sortiert, nicht nach Anzeigereihenfolge.** Genau da steckte
+   * ein Fehler: Die Liste stand zuerst in der Reihenfolge Silber-Gold-Bronze
+   * da, abgegriffen wurde sie aber mit dem Platzindex. Ergebnis: Silber
+   * bekam die höchste Stufe, Gold die mittlere — das Podest sagte das
+   * Gegenteil dessen aus, was es zeigen soll. Im Bild fällt so etwas sofort
+   * auf, im Code überhaupt nicht.
+   */
+  const hoehen = ['4.75rem', '3.25rem', '2.5rem'] as const;
+
+  return (
+    <ol className="flex items-end justify-center gap-2 pt-2">
+      {ordnung.map((platzIndex) => {
+        const eintrag = oben[platzIndex];
+        if (!eintrag) return null;
+        const farbe = MEDAILLENFARBE[platzIndex]!;
+        return (
+          <li
+            key={platzIndex}
+            className="podest-auf flex min-w-0 flex-1 flex-col items-center"
+            style={{ animationDelay: `${platzIndex * 130}ms`, maxWidth: '7.5rem' }}
+          >
+            <span aria-hidden="true" className="text-2xl leading-none">
+              {MEDAILLEN[platzIndex]}
+            </span>
+
+            {/* Der Kreis mit dem Anfangsbuchstaben. Bis es Avatare gibt, ist
+                das die schnellste Art, einen Namen wiederzuerkennen — und er
+                gibt dem Podest oben eine Form statt nur Text. */}
+            <span
+              aria-hidden="true"
+              className="mt-1 grid size-11 place-items-center rounded-full text-base font-black text-black/75"
+              style={{
+                background: `radial-gradient(circle at 34% 28%, color-mix(in oklab, ${farbe} 55%, white), ${farbe})`,
+                boxShadow: `inset 0 -2px 5px rgb(0 0 0 / 0.28), 0 0 16px -4px ${farbe}`,
+              }}
+            >
+              {eintrag.name.slice(0, 1).toUpperCase()}
+            </span>
+
+            <span className="mt-1 w-full truncate text-center text-xs font-bold text-white">
+              {eintrag.name}
+              {eintrag.ich && <span className="ml-1 text-fokus">(du)</span>}
+            </span>
+            <span className="text-sm font-black tabular-nums" style={{ color: farbe }}>
+              {eintrag.punkte}
+            </span>
+
+            {/* Die Stufe selbst. Höhe = Platz, und das ist die eigentliche
+                Aussage des Bildes. */}
+            <span
+              aria-hidden="true"
+              className="mt-1.5 grid w-full place-items-center rounded-t-lg text-lg font-black text-white/85"
+              style={{
+                height: hoehen[platzIndex],
+                background: `linear-gradient(180deg, color-mix(in oklab, ${farbe} 42%, transparent), color-mix(in oklab, ${farbe} 12%, transparent))`,
+                borderTop: `2px solid ${farbe}`,
+              }}
+            >
+              {platzIndex + 1}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Ein Platz in einer Rangliste — Zeile für alles ab Platz 4. */
+function Rangzeile({
+  platz,
+  name,
+  punkte,
+  unterzeile,
+  ich,
+}: {
+  platz: number;
+  name: string;
+  punkte: number;
+  unterzeile?: string;
+  ich?: boolean;
+}) {
+  return (
+    <li
+      className="flex items-center gap-3 rounded-xl px-2 py-1.5 text-sm tabular-nums"
+      style={
+        ich
+          ? {
+              background: 'color-mix(in oklab, var(--color-fokus) 22%, transparent)',
+              boxShadow: 'inset 0 0 0 1px color-mix(in oklab, var(--color-fokus) 45%, transparent)',
+            }
+          : undefined
+      }
+    >
+      <span
+        aria-hidden="true"
+        className="w-7 shrink-0 text-center font-black"
+        style={{ color: MEDAILLENFARBE[platz - 1] ?? 'var(--color-gedaempft)' }}
+      >
+        {MEDAILLEN[platz - 1] ?? platz}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-semibold">
+          {name}
+          {ich && <span className="ml-1 text-xs text-fokus">(du)</span>}
+        </span>
+        {unterzeile && <span className="block text-xs text-gedaempft">{unterzeile}</span>}
+      </span>
+      <span className="shrink-0 text-base font-black">{punkte}</span>
+    </li>
+  );
+}
+
+function Spielkopf({ spiel, rechts }: { spiel: GameApi; rechts?: React.ReactNode }) {
   const Icon = spiel.Icon;
   return (
-    <h3 className="flex items-center gap-2 font-semibold">
-      {/* Fertige App-Symbole stehen für sich, siehe Kachelmenue. */}
+    <h3 className="flex items-center gap-2.5 font-bold">
       {spiel.iconVollflaechig ? (
-        <Icon className="size-7 shrink-0 rounded-lg" />
+        <Icon className="size-8 shrink-0 rounded-lg" />
       ) : (
         <span
           aria-hidden="true"
           style={{ backgroundColor: spiel.accent }}
-          className="grid size-7 shrink-0 place-items-center rounded-lg text-white"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-white"
         >
           <Icon className="size-4" />
         </span>
       )}
-      {spiel.title}
+      <span className="min-w-0 flex-1 truncate">{spiel.title}</span>
+      {rechts}
     </h3>
   );
 }
 
 /** Ein Kasten je Spiel, in der festen Reihenfolge der Registrierung. */
-function Spielkasten({ spiel, children }: { spiel: GameApi; children: React.ReactNode }) {
+function Spielkasten({
+  spiel,
+  rechts,
+  children,
+}: {
+  spiel: GameApi;
+  rechts?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section
-      style={{ borderLeftColor: spiel.accent }}
-      className="rounded-karte border border-rand border-l-4 bg-flaeche p-4"
+      style={{ borderLeftColor: spiel.accent, boxShadow: 'var(--schatten-2)' }}
+      className="rounded-2xl border border-white/12 border-l-4 bg-white/[0.06] p-4 backdrop-blur-sm"
     >
-      <Spielkopf spiel={spiel} />
+      <Spielkopf spiel={spiel} rechts={rechts} />
       {children}
     </section>
+  );
+}
+
+/**
+ * Der Ladezustand als **Platzhalter in der Form des Ergebnisses**, nicht
+ * als Satz „Wird geladen …".
+ *
+ * Eine leere Fläche mit einem Wort darauf liest sich als Fehler. Ein
+ * Gerüst, das schon aussieht wie das, was gleich kommt, liest sich als
+ * „gleich da" — und wenn die Daten eintreffen, springt nichts, weil die
+ * Höhe schon stimmt.
+ */
+function Geruest() {
+  return (
+    <div className="flex flex-col gap-4" aria-hidden="true">
+      <Karte>
+        <span className="schimmer block h-4 w-32 rounded" />
+        <div className="mt-4 flex items-end justify-center gap-2">
+          {['3.25rem', '4.75rem', '2.5rem'].map((h, i) => (
+            <span key={i} className="flex flex-1 flex-col items-center gap-1.5" style={{ maxWidth: '7.5rem' }}>
+              <span className="schimmer size-11 rounded-full" />
+              <span className="schimmer h-3 w-14 rounded" />
+              <span className="schimmer w-full rounded-t-lg" style={{ height: h }} />
+            </span>
+          ))}
+        </div>
+      </Karte>
+      {[0, 1].map((i) => (
+        <Karte key={i}>
+          <div className="flex items-center gap-2.5">
+            <span className="schimmer size-8 rounded-lg" />
+            <span className="schimmer h-4 w-28 rounded" />
+          </div>
+          <div className="mt-3 flex flex-col gap-2">
+            <span className="schimmer h-4 w-full rounded" />
+            <span className="schimmer h-4 w-4/5 rounded" />
+          </div>
+        </Karte>
+      ))}
+    </div>
   );
 }
 
@@ -120,7 +316,7 @@ export function BestenlisteSeite({
     };
   }, [konto]);
 
-  // Treppchen je Spiel, einmal umsortiert statt vierzehnmal gefiltert.
+  // Treppchen je Spiel, einmal umsortiert statt zwanzigmal gefiltert.
   const treppchen = useMemo(() => {
     const nach = new Map<string, Bestenlisten['spitze']>();
     for (const eintrag of daten?.spitze ?? []) {
@@ -137,13 +333,13 @@ export function BestenlisteSeite({
   );
 
   return (
-    <Seite titel="Bestenliste" onZurueck={onZurueck}>
+    <Seite titel="Rangliste" onZurueck={onZurueck}>
       {/* Zwei große Schalter statt eines Auswahlmenüs — für einen Daumen
           leichter zu treffen, und man sieht beide Möglichkeiten auf einmal. */}
       <div
         role="tablist"
         aria-label="Blickwinkel"
-        className="mb-4 flex gap-1 rounded-2xl border border-rand bg-flaeche p-1"
+        className="mb-4 flex gap-1 rounded-2xl border border-white/12 bg-black/25 p-1"
       >
         {(
           [
@@ -157,9 +353,13 @@ export function BestenlisteSeite({
             role="tab"
             aria-selected={blick === wert}
             onClick={() => setBlick(wert)}
-            className={`min-h-11 flex-1 rounded-xl px-3 text-sm font-bold transition-colors ${
-              blick === wert ? 'bg-fokus text-grund' : 'text-gedaempft hover:bg-white/5'
-            }`}
+            className="min-h-11 flex-1 rounded-xl px-3 text-sm font-bold"
+            style={{
+              background: blick === wert ? 'var(--color-fokus)' : 'transparent',
+              color: blick === wert ? 'var(--color-grund)' : 'var(--color-gedaempft)',
+              boxShadow: blick === wert ? 'var(--schatten-2)' : 'none',
+              transition: `background var(--zeit-kurz) var(--kurve), color var(--zeit-kurz) var(--kurve)`,
+            }}
           >
             {beschriftung}
           </button>
@@ -205,8 +405,8 @@ function AlleSpieler({
 }) {
   if (!konto) {
     return (
-      <div className="rounded-karte border border-rand bg-flaeche p-6 text-center">
-        <p className="text-4xl" aria-hidden="true">
+      <Karte className="text-center">
+        <p className="text-5xl" aria-hidden="true">
           🏆
         </p>
         <h2 className="mt-3 text-lg font-black">Wer ist der Beste?</h2>
@@ -220,70 +420,79 @@ function AlleSpieler({
           // Siehe KontoSeite: `.spielknopf` steht ohne Ebene in der
           // CSS-Datei und schlägt damit jede Tailwind-Hintergrundklasse.
           style={{ backgroundColor: 'var(--color-fokus)' }}
-          className="spielknopf spielknopf-gross mt-5 w-full text-grund"
+          className="spielknopf spielknopf-gross druckbar mt-5 w-full text-grund"
         >
           Anmelden oder Konto anlegen
         </button>
-      </div>
+      </Karte>
     );
   }
 
   if (!daten) {
-    return (
-      <p className="rounded-karte border border-rand bg-flaeche p-6 text-center text-sm text-gedaempft">
-        {laedt ? 'Wird geladen …' : 'Die Bestenliste ist gerade nicht erreichbar. Kein Internet?'}
-      </p>
+    return laedt ? (
+      <Geruest />
+    ) : (
+      <Karte className="text-center">
+        <p className="text-4xl" aria-hidden="true">
+          📡
+        </p>
+        <h2 className="mt-3 font-black">Die Rangliste ist gerade nicht erreichbar</h2>
+        <p className="mt-1.5 text-sm text-gedaempft">
+          Vermutlich ist kein Internet da. Deine Punkte sind trotzdem gespeichert und gehen später
+          von allein mit hoch.
+        </p>
+      </Karte>
     );
   }
 
   const bespielt = spiele.filter((s) => (treppchen.get(s.id)?.length ?? 0) > 0);
   const frei = spiele.filter((s) => (treppchen.get(s.id)?.length ?? 0) === 0);
+  const podest = daten.gesamt.slice(0, 3);
+  const dahinter = daten.gesamt.slice(3);
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-karte border border-rand bg-flaeche p-4">
+      <Karte>
         <h2 className="font-black">Gesamtwertung</h2>
         <p className="mt-0.5 text-xs text-gedaempft">
           Punkte für gute Plätze in jedem einzelnen Spiel — nicht die Spielpunkte selbst. So zählt
           Quiz Time genauso viel wie Block Burst.
         </p>
+
         {daten.gesamt.length === 0 ? (
-          <p className="mt-3 text-sm text-gedaempft">Noch hat niemand gespielt. Fang du an!</p>
+          <div className="mt-4 text-center">
+            <p className="text-4xl" aria-hidden="true">
+              🎬
+            </p>
+            <p className="mt-2 text-sm font-bold">Noch hat niemand gespielt.</p>
+            <p className="mt-1 text-sm text-gedaempft">Der erste Platz gehört dir. Fang an!</p>
+          </div>
         ) : (
-          <ol className="mt-3 flex flex-col gap-1">
-            {daten.gesamt.map((eintrag, i) => (
-              <li
-                key={`${eintrag.name}-${i}`}
-                className={`flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm tabular-nums ${
-                  eintrag.ich ? 'bg-fokus/20 ring-1 ring-fokus/40' : ''
-                }`}
-              >
-                <span aria-hidden="true" className="w-6 shrink-0 text-center">
-                  {MEDAILLEN[i] ?? `${i + 1}.`}
-                </span>
-                {/* Name und Zahlen untereinander, nicht nebeneinander: Auf
-                    einem 375er-Handy blieb dem Namen sonst so wenig Platz,
-                    dass er nach drei Buchstaben abgeschnitten war. */}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold">
-                    {eintrag.name}
-                    {eintrag.ich && <span className="ml-1 text-xs text-fokus">(du)</span>}
-                  </span>
-                  <span className="block text-xs text-gedaempft">
-                    {eintrag.gespielteSpiele} {eintrag.gespielteSpiele === 1 ? 'Spiel' : 'Spiele'}
-                    {eintrag.siege > 0 && ` · ${eintrag.siege}× erster`}
-                  </span>
-                </span>
-                <span className="shrink-0 text-lg font-black">{eintrag.punkte}</span>
-              </li>
-            ))}
-          </ol>
+          <>
+            <Podest oben={podest} />
+            {dahinter.length > 0 && (
+              <ol className="mt-4 flex flex-col gap-1 border-t border-white/10 pt-3">
+                {dahinter.map((eintrag, i) => (
+                  <Rangzeile
+                    key={`${eintrag.name}-${i}`}
+                    platz={i + 4}
+                    name={eintrag.name}
+                    punkte={eintrag.punkte}
+                    ich={eintrag.ich}
+                    unterzeile={`${eintrag.gespielteSpiele} ${eintrag.gespielteSpiele === 1 ? 'Spiel' : 'Spiele'}${
+                      eintrag.siege > 0 ? ` · ${eintrag.siege}× erster` : ''
+                    }`}
+                  />
+                ))}
+              </ol>
+            )}
+          </>
         )}
-      </section>
+      </Karte>
 
-      <h2 className="mt-1 font-black">Treppchen je Spiel</h2>
+      {bespielt.length > 0 && <h2 className="mt-1 px-1 font-black">Treppchen je Spiel</h2>}
 
-      {/* Nur Spiele, in denen wirklich jemand gespielt hat. Vierzehn Kästen
+      {/* Nur Spiele, in denen wirklich jemand gespielt hat. Zwanzig Kästen
           mit „hier war noch niemand" wären eine Seite Leere — die freien
           Spiele stehen unten in **einer** Zeile, und die liest sich sogar wie
           eine Einladung. */}
@@ -296,27 +505,22 @@ function AlleSpieler({
 
         return (
           <Spielkasten key={spiel.id} spiel={spiel}>
-            <ol className="mt-2 flex flex-col gap-1">
+            <ol className="mt-2.5 flex flex-col gap-1">
               {oben.map((eintrag) => (
-                <li
+                <Rangzeile
                   key={`${eintrag.platz}-${eintrag.name}`}
-                  className={`flex items-baseline gap-3 rounded-lg px-2 py-1 text-sm tabular-nums ${
-                    eintrag.ich ? 'bg-fokus/20 font-bold ring-1 ring-fokus/40' : ''
-                  }`}
-                >
-                  <span aria-hidden="true" className="w-6 shrink-0 text-center">
-                    {MEDAILLEN[eintrag.platz - 1] ?? `${eintrag.platz}.`}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">
-                    {eintrag.name}
-                    {eintrag.ich && <span className="ml-1 text-xs text-fokus">(du)</span>}
-                  </span>
-                  <span className="font-semibold">{eintrag.punkte}</span>
-                </li>
+                  platz={eintrag.platz}
+                  name={eintrag.name}
+                  punkte={eintrag.punkte}
+                  ich={eintrag.ich}
+                />
               ))}
             </ol>
             {eigenExtra && (
-              <p className="mt-2 rounded-lg bg-fokus/15 px-2 py-1 text-sm tabular-nums">
+              <p
+                className="mt-2 rounded-xl px-2.5 py-1.5 text-sm tabular-nums"
+                style={{ background: 'color-mix(in oklab, var(--color-fokus) 16%, transparent)' }}
+              >
                 Dein Platz: <strong>{eigenExtra.platz}</strong> mit {eigenExtra.punkte} Punkten
               </p>
             )}
@@ -325,8 +529,8 @@ function AlleSpieler({
       })}
 
       {frei.length > 0 && (
-        <section className="rounded-karte border border-dashed border-rand p-4">
-          <h3 className="font-semibold">
+        <section className="rounded-2xl border border-dashed border-white/25 p-4">
+          <h3 className="font-bold">
             {bespielt.length === 0 ? 'Alle Plätze sind frei' : 'Hier ist der erste Platz noch frei'}
           </h3>
           <p className="mt-1 text-sm text-gedaempft">{frei.map((s) => s.title).join(' · ')}</p>
@@ -344,35 +548,111 @@ function AlleSpieler({
   );
 }
 
-/** Die eigenen Ergebnisse von diesem Gerät. Läuft ohne Konto und ohne Netz. */
+/**
+ * Die eigenen Ergebnisse von diesem Gerät. Läuft ohne Konto und ohne Netz.
+ *
+ * **Nur gespielte Spiele.** Vorher standen hier alle zwanzig untereinander,
+ * und auf den meisten stand „Noch nichts gespielt." — zwanzig fast
+ * identische dunkle Kästen, die nichts sagten. Das war die schwächste Seite
+ * der App. Ungespielte Spiele stehen jetzt in **einer** Zeile am Ende, und
+ * die liest sich als Einladung statt als Mangelliste.
+ */
 function NurIch({
   eigenePlaetze,
 }: {
   eigenePlaetze: Map<string, Bestenlisten['eigene'][number]>;
 }) {
+  const fortschritt = fortschrittLesen();
+  const mitEintrag = spiele.filter((s) => bestenlisteLesen(s.id).length > 0);
+  const ohne = spiele.filter((s) => bestenlisteLesen(s.id).length === 0);
+
+  if (mitEintrag.length === 0) {
+    return (
+      <Karte className="text-center">
+        <p className="text-5xl" aria-hidden="true">
+          🎮
+        </p>
+        <h2 className="mt-3 text-lg font-black">Noch keine Runde gespielt</h2>
+        <p className="mt-2 text-sm text-gedaempft">
+          Sobald du das erste Mal spielst, stehen hier deine besten fünf Ergebnisse je Spiel.
+        </p>
+      </Karte>
+    );
+  }
+
+  const sterne = spiele.reduce((s, sp) => s + (fortschritt.jeSpiel[sp.id]?.besteSterne ?? 0), 0);
+  const ergebnisse = mitEintrag.reduce((s, sp) => s + bestenlisteLesen(sp.id).length, 0);
+
   return (
     <div className="flex flex-col gap-4">
-      {spiele.map((spiel) => {
+      {/* Drei Zahlen, die **zu der Liste darunter passen müssen.**
+          Zuerst stand hier die Rundenzahl aus dem Fortschritt — und die
+          zählt erst, seit es den Fortschritt gibt. Auf einem Gerät mit
+          älteren Ergebnissen stand dann „2 Runden" über sieben
+          aufgelisteten Ergebnissen. Eine Kopfzahl, die ihrer eigenen Liste
+          widerspricht, sieht nach Fehler aus, auch wenn beide Zahlen für
+          sich stimmen. Also wird gezählt, was tatsächlich darunter steht.
+
+          Eine Gesamtpunktzahl gibt es hier bewusst nicht: Die Skalen der
+          Spiele sind unvergleichbar. */}
+      <Karte className="flex items-center justify-around text-center">
+        <span>
+          <span className="block text-2xl font-black tabular-nums">{ergebnisse}</span>
+          <span className="block text-xs text-gedaempft">Ergebnisse</span>
+        </span>
+        <span>
+          <span className="block text-2xl font-black tabular-nums">{mitEintrag.length}</span>
+          <span className="block text-xs text-gedaempft">Spiele</span>
+        </span>
+        <span>
+          <span
+            className="block text-2xl font-black tabular-nums"
+            style={{ color: 'var(--color-gold)' }}
+          >
+            {sterne}
+          </span>
+          <span className="block text-xs text-gedaempft">Sterne</span>
+        </span>
+      </Karte>
+
+      {mitEintrag.map((spiel) => {
         const eintraege = bestenlisteLesen(spiel.id);
         const eigen = eigenePlaetze.get(spiel.id);
+        const meine = fortschritt.jeSpiel[spiel.id]?.besteSterne ?? 0;
         return (
-          <Spielkasten key={spiel.id} spiel={spiel}>
-            {eintraege.length === 0 ? (
-              <p className="mt-2 text-sm text-gedaempft">Noch nichts gespielt.</p>
-            ) : (
-              <ol className="mt-2 flex flex-col gap-1">
-                {eintraege.map((eintrag, i) => (
-                  <li
-                    key={`${eintrag.datum}-${i}`}
-                    className="flex items-baseline gap-3 text-sm tabular-nums"
-                  >
-                    <span className="w-5 text-gedaempft">{i + 1}.</span>
-                    <span className="flex-1 font-semibold">{eintrag.punkte}</span>
-                    <span className="text-gedaempft">{datum(eintrag.datum)}</span>
-                  </li>
+          <Spielkasten
+            key={spiel.id}
+            spiel={spiel}
+            rechts={
+              <span aria-label={`${meine} von 3 Sternen`} className="flex shrink-0 gap-0.5">
+                {[1, 2, 3].map((n) => (
+                  <svg key={n} viewBox="-12 -12 24 24" aria-hidden="true" className="size-3">
+                    <path
+                      d="M0-11 3.2-3.9 11-3.1 5.2 2.1 6.8 9.7 0 5.9-6.8 9.7-5.2 2.1-11-3.1-3.2-3.9Z"
+                      fill={n <= meine ? 'var(--color-gold)' : 'rgba(255,255,255,0.2)'}
+                    />
+                  </svg>
                 ))}
-              </ol>
-            )}
+              </span>
+            }
+          >
+            <ol className="mt-2.5 flex flex-col gap-1">
+              {eintraege.map((eintrag, i) => (
+                <li
+                  key={`${eintrag.datum}-${i}`}
+                  className="flex items-baseline gap-3 text-sm tabular-nums"
+                >
+                  <span
+                    className="w-5 font-black"
+                    style={{ color: MEDAILLENFARBE[i] ?? 'var(--color-gedaempft)' }}
+                  >
+                    {i + 1}.
+                  </span>
+                  <span className="flex-1 font-bold">{eintrag.punkte}</span>
+                  <span className="text-gedaempft">{datum(eintrag.datum)}</span>
+                </li>
+              ))}
+            </ol>
             {eigen && (
               <p className="mt-2 text-sm text-gedaempft tabular-nums">
                 Unter allen Spielern: Platz <strong className="text-text">{eigen.platz}</strong>
@@ -381,6 +661,13 @@ function NurIch({
           </Spielkasten>
         );
       })}
+
+      {ohne.length > 0 && (
+        <section className="rounded-2xl border border-dashed border-white/25 p-4">
+          <h3 className="font-bold">Diese warten noch auf dich</h3>
+          <p className="mt-1 text-sm text-gedaempft">{ohne.map((s) => s.title).join(' · ')}</p>
+        </section>
+      )}
     </div>
   );
 }

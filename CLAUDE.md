@@ -1947,6 +1947,46 @@ Nachgemessen bei 375, 768 und 1920 Pixeln: kein waagerechter Überlauf,
 nichts ragt heraus, die Leiste sitzt auf allen fünf Seiten exakt auf der
 Unterkante.
 
+## Die Rangliste
+
+Stufe 3 des Qualitäts-Umbaus. Zwei Dinge waren hier grundlegend falsch.
+
+**Die Gesamtwertung war eine nummerierte Liste.** Jetzt ein Podest: Gold
+steht **in der Mitte und am höchsten**, Silber links, Bronze rechts. Das ist
+der ganze Unterschied — eine Liste liest man von oben nach unten und muss
+Zahlen vergleichen; ein Podest sieht man auf einen Blick, weil die *Höhe*
+die Information ist. Stünde Platz 1 links, wäre es wieder eine Liste, nur
+waagerecht. Ab Platz 4 geht es als Zeilen weiter, dort ist Höhe kein
+sinnvolles Mittel mehr.
+
+Die Reihenfolge im Markup bleibt **1, 2, 3** und wird nur optisch
+umsortiert. Sonst liest ein Vorleseprogramm „Silber, Gold, Bronze".
+
+*Ein Fehler, den nur das Hinsehen findet:* Die Stufenhöhen standen zuerst in
+der **Anzeige**reihenfolge (Silber, Gold, Bronze), abgegriffen wurden sie
+aber mit dem **Platz**index. Silber bekam dadurch die höchste Stufe — das
+Podest sagte das Gegenteil dessen aus, was es zeigen soll. Im Code fällt so
+etwas überhaupt nicht auf, im Bild sofort.
+
+**„Nur ich" war die schwächste Seite der App.** Sie zeigte alle zwanzig
+Spiele untereinander, und auf den meisten stand „Noch nichts gespielt." —
+zwanzig fast identische dunkle Kästen, die nichts sagten. Jetzt stehen dort
+nur Spiele **mit** Ergebnissen, jeweils mit ihrer Sternzahl; der Rest steht
+in einer Zeile am Ende („Diese warten noch auf dich"), und die liest sich
+als Einladung statt als Mangelliste. Darüber drei Zahlen: Ergebnisse,
+Spiele, Sterne.
+
+*Merksatz dazu:* Eine Kopfzahl muss zu ihrer eigenen Liste passen. Zuerst
+stand dort die Rundenzahl aus dem Fortschritt — die zählt aber erst, seit es
+den Fortschritt gibt, und auf einem Gerät mit älteren Ergebnissen stand dann
+„2 Runden" über sieben aufgelisteten Ergebnissen. Beide Zahlen stimmten für
+sich; zusammen sahen sie nach einem Fehler aus.
+
+**Der Ladezustand ist ein Gerüst, kein Satz.** „Wird geladen …" auf leerer
+Fläche liest sich als Fehler. Ein Platzhalter in der Form dessen, was gleich
+kommt (`.schimmer`), liest sich als „gleich da" — und wenn die Daten
+eintreffen, springt nichts, weil die Höhe schon stimmt.
+
 ## Ausliefern
 
 Läuft auf **Netlify** unter `florian-spielesammlung.netlify.app`. Das ist
