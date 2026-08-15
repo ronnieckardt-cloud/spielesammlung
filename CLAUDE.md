@@ -15,7 +15,9 @@ geräteübergreifende Bestenlisten — **nichts einbauen, was das verbaut, aber
 jetzt noch nicht umsetzen.**
 
 **Keine Bibliothek dazunehmen, ohne vorher zu fragen.** Bisher bewusst
-aufgenommen: React, Tailwind, Vitest.
+aufgenommen: React, Tailwind, Vitest — und **three.js**, ausdrücklich von
+Ronni freigegeben („wenn 3-D, dann auch gleich richtiges, keine halben
+Sachen"). Es wird **nur für Dash City nachgeladen**, siehe unten.
 
 **Vor jedem Deploy: `SPEICHER` in `public/sw.js` um eins hochzählen.** Der
 Offline-Speicher liefert sonst auf installierten PWAs (vor allem iOS) weiter
@@ -160,6 +162,7 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `verbinden` | Flow Link |
 | `tempo` | Tap Rush |
 | `kistenschieben` | Box Push |
+| `laufen` | Dash City |
 
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
@@ -1225,6 +1228,74 @@ flachen Anordnung liegt die Mitte des Kastens genau auf dem Pfeil nach
 unten.
 
 Nachgemessen: **alle vierzehn Spiele passen auf 375 × 560 ohne Scrollen.**
+
+## Dash City — der 3-D-Läufer
+
+Ronnis Wunsch, wörtlich: „ein richtiges 3-D-Spiel, so was wie Subway
+Surfers" — und ausdrücklich kein Pseudo-3-D. Damit ist **three.js** die
+einzige größere Bibliothek im Projekt neben React.
+
+**Der Preis trifft nur dieses eine Spiel.** `szene.ts` wird in
+`DashCity.tsx` per `await import(...)` nachgeladen und landet in einem
+eigenen Brocken:
+
+| Brocken | gzip | wann geladen |
+|---|---|---|
+| Hauptbündel (Hülle + 19 andere Spiele) | 146 kB | immer |
+| `three` | 130 kB | nur bei Dash City |
+| `szene` | 2 kB | nur bei Dash City |
+
+Wer Snake Rush spielt, lädt three.js nie. Das war die Bedingung, unter der
+die Bibliothek überhaupt vertretbar ist.
+
+**Dafür musste der Service Worker umgebaut werden.** Er legte bisher nur
+`/`, `index.html` und das Manifest in den Vorrat; alles andere kam beim
+ersten Abruf dazu. Solange es genau ein Bündel gab, fiel das nicht auf.
+Mit einem zweiten, erst später geladenen Brocken wäre Dash City das einzige
+Spiel gewesen, das **offline fehlt** — installiert, aber nie mit Netz
+gestartet, und im Flugzeug bleibt der Bildschirm schwarz. Jetzt erzeugt
+`vite.config.ts` beim Bauen eine `dateiliste.json` (die Dateinamen tragen
+einen Prüfwert und ändern sich bei jedem Bau), und der Service Worker holt
+beim Einrichten alles auf einmal. Schlägt das fehl, bricht die Einrichtung
+**nicht** ab — dann bleibt es beim alten Verhalten.
+
+Weitere Entscheidungen:
+
+- **`szene.ts` ist der einzige Ort im Projekt, der three.js kennt, und
+  enthält keine einzige Spielregel.** Sie bekommt einen `Lauf` gereicht und
+  stellt ihn dar. Alles Rechnende steht in `logik.ts` und ist ohne Browser
+  geprüft. Genau diese Trennung war die eigentliche Bedingung — nicht die
+  Dateigröße: Läge die Spiellogik in der Bibliothek, wäre sie der Prüfung
+  entzogen, und das bricht die Kernregel des Projekts.
+- **Der Fairness-Test ist der wichtigste.** Ein Endlosläufer wird schneller,
+  bis er unspielbar ist. Erzeugt er dabei ein Muster, das gar nicht mehr zu
+  schaffen ist, stirbt man durch Zufall statt durch eigenen Fehler.
+  `istPassierbar` prüft zweierlei: nie alle drei Spuren durch Mauern dicht,
+  und nie Hürde und Balken auf derselben Spur (springen und rutschen zugleich
+  geht nicht). Der Test läuft über **15 000 Abschnitte**.
+- Hindernisse entstehen aus der **Abschnittsnummer**, nie aus der
+  verstrichenen Zeit. Nur so ergibt derselbe Lauf mit derselben Eingabefolge
+  immer dasselbe Ergebnis — dafür gibt es einen eigenen Test.
+- **Der Zeitschritt ist auf 50 ms gedeckelt.** Nach einem App-Wechsel wäre
+  er sonst mehrere Sekunden groß, und die Figur führe blind durch ein Dutzend
+  Hindernisse.
+- **Der Lauf liegt in einer Ref, nicht im React-Zustand.** 60 Bilder je
+  Sekunde als `setState` hieße 60-mal je Sekunde den Baum durchrechnen,
+  während three.js daneben zeichnet. Nach außen gemeldet wird viermal je
+  Sekunde.
+- Fürs alte iPad: `devicePixelRatio` auf 1,5 gedeckelt, keine
+  Kantenglättung, keine echten Schatten (ein dunkler Fleck unter der Figur,
+  der beim Springen kleiner wird — daran sieht man die Höhe), geteilte
+  Geometrien und Werkstoffe, fester Vorrat wiederverwendeter Körper statt
+  ständigem Neuanlegen.
+- `aufraeumen()` gibt beim Verlassen **alles** frei. Ohne das bliebe bei
+  jedem „Nochmal" ein kompletter Satz Geometrien im Grafikspeicher liegen —
+  auf einem iPad nach ein paar Runden das Ende.
+- Die Kamera stand zuerst zu dicht hinter der Figur; sie nahm das untere
+  Drittel ein und man sah kaum Straße voraus. Bei einem Läufer ist Sichtweite
+  nach vorn gleichbedeutend mit **Reaktionszeit** — das ist kein Geschmack,
+  sondern Spielbarkeit.
+- **Nicht duellfähig**: keine Levelnummer.
 
 ## Box Push — Besonderheiten
 

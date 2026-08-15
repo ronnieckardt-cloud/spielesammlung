@@ -8,16 +8,45 @@
  * Beim Veröffentlichen einer neuen Fassung die Zahl in SPEICHER erhöhen.
  */
 
-const SPEICHER = 'spielesammlung-v32';
+const SPEICHER = 'spielesammlung-v33';
 const GRUNDGERUEST = ['/', '/index.html', '/manifest.webmanifest'];
 
+/**
+ * Beim Einrichten **alles** holen, was der Bau erzeugt hat.
+ *
+ * Vorher kam nur das Grundgerüst in den Vorrat, alles andere erst beim
+ * ersten Abruf. Das ging gut, solange es genau ein JavaScript-Bündel gab —
+ * das wird ja beim ersten Laden ohnehin geholt.
+ *
+ * Seit Dash City gibt es einen **zweiten** Brocken (three.js), der erst
+ * beim Öffnen dieses Spiels geladen wird. Ohne das hier wäre genau dieses
+ * Spiel offline nicht da: installiert, aber nie mit Netz gestartet = im
+ * Flugzeug ein schwarzer Bildschirm.
+ *
+ * Die Liste erzeugt `vite.config.ts` beim Bauen (`dateiliste.json`), weil
+ * die Dateinamen einen Prüfwert tragen und sich bei jedem Bau ändern.
+ *
+ * Schlägt das Holen fehl (kein Netz beim allerersten Besuch), wird die
+ * Einrichtung **nicht** abgebrochen — das Grundgerüst steht, und der Rest
+ * kommt wie früher beim ersten Abruf dazu.
+ */
+async function vorratFuellen() {
+  const speicher = await caches.open(SPEICHER);
+  await speicher.addAll(GRUNDGERUEST);
+  try {
+    const antwort = await fetch('/dateiliste.json', { cache: 'no-cache' });
+    if (!antwort.ok) return;
+    const dateien = await antwort.json();
+    if (Array.isArray(dateien) && dateien.length > 0) {
+      await speicher.addAll(dateien);
+    }
+  } catch {
+    /* Ohne Netz bleibt es beim Grundgerüst. */
+  }
+}
+
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches
-      .open(SPEICHER)
-      .then((speicher) => speicher.addAll(GRUNDGERUEST))
-      .then(() => self.skipWaiting()),
-  );
+  e.waitUntil(vorratFuellen().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
