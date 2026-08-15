@@ -14,6 +14,7 @@ import {
   punkteFuerLoesung,
   roehrchenAntippen,
   zurueck,
+  roehrchenFertig,
 } from './logik';
 import type { Brett, Zustand } from './logik';
 
@@ -276,5 +277,23 @@ describe('punkteFuerLoesung', () => {
 
   it('fällt nie unter die Mindestpunktzahl', () => {
     expect(punkteFuerLoesung(9999, MIN_FARBEN)).toBeGreaterThanOrEqual(100);
+  });
+});
+
+describe('roehrchenFertig', () => {
+  it('ist wahr bei vollem, einfarbigem Röhrchen', () => {
+    expect(roehrchenFertig([2, 2, 2, 2], 4)).toBe(true);
+  });
+
+  it('ist falsch, wenn es nicht voll ist', () => {
+    expect(roehrchenFertig([2, 2, 2], 4)).toBe(false);
+  });
+
+  it('ist falsch bei gemischten Farben', () => {
+    expect(roehrchenFertig([2, 2, 3, 2], 4)).toBe(false);
+  });
+
+  it('ist falsch beim leeren Röhrchen — da gibt es nichts zu feiern', () => {
+    expect(roehrchenFertig([], 4)).toBe(false);
   });
 });

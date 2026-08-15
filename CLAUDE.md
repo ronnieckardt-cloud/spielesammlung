@@ -304,6 +304,24 @@ versucht deshalb genau dasselbe Level erneut.
 - Bewusst kein Muster mehr auf den Farbschichten (war testweise drin,
   Rückmeldung: sieht unruhig aus). Nicht-visuelle Unterscheidung läuft über
   die Farbnamen im `aria-label` jedes Röhrchens.
+- **Schwierigkeit über Level 5 hinaus:** Die Farbzahl ist bei
+  `MAX_FARBEN = 5` gedeckelt (darüber wird der Lösbarkeits-Suchlauf auf dem
+  Handy spürbar langsam — eine Messung mit 6 und 7 Farben lief in die
+  Zeitgrenze, der alte Kommentar dort stimmt also weiterhin). Dadurch änderte
+  sich ab Level 5 gar nichts mehr; Rückmeldung: „ab Level sechs, sieben wird's
+  nicht mehr richtig schwerer". Die Schwierigkeit steigt jetzt über zwei
+  andere, für den Suchlauf billige Stellschrauben weiter:
+  `leereRoehrchenFuerLevel` (ab Level 8 nur noch **ein** leeres Röhrchen statt
+  zwei — ein großer Sprung, weil man mit nur einem Zwischenlager viel weiter
+  vorausdenken muss) und `extraRoehrchenFuerLevel` (ab Level 15 keine
+  Notbremse mehr). Ein Test prüft für Level 1 bis 30, dass jedes Brett lösbar
+  bleibt und die Schwierigkeit nie zurückgeht.
+- Ein fertig sortiertes Röhrchen bekommt einen **Deckel** aufgesetzt, danach
+  stiebt seitlich **Konfetti** heraus (`.deckel-drauf`, `.konfetti`). Vorher
+  sah ein fertiges Röhrchen genauso aus wie ein halb sortiertes. Wichtig: Das
+  Feiern wartet, bis `guss` durch ist — der Zustand meldet das Röhrchen schon
+  beim Anklicken als fertig, zu sehen ist es aber erst, wenn die Flüssigkeit
+  angekommen ist.
 - Die Gieß-Animation läuft immer mit fester Dauer (`GIESS_DAUER_MS`), kein
   Tempo-Knopf mehr. Der frühere Knopf war lokaler `useState`, der bei jeder
   neuen Runde (Komponente wird komplett neu gemountet) auf

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { sfx } from '../../core/sfx';
@@ -9,6 +9,7 @@ import {
   neuesLevel,
   punkteFuerLoesung,
   roehrchenAntippen,
+  roehrchenFertig,
   zurueck,
 } from './logik';
 import type { Zustand } from './logik';
@@ -24,12 +25,16 @@ import {
 } from './geometrie';
 import { FarbMusterDefs } from './FarbMusterDefs';
 import { Roehrchen } from './Roehrchen';
+import { Konfetti } from './Konfetti';
 import { farbpaletteFuerLevel } from './farben';
 import type { FarbEintrag } from './farben';
 import { FarbsortiererIcon } from './Icon';
 
 /** Feste Dauer der Gieß-Animation — läuft immer, kein Knopf zum An-/Abstellen. */
 const GIESS_DAUER_MS = 950;
+
+/** So lange fliegt das Konfetti über einem fertigen Röhrchen. */
+const KONFETTI_DAUER_MS = 1350;
 
 const SCHICHTHOEHE = ROEHRCHEN_HOEHE / KAPAZITAET;
 
@@ -144,7 +149,13 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
   );
 }
 
-export function Farbsortierer({ onScore, onGameOver, bestScore, istErsteRunde }: GameProps) {
+export function Farbsortierer({
+  onScore,
+  onGameOver,
+  settings,
+  bestScore,
+  istErsteRunde,
+}: GameProps) {
   // Nach „Nochmal" (= nächstes Level) direkt weiterspielen statt wieder
   // über den Startbildschirm zu gehen — der gehört nur ans Betreten.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
@@ -222,6 +233,39 @@ export function Farbsortierer({ onScore, onGameOver, bestScore, istErsteRunde }:
     // Absichtlich nur an geloest/guss gebunden — onGameOver darf nur einmal kommen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [z.geloest, !!guss]);
+
+  // Welche Röhrchen sind fertig? Wird beim Rendern frisch bestimmt — die
+  // Prüfung ist billig und so kann nichts veralten.
+  const fertige = z.roehrchen.map((inhalt) => roehrchenFertig(inhalt));
+
+  // Konfetti nur beim *Übergang* auf fertig, nicht dauerhaft. Der Vergleich
+  // läuft über eine Ref, damit ein erneutes Rendern ohne Änderung nichts
+  // auslöst.
+  const [feiern, setFeiern] = useState<readonly number[]>([]);
+  const fertigeVorherRef = useRef<readonly boolean[]>(fertige);
+
+  useEffect(() => {
+    // Während des Gießens noch nicht feiern: Der Zustand meldet das
+    // Röhrchen sofort als fertig, zu sehen ist es aber erst, wenn die
+    // Flüssigkeit angekommen ist. Solange `guss` läuft, bleibt auch der
+    // Vergleichswert stehen — sonst wäre der Übergang danach verpasst.
+    if (guss) return;
+
+    const vorher = fertigeVorherRef.current;
+    const neuFertig = fertige
+      .map((ist, i) => (ist && !vorher[i] ? i : -1))
+      .filter((i) => i >= 0);
+    fertigeVorherRef.current = fertige;
+    if (neuFertig.length === 0) return;
+
+    setFeiern(neuFertig);
+    sfx('stufe');
+    const uhr = window.setTimeout(() => setFeiern([]), KONFETTI_DAUER_MS);
+    return () => window.clearTimeout(uhr);
+    // Absichtlich an der Zeichenkette hängend: ein neues Array bei gleichem
+    // Inhalt soll den Effekt nicht erneut auslösen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fertige.join(','), !!guss]);
 
   const beiZurueck = useCallback(() => {
     if (!guss) setZ((alt) => zurueck(alt));
@@ -344,12 +388,15 @@ export function Farbsortierer({ onScore, onGameOver, bestScore, istErsteRunde }:
                 kapazitaet={KAPAZITAET}
                 palette={palette}
                 ausgewaehlt={z.ausgewaehlt === i}
+                fertig={fertige[i] === true && !istVon && !istNach}
+                ruhig={settings.reducedMotion}
                 teilschicht={
                   istNach
                     ? { farbe: guss!.farbe, hoehe: giessAnteil * guss!.anzahl * SCHICHTHOEHE }
                     : undefined
                 }
               />
+              {feiern.includes(i) && <Konfetti ruhig={settings.reducedMotion} />}
             </g>
           );
         })}

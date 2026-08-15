@@ -39,6 +39,8 @@ export function Roehrchen({
   kapazitaet,
   palette,
   ausgewaehlt = false,
+  fertig = false,
+  ruhig = false,
   teilschicht,
 }: {
   farben: readonly number[];
@@ -46,6 +48,10 @@ export function Roehrchen({
   /** Die für dieses Level gezogenen Farben, indiziert wie die Logik-Zahlen. */
   palette: readonly FarbEintrag[];
   ausgewaehlt?: boolean;
+  /** Randvoll und einfarbig — dann bekommt es einen Deckel aufgesetzt. */
+  fertig?: boolean;
+  /** Bei „weniger Bewegung" wird der Deckel ohne Animation gesetzt. */
+  ruhig?: boolean;
   /** Zusätzliche, stufenlose Höhe oberhalb von `farben` — für die Gieß-Animation:
    *  beim Ziel wächst sie von 0 an, bei der Quelle schrumpft sie auf 0. */
   teilschicht?: { farbe: number; hoehe: number };
@@ -111,6 +117,30 @@ export function Roehrchen({
           fill="url(#glanzstreifen)"
         />
       </g>
+
+      {/* Der Deckel: Ein fertig sortiertes Röhrchen sah vorher genauso aus
+          wie ein halb sortiertes. Jetzt wird es sichtbar verschlossen —
+          das ist der kleine Sieg zwischendurch. */}
+      {fertig && (
+        <g className={ruhig ? undefined : 'deckel-drauf'}>
+          <rect
+            x={-3}
+            y={-9}
+            width={ROEHRCHEN_BREITE + 6}
+            height={16}
+            rx={7}
+            fill="#7c5a3a"
+          />
+          <rect
+            x={-1}
+            y={-7}
+            width={ROEHRCHEN_BREITE + 2}
+            height={5}
+            rx={2.5}
+            fill="#a97c4f"
+          />
+        </g>
+      )}
     </g>
   );
 }

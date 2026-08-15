@@ -45,6 +45,31 @@ export function farbenFuerLevel(level: number): number {
   return Math.min(stufe, MAX_FARBEN);
 }
 
+/**
+ * Wie viele leere Röhrchen zum Sortieren bereitstehen.
+ *
+ * Das ist die eigentliche Schwierigkeits-Stellschraube jenseits von Level 5:
+ * Die Farbzahl ist bei 5 gedeckelt (der Lösbarkeits-Suchlauf wird darüber
+ * auf dem Handy spürbar langsam, siehe MAX_FARBEN), und dadurch änderte sich
+ * ab Level 5 gar nichts mehr — Rückmeldung: „ab Level sechs, sieben wird's
+ * nicht mehr richtig schwerer".
+ *
+ * Ein leeres Röhrchen weniger ist ein großer Sprung: Mit nur einem
+ * Zwischenlager muss man viel weiter vorausdenken.
+ */
+export function leereRoehrchenFuerLevel(level: number): number {
+  return Math.max(1, level) >= 8 ? 1 : LEERE_ROEHRCHEN_START;
+}
+
+/**
+ * Wie viele Extra-Röhrchen man sich im Level dazuholen darf — die
+ * Notbremse, wenn man sich festgefahren hat. Ab Level 15 gibt es sie nicht
+ * mehr, dann muss der Zug von Anfang an sitzen.
+ */
+export function extraRoehrchenFuerLevel(level: number): number {
+  return Math.max(1, level) >= 15 ? 0 : 1;
+}
+
 export function kannGiessen(von: Roehrchen, nach: Roehrchen, kapazitaet = KAPAZITAET): boolean {
   if (von.length === 0) return false;
   if (nach.length >= kapazitaet) return false;
@@ -72,6 +97,15 @@ export function giessen(brett: Brett, von: number, nach: number, kapazitaet = KA
   const neuesVon = brett[von].slice(0, brett[von].length - anzahl);
   const neuesNach = [...brett[nach], ...Array(anzahl).fill(farbe)];
   return brett.map((r, i) => (i === von ? neuesVon : i === nach ? neuesNach : r));
+}
+
+/**
+ * Ein Röhrchen ist fertig, wenn es randvoll ist und nur eine Farbe enthält.
+ * Nur für die Anzeige gedacht — sie setzt darauf den Deckel und lässt kurz
+ * Konfetti fliegen, damit man den kleinen Sieg auch sieht.
+ */
+export function roehrchenFertig(inhalt: readonly number[], kapazitaet = KAPAZITAET): boolean {
+  return inhalt.length === kapazitaet && inhalt.every((f) => f === inhalt[0]);
 }
 
 export function istGeloest(brett: Brett, kapazitaet = KAPAZITAET): boolean {
@@ -128,6 +162,7 @@ function gemischtesBrett(
   saat: number,
   farbenAnzahl: number,
   kapazitaet: number,
+  leereRoehrchen: number,
 ): { brett: Brett; saat: number } {
   const schichten: Farbe[] = [];
   for (let f = 0; f < farbenAnzahl; f++) {
@@ -146,7 +181,7 @@ function gemischtesBrett(
   for (let t = 0; t < farbenAnzahl; t++) {
     brett.push(schichten.slice(t * kapazitaet, (t + 1) * kapazitaet));
   }
-  for (let i = 0; i < LEERE_ROEHRCHEN_START; i++) brett.push([]);
+  for (let i = 0; i < leereRoehrchen; i++) brett.push([]);
 
   return { brett, saat: s };
 }
@@ -161,11 +196,12 @@ const MAX_MISCH_VERSUCHE = 60;
  */
 export function neuesLevel(level: number, kapazitaet = KAPAZITAET): Zustand {
   const farbenAnzahl = farbenFuerLevel(level);
+  const leere = leereRoehrchenFuerLevel(level);
   let saat = saatAus('farbsortierer', level);
   let brett: Brett = [];
 
   for (let versuch = 0; versuch < MAX_MISCH_VERSUCHE; versuch++) {
-    const gemischt = gemischtesBrett(saat, farbenAnzahl, kapazitaet);
+    const gemischt = gemischtesBrett(saat, farbenAnzahl, kapazitaet, leere);
     brett = gemischt.brett;
     saat = gemischt.saat + 1;
     if (loesbar(brett, kapazitaet)) break;
@@ -178,7 +214,7 @@ export function neuesLevel(level: number, kapazitaet = KAPAZITAET): Zustand {
     level,
     farbenAnzahl,
     zuege: 0,
-    extraRoehrchenUebrig: 1,
+    extraRoehrchenUebrig: extraRoehrchenFuerLevel(level),
     geloest: false,
   };
 }

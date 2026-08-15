@@ -413,6 +413,55 @@
   animation: pulsiert-sanft 1.4s ease-in-out infinite;
 }
 
+/* Color Pour: Der Deckel fällt aufs fertige Röhrchen, kurzes Nachfedern.
+   Endet im Ruhezustand, damit er unter `.ruhig` einfach sofort sitzt. */
+@keyframes deckel-drauf {
+  0% {
+    opacity: 0;
+    translate: 0 -18px;
+  }
+  60% {
+    opacity: 1;
+    translate: 0 3px;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.deckel-drauf {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: deckel-drauf 0.34s ease-out;
+}
+
+/* Konfetti über dem fertigen Röhrchen. Richtung je Stück über --kx/--ky,
+   wie bei `.kruemel` in Block Burst. `translate`/`scale` als eigene
+   Eigenschaften, damit sie sich nicht mit einem `transform` am Element
+   ins Gehege kommen. */
+@keyframes konfetti-flug {
+  0% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: var(--kx, 0) var(--ky, -40px);
+    scale: 0.4;
+  }
+}
+
+.konfetti {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: konfetti-flug 0.8s ease-out forwards;
+}
+
 /* Der React-Wurzelknoten füllt den Rest der Seite. */
 #wurzel {
   display: flex;
