@@ -8,5 +8,6 @@ export const gehirnjogging: GameApi = {
   title: 'Gehirnjogging',
   accent: '#f59e0b',
   Icon: GehirnjoggingIcon,
+  iconVollflaechig: true,
   Component: Gehirnjogging,
 };

@@ -8,5 +8,6 @@ export const farbsortierer: GameApi = {
   title: 'Color Pour',
   accent: '#a855f7',
   Icon: FarbsortiererIcon,
+  iconVollflaechig: true,
   Component: Farbsortierer,
 };

@@ -8,5 +8,6 @@ export const wortspiel: GameApi = {
   title: 'Word Play',
   accent: '#ec4899',
   Icon: WortspielIcon,
+  iconVollflaechig: true,
   Component: Wortspiel,
 };

@@ -1,25 +1,95 @@
-/** Eigenes Symbol statt Emoji — Reagenzglas mit bunten Farbschichten. */
+import { AppSymbol } from '../../core/AppSymbol';
+
+/**
+ * App-Symbol: drei Röhrchen mit Farbschichten, wie sie im Spiel sortiert
+ * werden. Aufbau siehe `core/AppSymbol.tsx`.
+ */
+
+/** Röhrchen von links nach rechts, jeweils mit ihren Schichten von unten. */
+const ROEHRCHEN: readonly { x: number; schichten: readonly string[] }[] = [
+  { x: 8, schichten: ['#fb923c', '#facc15', '#2dd4bf'] },
+  { x: 26, schichten: ['#2dd4bf', '#f472b6'] },
+  { x: 44, schichten: ['#facc15', '#fb923c', '#f472b6'] },
+];
+
+const OBEN = 5;
+const UNTEN = 40;
+const BREITE = 12;
+/** Höhe einer Schicht — vier passen ins Röhrchen. */
+const SCHICHT = (UNTEN - OBEN) / 4;
+
 export function FarbsortiererIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <AppSymbol
+      id="colorpour"
+      verlauf={['#22d3ee', '#0ea5e9', '#a855f7']}
+      schriftzug="COLOR POUR"
+      className={className}
+    >
       <defs>
-        <clipPath id="fs-glas">
-          <path d="M10.2 3v9.3l-3.9 8a2.7 2.7 0 002.4 3.9h6.6a2.7 2.7 0 002.4-3.9l-3.9-8V3z" />
+        {/* Alle drei Röhrchen in einer Maske — so bleiben die Schichten
+            innerhalb der runden Glasform, ohne je eine eigene id. */}
+        <clipPath id="colorpour-glas">
+          {ROEHRCHEN.map((r) => (
+            <rect key={r.x} x={r.x} y={OBEN} width={BREITE} height={UNTEN - OBEN} rx={BREITE / 2} />
+          ))}
         </clipPath>
       </defs>
-      <g clipPath="url(#fs-glas)">
-        <rect x="4" y="18" width="16" height="6" fill="#fb923c" />
-        <rect x="4" y="14.5" width="16" height="4" fill="#facc15" />
-        <rect x="4" y="11" width="16" height="4" fill="#2dd4bf" />
+
+      {/* Glasinneres, leicht dunkel, damit helle Schichten sich abheben. */}
+      {ROEHRCHEN.map((r) => (
+        <rect
+          key={`glas-${r.x}`}
+          x={r.x}
+          y={OBEN}
+          width={BREITE}
+          height={UNTEN - OBEN}
+          rx={BREITE / 2}
+          fill="#0b1020"
+          opacity="0.3"
+        />
+      ))}
+
+      <g clipPath="url(#colorpour-glas)">
+        {ROEHRCHEN.map((r) =>
+          r.schichten.map((farbe, i) => (
+            <rect
+              key={`${r.x}-${i}`}
+              x={r.x}
+              y={UNTEN - (i + 1) * SCHICHT}
+              width={BREITE}
+              height={SCHICHT}
+              fill={farbe}
+            />
+          )),
+        )}
       </g>
-      <path
-        d="M9.5 2.5h5M10.2 3v9.3l-3.9 8a2.7 2.7 0 002.4 3.9h6.6a2.7 2.7 0 002.4-3.9l-3.9-8V3"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+
+      {/* Glasrand und ein Glanzstreifen je Röhrchen. */}
+      {ROEHRCHEN.map((r) => (
+        <g key={`rand-${r.x}`}>
+          <rect
+            x={r.x}
+            y={OBEN}
+            width={BREITE}
+            height={UNTEN - OBEN}
+            rx={BREITE / 2}
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth="1.6"
+            opacity="0.85"
+          />
+          <rect
+            x={r.x + 2.4}
+            y={OBEN + 3.5}
+            width="2.2"
+            height={UNTEN - OBEN - 9}
+            rx="1.1"
+            fill="#ffffff"
+            opacity="0.35"
+          />
+        </g>
+      ))}
+    </AppSymbol>
   );
 }

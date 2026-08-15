@@ -8,5 +8,6 @@ export const mergeup: GameApi = {
   title: 'Merge Up',
   accent: '#0891b2',
   Icon: MergeUpIcon,
+  iconVollflaechig: true,
   Component: MergeUp,
 };

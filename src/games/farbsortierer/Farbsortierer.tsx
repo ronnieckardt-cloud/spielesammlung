@@ -116,9 +116,9 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
         ))}
       </div>
 
-      <div className="relative grid size-28 place-items-center rounded-full bg-white/20 shadow-2xl ring-1 ring-white/40 backdrop-blur-sm">
-        <FarbsortiererIcon className="size-16 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" />
-      </div>
+      {/* Das App-Symbol bringt Hintergrund und Ecken selbst mit — es steht
+          hier für sich, wie auf einer Store-Seite. */}
+      <FarbsortiererIcon className="relative size-32 rounded-[2rem] shadow-2xl" />
 
       <div className="relative">
         <h1

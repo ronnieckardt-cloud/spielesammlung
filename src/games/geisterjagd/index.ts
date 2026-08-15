@@ -8,5 +8,6 @@ export const geisterjagd: GameApi = {
   title: 'Ghost Chase',
   accent: '#a78bfa',
   Icon: GeisterjagdIcon,
+  iconVollflaechig: true,
   Component: Geisterjagd,
 };

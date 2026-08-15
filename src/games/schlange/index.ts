@@ -8,5 +8,6 @@ export const schlange: GameApi = {
   title: 'Snake Rush',
   accent: '#22c55e',
   Icon: SchlangeIcon,
+  iconVollflaechig: true,
   Component: Schlange,
 };

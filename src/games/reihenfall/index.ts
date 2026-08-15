@@ -8,5 +8,6 @@ export const reihenfall: GameApi = {
   title: 'Line Fall',
   accent: '#f43f5e',
   Icon: ReihenfallIcon,
+  iconVollflaechig: true,
   Component: Reihenfall,
 };

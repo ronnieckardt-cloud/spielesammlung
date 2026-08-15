@@ -8,5 +8,6 @@ export const platzhalter: GameApi = {
   title: 'Star Dash',
   accent: '#7dd3fc',
   Icon: PlatzhalterIcon,
+  iconVollflaechig: true,
   Component: Platzhalter,
 };

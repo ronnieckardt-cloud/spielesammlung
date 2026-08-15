@@ -8,5 +8,6 @@ export const bubblepop: GameApi = {
   title: 'Bubble Pop',
   accent: '#d946ef',
   Icon: BubblePopIcon,
+  iconVollflaechig: true,
   Component: BubblePop,
 };

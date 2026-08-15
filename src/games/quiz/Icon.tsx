@@ -1,19 +1,46 @@
-/** Eigenes Symbol statt Emoji — Sprechblase mit Fragezeichen und Funken. */
+import { AppSymbol } from '../../core/AppSymbol';
+
+/**
+ * App-Symbol: die Frage als Sprechblase, darunter die vier Antwortfelder in
+ * den vier Farben. Aufbau siehe `core/AppSymbol.tsx`.
+ */
+
+/** Die vier Antwortfelder, wie sie im Spiel nebeneinander stehen. */
+const ANTWORTEN: readonly { x: number; farbe: string }[] = [
+  { x: 5, farbe: '#f87171' },
+  { x: 20, farbe: '#60a5fa' },
+  { x: 35, farbe: '#facc15' },
+  { x: 50, farbe: '#4ade80' },
+];
+
 export function QuizIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <rect x="4" y="3" width="16" height="11.6" rx="2.8" fill="#ffffff" />
-      <path d="M10 14.6L5 19l2-4.4z" fill="#ffffff" />
+    <AppSymbol
+      id="quiztime"
+      verlauf={['#6366f1', '#7c3aed', '#4338ca']}
+      schriftzug="QUIZ TIME"
+      className={className}
+    >
+      {/* Sprechblase mit Fragezeichen. */}
+      <rect x="12" y="5" width="40" height="23" rx="6" fill="#ffffff" />
+      <path d="M20 27.5 L16 34 L27 27.5 Z" fill="#ffffff" />
       <path
-        d="M9.6 8.4c0-1.3 1-2.2 2.3-2.2 1.2 0 2.2.9 2.2 2 0 1.7-2.2 1.6-2.2 3.5"
+        d="M27.4 13.6c0-2.6 2.1-4.4 4.8-4.4 2.5 0 4.5 1.7 4.5 4 0 3.4-4.5 3.2-4.5 6.9"
         fill="none"
         stroke="#16a34a"
-        strokeWidth="1.7"
+        strokeWidth="3.2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="11.9" cy="14.8" r="1.05" fill="#16a34a" />
-      <path d="M20.5 3.5l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" fill="#facc15" />
-    </svg>
+      <circle cx="32.1" cy="24.4" r="2.1" fill="#16a34a" />
+
+      {/* Die vier Antwortfelder. */}
+      {ANTWORTEN.map((a) => (
+        <g key={a.x}>
+          <rect x={a.x} y="34.5" width="9" height="7" rx="2" fill="#0b1020" opacity="0.25" />
+          <rect x={a.x} y="33.5" width="9" height="7" rx="2" fill={a.farbe} />
+        </g>
+      ))}
+    </AppSymbol>
   );
 }

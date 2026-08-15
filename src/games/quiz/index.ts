@@ -8,5 +8,6 @@ export const quiz: GameApi = {
   title: 'Quiz Time',
   accent: '#22c55e',
   Icon: QuizIcon,
+  iconVollflaechig: true,
   Component: Quiz,
 };

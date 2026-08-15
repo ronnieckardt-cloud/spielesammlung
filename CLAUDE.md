@@ -144,50 +144,71 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
 
-Kachel-Symbole sind eigene, kleine SVG-Icons (`games/<name>/Icon.tsx`), keine
-Emojis, 24×24 Viewbox. Bewusst **nicht** einfarbig (erste Fassung war reines
-`stroke="currentColor"` — Rückmeldung: sieht altbacken/zu einfach aus) —
-jetzt gefüllte Formen mit zwei bis drei festen Hex-Farben je Icon, wie eine
-kleine Mini-Illustration der eigentlichen Spielszene (z. B. Color Pour zeigt
-ein Glas mit echten Farbschichten, Block Burst bunte Einzelblöcke). Das
-Kachelmenü selbst zeigt Icon **und** Name (Name als kleine Beschriftung unter
+Kachel-Symbole sind eigene SVG-Icons (`games/<name>/Icon.tsx`), keine Emojis.
+Zwei Zwischenstufen, die es nicht mehr gibt: erst einfarbige Strichzeichen
+(`stroke="currentColor"` — Rückmeldung: altbacken), dann kleine bunte
+Zeichen mittig auf der Akzentfarbe (Rückmeldung: „einfach nur son kleines
+Symbol draufgemacht"). Heute hat jedes Spiel ein fertiges App-Symbol, siehe
+Abschnitt unten.
+
+Das Kachelmenü zeigt Symbol **und** Name (Name als kleine Beschriftung unter
 der Kachel, kein Beschreibungstext mehr) — nach kurzem Test ganz ohne Namen
 war die Rückmeldung, dass man dann nicht erkennt, was ein Symbol bedeutet.
 Bestwert steht weiterhin nur im `aria-label` für Screenreader, nicht sichtbar.
 
-Kachel-Hintergrund ist ein Farbverlauf aus der Akzentfarbe (heller/dunkler
-über `color-mix()`, kein zweites Hex pro Spiel nötig), dazu ein farbiger
-Schlagschatten — sonst wirkte die Startseite zu flach/grau. Ein wandernder
+Die `accent`-Farbe wird bei den fertigen App-Symbolen nur noch für den
+farbigen Schlagschatten unter der Kachel und für den Rand in der
+Bestenliste gebraucht — der Kachel-Farbverlauf daraus (`color-mix()`) ist
+der Fallback für Spiele ohne eigenes App-Symbol. Ein wandernder
 Lichtschimmer war testweise drin, wurde aber wieder entfernt (Rückmeldung:
 lenkt ab, wenn er ständig hintereinander über die Kacheln läuft).
 
-**Fertige App-Symbole (`iconVollflaechig: true`).** Rückmeldung zu den
-kleinen Zeichen auf farbigem Grund: „einfach nur son kleines Symbol
-draufgemacht … ich will, dass es aussieht wie eine echte App, mit dem
-Schriftzug und so." Ein Spiel kann deshalb statt eines Zeichens ein
-komplettes App-Symbol mitbringen: eigener Farbverlauf, eigene runde Ecken,
-Glanzlichter, Schriftzug — es füllt die Kachel ganz aus, die Hülle legt
-keinen Verlauf mehr darunter (nur noch den farbigen Schatten). Erste und
-bisher einzige Umsetzung: **Block Burst** (`games/blockblitz/Icon.tsx`), als
-Vorlage für die übrigen Spiele gedacht. Zu beachten:
+**App-Symbole (`core/AppSymbol.tsx`).** Rückmeldung zu den früheren kleinen
+Zeichen auf farbigem Grund: „einfach nur son kleines Symbol draufgemacht …
+ich will, dass es aussieht wie eine echte App, mit dem Schriftzug und so."
+Inzwischen hat **jedes** Spiel ein fertiges App-Symbol: eigener Farbverlauf,
+eigene runde Ecken, ein kleiner Einblick ins Spiel, unten ein Band mit dem
+Schriftzug. Es füllt die Kachel ganz aus, die Hülle legt keinen Verlauf mehr
+darunter (nur noch den farbigen Schatten aus `accent`).
 
-- viewBox `0 0 64 64` (statt 24×24 wie bei den Zeichen-Icons) — mehr Platz
-  für Details. `rx="16"` entspricht bei 64 Breite genau `rounded-2xl` auf
-  der 64px-Kachel und skaliert überall mit.
-- Verlaufs- und clipPath-`id`s sind fest vergeben. Das Symbol kann mehrfach
-  auf einer Seite stehen (Menü und Bestenliste); die Definitionen sind dann
-  identisch, das Bild also überall gleich.
-- Der Schriftzug bekommt `textLength` + `lengthAdjust="spacingAndGlyphs"` —
-  so passt er auch dann in die Kachel, wenn ein Gerät eine andere Schrift
-  einsetzt.
-- Einzelne leere Rasterfelder sahen bei großer Anzeige wie Lücken aus,
-  deshalb ist das Brett bis auf das Feld mit dem Funken voll.
-- Wer so ein Symbol einbaut, muss an drei Stellen denken: `index.ts`
-  (`iconVollflaechig: true`), `Kachelmenue.tsx` und `BestenlisteSeite.tsx`
-  prüfen das Feld bereits selbst — dort ist nichts mehr zu tun. Der
-  Startbildschirm des Spiels sollte das Symbol dann aber freistehend zeigen
-  (`<Icon className="size-32 rounded-[2rem] shadow-2xl" />`) statt in einem
-  mattierten Kasten, siehe `Blockblitz.tsx`.
+Der immer gleiche Teil steht **einmal** in `core/AppSymbol.tsx` — Verlauf,
+Lichtschein, Ecken, Schriftband. Ein Icon liefert nur noch den Einblick:
+
+```tsx
+<AppSymbol id="snakerush" verlauf={[...]} schriftzug="SNAKE RUSH" className={className}>
+  …der Einblick, im Bereich y = 0 bis 44…
+</AppSymbol>
+```
+
+Zu beachten:
+
+- Koordinatensystem ist immer `0 0 64 64`. Unterhalb von `BAND_OBEN` (44)
+  liegt das Schriftband — der Einblick muss darüber bleiben.
+- `rx="16"` bei 64 Breite entspricht genau `rounded-2xl` auf der 64px-Kachel
+  und skaliert überall mit.
+- `id` muss je Spiel eindeutig sein, daraus werden die SVG-internen ids für
+  Verlauf und clipPath. Sie sind absichtlich fest und nicht zufällig: Ein
+  Symbol kann mehrfach auf einer Seite stehen (Menü und Bestenliste), die
+  Definitionen sind dann identisch und das Bild überall gleich.
+- Der Schriftzug bekommt `textLength` + `lengthAdjust="spacingAndGlyphs"`,
+  passt also auch, wenn ein Gerät eine andere Schrift einsetzt. Ab zwölf
+  Zeichen wird die Schrift kleiner (nur „GEHIRNJOGGING") — die Grenze liegt
+  bei elf, damit „BLOCK BURST" unverändert bleibt.
+- `GlanzBlock` ist der gemeinsame Baustein für glänzende Spielsteine
+  (Schatten unten, Farbe, Lichtkante oben) — benutzt von Block Burst und
+  Line Fall.
+- Der Einblick soll wirklich das Spiel zeigen, nicht irgendein Motiv: Merge
+  Up holt die Kachelfarben aus dem eigenen `farben.ts`, Star Dash zeichnet
+  dieselbe Katze wie im Spiel. Einzelne leere Rasterfelder sahen bei großer
+  Anzeige wie Lücken aus — Bretter also möglichst voll zeichnen.
+- Was im Symbol steht, muss zum Namen passen: Word Play zeigte erst die
+  Buchstaben „WORT" über dem Schriftzug „WORD PLAY", das las sich wie ein
+  Tippfehler.
+- Neues Spiel: `iconVollflaechig: true` in `index.ts` setzen.
+  `Kachelmenue.tsx` und `BestenlisteSeite.tsx` prüfen das Feld selbst, dort
+  ist nichts zu tun. Der Startbildschirm zeigt das Symbol freistehend
+  (`<Icon className="relative size-32 rounded-[2rem] shadow-2xl" />`) statt
+  in einem mattierten Kasten.
 
 Kachelmenü ist bewusst `flex flex-wrap` mit **fester** Kachelgröße
 (`size-16`), keine responsive Grid-Spaltenzahl mehr — Rückmeldung: Kacheln
