@@ -159,6 +159,7 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `halbieren` | Even Cut |
 | `verbinden` | Flow Link |
 | `tempo` | Tap Rush |
+| `kistenschieben` | Box Push |
 
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
@@ -382,8 +383,7 @@ Lücke, die keines der bisherigen Spiele abdeckt:
     größte Lücke in der Sammlung. Nicht „Vier gewinnt": Das ist in
     Deutschland ein geschützter Handelsname, dieselbe Überlegung wie bei
     Pair Up.
-19. Box Push — Kisten auf Zielfelder schieben (Sokoban-Prinzip). Das erste
-    Spiel, in dem man einen Zug wirklich *verbauen* kann.
+19. ✅ Box Push — Kisten auf Zielfelder schieben. Siehe eigenen Abschnitt.
 20. Schatzsuche — Minensuchen mit Kristallen statt Bomben. Reines
     Schlussfolgern aus Zahlen.
 21. Wortsuche — versteckte Wörter im Buchstabengitter. Kleiner Aufwand,
@@ -1183,6 +1183,36 @@ flachen Anordnung liegt die Mitte des Kastens genau auf dem Pfeil nach
 unten.
 
 Nachgemessen: **alle vierzehn Spiele passen auf 375 × 560 ohne Scrollen.**
+
+## Box Push — Besonderheiten
+
+Das erste Spiel, in dem man einen Zug wirklich **verbauen** kann: Kisten
+lassen sich nur schieben, nie ziehen. Steht eine in der Ecke, bleibt sie
+dort.
+
+- **Die Level sind von Hand gebaut, nicht gewürfelt** (`level.ts`, als
+  Textraster wie das Labyrinth in Ghost Chase). Gute Schiebe-Rätsel leben
+  von einer Idee — „die Kiste muss erst nach links, obwohl sie nach rechts
+  soll" —, und die kann kein Zufall. Ein Erzeuger liefert entweder Triviales
+  oder Unlösbares.
+- Dafür beweist ein **Suchlauf im Test**, dass jedes Level lösbar ist. Beim
+  ersten Durchlauf waren prompt vier von zwölf kaputt — beim Selbertesten
+  hätte ich das erst nach zwanzig Minuten Grübeln gemerkt, und ein Kind
+  schriebe den Fehler sich selbst zu.
+- **Der Suchlauf geht über Schübe, nicht über Einzelschritte.** Das ist kein
+  Feinschliff, sondern der Unterschied zwischen „läuft" und „läuft nicht":
+  Über Schritte kam er bei vier Kisten auf über eine Million Zustände und
+  gab auf, obwohl das Level lösbar war. Der Kniff: Wo genau der Spieler
+  steht, ist egal — es zählt nur, welchen Bereich er erreicht. Als
+  Kennzeichen dient das kleinste erreichbare Feld.
+- **Zurück ist Teil der Regeln, nicht Komfort.** Ohne ihn müsste ein Kind
+  bei jeder verschobenen Kiste von vorn anfangen, und Fehler sind hier der
+  Normalfall. Er zählt als eigener Zug — sonst könnte man beliebig lange
+  probieren und trotzdem die volle Punktzahl abräumen.
+- Schub und Schritt klingen verschieden. Daran hört man, dass man etwas
+  bewegt hat, ohne hinzusehen.
+- **Duellfähig**, und zwar besonders sauber: Die Level stehen fest, gleiche
+  Nummer heißt also wirklich dasselbe Rätsel.
 
 ## Tap Rush — Besonderheiten
 

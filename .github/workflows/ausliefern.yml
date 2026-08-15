@@ -43,9 +43,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Läuft bei **jedem** Push, unabhängig vom Umzug.
+  #
+  # Vorher hing der ganze Ablauf an der Hetzner-Bedingung und wurde deshalb
+  # jedes Mal einfach übersprungen — GitHub zeigte „skipped", und geprüft
+  # wurde gar nichts. Das war verschenkt: Tests und Typprüfung sind auch
+  # dann etwas wert, wenn danach niemand etwas hochlädt.
+  pruefen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # `npm run build` enthält die Typprüfung.
+      - name: Tests
+        run: npm test
+
+      - name: Bauen
+        run: npm run build
+
+      # Der Offline-Speicher wird nur geleert, wenn die Nummer in sw.js
+      # hochgezählt wurde. Wird sie vergessen, zeigen installierte Geräte
+      # weiter die alte Fassung — das ist in diesem Projekt schon passiert.
+      - name: Speicherversion gegen die laufende Fassung prüfen
+        continue-on-error: true
+        run: |
+          NEU=$(grep -o "spielesammlung-v[0-9]*" public/sw.js | head -1)
+          ALT=$(curl -fsS "https://florian-spielesammlung.netlify.app/sw.js" 2>/dev/null \
+                | grep -o "spielesammlung-v[0-9]*" | head -1 || echo "")
+          echo "live: ${ALT:-unbekannt} · neu: $NEU"
+          if [ -n "$ALT" ] && [ "$ALT" = "$NEU" ]; then
+            echo "::warning::SPEICHER in public/sw.js wurde nicht hochgezählt ($NEU). Installierte Geräte bekommen die neue Fassung womöglich nicht."
+          fi
+
   bauen-und-hochladen:
     runs-on: ubuntu-latest
-    # Solange die Zugangsdaten nicht hinterlegt sind, läuft der Ablauf gar
+    needs: pruefen
+    # Solange die Zugangsdaten nicht hinterlegt sind, läuft dieser Teil gar
     # nicht erst an. Ohne diese Bedingung würde er bei jedem Push scheitern
     # und GitHub schickte eine Fehlermail — für einen Umzug, der noch gar
     # nicht dran ist. Sobald die vier Secrets stehen, läuft er von selbst.
@@ -60,28 +100,8 @@ jobs:
 
       - run: npm ci
 
-      # Erst prüfen, dann bauen: Eine kaputte Fassung soll gar nicht erst
-      # hochgeladen werden. `npm run build` enthält die Typprüfung.
-      - name: Tests
-        run: npm test
-
       - name: Bauen
         run: npm run build
-
-      # Der Offline-Speicher wird nur geleert, wenn die Nummer in sw.js
-      # hochgezählt wurde. Wird sie vergessen, zeigen installierte Geräte
-      # weiter die alte Fassung — das ist in diesem Projekt schon passiert.
-      # Deshalb hier eine Warnung statt eines stillen Fehlschlags.
-      - name: Speicherversion gegen die letzte Auslieferung prüfen
-        continue-on-error: true
-        run: |
-          NEU=$(grep -o "spielesammlung-v[0-9]*" public/sw.js | head -1)
-          ALT=$(curl -fsS "https://spiele.klarvorteil.de/sw.js" 2>/dev/null \
-                | grep -o "spielesammlung-v[0-9]*" | head -1 || echo "")
-          echo "live: ${ALT:-unbekannt} · neu: $NEU"
-          if [ -n "$ALT" ] && [ "$ALT" = "$NEU" ]; then
-            echo "::warning::SPEICHER in public/sw.js wurde nicht hochgezählt ($NEU). Installierte Geräte bekommen die neue Fassung womöglich nicht."
-          fi
 
       - name: lftp installieren
         run: sudo apt-get update && sudo apt-get install -y lftp
