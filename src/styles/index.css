@@ -1090,6 +1090,70 @@
   flex-direction: column;
 }
 
+/* Das Regenbogen-Feld in Tap Rush — die höchste Tempostufe.
+
+   Wandert **seitlich**, die Helligkeit bleibt dabei gleich. Das ist hier
+   keine Spielerei, sondern die Bedingung: Ein ganzflächiges Hell-Dunkel-
+   Wechseln ist im ganzen Projekt tabu, und schnelles Blinken erst recht.
+   Ein voller Durchlauf dauert drei Sekunden, also 0,33 Hz — weit unter der
+   1,7-Hz-Grenze, obwohl das Feld den halben Bildschirm einnimmt.
+
+   Unter `.ruhig` friert die Bewegung ein; übrig bleibt ein bunter Verlauf,
+   also weiterhin ein gültiges Bild. */
+@keyframes regenbogen-wandern {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.tempo-regenbogen {
+  background: linear-gradient(
+    100deg,
+    #ef4444,
+    #f59e0b,
+    #facc15,
+    #22c55e,
+    #06b6d4,
+    #6366f1,
+    #d946ef,
+    #ef4444
+  );
+  background-size: 200% 100%;
+  animation: regenbogen-wandern 3s linear infinite;
+}
+
+/* Die Zählzahl in Tap Rush auf der höchsten Stufe: selbst ein Regenbogen.
+ *
+ * Läuft **entgegengesetzt** zum Feld dahinter (`reverse`), sonst
+ * verschwindet die Zahl im gleichfarbigen Grund — genau das war der erste
+ * Versuch, und die Zahl war streckenweise unlesbar.
+ *
+ * Kein `text-shadow`: Bei durchsichtiger Füllung wird der hinter dem
+ * Buchstaben gezeichnet und scheint durch (dieselbe Falle wie bei der
+ * Wortmarke auf der Startseite). Der dunkle Rand kommt deshalb über
+ * `filter: drop-shadow`, das die Form selbst umfasst. */
+.tempo-zahl-regenbogen {
+  background: linear-gradient(
+    100deg,
+    #fef9c3,
+    #ffffff,
+    #a5f3fc,
+    #ffffff,
+    #fbcfe8,
+    #ffffff,
+    #fef9c3
+  );
+  background-size: 200% 100%;
+  animation: regenbogen-wandern 3s linear infinite reverse;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.3)) drop-shadow(0 10px 22px rgba(0, 0, 0, 0.45));
+}
+
 /* Wenn wenig Bewegung gewünscht ist.
 
    **Nur** über die Klasse, nicht zusätzlich über eine Medienabfrage. Die

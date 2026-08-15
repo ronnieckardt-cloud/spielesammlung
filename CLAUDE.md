@@ -158,6 +158,7 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `farbringe` | Ring Rise |
 | `halbieren` | Even Cut |
 | `verbinden` | Flow Link |
+| `tempo` | Tap Rush |
 
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
@@ -408,11 +409,7 @@ Von Ronni selbst ausgesucht, aus einer Liste von Vorschlägen:
     am Ende ist das Gitter voll (Vorbild: Flow Free).
 26. ✅ **Duell** — zwei Angemeldete spielen dasselbe Level, wer mehr Punkte
     hat, gewinnt. Siehe eigenen Abschnitt unten.
-27. **Tap Rush** — Ronnis Idee: Zeit vorher wählen (5, 10, 20, 60 Sekunden),
-    dann so oft wie möglich tippen. Die Optik eskaliert mit dem Tempo: grün,
-    rot, Regenbogen. Achtung, die Puls-Grenze aus dem Audit gilt auch hier —
-    über Farbton und Deckkraft steuern, nicht über Blinken, und keine
-    ganzflächigen Hell-Dunkel-Wechsel.
+27. ✅ **Tap Rush** — Zeit wählen, so oft wie möglich tippen. Siehe unten.
 
 Danach, in dieser Reihenfolge:
 
@@ -1186,6 +1183,42 @@ flachen Anordnung liegt die Mitte des Kastens genau auf dem Pfeil nach
 unten.
 
 Nachgemessen: **alle vierzehn Spiele passen auf 375 × 560 ohne Scrollen.**
+
+## Tap Rush — Besonderheiten
+
+Ronnis Idee, samt Farbverlauf: „Am Anfang rot, umso mehr du tippst wird's
+grün, hellblau ist schon gut, und Regenbogen heißt übelst schnell."
+
+- **Die Uhr startet mit dem ersten Tipp**, nicht mit dem Öffnen. Sonst
+  verliert man Zeit, während man sich zurechtsetzt — bei fünf Sekunden wäre
+  das die halbe Runde. Dafür gibt es einen eigenen Test.
+- Das Tempo kommt aus einem **gleitenden Fenster** über die letzten 1,2
+  Sekunden. Kürzer, und die Farbe zappelt bei jedem einzelnen Tipp; länger,
+  und sie hinkt hinterher, sodass man den Zusammenhang gar nicht mehr merkt.
+  Das Fenster wirft alte Tipps laufend weg — die Liste bleibt kurz, auch
+  über eine ganze Minute.
+- **Punkte sind Tipps je zehn Sekunden**, nicht die reine Anzahl. Sonst
+  gewönne in der Bestenliste immer, wer die Minute gewählt hat, und die
+  Liste sagte nur noch aus, wer am längsten gespielt hat. So sind alle vier
+  Längen vergleichbar — ein Test prüft genau das.
+- Die Grenzen (2,5 / 4,5 / 6,5 Tipps je Sekunde) sind an einem Kind
+  ausgerichtet, nicht an einem Rekordhalter. Wären sie höher, bliebe das
+  Feld die ganze Runde rot, und die Farbe wäre keine Rückmeldung mehr,
+  sondern nur Deko.
+- **Der Regenbogen wandert seitlich, die Helligkeit bleibt gleich.** Das ist
+  Pflicht, nicht Geschmack: Ganzflächige Hell-Dunkel-Wechsel sind im ganzen
+  Projekt tabu, und das Feld nimmt hier den halben Bildschirm ein. Ein
+  Durchlauf dauert drei Sekunden — 0,33 Hz, weit unter der 1,7-Hz-Grenze.
+- **Die große Zahl färbt mit** (Ronnis Zusatzwunsch) und wird mit jeder
+  Stufe heller — auf der höchsten selbst zum Regenbogen, aber **gegenläufig**
+  zum Grund. Gleichläufig verschwand sie genau dann, wenn man am schnellsten
+  war. Und kein `text-shadow` an der eingeclippten Zahl: Der wird hinter der
+  durchsichtigen Füllung gezeichnet und scheint durch — dieselbe Falle wie
+  bei der Wortmarke auf der Startseite. Der dunkle Rand kommt über
+  `filter: drop-shadow`.
+- **Nicht duellfähig**: Es gibt keine Levelnummer. Ein Duell bräuchte hier
+  nur dieselbe Rundenlänge — eine eigene Sache, bewusst nicht mit
+  hineingemischt.
 
 ## Das Duell
 

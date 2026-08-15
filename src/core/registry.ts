@@ -16,6 +16,7 @@ import { viererreihe } from '../games/viererreihe';
 import { farbringe } from '../games/farbringe';
 import { halbieren } from '../games/halbieren';
 import { verbinden } from '../games/verbinden';
+import { tempo } from '../games/tempo';
 
 /**
  * Die einzige Liste aller Spiele. Ein neues Spiel wird hier eingetragen —
@@ -39,6 +40,7 @@ export const spiele: readonly GameApi[] = [
   farbringe,
   halbieren,
   verbinden,
+  tempo,
 ];
 
 export function spielFinden(id: string): GameApi | undefined {
