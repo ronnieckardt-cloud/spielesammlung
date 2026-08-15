@@ -223,6 +223,7 @@ describe('zeitFortschritt — Spielerbewegung und Fressen', () => {
       modusPhase: 0,
       modusZeitRest: 999,
       vorbei: false,
+      gewonnen: false,
       saat: 1,
     };
     const nach = zeitFortschritt(z, 0.01);
@@ -246,6 +247,7 @@ describe('zeitFortschritt — Spielerbewegung und Fressen', () => {
       modusPhase: 0,
       modusZeitRest: 999,
       vorbei: false,
+      gewonnen: false,
       saat: 1,
     };
     const nach = zeitFortschritt(z, 0.02);
@@ -275,6 +277,7 @@ describe('zeitFortschritt — Spielerbewegung und Fressen', () => {
       modusPhase: 0,
       modusZeitRest: 999,
       vorbei: false,
+      gewonnen: false,
       saat: 1,
     };
     const nach = zeitFortschritt(z, 0.02);
@@ -309,12 +312,69 @@ describe('zeitFortschritt — Kollisionen', () => {
       modusPhase: 0,
       modusZeitRest: 999,
       vorbei: false,
+      gewonnen: false,
       saat: 1,
     };
     const nach = zeitFortschritt(z, 0.001);
     expect(nach.geister[0]!.modus).toBe('augen');
     expect(nach.score).toBe(200);
     expect(nach.vorbei).toBe(false);
+  });
+
+  it('sind danach alle vier Geister im Augen-Modus, ist die Runde als Sieg vorbei', () => {
+    const labyrinth = offenesLabyrinth();
+    const z: Zustand = {
+      labyrinth,
+      spieler: spieler(7, 5, { bewegungRest: 999 }),
+      geister: [
+        geist(0, 7, 5, { modus: 'angst', angstZeitRest: 5, bewegungRest: 999 }),
+        geist(1, 0, 0, { modus: 'augen', bewegungRest: 999 }),
+        geist(2, 0, 0, { modus: 'augen', bewegungRest: 999 }),
+        geist(3, 0, 0, { modus: 'augen', bewegungRest: 999 }),
+      ],
+      punkte: new Set(['1,1']),
+      kraftpillen: new Set(),
+      score: 0,
+      leben: STARTLEBEN,
+      level: 1,
+      modusPhase: 0,
+      modusZeitRest: 999,
+      vorbei: false,
+      gewonnen: false,
+      saat: 1,
+    };
+    const nach = zeitFortschritt(z, 0.001);
+    expect(nach.geister[0]!.modus).toBe('augen');
+    expect(nach.vorbei).toBe(true);
+    expect(nach.gewonnen).toBe(true);
+    expect(nach.score).toBe(200 + 1000);
+  });
+
+  it('bleiben nicht alle Geister gleichzeitig im Augen-Modus, geht die Runde normal weiter', () => {
+    const labyrinth = offenesLabyrinth();
+    const z: Zustand = {
+      labyrinth,
+      spieler: spieler(7, 5, { bewegungRest: 999 }),
+      geister: [
+        geist(0, 7, 5, { modus: 'angst', angstZeitRest: 5, bewegungRest: 999 }),
+        geist(1, 0, 0, { modus: 'streuen', bewegungRest: 999 }),
+        geist(2, 0, 0, { modus: 'augen', bewegungRest: 999 }),
+        geist(3, 0, 0, { modus: 'augen', bewegungRest: 999 }),
+      ],
+      punkte: new Set(['1,1']),
+      kraftpillen: new Set(),
+      score: 0,
+      leben: STARTLEBEN,
+      level: 1,
+      modusPhase: 0,
+      modusZeitRest: 999,
+      vorbei: false,
+      gewonnen: false,
+      saat: 1,
+    };
+    const nach = zeitFortschritt(z, 0.001);
+    expect(nach.vorbei).toBe(false);
+    expect(nach.gewonnen).toBe(false);
   });
 
   it('ein jagender Geist kostet ein Leben und setzt Positionen zurück', () => {
@@ -336,6 +396,7 @@ describe('zeitFortschritt — Kollisionen', () => {
       modusPhase: 0,
       modusZeitRest: 999,
       vorbei: false,
+      gewonnen: false,
       saat: 1,
     };
     const nach = zeitFortschritt(z, 0.001);
@@ -363,6 +424,7 @@ describe('zeitFortschritt — Kollisionen', () => {
       modusPhase: 0,
       modusZeitRest: 999,
       vorbei: false,
+      gewonnen: false,
       saat: 1,
     };
     const nach = zeitFortschritt(z, 0.001);
@@ -389,6 +451,7 @@ describe('zeitFortschritt — Kollisionen', () => {
       modusPhase: 0,
       modusZeitRest: 999,
       vorbei: false,
+      gewonnen: false,
       saat: 1,
     };
     const nach = zeitFortschritt(z, 0.001);
@@ -411,6 +474,7 @@ describe('zeitFortschritt — Modus-Zeittabelle', () => {
       modusPhase: 0,
       modusZeitRest: 0.01,
       vorbei: false,
+      gewonnen: false,
       saat: 1,
     };
     const nach = zeitFortschritt(z, 0.02);
@@ -435,6 +499,7 @@ describe('zeitFortschritt — Level abgeschlossen', () => {
       modusPhase: 5,
       modusZeitRest: 999,
       vorbei: false,
+      gewonnen: false,
       saat: 1,
     };
     const nach = zeitFortschritt(z, 0.02);
@@ -462,6 +527,7 @@ describe('Tunnel', () => {
       modusPhase: 0,
       modusZeitRest: 999,
       vorbei: false,
+      gewonnen: false,
       saat: 1,
     };
     const nach = zeitFortschritt(z, 0.02);

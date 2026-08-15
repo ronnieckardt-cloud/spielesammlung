@@ -1,12 +1,12 @@
 import type { GameApi } from '../../core/types';
 import { Farbsortierer } from './Farbsortierer';
+import { FarbsortiererIcon } from './Icon';
 
 /** Alles, was die Hülle von diesem Spiel sehen darf. */
 export const farbsortierer: GameApi = {
   id: 'farbsortierer',
-  title: 'Farbsortierer',
-  blurb: 'Sortiere Farbschichten in Röhrchen — jedes Level lösbar, gleiche Nummer für alle.',
+  title: 'Color Pour',
   accent: '#a855f7',
-  symbol: '🧪',
+  Icon: FarbsortiererIcon,
   Component: Farbsortierer,
 };

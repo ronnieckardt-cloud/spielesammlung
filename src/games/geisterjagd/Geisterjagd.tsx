@@ -60,7 +60,7 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
   }, [z.level]);
 
   useEffect(() => {
-    if (z.vorbei) onGameOver(z.score);
+    if (z.vorbei) onGameOver(z.score, z.gewonnen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [z.vorbei]);
 
@@ -81,7 +81,7 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
         className="relative touch-none"
         style={{ width: breite * ZELLE_PX, height: hoehe * ZELLE_PX }}
         role="img"
-        aria-label={`Labyrinth, Level ${z.level}, ${z.leben} Leben, ${z.score} Punkte.${z.vorbei ? ' Spiel vorbei.' : ''}`}
+        aria-label={`Labyrinth, Level ${z.level}, ${z.leben} Leben, ${z.score} Punkte.${z.gewonnen ? ' Alle Geister gefressen, gewonnen!' : z.vorbei ? ' Spiel vorbei.' : ''}`}
       >
         <div
           className="absolute inset-0 grid"
@@ -109,7 +109,9 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
                 )}
                 {hatPille && (
                   <div className="pulsiert absolute inset-0 grid place-items-center">
-                    <div className="size-2.5 rounded-full" style={{ backgroundColor: PILLE_FARBE }} />
+                    <svg viewBox="0 0 24 24" className="size-3.5" fill={PILLE_FARBE} aria-hidden="true">
+                      <path d="M12 2l2.5 6.9H21l-5.6 4.4 2.1 7.1L12 16.2 6.5 20.4l2.1-7.1L3 8.9h6.5z" />
+                    </svg>
                   </div>
                 )}
               </div>
@@ -150,8 +152,9 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
       <Steuerkreuz onRichtung={bewege} aktiv={!z.vorbei} />
 
       <p className="max-w-sm text-center text-xs text-gedaempft">
-        Pfeiltasten, Wischen oder das Kreuz oben bewegen. Kraftpillen machen
-        die Geister kurz ängstlich — dann kannst du sie fangen.
+        Pfeiltasten, Wischen oder das Kreuz oben bewegen. Die großen Sterne
+        machen die Geister kurz ängstlich — dann kannst du sie fangen. Frisst
+        du alle vier auf einmal, ist die Runde sofort gewonnen!
       </p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}

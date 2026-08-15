@@ -1,12 +1,12 @@
 import type { GameApi } from '../../core/types';
 import { Platzhalter } from './Platzhalter';
+import { PlatzhalterIcon } from './Icon';
 
 /** Alles, was die Hülle von diesem Spiel sehen darf. */
 export const platzhalter: GameApi = {
   id: 'platzhalter',
-  title: 'Sternenfang',
-  blurb: 'Fang mit deiner Katze Sterne, bevor die Zeit abläuft.',
+  title: 'Star Dash',
   accent: '#7dd3fc',
-  symbol: '★',
+  Icon: PlatzhalterIcon,
   Component: Platzhalter,
 };

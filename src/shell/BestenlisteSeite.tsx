@@ -15,15 +15,20 @@ export function BestenlisteSeite({ onZurueck }: { onZurueck: () => void }) {
       <div className="flex flex-col gap-4">
         {spiele.map((spiel) => {
           const eintraege = bestenlisteLesen(spiel.id);
+          const Icon = spiel.Icon;
           return (
             <section
               key={spiel.id}
               style={{ borderLeftColor: spiel.accent }}
               className="rounded-karte border border-rand border-l-4 bg-flaeche p-4"
             >
-              <h2 className="font-semibold">
-                <span aria-hidden="true" className="mr-2" style={{ color: spiel.accent }}>
-                  {spiel.symbol}
+              <h2 className="flex items-center gap-2 font-semibold">
+                <span
+                  aria-hidden="true"
+                  style={{ backgroundColor: spiel.accent }}
+                  className="grid size-7 shrink-0 place-items-center rounded-lg text-white"
+                >
+                  <Icon className="size-4" />
                 </span>
                 {spiel.title}
               </h2>

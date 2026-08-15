@@ -20,8 +20,11 @@ import { blockFarbe } from './farben';
 const VERSATZ_Y = 60; // Pixel, um die das gezogene Teil über den Finger gehoben wird
 const SCHWELLE_TIPP = 8; // Pixel Bewegung, unterhalb derer ein Antippen statt Ziehen gilt
 const FALLBACK_ZELLGROESSE = 40; // bevor das Raster zum ersten Mal gemessen wurde
-const ZERBROESELN_VERSATZ_MS = 28; // Zeitversatz je Diagonal-Schritt beim Auflösen
-const ZERBROESELN_DAUER_MS = 420; // Dauer einer einzelnen Zelle, siehe index.css
+// Straff und "zack zack zack": großer Versatz, aber jede Zelle für sich kurz —
+// das wirkt wie ein schnelles, hintereinander laufendes Wegkrattern statt
+// eines einzigen langsamen, gemeinsamen Aufblitzens.
+const ZERBROESELN_VERSATZ_MS = 55; // Zeitversatz je Diagonal-Schritt beim Auflösen
+const ZERBROESELN_DAUER_MS = 260; // Dauer einer einzelnen Zelle, siehe index.css
 const PUNKTE_ANZEIGE_DAUER_MS = 900;
 
 type ZugZustand = {
@@ -107,6 +110,16 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
           settings.reducedMotion ? 0 : maxVersatz + ZERBROESELN_DAUER_MS,
         );
         sfx('stufe');
+
+        // Kleine, gestaffelte "Kratz"-Klicks passend zum Zerbröseln — ein Klick
+        // je Zeitstufe, nicht je Zelle, sonst wird es bei vielen Zellen zu viel.
+        if (!settings.reducedMotion) {
+          const stufen = new Set(positionen.values());
+          for (const stufe of stufen) {
+            if (stufe === 0) continue;
+            window.setTimeout(() => sfx('klick'), stufe);
+          }
+        }
 
         const zugPunkte = punkteFuerZug(teil.form.length, anzahlLinien, aktuell.kombo + 1);
         punkteAnzeigeId.current += 1;
@@ -233,12 +246,23 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
 
   return (
     <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4">
-      <div className="flex h-8 items-center">
-        {z.kombo >= 2 && (
-          <span className="rounded-full bg-flaeche-hoch px-3 py-1 text-sm font-bold text-fokus">
-            🔥 Kombo ×{z.kombo}
-          </span>
-        )}
+      <div className="flex flex-col items-center gap-1">
+        <output
+          key={z.punkte}
+          aria-live="polite"
+          aria-label={`${z.punkte} Punkte`}
+          className="punkte-bumsen text-6xl leading-none font-extrabold tabular-nums text-white"
+          style={{ textShadow: '0 2px 16px rgba(0,0,0,0.55)' }}
+        >
+          {z.punkte}
+        </output>
+        <span
+          className={`rounded-full bg-flaeche-hoch px-3 py-1 text-sm font-bold text-fokus transition-opacity ${
+            z.kombo >= 2 ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          🔥 Kombo ×{z.kombo}
+        </span>
       </div>
 
       <div className="relative w-full max-w-sm">
@@ -323,10 +347,10 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
             disabled={!teil || z.vorbei}
             onPointerDown={teil ? beiTablettPointerDown(i) : undefined}
             aria-label={teil ? `Teil ${i + 1}, ${teil.form.length} Felder` : `Platz ${i + 1}, leer`}
-            className={`grid size-24 touch-none place-items-center rounded-xl border transition-transform disabled:opacity-30 ${
+            className={`grid size-24 touch-none place-items-center rounded-xl transition-all disabled:opacity-30 ${
               ausgewaehlt === i || zug?.tablettIndex === i
-                ? 'border-fokus bg-flaeche-hoch -translate-y-1'
-                : 'border-rand bg-flaeche'
+                ? '-translate-y-1.5 drop-shadow-[0_6px_16px_rgba(0,0,0,0.45)]'
+                : ''
             }`}
           >
             {teil && <TeilAnzeige teil={teil} zellgroesse={16} />}

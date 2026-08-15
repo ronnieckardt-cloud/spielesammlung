@@ -16,14 +16,14 @@ Dann <http://localhost:5180> öffnen.
 
 | Spiel | Stand |
 |---|---|
-| **Sternenfang** (Platzhalter) | spielbar |
-| **Farbsortierer** | spielbar |
-| **Blockblitz** | spielbar |
-| **Reihenfall** | spielbar |
-| **Geisterjagd** | spielbar |
-| **Wissensquiz** | spielbar |
+| **Star Dash** (Platzhalter) | spielbar |
+| **Color Pour** | spielbar |
+| **Block Burst** | spielbar |
+| **Line Fall** | spielbar |
+| **Ghost Chase** | spielbar |
+| **Quiz Time** | spielbar |
 | **Gehirnjogging** | spielbar |
-| **Wortspiel** | spielbar |
+| **Word Play** | spielbar |
 
 Der Platzhalter ist kein richtiges Spiel, sondern der Beweis, dass das
 Grundgerüst trägt: Er benutzt alle gemeinsamen Bausteine und meldet Punkte

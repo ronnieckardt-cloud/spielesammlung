@@ -94,7 +94,7 @@
 }
 
 .aufloesen-blitz {
-  animation: aufloesen-blitz 0.38s ease-in forwards;
+  animation: aufloesen-blitz 0.24s ease-in forwards;
   animation-delay: var(--verzoegerung, 0ms);
 }
 
@@ -112,8 +112,26 @@
 }
 
 .kruemel {
-  animation: kruemel-fallen 0.42s ease-in forwards;
+  animation: kruemel-fallen 0.26s ease-in forwards;
   animation-delay: var(--verzoegerung, 0ms);
+}
+
+/* Kurzer Puls, wenn sich der Punktestand ändert (Blockblitz) — spielt einmal
+   ab, weil die Komponente per key={punkte} neu gemountet wird. */
+@keyframes punkte-bumsen {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.16);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.punkte-bumsen {
+  animation: punkte-bumsen 0.32s ease-out;
 }
 
 /* Kurz auftauchendes Punkte-Popup beim Auflösen (Blockblitz). */

@@ -56,6 +56,8 @@ export type Zustand = {
   modusPhase: number;
   modusZeitRest: number;
   vorbei: boolean;
+  /** true = Runde durch "alle Geister gefressen" gewonnen, nicht durch Leben verloren. */
+  gewonnen: boolean;
   saat: number;
 };
 
@@ -64,6 +66,7 @@ export const ANGST_DAUER = 8;
 const PUNKTE_PRO_PUNKT = 10;
 const PUNKTE_PRO_KRAFTPILLE = 50;
 const PUNKTE_PRO_GEIST = 200;
+const PUNKTE_ALLE_GEISTER_BONUS = 1000;
 
 /**
  * Streuen/Jagen nach fester, eigener Zeittabelle (nicht die Original-Werte).
@@ -257,6 +260,7 @@ export function neuesSpiel(saat: number): Zustand {
     modusPhase: 0,
     modusZeitRest: MODUS_ZEITTABELLE[0]!.dauer,
     vorbei: false,
+    gewonnen: false,
     saat,
   };
 }
@@ -408,13 +412,21 @@ function kollisionenPruefen(z: Zustand): Zustand {
     const geister = z.geister.map((g) =>
       g.id === treffer.id ? { ...g, modus: 'augen' as const, angstZeitRest: 0 } : g,
     );
-    return { ...z, geister, score: z.score + PUNKTE_PRO_GEIST };
+    const score = z.score + PUNKTE_PRO_GEIST;
+
+    // Sind jetzt alle vier gleichzeitig auf dem Heimweg (Augen-Modus), hat
+    // der Spieler die ganze Geisterbande gefressen — das zählt als Sieg,
+    // unabhängig davon, wie viele Punkte noch im Labyrinth liegen.
+    if (geister.every((g) => g.modus === 'augen')) {
+      return { ...z, geister, score: score + PUNKTE_ALLE_GEISTER_BONUS, vorbei: true, gewonnen: true };
+    }
+    return { ...z, geister, score };
   }
 
   if (treffer.modus === 'augen') return z;
 
   const leben = z.leben - 1;
-  if (leben <= 0) return { ...z, leben: 0, vorbei: true };
+  if (leben <= 0) return { ...z, leben: 0, vorbei: true, gewonnen: false };
   return startpositionenZuruecksetzen({ ...z, leben });
 }
 

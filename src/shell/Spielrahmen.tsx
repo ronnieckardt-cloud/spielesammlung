@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Einstellungen, GameApi } from '../core/types';
 import { bestwert, ergebnisEintragen } from './speicher';
 
-type Ende = { punkte: number; beste: number; rekord: boolean };
+type Ende = { punkte: number; beste: number; rekord: boolean; gewonnen: boolean };
 
 /**
  * Rahmen um ein laufendes Spiel: Kopfzeile mit Punktestand und Zurück-Knopf,
@@ -30,14 +30,14 @@ export function Spielrahmen({
   const beiPunkten = useCallback((wert: number) => setPunkte(wert), []);
 
   const beiEnde = useCallback(
-    (wert: number) => {
+    (wert: number, gewonnen = false) => {
       if (!rundeLaeuft.current) return;
       rundeLaeuft.current = false;
 
       const vorher = bestwert(spiel.id);
       const liste = ergebnisEintragen(spiel.id, wert);
       setPunkte(wert);
-      setEnde({ punkte: wert, beste: liste[0]?.punkte ?? wert, rekord: wert > vorher });
+      setEnde({ punkte: wert, beste: liste[0]?.punkte ?? wert, rekord: wert > vorher, gewonnen });
     },
     [spiel.id],
   );
@@ -102,7 +102,7 @@ export function Spielrahmen({
             className="absolute inset-0 grid place-items-center bg-grund/85 p-4 backdrop-blur-sm"
           >
             <div className="w-full max-w-xs rounded-karte border border-rand bg-flaeche p-5 text-center">
-              <h2 className="text-lg font-bold">Vorbei</h2>
+              <h2 className="text-lg font-bold">{ende.gewonnen ? '🎉 Gewonnen!' : 'Vorbei'}</h2>
               <p className="mt-3 text-4xl font-bold tabular-nums" style={{ color: spiel.accent }}>
                 {ende.punkte}
               </p>

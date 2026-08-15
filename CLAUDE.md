@@ -25,21 +25,24 @@ Der wichtigste Punkt im ganzen Projekt. Ein Spiel liegt in
 
 ```ts
 type GameApi = {
-  id: string;
+  id: string;      // stabil — Bestenlisten hängen daran, title darf sich ändern
   title: string;
-  blurb: string;   // ein Satz fürs Kachelmenü
   accent: string;  // Farbe der Kachel
-  symbol: string;  // Zeichen der Kachel — Farbe ist nie das einzige Merkmal
+  Icon: React.FC<{ className?: string }>;  // eigenes SVG, kein Emoji
   Component: React.FC<GameProps>;
 };
 
 type GameProps = {
-  onScore: (score: number) => void;     // laufender Punktestand
-  onGameOver: (score: number) => void;  // genau einmal pro Runde
+  onScore: (score: number) => void;               // laufender Punktestand
+  onGameOver: (score: number, gewonnen?: boolean) => void;  // genau einmal pro Runde
   onExit: () => void;
   settings: { sound: boolean; reducedMotion: boolean };
 };
 ```
+
+`gewonnen` ist optional — nur Spiele mit einer echten Sieg-Bedingung (nicht
+nur "Leben aufgebraucht", siehe Geisterjagd) geben es mit. Die Hülle zeigt
+dann „🎉 Gewonnen!" statt „Vorbei" im Rundenende-Bildschirm.
 
 **Ein Spiel darf nie direkt auf Bestenliste, Router oder Browser-Speicher
 zugreifen — immer nur über diese Props.** Konkret heißt das: in
@@ -86,9 +89,30 @@ schreibt das.
 ## Namen und Optik
 
 Die Spielprinzipien sind frei, Namen und Optik der Vorbilder nicht.
-Durchgehend eigene Namen verwenden (Farbsortierer, Blockblitz, Reihenfall,
-Geisterjagd) und sich optisch **nicht** an die Originale anlehnen — keine
+Durchgehend eigene Namen verwenden — auf Ronnis Wunsch inzwischen coole,
+kurze englische Titel statt der ursprünglichen deutschen Arbeitsnamen (siehe
+Tabelle unten) — und sich optisch **nicht** an die Originale anlehnen — keine
 gelbe Kreisfigur, keine originalen Steinfarben.
+
+| Interne id (`registry.ts`, Bestenliste) | Angezeigter Titel |
+|---|---|
+| `platzhalter` | Star Dash |
+| `farbsortierer` | Color Pour |
+| `blockblitz` | Block Burst |
+| `reihenfall` | Line Fall |
+| `geisterjagd` | Ghost Chase |
+| `quiz` | Quiz Time |
+| `gehirnjogging` | Gehirnjogging (Name bewusst unverändert) |
+| `wortspiel` | Word Play |
+
+Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
+`localStorage`. Nur `title` ändert sich, sonst nichts.
+
+Kachel-Symbole sind eigene, kleine SVG-Icons (`games/<name>/Icon.tsx`),
+keine Emojis — Strich-Icons, `stroke="currentColor"`, 24×24 Viewbox, weiß auf
+der Akzentfarbe. Das Kachelmenü selbst zeigt bewusst **nur** das Icon, ohne
+Titel oder Beschreibungstext (wie eine Reihe kleiner App-Symbole) — Titel und
+Bestwert stehen weiterhin im `aria-label` für Screenreader.
 
 Ausnahme auf ausdrücklichen Wunsch: Die Spielfigur in Sternenfang
 (`games/platzhalter/Platzhalter.tsx`, Komponente `KatzenGesicht`) ist
@@ -195,6 +219,20 @@ versucht deshalb genau dasselbe Level erneut.
   genau beim Auflösen, über dem Spielfeld zentriert — Punkte gab es vorher
   auch schon (`punkteFuerZug`), aber ohne direkte Rückmeldung am Ort des
   Geschehens wirkte es unsichtbar.
+- Punktestand steht jetzt groß und hell über dem Feld (`text-6xl`,
+  `key={z.punkte}` + `.punkte-bumsen` in `index.css` für einen kurzen Puls
+  bei jeder Änderung) statt nur klein in der Kopfzeile der Hülle — die
+  Kopfzeile selbst bleibt unverändert (gemeinsamer Baustein, gilt für alle
+  Spiele gleich), das ist eine zusätzliche, eigene Anzeige nur in diesem Spiel.
+- Tablett-Teile schweben ohne Kasten (kein `border`/`bg-*` mehr am
+  Tablett-Button) — beim Anheben nur ein `drop-shadow` und ein leichtes
+  Anheben (`-translate-y-1.5`) als Rückmeldung, kein Kasten-Hintergrund.
+- Zerbröseln straffer getaktet als in der ersten Fassung (`ZERBROESELN_VERSATZ_MS`
+  55 statt 28, Einzeldauer 260ms statt 420ms) — wirkt jetzt wie ein
+  schnelles Hintereinander-Wegkrattern statt eines langsamen gemeinsamen
+  Aufblitzens. Dazu ein paar gestaffelte, kurze „Kratz"-Klicks
+  (`sfx('klick')`), einer je Zeitstufe, nicht je Zelle — sonst wird es bei
+  großen Auflösungen zu viel.
 
 ## Reihenfall — Besonderheiten
 
@@ -245,6 +283,21 @@ versucht deshalb genau dasselbe Level erneut.
 - Steuerung über `useInput` (Wischen + Tastatur) **und** den gemeinsamen
   `Steuerkreuz`-Baustein — hier passt er, weil es wirklich nur die vier
   Richtungen braucht.
+- Das Labyrinth hat gegenüber der ersten Fassung zusätzliche, kleine
+  Wandsegmente in den vormals komplett offenen Bereichen (mehr Abzweigungen,
+  weniger "nur kreuzweise laufen") — Layout an sich unverändert (gleiche
+  Größe, gleiche Positionen für Spieler, Geister, Kraftpillen), nur ergänzt.
+  Jede Ergänzung wurde einzeln gegen den Flood-Fill-Test geprüft.
+- Kraftpillen werden als kleine Sterne gezeichnet (SVG-Pfad statt Kreis,
+  `PILLE_FARBE` bleibt als Variablenname), sonst identische Mechanik.
+- Neue Sieg-Bedingung: Sind nach einem Biss alle vier Geister gleichzeitig
+  im Augen-Modus (gerade gefressen, auf dem Heimweg — auch wenn sie über
+  mehrere Kraftpillen verteilt dorthin kamen), ist die Runde sofort mit
+  `gewonnen: true` vorbei, plus 1000 Bonuspunkte
+  (`PUNKTE_ALLE_GEISTER_BONUS`). Absichtlich unabhängig davon, wie viele
+  Punkte noch im Labyrinth liegen. Die Hülle zeigt dafür „🎉 Gewonnen!"
+  statt „Vorbei" — dafür wurde `GameProps.onGameOver` um ein optionales
+  zweites Argument erweitert (siehe „Die Schnittstelle" oben).
 
 ## Wissensquiz — Besonderheiten
 

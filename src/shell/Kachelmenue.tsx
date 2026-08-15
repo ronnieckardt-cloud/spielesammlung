@@ -40,34 +40,23 @@ export function Kachelmenue({
         </nav>
       </header>
 
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {/* Bewusst nur Icon-Kacheln, ohne Namen oder Beschreibung — wie eine
+          Reihe kleiner App-Symbole. Name und Bestwert bleiben für
+          Screenreader über aria-label erhalten. */}
+      <ul className="grid grid-cols-4 gap-4 sm:grid-cols-5">
         {spiele.map((spiel) => {
           const beste = bestwert(spiel.id);
+          const Icon = spiel.Icon;
           return (
             <li key={spiel.id}>
               <button
                 type="button"
                 onClick={() => onSpielen(spiel.id)}
-                style={{ borderLeftColor: spiel.accent }}
-                className="flex w-full items-center gap-4 rounded-karte border border-rand border-l-4 bg-flaeche p-4 text-left transition-colors hover:bg-flaeche-hoch"
+                aria-label={`${spiel.title} — ${beste > 0 ? `beste Punktzahl ${beste}` : 'noch nicht gespielt'}`}
+                style={{ backgroundColor: spiel.accent }}
+                className="flex aspect-square w-full items-center justify-center rounded-2xl text-white shadow-sm transition-transform active:scale-95"
               >
-                <span
-                  aria-hidden="true"
-                  style={{ backgroundColor: spiel.accent }}
-                  className="grid size-11 shrink-0 place-items-center rounded-xl text-xl font-bold text-grund"
-                >
-                  {spiel.symbol}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold">{spiel.title}</span>
-                  <span className="block text-sm text-gedaempft">{spiel.blurb}</span>
-                  <span className="mt-1 block text-xs text-gedaempft">
-                    {beste > 0 ? `Beste Punktzahl: ${beste}` : 'Noch nicht gespielt'}
-                  </span>
-                </span>
-                <span aria-hidden="true" className="text-gedaempft">
-                  ▸
-                </span>
+                <Icon className="size-8 sm:size-9" />
               </button>
             </li>
           );

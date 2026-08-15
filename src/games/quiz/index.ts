@@ -1,12 +1,12 @@
 import type { GameApi } from '../../core/types';
 import { Quiz } from './Quiz';
+import { QuizIcon } from './Icon';
 
 /** Alles, was die Hülle von diesem Spiel sehen darf. */
 export const quiz: GameApi = {
   id: 'quiz',
-  title: 'Wissensquiz',
-  blurb: 'Zehn Fragen pro Level — allgemeines Wissen, gleiche Nummer für alle.',
+  title: 'Quiz Time',
   accent: '#22c55e',
-  symbol: '🧠',
+  Icon: QuizIcon,
   Component: Quiz,
 };

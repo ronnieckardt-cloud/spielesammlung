@@ -1,12 +1,12 @@
 import type { GameApi } from '../../core/types';
 import { Reihenfall } from './Reihenfall';
+import { ReihenfallIcon } from './Icon';
 
 /** Alles, was die Hülle von diesem Spiel sehen darf. */
 export const reihenfall: GameApi = {
   id: 'reihenfall',
-  title: 'Reihenfall',
-  blurb: 'Fallende Vierlinge — volle Reihen räumen, bevor der Stapel wächst.',
+  title: 'Line Fall',
   accent: '#f43f5e',
-  symbol: '🧱',
+  Icon: ReihenfallIcon,
   Component: Reihenfall,
 };

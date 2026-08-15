@@ -17,22 +17,25 @@ export type Einstellungen = {
 export type GameProps = {
   /** Laufender Punktestand. Darf beliebig oft kommen, auch mit gleichem Wert. */
   onScore: (score: number) => void;
-  /** Genau einmal pro Runde beim Spielende. Die Hülle trägt den Wert ein. */
-  onGameOver: (score: number) => void;
+  /** Genau einmal pro Runde beim Spielende. Die Hülle trägt den Wert ein.
+   * `gewonnen` ist optional — nur Spiele mit einer echten Sieg-Bedingung
+   * (nicht nur "Leben aufgebraucht") geben es mit, dann zeigt die Hülle
+   * eine andere Überschrift als beim gewöhnlichen Rundenende. */
+  onGameOver: (score: number, gewonnen?: boolean) => void;
   /** Zurück ins Menü. Das Spiel muss das nicht selbst anbieten. */
   onExit: () => void;
   settings: Einstellungen;
 };
 
 export type GameApi = {
-  /** Kurz, klein, ohne Leerzeichen — steht auch in der Adresszeile. */
+  /** Kurz, klein, ohne Leerzeichen — steht auch in der Adresszeile. Bleibt
+   * stabil, auch wenn sich `title` mal ändert — Bestenlisten hängen daran. */
   id: string;
   title: string;
-  /** Ein Satz fürs Kachelmenü. */
-  blurb: string;
   /** Farbe der Kachel, als CSS-Farbe. */
   accent: string;
-  /** Zeichen auf der Kachel — damit Farbe nicht das einzige Merkmal ist. */
-  symbol: string;
+  /** Eigenes SVG-Symbol auf der Kachel — kein Emoji, damit es zum Rest der
+   * eigenen Optik passt. Zeichnet in `currentColor`, Größe kommt von außen. */
+  Icon: React.FC<{ className?: string }>;
   Component: React.FC<GameProps>;
 };

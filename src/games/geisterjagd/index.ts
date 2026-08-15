@@ -1,12 +1,12 @@
 import type { GameApi } from '../../core/types';
 import { Geisterjagd } from './Geisterjagd';
+import { GeisterjagdIcon } from './Icon';
 
 /** Alles, was die Hülle von diesem Spiel sehen darf. */
 export const geisterjagd: GameApi = {
   id: 'geisterjagd',
-  title: 'Geisterjagd',
-  blurb: 'Punkte fressen, vier Geistern mit je eigener Taktik ausweichen.',
+  title: 'Ghost Chase',
   accent: '#a78bfa',
-  symbol: '👻',
+  Icon: GeisterjagdIcon,
   Component: Geisterjagd,
 };
