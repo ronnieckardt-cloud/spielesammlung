@@ -1295,6 +1295,39 @@ Weitere Entscheidungen:
   Drittel ein und man sah kaum Straße voraus. Bei einem Läufer ist Sichtweite
   nach vorn gleichbedeutend mit **Reaktionszeit** — das ist kein Geschmack,
   sondern Spielbarkeit.
+- **Eigene Steuerung statt `useInput`** — und das war ein echter Fehler,
+  nicht Geschmack. `useInput` ist für Rasterspiele gebaut: Ein schneller
+  oder weiter Wisch nach unten wird dort zu `drop` statt zu `down`. Beim
+  Läufer ist genau das aber das Ducken — es kam schlicht **nie** an. Dazu
+  bedeutet Antippen dort `select`; bei einem Läufer erwartet jeder, dass
+  Tippen springt, und ohne das findet man das Springen gar nicht. Ronnis
+  Rückmeldung war entsprechend: „ich kann nicht springen, nicht ducken, gar
+  nichts." Jetzt: eigener Zeiger-Listener mit kleinerer Schwelle (18 statt
+  24 Pixel), Tippen springt, und ein Hinweis im Bild sagt die drei Gesten
+  an — er verschwindet mit der ersten Geste oder nach 4,5 Sekunden.
+- Der frühere Hinweistext stand unter dem Spielfeld in `.nur-bei-platz` —
+  also genau dort, wo ihn die Regel für kurze Bildschirme ausblendet.
+- **Häuser sind Beton, nicht bunt.** Eine Zwischenfassung hatte sie in
+  Regenbogenfarben; Rückmeldung: Hochhäuser sollen nach Hochhäusern
+  aussehen. Farbe gehört dorthin, wo sie etwas bedeutet — auf Hindernisse
+  und Münzen. Sind die Häuser genauso bunt, sucht das Auge länger nach dem,
+  worauf es ankommt.
+- **Die Figur ist ein Körper, keine Sammlung von Teilen.** Die erste Fassung
+  hängte die Arme an Drehpunkte außerhalb des Rumpfes, dazwischen klaffte
+  Luft. Bei Grundkörpern ohne Skelett ist **Überlappung** das einzige
+  Mittel: Schultern, Schulterbalken, Hals, Becken, Gelenkkugeln an jedem
+  Ansatz und Hände. Wo zwei Kugeln sich schneiden, sieht das Auge eine
+  durchgehende Form.
+- **Jedes Hindernis sagt über seine Form, was zu tun ist**, nicht über die
+  Farbe: Hürde = flache Absperrung mit Beinen (drüber), Balken = Schild an
+  zwei Pfosten, unten offen (drunter), Mauer = geschlossener Container mit
+  dunklen Bändern (ausweichen). Wer die Bedeutung erst aus der Farbe
+  erschließen muss, erschließt sie bei Tempo 20 zu spät.
+- **Während des Laufens rendert React gar nicht.** Punkte, Münzen und
+  Tempobalken werden direkt ins DOM geschrieben. Ein `setState` mitten in
+  die Zeichenschleife war der Grund, warum es sich nicht ganz flüssig
+  anfühlte. Nur der Punktestand für die Kopfzeile der Hülle geht zweimal je
+  Sekunde nach außen — das kostet ein paar Textknoten, nicht die Leinwand.
 - **Nicht duellfähig**: keine Levelnummer.
 
 ## Box Push — Besonderheiten

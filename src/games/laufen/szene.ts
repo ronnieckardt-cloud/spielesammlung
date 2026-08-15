@@ -28,16 +28,25 @@ const VORRAT_HINDERNISSE = 26;
 const VORRAT_MUENZEN = 60;
 const VORRAT_HAEUSER = 28;
 
+/**
+ * Heller Tag statt Nacht.
+ *
+ * Die erste Fassung spielte im Dunkeln — das sah zwar stimmungsvoll aus,
+ * aber Rückmeldung war: „soll aussehen wie das Vorbild". Und die sind alle
+ * hell: kräftiger Himmel, farbige Häuser, gut ablesbare Hindernisse. Auf
+ * einem Handy im Sonnenlicht ist Helligkeit außerdem kein Geschmack,
+ * sondern Lesbarkeit.
+ */
 const FARBEN = {
-  himmel: 0x1a1a3e,
-  nebel: 0x2a2a5a,
-  strasse: 0x2f3542,
-  streifen: 0xf7d774,
-  figur: 0x38bdf8,
+  himmel: 0x6fc4ee,
+  nebel: 0xa8dcf0,
+  strasse: 0x6b7280,
+  streifen: 0xfffbe8,
+  figur: 0x22d3ee,
   haut: 0xfcd5b0,
   huerde: 0xf97316,
-  balken: 0xef4444,
-  mauer: 0x94a3b8,
+  balken: 0xdc2626,
+  mauer: 0xef4444,
   muenze: 0xfacc15,
 } as const;
 
@@ -56,63 +65,137 @@ export type Szene = {
  * Figur bauen, die auf Handygröße rund und freundlich wirkt — und sie
  * kostet ein paar hundert Dreiecke statt zehntausender.
  */
-function figurBauen(): { gruppe: THREE.Group; armL: THREE.Object3D; armR: THREE.Object3D; beinL: THREE.Object3D; beinR: THREE.Object3D } {
+function figurBauen(): {
+  gruppe: THREE.Group;
+  armL: THREE.Object3D;
+  armR: THREE.Object3D;
+  beinL: THREE.Object3D;
+  beinR: THREE.Object3D;
+} {
   const gruppe = new THREE.Group();
 
   const stoffKoerper = new THREE.MeshLambertMaterial({ color: FARBEN.figur });
   const stoffHaut = new THREE.MeshLambertMaterial({ color: FARBEN.haut });
   const stoffHose = new THREE.MeshLambertMaterial({ color: 0x1e40af });
   const stoffSchuh = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+  const stoffMuetze = new THREE.MeshLambertMaterial({ color: 0xf43f5e });
 
-  // Rumpf — eine Kapsel wirkt weicher als ein Kasten.
-  const rumpf = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.42, 4, 10), stoffKoerper);
-  rumpf.position.y = 1.05;
+  /*
+   * Alle Teile sind so gesetzt, dass sie sich **überlappen**.
+   *
+   * Die erste Fassung hing die Arme an Drehpunkte weit außerhalb des
+   * Rumpfes — dazwischen klaffte Luft, und die Figur sah aus wie
+   * zusammengesteckt statt gewachsen. Bei Grundkörpern ohne Skelett ist
+   * Überlappung das einzige Mittel: Wo zwei Kugeln sich schneiden, sieht
+   * das Auge eine durchgehende Form.
+   *
+   * Konkret dazugekommen sind Schultern, ein Hals, ein Becken und Hände —
+   * genau die Stellen, an denen vorher Lücken waren.
+   */
+  const RUMPF_R = 0.3;
+  const SCHULTER_Y = 1.3;
+  const SCHULTER_X = 0.27;
+  const HUEFT_Y = 0.82;
+
+  // Becken — verbindet Rumpf und Beine, sonst schweben die Beine unter dem
+  // Bauch.
+  const becken = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.14, 4, 10), stoffHose);
+  becken.rotation.z = Math.PI / 2;
+  becken.position.y = HUEFT_Y;
+  gruppe.add(becken);
+
+  // Rumpf, oben etwas breiter durch den Schulterbalken darüber.
+  const rumpf = new THREE.Mesh(new THREE.CapsuleGeometry(RUMPF_R, 0.4, 5, 12), stoffKoerper);
+  rumpf.position.y = 1.06;
   gruppe.add(rumpf);
 
-  // Kopf mit Mütze — die Mütze gibt der Silhouette von hinten eine Kante,
-  // sonst ist der Kopf nur ein Ball.
-  const kopf = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 12), stoffHaut);
-  kopf.position.y = 1.62;
+  // Schulterbalken quer — er macht aus zwei einzelnen Armansätzen ein
+  // durchgehendes Schulterpaar.
+  const schulterbalken = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.15, 0.3, 4, 10),
+    stoffKoerper,
+  );
+  schulterbalken.rotation.z = Math.PI / 2;
+  schulterbalken.position.y = SCHULTER_Y;
+  gruppe.add(schulterbalken);
+
+  // Hals — schließt die Lücke zwischen Rumpf und Kopf.
+  const hals = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.14, 10), stoffHaut);
+  hals.position.y = 1.44;
+  gruppe.add(hals);
+
+  const kopf = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 14), stoffHaut);
+  kopf.position.y = 1.64;
   gruppe.add(kopf);
 
+  // Mütze sitzt auf dem Kopf auf, nicht daneben.
   const muetze = new THREE.Mesh(
-    new THREE.SphereGeometry(0.275, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-    new THREE.MeshLambertMaterial({ color: 0xf43f5e }),
+    new THREE.SphereGeometry(0.262, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2.1),
+    stoffMuetze,
   );
-  muetze.position.y = 1.64;
+  muetze.position.y = 1.645;
   gruppe.add(muetze);
-  const schirm = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.05, 0.22), muetze.material);
-  schirm.position.set(0, 1.62, -0.24);
+  const schirm = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.05, 0.2), stoffMuetze);
+  schirm.position.set(0, 1.63, -0.22);
   gruppe.add(schirm);
 
-  // Arme und Beine hängen an eigenen Drehpunkten, damit sich das Pendeln
-  // über eine einzige Drehung je Glied machen lässt.
-  const armGeo = new THREE.CapsuleGeometry(0.085, 0.34, 3, 8);
-  const beinGeo = new THREE.CapsuleGeometry(0.105, 0.4, 3, 8);
-  const schuhGeo = new THREE.BoxGeometry(0.2, 0.11, 0.3);
+  const armGeo = new THREE.CapsuleGeometry(0.095, 0.32, 4, 10);
+  const beinGeo = new THREE.CapsuleGeometry(0.115, 0.38, 4, 10);
+  const handGeo = new THREE.SphereGeometry(0.1, 10, 8);
+  const schuhGeo = new THREE.BoxGeometry(0.21, 0.12, 0.32);
+  const gelenkGeo = new THREE.SphereGeometry(0.145, 10, 8);
 
-  const glied = (geo: THREE.BufferGeometry, stoff: THREE.Material, x: number, y: number, laenge: number) => {
+  /**
+   * Ein Glied mit **Gelenkkugel am Ansatz**. Die Kugel sitzt genau im
+   * Drehpunkt und überlappt sowohl Rumpf als auch Glied — dadurch bleibt die
+   * Verbindung auch dann geschlossen, wenn das Glied ausschwingt.
+   */
+  const glied = (
+    geo: THREE.BufferGeometry,
+    stoff: THREE.Material,
+    x: number,
+    y: number,
+    laenge: number,
+    gelenkStoff: THREE.Material,
+  ) => {
     const drehpunkt = new THREE.Object3D();
     drehpunkt.position.set(x, y, 0);
+
+    const gelenk = new THREE.Mesh(gelenkGeo, gelenkStoff);
+    drehpunkt.add(gelenk);
+
     const teil = new THREE.Mesh(geo, stoff);
-    teil.position.y = -laenge / 2;
+    // Etwas höher als die halbe Länge: So steckt das obere Ende im Gelenk.
+    teil.position.y = -laenge / 2 + 0.04;
     drehpunkt.add(teil);
+
     gruppe.add(drehpunkt);
-    return { drehpunkt, teil };
+    return { drehpunkt, laenge };
   };
 
-  const armL = glied(armGeo, stoffHaut, -0.36, 1.28, 0.5).drehpunkt;
-  const armR = glied(armGeo, stoffHaut, 0.36, 1.28, 0.5).drehpunkt;
+  const armL = glied(armGeo, stoffHaut, -SCHULTER_X, SCHULTER_Y, 0.5, stoffKoerper);
+  const armR = glied(armGeo, stoffHaut, SCHULTER_X, SCHULTER_Y, 0.5, stoffKoerper);
+  for (const arm of [armL, armR]) {
+    const hand = new THREE.Mesh(handGeo, stoffHaut);
+    hand.position.y = -0.46;
+    arm.drehpunkt.add(hand);
+  }
 
-  const linkesBein = glied(beinGeo, stoffHose, -0.16, 0.72, 0.6);
-  const rechtesBein = glied(beinGeo, stoffHose, 0.16, 0.72, 0.6);
-  for (const bein of [linkesBein, rechtesBein]) {
+  const beinL = glied(beinGeo, stoffHose, -0.15, HUEFT_Y, 0.6, stoffHose);
+  const beinR = glied(beinGeo, stoffHose, 0.15, HUEFT_Y, 0.6, stoffHose);
+  for (const bein of [beinL, beinR]) {
     const schuh = new THREE.Mesh(schuhGeo, stoffSchuh);
-    schuh.position.set(0, -0.62, -0.04);
+    schuh.position.set(0, -0.66, -0.03);
     bein.drehpunkt.add(schuh);
   }
 
-  return { gruppe, armL, armR, beinL: linkesBein.drehpunkt, beinR: rechtesBein.drehpunkt };
+  return {
+    gruppe,
+    armL: armL.drehpunkt,
+    armR: armR.drehpunkt,
+    beinL: beinL.drehpunkt,
+    beinR: beinR.drehpunkt,
+  };
 }
 
 export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
@@ -131,7 +214,10 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
   szene.background = new THREE.Color(FARBEN.himmel);
   // Der Nebel versteckt die Stelle, an der die Welt aufhört — ohne ihn
   // sieht man Häuser aus dem Nichts auftauchen.
-  szene.fog = new THREE.Fog(FARBEN.nebel, 24, SICHTWEITE);
+  // Weiter hinten einsetzender Dunst als vorher: Bei 24 Metern verschluckte
+  // er die Hindernisse, bevor man sie erkennen konnte — und Sichtweite ist
+  // bei einem Läufer bare Reaktionszeit.
+  szene.fog = new THREE.Fog(FARBEN.nebel, 45, SICHTWEITE);
 
   const kamera = new THREE.PerspectiveCamera(62, 1, 0.1, SICHTWEITE + 20);
   // Etwas weiter zurück und höher als der erste Versuch: Der klebte der
@@ -145,9 +231,9 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
   // Licht: ein weiches Grundlicht plus eine Sonne von schräg vorn. Keine
   // Schattenwürfe — die kosten auf altem Gerät am meisten und bringen bei
   // dieser Kameraführung am wenigsten.
-  szene.add(new THREE.HemisphereLight(0xbcd4ff, 0x30304a, 1.5));
-  const sonne = new THREE.DirectionalLight(0xffffff, 1.4);
-  sonne.position.set(-4, 10, -6);
+  szene.add(new THREE.HemisphereLight(0xffffff, 0x9ab6c8, 2.2));
+  const sonne = new THREE.DirectionalLight(0xfff6e0, 1.9);
+  sonne.position.set(-6, 12, -4);
   szene.add(sonne);
 
   // ---------------------------------------------------------------
@@ -181,7 +267,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
   for (const seite of [-1, 1]) {
     const bord = new THREE.Mesh(
       new THREE.BoxGeometry(0.6, 0.34, SICHTWEITE * 2),
-      new THREE.MeshLambertMaterial({ color: 0x475569 }),
+      new THREE.MeshLambertMaterial({ color: 0xd6d3d1 }),
     );
     bord.position.set((seite * (strassenBreite + 0.6)) / 2, 0.17, SICHTWEITE / 2);
     szene.add(bord);
@@ -191,7 +277,15 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
   // Häuser — die Stadt drumherum
   // ---------------------------------------------------------------
   const hausGeo = new THREE.BoxGeometry(1, 1, 1);
-  const hausStoffe = [0x334155, 0x3f3f5f, 0x2c3a52, 0x453a5a].map(
+  /*
+   * Häuser in Beton- und Glastönen, **nicht** bunt.
+   *
+   * Eine Zwischenfassung hatte sie in Regenbogenfarben — die Rückmeldung war
+   * eindeutig: Hochhäuser sollen nach Hochhäusern aussehen. Die Farbe gehört
+   * dorthin, wo sie etwas bedeutet: auf Hindernisse und Münzen. Sind die
+   * Häuser genauso bunt, sucht das Auge länger nach dem, worauf es ankommt.
+   */
+  const hausStoffe = [0x9aa5b1, 0x7f8c9b, 0xb9c0c9, 0x6d7883, 0xa8a29a, 0x8794a1].map(
     (c) => new THREE.MeshLambertMaterial({ color: c }),
   );
   const haeuser: THREE.Mesh[] = [];
@@ -204,7 +298,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
   const hausSetzen = (haus: THREE.Mesh, index: number, versatz: number) => {
     const seite = index % 2 === 0 ? -1 : 1;
     const reihe = Math.floor(index / 2);
-    const hoehe = 6 + ((reihe * 37) % 17);
+    const hoehe = 7 + ((reihe * 37) % 19);
     const tiefe = 5 + ((reihe * 23) % 6);
     haus.scale.set(4.5, hoehe, tiefe);
     haus.position.set(seite * (strassenBreite / 2 + 3.6), hoehe / 2, versatz);
@@ -213,24 +307,83 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
   // ---------------------------------------------------------------
   // Hindernisse und Münzen — fester Vorrat, wird umgesetzt statt neu gebaut
   // ---------------------------------------------------------------
-  const huerdeGeo = new THREE.BoxGeometry(SPUR_BREITE * 0.8, 0.5, 0.5);
-  const balkenGeo = new THREE.BoxGeometry(SPUR_BREITE * 0.85, 0.5, 0.5);
-  const mauerGeo = new THREE.BoxGeometry(SPUR_BREITE * 0.85, 2.4, 0.5);
+  /*
+   * Jedes Hindernis soll **auf einen Blick sagen, was zu tun ist** — und
+   * zwar über die Form, nicht nur über die Farbe:
+   *
+   * - Hürde: flache Absperrung mit Standbeinen. Niedrig = drüber.
+   * - Balken: ein Schild, das an zwei Pfosten **hängt**. Die Pfosten sind
+   *   der eigentliche Hinweis: Darunter ist offen, da muss man durch.
+   * - Mauer: ein geschlossener Container mit dunklen Bändern, vom Boden bis
+   *   über Kopfhöhe. Dicht = ausweichen.
+   *
+   * Eine Zwischenfassung hatte für alle drei denselben Kasten in drei
+   * Farben — und die Mauer war ausgerechnet violett, was in einer Stadt
+   * nach nichts aussieht. Wer die Bedeutung erst aus der Farbe erschließen
+   * muss, erschließt sie bei Tempo 20 zu spät.
+   */
   const stoffe = {
     huerde: new THREE.MeshLambertMaterial({ color: FARBEN.huerde }),
     balken: new THREE.MeshLambertMaterial({ color: FARBEN.balken }),
     mauer: new THREE.MeshLambertMaterial({ color: FARBEN.mauer }),
+    dunkel: new THREE.MeshLambertMaterial({ color: 0x3f3f46 }),
+    hell: new THREE.MeshLambertMaterial({ color: 0xf5f5f4 }),
+  };
+
+  const breit = SPUR_BREITE * 0.86;
+  const geo = {
+    huerdeBrett: new THREE.BoxGeometry(breit, 0.26, 0.16),
+    huerdeBein: new THREE.BoxGeometry(0.12, 0.42, 0.12),
+    schild: new THREE.BoxGeometry(breit, 0.6, 0.16),
+    pfosten: new THREE.BoxGeometry(0.13, 2.4, 0.13),
+    container: new THREE.BoxGeometry(breit, 2.3, 0.7),
+    band: new THREE.BoxGeometry(breit + 0.04, 0.16, 0.74),
   };
 
   const hindernisse = Array.from({ length: VORRAT_HINDERNISSE }, () => {
     const gruppe = new THREE.Group();
-    const huerde = new THREE.Mesh(huerdeGeo, stoffe.huerde);
-    huerde.position.y = 0.25;
-    const balken = new THREE.Mesh(balkenGeo, stoffe.balken);
-    balken.position.y = 1.35;
-    const mauer = new THREE.Mesh(mauerGeo, stoffe.mauer);
-    mauer.position.y = 1.2;
-    gruppe.add(huerde, balken, mauer);
+
+    // --- Hürde: Absperrung zum Drüberspringen ---
+    const huerde = new THREE.Group();
+    const brettOben = new THREE.Mesh(geo.huerdeBrett, stoffe.huerde);
+    brettOben.position.y = 0.44;
+    const brettUnten = new THREE.Mesh(geo.huerdeBrett, stoffe.hell);
+    brettUnten.position.y = 0.18;
+    huerde.add(brettOben, brettUnten);
+    for (const seite of [-1, 1]) {
+      const bein = new THREE.Mesh(geo.huerdeBein, stoffe.dunkel);
+      bein.position.set(seite * (breit / 2 - 0.08), 0.21, 0);
+      huerde.add(bein);
+    }
+    gruppe.add(huerde);
+
+    // --- Balken: hängendes Schild auf Pfosten, unten offen ---
+    const balken = new THREE.Group();
+    const schild = new THREE.Mesh(geo.schild, stoffe.balken);
+    schild.position.y = 1.62;
+    balken.add(schild);
+    const querbalken = new THREE.Mesh(geo.huerdeBrett, stoffe.dunkel);
+    querbalken.position.y = 2.0;
+    balken.add(querbalken);
+    for (const seite of [-1, 1]) {
+      const pfosten = new THREE.Mesh(geo.pfosten, stoffe.dunkel);
+      pfosten.position.set(seite * (breit / 2 + 0.12), 1.2, 0);
+      balken.add(pfosten);
+    }
+    gruppe.add(balken);
+
+    // --- Mauer: geschlossener Container ---
+    const mauer = new THREE.Group();
+    const kasten = new THREE.Mesh(geo.container, stoffe.mauer);
+    kasten.position.y = 1.15;
+    mauer.add(kasten);
+    for (const y of [0.35, 1.15, 1.95]) {
+      const band = new THREE.Mesh(geo.band, stoffe.dunkel);
+      band.position.y = y;
+      mauer.add(band);
+    }
+    gruppe.add(mauer);
+
     gruppe.visible = false;
     szene.add(gruppe);
     return { gruppe, huerde, balken, mauer };
