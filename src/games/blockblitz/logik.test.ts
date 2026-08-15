@@ -14,9 +14,10 @@ import {
   passtIrgendwo,
   punkteFuerZug,
   teilLegen,
+  loesbareLinien,
   volleZeilenUndSpalten,
 } from './logik';
-import type { Raster, Zustand } from './logik';
+import type { Raster, Teil, Zustand } from './logik';
 
 const VOLLE_ZEILE = Array.from({ length: BREITE }, (_, i) => ({ dx: i, dy: 0 }));
 
@@ -309,5 +310,71 @@ describe('teilLegen', () => {
 describe('ANZAHL_FARBEN', () => {
   it('ist mindestens 1', () => {
     expect(ANZAHL_FARBEN).toBeGreaterThan(0);
+  });
+});
+
+describe('loesbareLinien', () => {
+  /** Ein Teil mit genau einer Zelle — passt in jede Lücke. */
+  const EINZELTEIL: Teil = { id: 't1', form: [{ dx: 0, dy: 0 }], farbe: 0 };
+  /** Ein Teil aus zwei nebeneinanderliegenden Zellen. */
+  const ZWEIERTEIL: Teil = { id: 't2', form: [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }], farbe: 0 };
+
+  /** Raster mit einer Zeile, in der genau `luecken` Felder frei sind. */
+  function zeileFast(y: number, luecken: number): Raster {
+    return Array.from({ length: HOEHE }, (_, zy) =>
+      Array.from({ length: BREITE }, (_, x) => (zy === y && x < luecken ? null : zy === y ? 0 : null)),
+    );
+  }
+
+  it('findet die Zeile, der genau ein Feld fehlt', () => {
+    const treffer = loesbareLinien(zeileFast(3, 1), [EINZELTEIL, null, null]);
+    expect(treffer.zeilen).toEqual([3]);
+  });
+
+  it('findet nichts, wenn kein Teil passt', () => {
+    // Zwei Lücken in der Zeile, aber nur ein Einzelteil im Tablett.
+    const treffer = loesbareLinien(zeileFast(3, 2), [EINZELTEIL, null, null]);
+    expect(treffer.zeilen).toEqual([]);
+  });
+
+  it('findet die Zeile, wenn ein größeres Teil beide Lücken füllt', () => {
+    const treffer = loesbareLinien(zeileFast(3, 2), [ZWEIERTEIL, null, null]);
+    expect(treffer.zeilen).toEqual([3]);
+  });
+
+  it('findet Spalten genauso', () => {
+    // Spalte 2 fehlt nur die oberste Zelle.
+    const raster: Raster = Array.from({ length: HOEHE }, (_, y) =>
+      Array.from({ length: BREITE }, (_, x) => (x === 2 && y > 0 ? 0 : null)),
+    );
+    const treffer = loesbareLinien(raster, [EINZELTEIL, null, null]);
+    expect(treffer.spalten).toEqual([2]);
+  });
+
+  it('meldet jede Linie nur einmal, auch wenn mehrere Teile sie schaffen', () => {
+    const treffer = loesbareLinien(zeileFast(3, 1), [EINZELTEIL, EINZELTEIL, EINZELTEIL]);
+    expect(treffer.zeilen).toEqual([3]);
+  });
+
+  it('gibt bei leerem Tablett nichts zurück', () => {
+    expect(loesbareLinien(zeileFast(3, 1), [null, null, null])).toEqual({ zeilen: [], spalten: [] });
+  });
+
+  it('gibt auf leerem Raster nichts zurück', () => {
+    expect(loesbareLinien(leeresRaster(), [EINZELTEIL, ZWEIERTEIL, null])).toEqual({
+      zeilen: [],
+      spalten: [],
+    });
+  });
+
+  it('findet Zeile und Spalte, wenn ein Zug beide voll macht', () => {
+    // Alles belegt außer der Ecke (0,0) — ein Einzelteil dort füllt Zeile 0
+    // und Spalte 0 gleichzeitig.
+    const raster: Raster = Array.from({ length: HOEHE }, (_, y) =>
+      Array.from({ length: BREITE }, (_, x) => (x === 0 && y === 0 ? null : 0)),
+    );
+    const treffer = loesbareLinien(raster, [EINZELTEIL, null, null]);
+    expect(treffer.zeilen).toContain(0);
+    expect(treffer.spalten).toContain(0);
   });
 });

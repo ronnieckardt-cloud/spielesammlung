@@ -139,6 +139,44 @@ export function volleZeilenUndSpalten(raster: Raster): { zeilen: number[]; spalt
   return { zeilen, spalten };
 }
 
+/**
+ * Welche Zeilen und Spalten sich mit einem der Teile im Tablett **jetzt**
+ * auflösen ließen — der Hinweis „hier kannst du eine Reihe wegmachen".
+ *
+ * Probiert jedes Teil an jeder erlaubten Stelle durch. Das sind bei drei
+ * Teilen und 64 Feldern höchstens knapp 200 Versuche, also billig genug,
+ * um es bei jeder Änderung neu zu rechnen — die Anzeige merkt sich das
+ * Ergebnis trotzdem, weil es bei jedem Bild sonst umsonst liefe.
+ *
+ * Bewusst getrennt von `volleZeilenUndSpalten` (das schaut auf ein
+ * fertiges Raster) — hier geht es um die Möglichkeit, nicht um die
+ * Tatsache.
+ */
+export function loesbareLinien(
+  raster: Raster,
+  tablett: readonly (Teil | null)[],
+): { zeilen: number[]; spalten: number[] } {
+  const zeilen = new Set<number>();
+  const spalten = new Set<number>();
+
+  for (const teil of tablett) {
+    if (!teil) continue;
+    for (let y = 0; y < HOEHE; y++) {
+      for (let x = 0; x < BREITE; x++) {
+        if (!passtAn(raster, teil.form, x, y)) continue;
+        const linien = volleZeilenUndSpalten(legen(raster, teil.form, x, y, teil.farbe));
+        for (const z of linien.zeilen) zeilen.add(z);
+        for (const s of linien.spalten) spalten.add(s);
+      }
+    }
+  }
+
+  return {
+    zeilen: [...zeilen].sort((a, b) => a - b),
+    spalten: [...spalten].sort((a, b) => a - b),
+  };
+}
+
 export function aufloesen(raster: Raster, zeilen: readonly number[], spalten: readonly number[]): Raster {
   if (zeilen.length === 0 && spalten.length === 0) return raster;
   const zeilenSet = new Set(zeilen);

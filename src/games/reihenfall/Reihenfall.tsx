@@ -45,7 +45,7 @@ function MiniTeil({ typ, abgedunkelt = false }: { typ: TeilTyp; abgedunkelt?: bo
         return (
           <div
             key={i}
-            className="rounded-[2px]"
+            className={`rounded-[3px] ${gefuellt ? 'glanzstein' : ''}`}
             style={{ backgroundColor: gefuellt ? reihenfallFarbe(FARB_INDEX[typ]) : 'transparent' }}
           />
         );
@@ -241,7 +241,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
       <div className="flex items-start justify-center gap-3">
         <div className="flex flex-col items-center gap-1">
           <span className="text-xs text-gedaempft">Halten</span>
-          <div className="grid size-14 place-items-center rounded-lg border border-rand bg-flaeche">
+          <div className="grid size-14 place-items-center rounded-lg border border-rand bg-flaeche transition-transform active:scale-95">
             {z.haltePosition && <MiniTeil typ={z.haltePosition} abgedunkelt={z.halteBenutzt} />}
           </div>
           <span className="text-[10px] text-gedaempft">C</span>
@@ -268,6 +268,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
             const belegtFarbe = z.feld[y]![x];
             const istGeist = !istAktuell && belegtFarbe === null && geisterZellen.has(schluessel);
 
+            const istStein = istAktuell || belegtFarbe !== null;
             let hintergrund = 'var(--color-flaeche)';
             if (istAktuell) hintergrund = reihenfallFarbe(FARB_INDEX[z.aktuell!.typ]);
             else if (belegtFarbe !== null) hintergrund = reihenfallFarbe(belegtFarbe);
@@ -275,7 +276,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
             return (
               <div
                 key={i}
-                className="rounded-[2px]"
+                className={`rounded-[3px] ${istStein ? 'glanzstein' : ''}`}
                 style={{
                   backgroundColor: hintergrund,
                   outline: istGeist ? '2px solid var(--color-gedaempft)' : undefined,
@@ -285,18 +286,15 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
             );
           })}
 
-          {z.vorbei && (
-            <div className="absolute inset-0 grid place-items-center rounded-lg bg-grund/70">
-              <span className="text-sm font-semibold text-text">Vorbei</span>
-            </div>
-          )}
+          {/* Kein eigenes „Vorbei" mehr im Feld — die Hülle legt direkt
+              darüber ihr Rundenende-Fenster, das stand doppelt. */}
         </div>
 
         <div className="flex flex-col items-center gap-1">
           <span className="text-xs text-gedaempft">Nächste</span>
           <div className="flex flex-col gap-2">
             {z.warteschlange.slice(0, 3).map((typ, i) => (
-              <div key={i} className="grid size-11 place-items-center rounded-lg border border-rand bg-flaeche">
+              <div key={i} className="grid size-11 place-items-center rounded-lg border border-rand bg-flaeche transition-transform active:scale-95">
                 <MiniTeil typ={typ} />
               </div>
             ))}
@@ -309,7 +307,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
           type="button"
           onClick={() => anwenden('drehenUhr')}
           disabled={z.vorbei}
-          className="rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">↺</span> Drehen
         </button>
@@ -317,7 +315,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
           type="button"
           onClick={() => anwenden('hartFallen')}
           disabled={z.vorbei}
-          className="rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">⬇</span> Fallen
         </button>
@@ -325,7 +323,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
           type="button"
           onClick={() => anwenden('halten')}
           disabled={z.vorbei || z.halteBenutzt}
-          className="rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-4 py-2 text-sm disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">⇄</span> Halten
         </button>

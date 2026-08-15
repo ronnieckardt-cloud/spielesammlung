@@ -276,7 +276,7 @@ export function Farbsortierer({ onScore, onGameOver, bestScore, istErsteRunde }:
             onClick={() => beiLevelWechsel(z.level - 1)}
             disabled={z.level <= 1 || !!guss}
             aria-label="Voriges Level"
-            className="rounded-lg border border-rand bg-flaeche px-2 py-1 text-base leading-none disabled:opacity-30"
+            className="rounded-lg border border-rand bg-flaeche px-2 py-1 text-base leading-none disabled:opacity-30 transition-transform active:scale-95"
           >
             ‹
           </button>
@@ -286,7 +286,7 @@ export function Farbsortierer({ onScore, onGameOver, bestScore, istErsteRunde }:
             onClick={() => beiLevelWechsel(z.level + 1)}
             disabled={!!guss}
             aria-label="Nächstes Level"
-            className="rounded-lg border border-rand bg-flaeche px-2 py-1 text-base leading-none disabled:opacity-30"
+            className="rounded-lg border border-rand bg-flaeche px-2 py-1 text-base leading-none disabled:opacity-30 transition-transform active:scale-95"
           >
             ›
           </button>
@@ -296,7 +296,7 @@ export function Farbsortierer({ onScore, onGameOver, bestScore, istErsteRunde }:
             type="button"
             onClick={beiZurueck}
             disabled={z.verlauf.length === 0 || !!guss}
-            className="rounded-lg border border-rand bg-flaeche px-3 py-1.5 disabled:opacity-40"
+            className="rounded-lg border border-rand bg-flaeche px-3 py-1.5 disabled:opacity-40 transition-transform active:scale-95"
           >
             <span aria-hidden="true">↩</span> Zurück
           </button>
@@ -304,7 +304,7 @@ export function Farbsortierer({ onScore, onGameOver, bestScore, istErsteRunde }:
             type="button"
             onClick={beiExtraRoehrchen}
             disabled={z.extraRoehrchenUebrig === 0 || !!guss}
-            className="rounded-lg border border-rand bg-flaeche px-3 py-1.5 disabled:opacity-40"
+            className="rounded-lg border border-rand bg-flaeche px-3 py-1.5 disabled:opacity-40 transition-transform active:scale-95"
           >
             + Röhrchen
           </button>

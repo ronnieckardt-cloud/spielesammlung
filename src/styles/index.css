@@ -223,6 +223,64 @@
   animation: vorschau-linie-puls 0.5s ease-in-out infinite;
 }
 
+/* Ruhigerer Dauerhinweis: Diese Reihe ließe sich mit einem der Teile im
+   Tablett wegmachen. Bewusst langsamer und schwächer als der Puls oben —
+   der sagt „jetzt sofort", dieser nur „hier wäre was zu holen". */
+@keyframes linie-moeglich {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: 0 0 6px 1px rgba(250, 204, 21, 0.75);
+    filter: brightness(1.25);
+  }
+}
+
+.linie-moeglich {
+  animation: linie-moeglich 1.5s ease-in-out infinite;
+}
+
+/* Glänzender Spielstein: helle Kante oben, Schatten unten. Dieselbe Machart
+   wie GlanzBlock in den App-Symbolen — die Symbole sahen dadurch nach
+   echtem Spiel aus, die Spielfelder waren daneben flach. Arbeitet nur mit
+   inneren Schatten, die Farbe des Steins bleibt also unangetastet. */
+.glanzstein {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.26);
+}
+
+/* Das Rundenende-Fenster fährt auf, statt hart zu erscheinen. */
+@keyframes dialog-auf {
+  0% {
+    opacity: 0;
+    scale: 0.92;
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+.dialog-auf {
+  animation: dialog-auf 0.18s ease-out;
+}
+
+@keyframes dialog-grund-auf {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.dialog-grund-auf {
+  animation: dialog-grund-auf 0.18s ease-out;
+}
+
 /* Der React-Wurzelknoten füllt den Rest der Seite. */
 #wurzel {
   display: flex;

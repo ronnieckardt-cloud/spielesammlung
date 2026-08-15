@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
@@ -7,6 +7,7 @@ import {
   BREITE,
   HOEHE,
   legen,
+  loesbareLinien,
   neuesSpiel,
   passtAn,
   punkteFuerZug,
@@ -331,6 +332,15 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
     vorschauSpalten = linien.spalten;
   }
 
+  // Dauerhinweis: Welche Reihen ließen sich mit einem der Teile im Tablett
+  // gerade wegmachen? Gemerkt, weil es sonst bei jedem Bild neu liefe.
+  const hinweisLinien = useMemo(() => loesbareLinien(z.raster, z.tablett), [z.raster, z.tablett]);
+  // Beim Ziehen ausgeblendet — dann führt die stärkere Zug-Vorschau, und
+  // zwei blinkende Signale nebeneinander wären nur unruhig.
+  const zeigeHinweis = !zug && !z.vorbei;
+  const hinweisZeilen = zeigeHinweis ? hinweisLinien.zeilen : [];
+  const hinweisSpalten = zeigeHinweis ? hinweisLinien.spalten : [];
+
   if (!gestartet) {
     return (
       <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />
@@ -383,6 +393,13 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
               istVorschau && vorschauGueltig && (vorschauZeilen.includes(y) || vorschauSpalten.includes(x));
             const leer = belegtFarbe === null && !istVorschau;
             const blitzVersatz = blitzZellen?.get(schluessel);
+            // Nur schon belegte Steine leuchten mit — die Lücke bleibt
+            // dunkel und zeigt dadurch gleich, wo das Teil hinmuss.
+            const istHinweis =
+              belegtFarbe !== null &&
+              !istVorschau &&
+              blitzVersatz === undefined &&
+              (hinweisZeilen.includes(y) || hinweisSpalten.includes(x));
 
             let farbe: string | undefined;
             if (istVorschau) farbe = vorschauGueltig ? blockFarbe(ziehendesTeil!.farbe) : '#ef4444';
@@ -395,7 +412,7 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
                 aria-hidden="true"
                 tabIndex={-1}
                 onClick={beiZelleKlick(x, y)}
-                className={`relative aspect-square rounded-md ${leer ? 'border border-rand bg-flaeche' : ''} ${istVorschauLinie ? 'vorschau-linie-puls' : ''}`}
+                className={`relative aspect-square rounded-md ${leer ? 'border border-rand bg-flaeche' : 'glanzstein'} ${istVorschauLinie ? 'vorschau-linie-puls' : ''} ${istHinweis ? 'linie-moeglich' : ''}`}
                 style={
                   farbe
                     ? {

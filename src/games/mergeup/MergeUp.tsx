@@ -187,7 +187,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
                 // key auf den Wert: bei jeder Änderung spielt der kurze Puls
                 // erneut ab, dadurch sieht man das Verschmelzen.
                 key={feld}
-                className="punkte-bumsen grid size-full place-items-center rounded-xl font-black tabular-nums"
+                className="punkte-bumsen glanzstein grid size-full place-items-center rounded-xl font-black tabular-nums"
                 style={{
                   backgroundColor: kachelFarbe(feld),
                   color: kachelTextFarbe(feld),
@@ -210,7 +210,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
           onClick={() => anwenden('hoch')}
           disabled={z.vorbei}
           aria-label="Nach oben schieben"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">↑</span>
         </button>
@@ -220,7 +220,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
           onClick={() => anwenden('links')}
           disabled={z.vorbei}
           aria-label="Nach links schieben"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">←</span>
         </button>
@@ -229,7 +229,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
           onClick={() => anwenden('runter')}
           disabled={z.vorbei}
           aria-label="Nach unten schieben"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">↓</span>
         </button>
@@ -238,7 +238,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
           onClick={() => anwenden('rechts')}
           disabled={z.vorbei}
           aria-label="Nach rechts schieben"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">→</span>
         </button>

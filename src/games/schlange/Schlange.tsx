@@ -213,7 +213,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'hoch'))}
           disabled={z.vorbei}
           aria-label="Nach oben"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">↑</span>
         </button>
@@ -223,7 +223,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'links'))}
           disabled={z.vorbei}
           aria-label="Nach links"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">←</span>
         </button>
@@ -232,7 +232,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'runter'))}
           disabled={z.vorbei}
           aria-label="Nach unten"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">↓</span>
         </button>
@@ -241,7 +241,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'rechts'))}
           disabled={z.vorbei}
           aria-label="Nach rechts"
-          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30"
+          className="rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
         >
           <span aria-hidden="true">→</span>
         </button>

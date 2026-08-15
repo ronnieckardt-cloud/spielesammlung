@@ -105,22 +105,38 @@ export function Spielrahmen({
             role="dialog"
             aria-modal="true"
             aria-label="Spiel beendet"
-            className="absolute inset-0 grid place-items-center bg-grund/85 p-4 backdrop-blur-sm"
+            className="dialog-grund-auf absolute inset-0 grid place-items-center bg-grund/85 p-4 backdrop-blur-sm"
           >
-            <div className="w-full max-w-xs rounded-karte border border-rand bg-flaeche p-5 text-center">
-              <h2 className="text-lg font-bold">{ende.gewonnen ? '🎉 Gewonnen!' : 'Vorbei'}</h2>
-              <p className="mt-3 text-4xl font-bold tabular-nums" style={{ color: spiel.accent }}>
+            {/* Der Moment, in dem man auf sein Ergebnis schaut — deshalb in
+                der Farbe des Spiels statt im grauen Systemkasten. */}
+            <div
+              className="dialog-auf w-full max-w-sm rounded-karte p-6 text-center shadow-2xl ring-1 ring-white/15"
+              style={{
+                background: `linear-gradient(160deg, color-mix(in srgb, ${spiel.accent} 34%, var(--color-flaeche)), var(--color-flaeche) 70%)`,
+              }}
+            >
+              <h2 className="text-xl font-black tracking-tight">
+                {ende.gewonnen ? '🎉 Gewonnen!' : 'Vorbei'}
+              </h2>
+              <p
+                className="punkte-bumsen mt-2 text-6xl leading-none font-black tabular-nums"
+                style={{ color: spiel.accent, textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
+              >
                 {ende.punkte}
               </p>
-              <p className="mt-1 text-sm text-gedaempft">
-                {ende.rekord ? '★ Neue Bestleistung!' : `Beste Punktzahl: ${ende.beste}`}
-              </p>
-              <div className="mt-5 flex flex-col gap-2">
+              {ende.rekord ? (
+                <p className="mt-3 text-base font-bold" style={{ color: '#facc15' }}>
+                  ★ Neue Bestleistung!
+                </p>
+              ) : (
+                <p className="mt-3 text-sm text-gedaempft">Beste Punktzahl: {ende.beste}</p>
+              )}
+              <div className="mt-6 flex flex-col gap-2.5">
                 <button
                   type="button"
                   autoFocus
                   onClick={nochmal}
-                  className="rounded-lg px-4 py-3 font-semibold text-grund"
+                  className="rounded-xl px-4 py-3.5 text-lg font-extrabold text-grund transition-transform active:scale-95"
                   style={{ backgroundColor: spiel.accent }}
                 >
                   Nochmal
@@ -128,7 +144,7 @@ export function Spielrahmen({
                 <button
                   type="button"
                   onClick={onExit}
-                  className="rounded-lg border border-rand px-4 py-3 hover:bg-flaeche-hoch"
+                  className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 font-medium transition-transform hover:bg-white/10 active:scale-95"
                 >
                   Zurück zum Menü
                 </button>

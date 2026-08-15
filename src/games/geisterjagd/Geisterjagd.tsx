@@ -11,7 +11,28 @@ import type { Richtung, Zustand } from './logik';
 import { GEIST_FARBEN, PILLE_FARBE, PUNKT_FARBE, WAND_FARBE } from './farben';
 import { Geist, Spieler } from './figuren';
 
-const ZELLE_PX = 18;
+/** Größte Kachelgröße. Auf schmalen Handys wird kleiner gerechnet, siehe
+ *  unten — vorher stand hier eine feste Größe, und 21 Spalten mal 18 Pixel
+ *  passten auf einem 375er-Handy nicht mehr in die Breite. */
+const MAX_ZELLE_PX = 18;
+
+/**
+ * Meldet, welche Figuren seit dem letzten Bild um mehr als eine Kachel
+ * gesprungen sind. Das passiert nur im Tunnel, wo sie von einer Seite auf
+ * die andere wechseln. Für diesen einen Schritt muss die weiche Bewegung
+ * aus sein — sonst flitzt die Figur sichtbar quer über das ganze Feld
+ * zurück, statt drüben aufzutauchen.
+ */
+function useSpruenge(figuren: readonly { id: string; x: number; y: number }[]): ReadonlySet<string> {
+  const vorher = useRef(new Map<string, { x: number; y: number }>());
+  const spruenge = new Set<string>();
+  for (const f of figuren) {
+    const alt = vorher.current.get(f.id);
+    if (alt && (Math.abs(f.x - alt.x) > 1 || Math.abs(f.y - alt.y) > 1)) spruenge.add(f.id);
+    vorher.current.set(f.id, { x: f.x, y: f.y });
+  }
+  return spruenge;
+}
 
 const istRichtung = (wert: string): wert is Richtung =>
   wert === 'up' || wert === 'down' || wert === 'left' || wert === 'right';
@@ -66,6 +87,17 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
 
   const { breite, hoehe } = z.labyrinth;
 
+  const spruenge = useSpruenge([
+    { id: 'spieler', x: z.spieler.position.x, y: z.spieler.position.y },
+    ...z.geister.map((g) => ({ id: `g${g.id}`, x: g.position.x, y: g.position.y })),
+  ]);
+
+  // Alles in Prozent statt in Pixeln: Eine Verschiebung um 100 % ist bei
+  // einer kachelgroßen Figur genau eine Kachel — dadurch stimmt die
+  // Anordnung bei jeder Feldgröße, ohne dass irgendwo gemessen werden muss.
+  const zelleBreite = 100 / breite;
+  const zelleHoehe = 100 / hoehe;
+
   return (
     <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4">
       <div className="flex items-center justify-center gap-6 text-sm text-gedaempft">
@@ -78,16 +110,16 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
 
       <div
         ref={bereich}
-        className="relative touch-none"
-        style={{ width: breite * ZELLE_PX, height: hoehe * ZELLE_PX }}
+        className="relative w-full touch-none"
+        style={{ maxWidth: breite * MAX_ZELLE_PX, aspectRatio: `${breite} / ${hoehe}` }}
         role="img"
         aria-label={`Labyrinth, Level ${z.level}, ${z.leben} Leben, ${z.score} Punkte.${z.gewonnen ? ' Alle Geister gefressen, gewonnen!' : z.vorbei ? ' Spiel vorbei.' : ''}`}
       >
         <div
           className="absolute inset-0 grid"
           style={{
-            gridTemplateColumns: `repeat(${breite}, ${ZELLE_PX}px)`,
-            gridTemplateRows: `repeat(${hoehe}, ${ZELLE_PX}px)`,
+            gridTemplateColumns: `repeat(${breite}, 1fr)`,
+            gridTemplateRows: `repeat(${hoehe}, 1fr)`,
           }}
         >
           {Array.from({ length: breite * hoehe }, (_, i) => {
@@ -120,11 +152,12 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
         </div>
 
         <div
-          className="absolute transition-transform duration-100 ease-linear"
+          className="absolute ease-linear"
           style={{
-            width: ZELLE_PX,
-            height: ZELLE_PX,
-            transform: `translate(${z.spieler.position.x * ZELLE_PX}px, ${z.spieler.position.y * ZELLE_PX}px)`,
+            width: `${zelleBreite}%`,
+            height: `${zelleHoehe}%`,
+            transform: `translate(${z.spieler.position.x * 100}%, ${z.spieler.position.y * 100}%)`,
+            transition: spruenge.has('spieler') ? 'none' : 'transform 100ms linear',
           }}
         >
           <Spieler richtung={z.spieler.richtung} />
@@ -133,11 +166,12 @@ export function Geisterjagd({ onScore, onGameOver, settings }: GameProps) {
         {z.geister.map((g) => (
           <div
             key={g.id}
-            className="absolute transition-transform duration-100 ease-linear"
+            className="absolute ease-linear"
             style={{
-              width: ZELLE_PX,
-              height: ZELLE_PX,
-              transform: `translate(${g.position.x * ZELLE_PX}px, ${g.position.y * ZELLE_PX}px)`,
+              width: `${zelleBreite}%`,
+              height: `${zelleHoehe}%`,
+              transform: `translate(${g.position.x * 100}%, ${g.position.y * 100}%)`,
+              transition: spruenge.has(`g${g.id}`) ? 'none' : 'transform 100ms linear',
             }}
           >
             <Geist
