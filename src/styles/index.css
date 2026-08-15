@@ -309,6 +309,58 @@
   animation: dialog-grund-auf 0.18s ease-out;
 }
 
+/* Der gestaffelte Auftritt im Rundenende.
+   Jede Zeile kommt einzeln nach, statt dass der ganze Kasten auf einmal
+   dasteht — dadurch liest man das Ergebnis in der gedachten Reihenfolge:
+   erst „vorbei", dann die Zahl, dann die Wertung, dann die Knöpfe. */
+@keyframes ende-zeile {
+  0% {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.ende-zeile {
+  animation: ende-zeile 0.24s ease-out backwards;
+  animation-delay: var(--verzoegerung, 0ms);
+}
+
+/* Ein Stern **plumpst** herein und wippt kurz nach. Deshalb eine eigene
+   Kurve statt `ende-zeile`: Ein Stern, der nur einblendet, fühlt sich nicht
+   wie eine Auszeichnung an. */
+@keyframes stern-rein {
+  0% {
+    opacity: 0;
+    scale: 0.2;
+    rotate: -35deg;
+  }
+  62% {
+    opacity: 1;
+    scale: 1.22;
+    rotate: 6deg;
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+
+.stern-rein {
+  animation: stern-rein 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  animation-delay: var(--verzoegerung, 0ms);
+}
+
+/* Der nicht erreichte Stern bleibt leer stehen — er wird gar nicht erst
+   animiert, sonst sähe „nicht bekommen" aus wie „bekommen". */
+.stern-leer {
+  opacity: 0.22;
+}
+
 /* Spielbildschirme sollen immer ganz aufs Bild passen — auf kleinen Handys
    musste man sonst scrollen, um an die unteren Steuertasten zu kommen, und
    sah dann das Spielfeld nicht mehr.
@@ -751,7 +803,9 @@
 
 .ruhig .kachel-rein,
 .ruhig .rein-von-oben,
-.ruhig .rein-von-unten {
+.ruhig .rein-von-unten,
+.ruhig .ende-zeile,
+.ruhig .stern-rein {
   animation-delay: 0ms !important;
 }
 

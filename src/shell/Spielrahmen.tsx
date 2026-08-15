@@ -1,14 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { Einstellungen, GameApi } from '../core/types';
+import { sfx } from '../core/sfx';
 import { bestwert, ergebnisEintragen, zuletztGespieltMerken } from './speicher';
 import { duellMelden, ergebnisMelden } from './konto';
 import type { Duell } from './konto';
 import { fremdePunkte, standFuer, standText } from './duell';
 import { spielfarbenStil, toenung } from './spielfarbe';
+import { sterne, sternText } from './sterne';
+import type { Sternzahl } from './sterne';
 
 type Ende = {
   punkte: number;
   beste: number;
+  /**
+   * Die Bestleistung **vor** dieser Runde. `beste` ist der Stand danach und
+   * enthält die gerade gespielte Runde schon — damit ließe sich die Wertung
+   * nicht rechnen, sie käme bei jeder Bestleistung auf genau 100 %.
+   */
+  vorher: number;
   rekord: boolean;
   gewonnen: boolean;
   /** Platz unter allen Angemeldeten — kommt erst nach, wenn der Server antwortet. */
@@ -69,6 +79,63 @@ function useHochzaehlen(ziel: number, ruhig: boolean): number {
   return gezeigt;
 }
 
+/**
+ * Die drei Sterne im Rundenende.
+ *
+ * Sie kommen **nacheinander** herein, mit gut zwei Zehnteln Abstand. Alle
+ * drei auf einmal wären dieselbe Information in einem Bruchteil der Wirkung:
+ * Bei drei Sternen entsteht durch die Staffelung eine Steigerung, und bei
+ * einem Stern sieht man, dass zwei ausgeblieben sind, statt es nur zu lesen.
+ *
+ * Nicht erreichte Sterne stehen blass da, statt zu fehlen — sonst wüsste ein
+ * Kind nicht, dass es überhaupt mehr zu holen gibt.
+ */
+function Sterne({ anzahl, verzoegerung }: { anzahl: Sternzahl; verzoegerung: number }) {
+  return (
+    // `role="img"` ist nötig, nicht schmückend: Alle drei Sterne sind
+    // `aria-hidden`, der Absatz hat also gar keinen vorlesbaren Inhalt — und
+    // ein `aria-label` an einem Element ohne Rolle wird von manchen
+    // Vorleseprogrammen einfach übergangen.
+    <p
+      role="img"
+      aria-label={`${anzahl} von 3 Sternen`}
+      className="mt-3 flex justify-center gap-1.5"
+    >
+      {([1, 2, 3] as const).map((n) => {
+        const erreicht = n <= anzahl;
+        return (
+          <svg
+            key={n}
+            viewBox="-12 -12 24 24"
+            aria-hidden="true"
+            className={erreicht ? 'stern-rein size-9' : 'stern-leer size-9'}
+            style={
+              erreicht
+                ? ({ '--verzoegerung': `${verzoegerung + (n - 1) * 210}ms` } as CSSProperties)
+                : undefined
+            }
+          >
+            <path
+              d={STERN_PFAD}
+              fill={erreicht ? '#facc15' : 'currentColor'}
+              stroke={erreicht ? '#a16207' : 'none'}
+              strokeWidth={1.4}
+              strokeLinejoin="round"
+            />
+          </svg>
+        );
+      })}
+    </p>
+  );
+}
+
+/** Fünfzackiger Stern, Radien 11 und 4,6, Spitze oben. */
+const STERN_PFAD = Array.from({ length: 10 }, (_, i) => {
+  const winkel = (i * Math.PI) / 5 - Math.PI / 2;
+  const r = i % 2 === 0 ? 11 : 4.6;
+  return `${i === 0 ? 'M' : 'L'}${(Math.cos(winkel) * r).toFixed(2)} ${(Math.sin(winkel) * r).toFixed(2)}`;
+}).join(' ') + ' Z';
+
 export function Spielrahmen({
   spiel,
   einstellungen,
@@ -107,7 +174,13 @@ export function Spielrahmen({
       const vorher = bestwert(spiel.id);
       const { liste, schluessel } = ergebnisEintragen(spiel.id, wert);
       setPunkte(wert);
-      setEnde({ punkte: wert, beste: liste[0]?.punkte ?? wert, rekord: wert > vorher, gewonnen });
+      setEnde({
+        punkte: wert,
+        beste: liste[0]?.punkte ?? wert,
+        vorher,
+        rekord: wert > vorher,
+        gewonnen,
+      });
 
       // Der Platz kommt **nachträglich** dazu. Der Dialog steht sofort, ohne
       // auf das Netz zu warten — das ist der ganze Sinn der Warteschlange.
@@ -163,6 +236,57 @@ export function Spielrahmen({
 
   const farbe = toenung(spiel.id, spiel.accent);
   const gezeigtePunkte = useHochzaehlen(punkte, einstellungen.reducedMotion);
+
+  const sternzahl = useMemo(
+    () => (ende ? sterne(ende.punkte, ende.vorher, ende.gewonnen) : 1),
+    [ende],
+  );
+
+  /*
+   * Die Zahl im Rundenende zählt **verzögert** hoch.
+   *
+   * Ohne die Verzögerung wäre der Zähler längst durch, bevor die Zeile
+   * überhaupt sichtbar wird: Ihr Auftritt beginnt erst nach 460 ms, das
+   * Hochzählen dauert 320. Man sähe nur das fertige Ergebnis — der ganze
+   * Sinn der Staffelung ginge verloren.
+   */
+  const [zaehlZiel, setZaehlZiel] = useState(0);
+  useEffect(() => {
+    if (!ende) {
+      setZaehlZiel(0);
+      return;
+    }
+    if (einstellungen.reducedMotion) {
+      setZaehlZiel(ende.punkte);
+      return;
+    }
+    const uhr = window.setTimeout(() => setZaehlZiel(ende.punkte), 470);
+    return () => window.clearTimeout(uhr);
+  }, [ende, einstellungen.reducedMotion]);
+  const gezeigtesErgebnis = useHochzaehlen(zaehlZiel, einstellungen.reducedMotion);
+
+  /*
+   * Der Jubelton bei drei Sternen.
+   *
+   * Er kommt **zusätzlich** zum Rundenende-Ton, den jedes Spiel selbst
+   * abspielt — der ist absteigend und heißt „vorbei". Genau das war die
+   * Beanstandung: Auch nach einer starken Runde klang es nach Niederlage.
+   * Ein aufsteigender Dreiklang eine halbe Sekunde später liest sich als
+   * Auszeichnung obendrauf, ohne dass ein einziges Spiel angefasst werden
+   * muss.
+   *
+   * Die Sperre über `endeMarke` ist nötig: `ende` bekommt später noch den
+   * Platz und den Duellstand angehängt, ist dann ein neues Objekt — und der
+   * Ton liefe ein zweites Mal.
+   */
+  const tonMarke = useRef(-1);
+  useEffect(() => {
+    if (!ende || sternzahl < 3) return;
+    if (tonMarke.current === endeMarke.current) return;
+    tonMarke.current = endeMarke.current;
+    const uhr = window.setTimeout(() => sfx('stufe'), 640);
+    return () => window.clearTimeout(uhr);
+  }, [ende, sternzahl]);
 
   return (
     <div
@@ -241,22 +365,41 @@ export function Spielrahmen({
                 background: `linear-gradient(160deg, color-mix(in srgb, ${spiel.accent} 34%, var(--color-flaeche)), var(--color-flaeche) 70%)`,
               }}
             >
-              <h2 className="text-xl font-black tracking-tight">
+              <h2 className="ende-zeile text-xl font-black tracking-tight">
                 {ende.gewonnen ? '🎉 Gewonnen!' : 'Vorbei'}
               </h2>
+
+              {/* Die Sterne kommen **vor** der Zahl — sie sind das, was ein
+                  Kind zuerst sucht, und sie gelten in jedem Spiel gleich.
+                  Die Zahl darunter ist der Beleg dazu. */}
+              <Sterne anzahl={sternzahl} verzoegerung={160} />
+
               <p
-                className="punkte-bumsen mt-2 text-6xl leading-none font-black tabular-nums"
-                style={{ color: spiel.accent, textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
+                className="ende-zeile mt-2 text-6xl leading-none font-black tabular-nums"
+                style={{
+                  color: spiel.accent,
+                  textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                  '--verzoegerung': '460ms',
+                } as CSSProperties}
               >
-                {ende.punkte}
+                {/* Zählt von null hoch. Vorgelesen wird der Endwert, sonst
+                    läse ein Screenreader jede Zwischenzahl mit. */}
+                <span aria-hidden="true">{gezeigtesErgebnis}</span>
+                <span className="sr-only">{ende.punkte}</span>
               </p>
-              {ende.rekord ? (
-                <p className="mt-3 text-base font-bold" style={{ color: '#facc15' }}>
-                  ★ Neue Bestleistung!
-                </p>
-              ) : (
-                <p className="mt-3 text-sm text-gedaempft">Beste Punktzahl: {ende.beste}</p>
-              )}
+
+              <p
+                className="ende-zeile mt-3 text-base font-bold"
+                style={{ '--verzoegerung': '620ms' } as CSSProperties}
+              >
+                {ende.rekord ? (
+                  <span style={{ color: '#facc15' }}>★ Neue Bestleistung!</span>
+                ) : (
+                  <span className="text-sm font-medium text-gedaempft">
+                    {sternText(sternzahl)} Beste Punktzahl: {ende.beste}
+                  </span>
+                )}
+              </p>
 
               {/* Kommt nach, sobald der Server geantwortet hat — und nur,
                   wenn jemand angemeldet ist. Der Auftritt ist bewusst
@@ -286,7 +429,10 @@ export function Spielrahmen({
                 </p>
               )}
 
-              <div className="mt-6 flex flex-col gap-2.5">
+              <div
+                className="ende-zeile mt-6 flex flex-col gap-2.5"
+                style={{ '--verzoegerung': '760ms' } as CSSProperties}
+              >
                 {/* Im Duell gibt es kein „Nochmal": Jede Seite spielt ihr
                     Level genau einmal, sonst könnte man beliebig oft
                     nachbessern. */}
