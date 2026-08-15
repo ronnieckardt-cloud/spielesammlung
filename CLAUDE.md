@@ -232,6 +232,11 @@ versucht deshalb genau dasselbe Level erneut.
 - Nach jeder Antwort sofortige Rückmeldung (richtig grün, falsch rot, die
   tatsächlich richtige Antwort wird immer angezeigt) — man lernt auch aus
   falschen Antworten, nicht erst am Rundenende.
+- Jede Frage trägt zusätzlich ein `erklaerung`-Feld: ein kurzer
+  Wissens-Hinweis ("💡 …"), der unterhalb der Antworten erscheint, sobald
+  beantwortet wurde — unabhängig davon, ob richtig oder falsch geklickt
+  wurde. So bleibt auch bei einer falschen Antwort ein Lerneffekt. Ein Test
+  prüft nur, dass jede Frage eine nicht-leere Erklärung hat.
 
 ## Befehle
 

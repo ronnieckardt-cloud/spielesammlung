@@ -20,6 +20,12 @@ describe('Fragenpool', () => {
     }
   });
 
+  it('jede Frage hat eine nicht-leere Erklärung', () => {
+    for (const f of FRAGEN) {
+      expect(f.erklaerung.trim().length).toBeGreaterThan(0);
+    }
+  });
+
   it('der Index der richtigen Antwort ist immer gültig', () => {
     for (const f of FRAGEN) {
       expect(f.richtig).toBeGreaterThanOrEqual(0);

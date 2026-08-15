@@ -143,6 +143,12 @@ export function Quiz({ onScore, onGameOver, settings }: GameProps) {
         })}
       </div>
 
+      {beantwortet && (
+        <div className="w-full max-w-md rounded-karte border border-rand bg-flaeche-hoch p-4 text-sm">
+          <span aria-hidden="true">💡</span> {frage.erklaerung}
+        </div>
+      )}
+
       {beantwortet && !z.vorbei && (
         <button
           type="button"
