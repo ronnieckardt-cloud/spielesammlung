@@ -1011,6 +1011,26 @@ html.eigenstaendig .spielseite {
 
 .seiten-auftritt {
   animation: seite-rein var(--zeit-mittel) var(--kurve) both;
+
+  /* Die Kachelgröße.
+
+     **Steht hier und nicht mehr inline in `BunterGrund`** — genau deshalb:
+     Ein `style`-Attribut schlägt jede Stylesheet-Regel, und `clamp()` kennt
+     keine Haltepunkte. Solange der Wert inline stand, ließ er sich für
+     Tablets gar nicht überschreiben.
+
+     Untergrenze so gewählt, dass auf einem 375er-iPhone vier Kacheln je
+     Reihe passen; Obergrenze, weil sie darüber nicht mehr wie App-Symbole
+     wirken. */
+  --kachel: clamp(3.5rem, 14vw, 5rem);
+}
+
+@media (min-width: 768px) {
+  .seiten-auftritt {
+    /* Auf dem Tablet etwas größer: Dieselbe Kachel wirkt auf einer
+       doppelt so großen Fläche verloren. */
+    --kachel: clamp(4rem, 7vw, 5.5rem);
+  }
 }
 
 /* Das Podest wächst von unten hoch — Gold zuletzt, weil es am höchsten

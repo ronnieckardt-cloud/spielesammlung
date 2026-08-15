@@ -31,7 +31,8 @@ export function Seite({
           'linear-gradient(168deg, #171634 0%, #1c1b45 42%, #241a4a 72%, #2e1740 100%)',
       }}
     >
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
+      {/* Auf Tablets breiter — siehe BunterGrund, gleiche Begründung. */}
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col md:max-w-5xl">
       <header
         className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/10 bg-black/25 px-4 pb-3 backdrop-blur-lg"
         // Auf dem iPhone als installierte App liegt die Statusleiste (Uhr,

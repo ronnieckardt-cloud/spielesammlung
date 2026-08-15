@@ -91,7 +91,11 @@ export function Unternavigation({
       className="shrink-0 border-t border-rand bg-grund/92 backdrop-blur-lg"
       style={{ boxShadow: '0 -8px 24px -12px rgb(0 0 0 / 0.7)' }}
     >
-      <ul className="mx-auto flex w-full max-w-md">
+      {/* Auf dem Handy schmal (Daumenbereich), auf dem Tablet etwas
+          breiter. Voll ausgereizt wäre falsch: Auf einem 13-Zoll-iPad
+          stünden fünf Punkte dreißig Zentimeter auseinander, und man
+          zielt quer über den Bildschirm. */}
+      <ul className="mx-auto flex w-full max-w-md md:max-w-lg">
         {PUNKTE.map((p) => {
           const istAktiv = p.ziel === aktiv;
           return (

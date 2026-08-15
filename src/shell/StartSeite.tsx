@@ -206,10 +206,20 @@ export function StartSeite({
    * lernt „Snake Rush ist das grüne", und ein Raster, das sich ständig
    * umsortiert, nimmt genau diese Sicherheit weg.
    */
-  const auswahl = [
-    ...(weiter ? [weiter] : []),
-    ...spiele.filter((s) => s.id !== weiter?.id),
-  ].slice(0, 8);
+  /*
+   * **Auf dem Handy acht, auf dem Tablet alle.**
+   *
+   * Auf einem 375er-iPhone sind acht Kacheln zwei volle Reihen und der
+   * Rest gehört hinter „Alle 20". Auf einem iPad im Hochformat blieb mit
+   * derselben Zahl die untere Hälfte der Seite leer — und eine halbleere
+   * Seite wirkt nicht großzügig, sondern unfertig. Dort ist Platz für das
+   * ganze Regal, und es füllt genau die Höhe, die sonst tot wäre.
+   *
+   * Die Kacheln ab der neunten tragen `nurBreit` und sind auf dem Handy
+   * ausgeblendet — eine Regel im CSS statt einer Abfrage in JavaScript,
+   * damit beim Drehen des Geräts nichts nachgerechnet werden muss.
+   */
+  const auswahl = [...(weiter ? [weiter] : []), ...spiele.filter((s) => s.id !== weiter?.id)];
 
   return (
     <BunterGrund>
@@ -244,61 +254,80 @@ export function StartSeite({
         <Stufenkarte stand={stand} />
       </div>
 
-      <div className="mb-3">
-        <Abenteuerkarte onOeffnen={onAbenteuer} />
-      </div>
+      {/*
+       * Ab Tablet **zwei Spalten**.
+       *
+       * Auf dem iPad im Hochformat stand vorher alles untereinander: oben
+       * gedrängt, das untere Drittel leer. Ein Handy-Layout auf einer
+       * doppelt so hohen Fläche wirkt nicht großzügig, sondern unfertig —
+       * dieselbe Regel wie umgekehrt, nur in die andere Richtung.
+       *
+       * Links die Dinge, die man *tut* (Abenteuer, Weiterspielen), rechts
+       * die Dinge, die man *anschaut* (Ziele, Spieleregal). Die Reihenfolge
+       * im Markup bleibt die des Handys — ein Vorleseprogramm und die
+       * Tastatur laufen also weiter von oben nach unten in der Reihenfolge
+       * der Wichtigkeit.
+       */}
+      <div className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:items-start md:gap-5">
+        <div className="md:flex md:flex-col md:gap-3">
+          <div className="mb-3 md:mb-0">
+            <Abenteuerkarte onOeffnen={onAbenteuer} />
+          </div>
 
-      {weiter && <Weiterkarte spiel={weiter} onSpielen={onSpielen} />}
+          {weiter && <Weiterkarte spiel={weiter} onSpielen={onSpielen} />}
 
-      <section
-        className="rein-von-unten mt-4"
-        style={{ animationDelay: '180ms' }}
-        aria-labelledby="ziele-titel"
-      >
-        <div className="mb-2 flex items-baseline justify-between px-1">
-          <h2 id="ziele-titel" className="text-sm font-black text-white/85">
-            Heute zu holen
-          </h2>
-          <span className="text-xs font-bold text-white/70">
-            {offen === 0 ? '✓ alle geschafft' : `noch ${offen} von ${aufgaben.length}`}
-          </span>
-        </div>
-        <ul className="flex flex-col gap-2">
-          {aufgaben.map((a) => (
-            <Aufgabenzeile key={a.id} aufgabe={a} stand={tagesstand} />
-          ))}
-        </ul>
-      </section>
-
-      <section
-        className="rein-von-unten mt-4"
-        style={{ animationDelay: '240ms' }}
-        aria-labelledby="spiele-titel"
-      >
-        <div className="mb-2 flex items-baseline justify-between px-1">
-          <h2 id="spiele-titel" className="text-sm font-black text-white/85">
-            Spiele
-          </h2>
-          <button
-            type="button"
-            onClick={onAlleSpiele}
-            className="min-h-8 rounded-full px-2 text-xs font-bold text-white/80"
+          <section
+            className="rein-von-unten mt-4 md:mt-0"
+            style={{ animationDelay: '180ms' }}
+            aria-labelledby="ziele-titel"
           >
-            Alle {spiele.length} ›
-          </button>
+            <div className="mb-2 flex items-baseline justify-between px-1">
+              <h2 id="ziele-titel" className="text-sm font-black text-white/85">
+                Heute zu holen
+              </h2>
+              <span className="text-xs font-bold text-white/70">
+                {offen === 0 ? '✓ alle geschafft' : `noch ${offen} von ${aufgaben.length}`}
+              </span>
+            </div>
+            <ul className="flex flex-col gap-2">
+              {aufgaben.map((a) => (
+                <Aufgabenzeile key={a.id} aufgabe={a} stand={tagesstand} />
+              ))}
+            </ul>
+          </section>
         </div>
-        <ul className="buehne-3d flex flex-wrap justify-center gap-x-3 gap-y-3 rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm sm:gap-x-6">
-          {auswahl.map((spiel, i) => (
-            <Spielkachel
-              key={spiel.id}
-              spiel={spiel}
-              sterne={fortschritt.jeSpiel[spiel.id]?.besteSterne ?? 0}
-              onSpielen={onSpielen}
-              verzoegerung={280 + i * 26}
-            />
-          ))}
-        </ul>
-      </section>
+
+        <section
+          className="rein-von-unten mt-4 md:mt-0"
+          style={{ animationDelay: '240ms' }}
+          aria-labelledby="spiele-titel"
+        >
+          <div className="mb-2 flex items-baseline justify-between px-1">
+            <h2 id="spiele-titel" className="text-sm font-black text-white/85">
+              Spiele
+            </h2>
+            <button
+              type="button"
+              onClick={onAlleSpiele}
+              className="min-h-8 rounded-full px-2 text-xs font-bold text-white/80"
+            >
+              Alle {spiele.length} ›
+            </button>
+          </div>
+          <ul className="buehne-3d flex flex-wrap justify-center gap-x-3 gap-y-3 rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm sm:gap-x-6">
+            {auswahl.map((spiel, i) => (
+              <Spielkachel
+                key={spiel.id}
+                spiel={spiel}
+                sterne={fortschritt.jeSpiel[spiel.id]?.besteSterne ?? 0}
+                onSpielen={onSpielen}
+                verzoegerung={280 + i * 26}
+                nurBreit={i >= 8}
+              />
+            ))}
+          </ul>
+        </section>
+      </div>
     </BunterGrund>
   );
 }

@@ -55,16 +55,18 @@ export function BunterGrund({ children }: { children: ReactNode }) {
       </div>
 
       <div
-        className="seiten-auftritt relative mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-6"
+        /*
+         * Auf Tablets breiter. `max-w-3xl` (768 px) ist für ein Handy
+         * richtig und auf einem 13-Zoll-iPad im Hochformat (1032 Punkte)
+         * eine schmale Spalte mit breiten toten Rändern links und rechts —
+         * genau das, wovor die Regel „Mobile ist kein verkleinertes
+         * Desktop" warnt, nur in die andere Richtung.
+         */
+        className="seiten-auftritt relative mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-6 md:max-w-5xl md:px-6"
         style={
           {
             // Abstand zur Statusleiste bei installierter App auf dem iPhone.
             paddingTop: 'calc(1rem + env(safe-area-inset-top))',
-            // Die Kachelgröße wächst mit dem Bildschirm, gedeckelt bei 80
-            // Pixel — darüber wirken die Kacheln nicht mehr wie App-Symbole.
-            // Die Untergrenze ist so gewählt, dass auf einem 375er-iPhone
-            // vier Kacheln je Reihe passen.
-            '--kachel': 'clamp(3.5rem, 14vw, 5rem)',
           } as CSSProperties
         }
       >

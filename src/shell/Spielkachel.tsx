@@ -27,12 +27,22 @@ export function Spielkachel({
   sterne,
   onSpielen,
   verzoegerung,
+  nurBreit = false,
 }: {
   spiel: GameApi;
   /** Beste je erreichte Sternzahl, 0 = noch nicht gespielt. */
   sterne: number;
   onSpielen: (id: string) => void;
   verzoegerung?: number;
+  /**
+   * Nur auf breiten Bildschirmen zeigen.
+   *
+   * Auf einem Handy passen vier Kacheln je Reihe, auf einem Tablet fünf.
+   * Acht Kacheln ergeben dort 5 + 3 — eine halbe Reihe, die schief im
+   * Regal hängt. Mit zwei zusätzlichen Kacheln stehen auf beiden Geräten
+   * **volle** Reihen: 4 + 4 auf dem Handy, 5 + 5 auf dem Tablet.
+   */
+  nurBreit?: boolean;
 }) {
   const Icon = spiel.Icon;
   // Fertige App-Symbole bringen Hintergrund und Ecken selbst mit — von der
@@ -41,7 +51,7 @@ export function Spielkachel({
 
   return (
     <li
-      className="kachel-rein flex flex-col items-center gap-1"
+      className={`kachel-rein flex-col items-center gap-1 ${nurBreit ? 'hidden md:flex' : 'flex'}`}
       style={
         {
           // Beschriftungsbreite wächst mit der Kachel mit. Knapp bemessen:
