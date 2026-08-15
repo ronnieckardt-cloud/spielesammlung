@@ -25,6 +25,10 @@ export type GameProps = {
   /** Zurück ins Menü. Das Spiel muss das nicht selbst anbieten. */
   onExit: () => void;
   settings: Einstellungen;
+  /** Bisherige Bestleistung dieses Spiels, schreibgeschützt — z. B. für
+   * einen eigenen Startbildschirm. Kein Zugriff auf die Bestenliste selbst,
+   * nur diese eine Zahl. 0, wenn noch nie gespielt. */
+  bestScore: number;
 };
 
 export type GameApi = {

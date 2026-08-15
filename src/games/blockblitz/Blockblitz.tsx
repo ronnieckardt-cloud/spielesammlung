@@ -16,6 +16,12 @@ import {
 import type { Teil, Zustand } from './logik';
 import { ankerZentriertAuf, formGroesse } from './geometrie';
 import { blockFarbe } from './farben';
+import { BlockblitzIcon } from './Icon';
+
+// Muss zur accent-Farbe in index.ts passen — Spiele kennen ihre eigene
+// GameApi nicht (Import von dort würde einen Kreis mit index.ts ergeben),
+// deshalb hier als eigene, kleine Konstante dupliziert statt importiert.
+const AKZENT = '#38bdf8';
 
 const VERSATZ_Y = 60; // Pixel, um die das gezogene Teil über den Finger gehoben wird
 const SCHWELLE_TIPP = 8; // Pixel Bewegung, unterhalb derer ein Antippen statt Ziehen gilt
@@ -64,7 +70,40 @@ function TeilAnzeige({ teil, zellgroesse }: { teil: Teil; zellgroesse: number })
   );
 }
 
-export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
+/** Ruhiges Titelbild vor der ersten Runde — Icon, Name, Bestleistung, Start. */
+function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: () => void }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6 text-center">
+      <div
+        className="grid size-24 place-items-center rounded-[1.75rem]"
+        style={{
+          background: `linear-gradient(150deg, color-mix(in srgb, ${AKZENT} 100%, white 30%), ${AKZENT} 55%, color-mix(in srgb, ${AKZENT} 100%, black 22%))`,
+          boxShadow: `0 14px 32px -12px color-mix(in srgb, ${AKZENT} 75%, transparent)`,
+        }}
+      >
+        <BlockblitzIcon className="size-14 text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />
+      </div>
+      <div>
+        <h1 className="text-3xl font-extrabold tracking-tight">Block Burst</h1>
+        <p className="mt-1.5 text-sm text-gedaempft">
+          {bestScore > 0 ? `Beste Punktzahl: ${bestScore}` : 'Noch nicht gespielt'}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onStart}
+        autoFocus
+        className="rounded-xl px-12 py-4 text-lg font-bold text-white shadow-lg transition-transform active:scale-95"
+        style={{ backgroundColor: AKZENT }}
+      >
+        Spielen
+      </button>
+    </div>
+  );
+}
+
+export function Blockblitz({ onScore, onGameOver, settings, bestScore }: GameProps) {
+  const [gestartet, setGestartet] = useState(false);
   const [z, setZ] = useState<Zustand>(() => neuesSpiel(saatAus('blockblitz', Date.now())));
   const [zug, setZug] = useState<ZugZustand | null>(null);
   const [ausgewaehlt, setAusgewaehlt] = useState<number | null>(null);
@@ -242,6 +281,10 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
     const linien = volleZeilenUndSpalten(testRaster);
     vorschauZeilen = linien.zeilen;
     vorschauSpalten = linien.spalten;
+  }
+
+  if (!gestartet) {
+    return <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />;
   }
 
   return (

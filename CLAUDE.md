@@ -54,12 +54,18 @@ type GameProps = {
   onGameOver: (score: number, gewonnen?: boolean) => void;  // genau einmal pro Runde
   onExit: () => void;
   settings: { sound: boolean; reducedMotion: boolean };
+  bestScore: number;  // bisherige Bestleistung, schreibgeschützt, 0 = noch nie gespielt
 };
 ```
 
 `gewonnen` ist optional — nur Spiele mit einer echten Sieg-Bedingung (nicht
 nur "Leben aufgebraucht", siehe Geisterjagd) geben es mit. Die Hülle zeigt
 dann „🎉 Gewonnen!" statt „Vorbei" im Rundenende-Bildschirm.
+
+`bestScore` kommt aus `Spielrahmen.tsx` (`bestwert(spiel.id)`, frisch bei
+jedem Rendern gelesen) — kein Zugriff aufs Storage selbst, nur diese eine
+Zahl. Gedacht für einen eigenen Startbildschirm wie bei Block Burst
+(„Beste Punktzahl: X" anzeigen, ohne die Bestenliste-Regel zu brechen).
 
 **Ein Spiel darf nie direkt auf Bestenliste, Router oder Browser-Speicher
 zugreifen — immer nur über diese Props.** Konkret heißt das: in
@@ -138,9 +144,17 @@ Bestwert steht weiterhin nur im `aria-label` für Screenreader, nicht sichtbar.
 
 Kachel-Hintergrund ist ein Farbverlauf aus der Akzentfarbe (heller/dunkler
 über `color-mix()`, kein zweites Hex pro Spiel nötig), dazu ein farbiger
-Schlagschatten und ein wandernder Lichtschimmer (`.kachel-glanz` in
-`index.css`, `--glanz-verzoegerung` je Kachel versetzt, damit nicht alle
-gleichzeitig aufblitzen) — sonst wirkte die Startseite zu flach/grau.
+Schlagschatten — sonst wirkte die Startseite zu flach/grau. Ein wandernder
+Lichtschimmer war testweise drin, wurde aber wieder entfernt (Rückmeldung:
+lenkt ab, wenn er ständig hintereinander über die Kacheln läuft).
+
+Kachelmenü ist bewusst `flex flex-wrap` mit **fester** Kachelgröße
+(`size-16`), keine responsive Grid-Spaltenzahl mehr — Rückmeldung: Kacheln
+wirkten auf breiteren Bildschirmen zu groß, sollen wie normale App-Symbole
+aussehen, nicht wie Kacheln, die die volle Breite ausfüllen. Der Name steht
+in einer eigenen, etwas breiteren Box (`w-20`) und darf bei Bedarf
+zweizeilig umbrechen (`leading-tight`, kein `truncate`) — sonst wurden
+längere Namen wie „Gehirnjogging" oder „Ghost Chase" abgeschnitten.
 
 Ausnahme auf ausdrücklichen Wunsch: Die Spielfigur in Sternenfang
 (`games/platzhalter/Platzhalter.tsx`, Komponente `KatzenGesicht`) ist
@@ -261,6 +275,14 @@ versucht deshalb genau dasselbe Level erneut.
   Aufblitzens. Dazu ein paar gestaffelte, kurze „Kratz"-Klicks
   (`sfx('klick')`), einer je Zeitstufe, nicht je Zelle — sonst wird es bei
   großen Auflösungen zu viel.
+- Eigener Startbildschirm vor der ersten Runde (`Startbildschirm` in
+  `Blockblitz.tsx`, `gestartet`-State): großes Icon im selben
+  Farbverlauf-Stil wie die Menü-Kachel, Name, `bestScore` aus den Props
+  (kein direkter Storage-Zugriff), großer „Spielen"-Knopf. `AKZENT` ist als
+  eigene Konstante dupliziert, nicht aus `index.ts` importiert — ein Import
+  von dort würde einen Kreis ergeben, da `index.ts` selbst `Blockblitz.tsx`
+  importiert. Bei einem neuen Startbildschirm für ein anderes Spiel diesen
+  Aufbau als Vorlage nehmen.
 
 ## Reihenfall — Besonderheiten
 

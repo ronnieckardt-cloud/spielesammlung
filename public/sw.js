@@ -8,7 +8,7 @@
  * Beim Veröffentlichen einer neuen Fassung die Zahl in SPEICHER erhöhen.
  */
 
-const SPEICHER = 'spielesammlung-v5';
+const SPEICHER = 'spielesammlung-v6';
 const GRUNDGERUEST = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {

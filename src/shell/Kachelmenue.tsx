@@ -41,16 +41,17 @@ export function Kachelmenue({
       </header>
 
       {/* Icon-Kacheln wie kleine App-Symbole vom Handy-Startbildschirm —
-          Farbverlauf statt Volltonfarbe, Name als kleine Beschriftung
-          darunter (kein Untertitel mehr, nur der Name). Der wandernde
-          Glanz-Schimmer ist bewusst wieder raus — Rückmeldung: lenkt ab,
-          wenn er ständig über die Kacheln läuft. */}
-      <ul className="grid grid-cols-3 gap-x-4 gap-y-5 sm:grid-cols-4 md:grid-cols-5">
+          feste, kleinere Größe statt sich über Grid-Spalten an die
+          Bildschirmbreite anzupassen (Rückmeldung: wirkten zu groß, sollen
+          so wirken wie normale App-Symbole auf dem Handy). Farbverlauf
+          statt Volltonfarbe, Name als kleine, zweizeilig umbrechende
+          Beschriftung darunter. */}
+      <ul className="flex flex-wrap gap-x-5 gap-y-4">
         {spiele.map((spiel) => {
           const beste = bestwert(spiel.id);
           const Icon = spiel.Icon;
           return (
-            <li key={spiel.id} className="flex flex-col items-center gap-1.5">
+            <li key={spiel.id} className="flex w-20 flex-col items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => onSpielen(spiel.id)}
@@ -59,11 +60,11 @@ export function Kachelmenue({
                   background: `linear-gradient(150deg, color-mix(in srgb, ${spiel.accent} 100%, white 30%), ${spiel.accent} 55%, color-mix(in srgb, ${spiel.accent} 100%, black 22%))`,
                   boxShadow: `0 6px 16px -6px color-mix(in srgb, ${spiel.accent} 70%, transparent)`,
                 }}
-                className="flex aspect-square w-full items-center justify-center rounded-2xl text-white transition-transform active:scale-95"
+                className="grid size-16 place-items-center rounded-2xl text-white transition-transform active:scale-95"
               >
-                <Icon className="size-9 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)] sm:size-10" />
+                <Icon className="size-7 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />
               </button>
-              <span className="max-w-full truncate text-xs font-medium text-gedaempft">
+              <span className="w-full text-center text-[11px] leading-tight font-medium text-gedaempft">
                 {spiel.title}
               </span>
             </li>

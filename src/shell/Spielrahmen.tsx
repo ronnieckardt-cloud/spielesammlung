@@ -59,6 +59,10 @@ export function Spielrahmen({
   }, [onExit]);
 
   const Spiel = spiel.Component;
+  // Frisch bei jedem Rendern gelesen (billige, synchrone localStorage-
+  // Abfrage) — nach beiEnde() steht der neue Rekord schon drin, bevor
+  // dieser Wert das nächste Mal gebraucht wird.
+  const beste = bestwert(spiel.id);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
@@ -92,6 +96,7 @@ export function Spielrahmen({
           onGameOver={beiEnde}
           onExit={onExit}
           settings={einstellungen}
+          bestScore={beste}
         />
 
         {ende && (
