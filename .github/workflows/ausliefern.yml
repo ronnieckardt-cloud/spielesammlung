@@ -14,6 +14,14 @@
 #   FTP_PASSWORT  das zugehörige Passwort
 #   FTP_ZIEL      der Ordner der Subdomain, z. B. /spiele
 #
+# UND als *Variable* (nicht Secret, gleicher Bildschirm, Reiter „Variables"):
+#
+#   HETZNER_AKTIV = ja
+#
+# Der Ablauf springt erst an, wenn diese Variable steht. Bis dahin passiert
+# nichts, und es kommen auch keine Fehlermails. Ausgeliefert wird solange
+# weiter auf Netlify.
+#
 # ACHTUNG beim FTP_ZIEL: Der Abgleich unten löscht auf dem Server alles, was
 # nicht mehr im Bau vorkommt. Zeigt der Pfad versehentlich auf das Stammver-
 # zeichnis, löscht er die ganze Webseite. Der Schritt „Ziel prüfen" fängt die
@@ -37,6 +45,11 @@ concurrency:
 jobs:
   bauen-und-hochladen:
     runs-on: ubuntu-latest
+    # Solange die Zugangsdaten nicht hinterlegt sind, läuft der Ablauf gar
+    # nicht erst an. Ohne diese Bedingung würde er bei jedem Push scheitern
+    # und GitHub schickte eine Fehlermail — für einen Umzug, der noch gar
+    # nicht dran ist. Sobald die vier Secrets stehen, läuft er von selbst.
+    if: vars.HETZNER_AKTIV == 'ja'
     steps:
       - uses: actions/checkout@v4
 
