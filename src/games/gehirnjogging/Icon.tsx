@@ -9,7 +9,7 @@ export function GehirnjoggingIcon({ className }: { className?: string }) {
     <AppSymbol
       id="gehirnjogging"
       verlauf={['#fbbf24', '#f59e0b', '#b45309']}
-      schriftzug="GEHIRNJOGGING"
+      schriftzug="BRAIN BLITZ"
       className={className}
     >
       {/* Gehirn: breite, runde Form. Die rechte Hälfte liegt als heller

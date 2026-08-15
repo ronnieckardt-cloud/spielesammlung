@@ -135,7 +135,7 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `reihenfall` | Line Fall |
 | `geisterjagd` | Ghost Chase |
 | `quiz` | Quiz Time |
-| `gehirnjogging` | Gehirnjogging (Name bewusst unverändert) |
+| `gehirnjogging` | Brain Blitz |
 | `wortspiel` | Word Play |
 | `schlange` | Snake Rush |
 | `mergeup` | Merge Up |
@@ -192,14 +192,16 @@ Zu beachten:
   Definitionen sind dann identisch und das Bild überall gleich.
 - Der Schriftzug bekommt `textLength` + `lengthAdjust="spacingAndGlyphs"`,
   passt also auch, wenn ein Gerät eine andere Schrift einsetzt. Ab zwölf
-  Zeichen wird die Schrift kleiner (nur „GEHIRNJOGGING") — die Grenze liegt
-  bei elf, damit „BLOCK BURST" unverändert bleibt.
+  Zeichen wird die Schrift kleiner — die Grenze liegt bei elf, damit
+  „BLOCK BURST" unverändert bleibt. Seit „Gehirnjogging" zu „Brain Blitz"
+  geworden ist, liegt kein Name mehr darüber; die Regel greift also gerade
+  nirgends, bleibt aber die Absicherung für den nächsten langen Namen.
 - `GlanzBlock` ist der gemeinsame Baustein für glänzende Spielsteine
   (Schatten unten, Farbe, Lichtkante oben) — benutzt von Block Burst und
   Line Fall.
 - Der Einblick soll wirklich das Spiel zeigen, nicht irgendein Motiv: Merge
   Up holt die Kachelfarben aus dem eigenen `farben.ts`, Star Dash zeichnet
-  dieselbe Katze wie im Spiel. Einzelne leere Rasterfelder sahen bei großer
+  denselben Sternenschlucker wie im Spiel. Einzelne leere Rasterfelder sahen bei großer
   Anzeige wie Lücken aus — Bretter also möglichst voll zeichnen.
 - Was im Symbol steht, muss zum Namen passen: Word Play zeigte erst die
   Buchstaben „WORT" über dem Schriftzug „WORD PLAY", das las sich wie ein
@@ -229,11 +231,19 @@ und Beschriftungen sind entsprechend auf Weiß-Töne umgestellt (nicht mehr
 Wunsch: Nicht nur die Startbildschirme der einzelnen Spiele, sondern
 gerade die Startseite soll nach „richtigem Spiel" aussehen.
 
-Ausnahme auf ausdrücklichen Wunsch: Die Spielfigur in Sternenfang
-(`games/platzhalter/Platzhalter.tsx`, Komponente `KatzenGesicht`) ist
-bewusst eine gelbe Kreisfigur mit angedeutetem Mund — durch Katzenohren
-bleibt sie als Katze lesbar. Für Geisterjagd (Schritt 5) gilt die Regel
-oben weiterhin uneingeschränkt: eigene Optik, keine Anlehnung.
+Die frühere Ausnahme für Star Dash (gelbe Kreisfigur mit Kerbe als „Katze")
+ist **weggefallen** — sie sah zu sehr nach einem bekannten
+Spielhallen-Klassiker aus. Die Figur ist jetzt der **Sternenschlucker**
+(`games/platzhalter/Figur.tsx`): ein erfundenes Wesen, dessen ganze
+Oberseite ein offenes Maul ist, mit den Augen darunter am Bauch. Wunsch war
+ausdrücklich „nicht irgendwie eine Katze oder 'n Hund, sondern irgendwas
+selber erfunden … was es halt noch nicht gibt" und explizit auch kein
+Emoji-Monster (also kein runder Klecks mit einem Auge und Hörnern).
+
+Die Datei zeichnet die Figur **einmal** als `SternenschluckerTeile`
+(Koordinaten 0…100, ohne eigenes `<svg>`), damit Spiel und App-Symbol
+dieselbe Figur zeigen: das Spiel über den Wrapper `Sternenschlucker`, das
+Symbol über `<g transform="translate(…) scale(…)">`.
 
 ## Reihenfolge
 

@@ -96,6 +96,12 @@
 .aufloesen-blitz {
   animation: aufloesen-blitz 0.24s ease-in forwards;
   animation-delay: var(--verzoegerung, 0ms);
+  /* Bei SVG-Formen bezieht sich transform sonst auf die viewBox statt auf
+     das Element — die platzenden Kugeln in Bubble Pop wanderten dadurch
+     beim Schrumpfen zur Feldmitte, statt an Ort und Stelle zu verpuffen.
+     Für HTML-Kästen (Blockblitz) ändert das nichts. */
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 /* Kleine Krümel, die beim Zerbröseln wegspritzen — Richtung je Krümel über
@@ -158,19 +164,26 @@
   animation: punkte-auftauchen 0.9s ease-out forwards;
 }
 
-/* Sanft schwebende Deko-Blöcke auf dem Blockblitz-Startbildschirm — Winkel
-   je Block über --grundwinkel, damit nicht alle gleich kippen. */
+/* Sanft schwebende Deko-Blöcke auf den Startbildschirmen — Winkel je Block
+   über --grundwinkel, damit nicht alle gleich kippen.
+
+   Die Neigung steht bewusst als eigene `rotate`-Eigenschaft und nicht im
+   Keyframe: Bei „weniger Bewegung" läuft die Animation praktisch nicht mehr,
+   und stand die Drehung nur im Keyframe, standen alle Blöcke plötzlich
+   gerade — die Gestaltung sah dann anders aus als gedacht. `rotate` und
+   `translate` sind eigenständige Eigenschaften, sie stören sich nicht. */
 @keyframes block-schweben {
   0%,
   100% {
-    transform: translateY(0) rotate(var(--grundwinkel, 0deg));
+    translate: 0 0;
   }
   50% {
-    transform: translateY(-14px) rotate(calc(var(--grundwinkel, 0deg) + 6deg));
+    translate: 0 -14px;
   }
 }
 
 .block-schweben {
+  rotate: var(--grundwinkel, 0deg);
   animation: block-schweben 3.4s ease-in-out infinite;
 }
 

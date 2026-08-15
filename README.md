@@ -22,7 +22,7 @@ Dann <http://localhost:5180> öffnen.
 | **Line Fall** | spielbar |
 | **Ghost Chase** | spielbar |
 | **Quiz Time** | spielbar |
-| **Gehirnjogging** | spielbar |
+| **Brain Blitz** | spielbar |
 | **Word Play** | spielbar |
 | **Snake Rush** | spielbar |
 | **Merge Up** | spielbar |
