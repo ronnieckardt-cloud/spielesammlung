@@ -150,6 +150,7 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `mergeup` | Merge Up |
 | `bubblepop` | Bubble Pop |
 | `paare` | Pair Up |
+| `messerwurf` | Blade Toss |
 
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
@@ -359,6 +360,10 @@ Reihenfolge nach Aufwand und Abwechslung:
 15. Sudoku Junior — 4×4 und 6×6 statt 9×9.
 16. Flow Connect — gleichfarbige Punkte verbinden, ohne sich zu kreuzen.
 17. Mini Golf — Winkel und Stärke, Bande, Loch.
+
+Außer der Reihe dazwischengeschoben, weil Ronni die Idee selbst hatte:
+
+17b. ✅ Blade Toss — Messer in einen drehenden Holzstamm werfen.
 
 Dazu ausgewählt aus einer zweiten Ideenliste — nach der Frage „was brauchen
 wir am meisten und kostet nicht zu viel Aufwand". Die vier schließen je eine
@@ -889,6 +894,47 @@ Ganzflächige Hell-Dunkel-Wechsel sind grundsätzlich tabu.
 - `--vz` rechnet sich hier aus Spalten mal 3 zu Zeilen mal 4, weil die
   Karten hochkant sind (Verhältnis 3:4) — sonst quetscht `.spielbrett` sie
   zu Quadraten.
+
+## Blade Toss — Besonderheiten
+
+Ronnis eigene Idee: ein Holzstamm von vorn (also die runde Schnittfläche),
+er dreht sich, man wirft von unten Messer hinein. Trifft man ein schon
+steckendes Messer, ist die Runde vorbei. Der Name ist bewusst nicht der des
+bekannten Vorbilds — dieselbe Regel wie bei Pair Up.
+
+- **Steckwinkel statt Koordinaten.** Ein steckendes Messer wird in
+  *Stammkoordinaten* gespeichert (`steck = ANKUNFT − stammwinkel`), nicht
+  als Position. Dadurch dreht es sich von allein mit, die Kollisionsprüfung
+  ist ein simpler Winkelvergleich, und die Anzeige braucht nur **eine**
+  Drehung um den Mittelpunkt statt einer Positionsrechnung je Messer.
+- Winkel 0 zeigt nach rechts und wächst im Uhrzeigersinn, weil y auf dem
+  Bildschirm nach unten wächst. Das Messer kommt immer von unten, trifft
+  also bei `ANKUNFT = π/2`.
+- **Drei Stellschrauben für die Schwierigkeit**, alle aus der Levelnummer:
+  mehr Messer (`messerFuerLevel`, gedeckelt bei 9), schon steckende Messer
+  ab Level 3 (`vorgestecktFuerLevel`, gedeckelt bei 4) und das Drehmuster
+  (`musterFuerLevel`). Bis Level 4 dreht der Stamm gleichmäßig, **ab Level 5
+  wechselt er die Richtung** in unregelmäßigen Abständen — genau das macht
+  das Vorhalten schwer, weil man sich auf keinen Rhythmus mehr verlassen
+  kann. Ein Test prüft für Level 1 bis 40, dass alle Messer eines Levels
+  rechnerisch überhaupt auf den Umfang passen.
+- Der Einschlag prüft **erst den Apfel, dann die Messer**: Ein Treffer
+  zerteilt den Apfel, das Messer fliegt weiter und steckt trotzdem — aber
+  ein Apfel schützt nicht vor einem Messer dahinter. Beides ist getestet.
+- **Eigener Tastatur-Listener statt `useInput`.** `useInput` erkennt ein
+  Antippen erst beim *Loslassen*. Zusammen mit dem `onPointerDown` (das den
+  Wurf im Moment der Berührung auslöst, weil sich alles andere träge
+  anfühlt) käme pro Tipp zweimal ein Wurf an — der zweite, sobald der erste
+  schon eingeschlagen ist. Das kostete jedes Mal ein Messer. Hier gibt es
+  ohnehin nur eine Handlung, die sieben Aktionen von `useInput` werden also
+  nicht gebraucht.
+- Gezeichnet wird **Stamm zuerst, Messer darüber**. Ein erster Versuch legte
+  die Messer unter den Stamm, damit die Klinge „im Holz verschwindet" —
+  dann waren alle Messer unsichtbar, sobald sie nach oben zeigten.
+- Die Logik kennt keine Uhr für den Levelwechsel im engeren Sinne, aber
+  einen `pauseRest`: Nach dem letzten Messer vergeht eine kurze Pause, bevor
+  der neue Stamm kommt. Ohne sie wirft ein noch tippender Finger sofort ins
+  frische Level.
 
 ## Befehle
 
