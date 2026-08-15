@@ -65,6 +65,8 @@ export type Zone = {
   baeume: readonly Baum[];
   laternen: readonly Laterne[];
   sammelstuecke: readonly Sammelstueck[];
+  /** Missionsgegenstände. Liegen nur da, solange die Mission sie braucht. */
+  werkzeuge: readonly Sammelstueck[];
   npcs: readonly NpcPlatz[];
   /** Straßen als Rechtecke — nur zum Zeichnen, sie blockieren nichts. */
   strassen: readonly Kasten[];
@@ -221,6 +223,20 @@ const SAMMELSTUECKE: readonly Sammelstueck[] = [
   { id: 'st-12', x: 19.5, y: 1.1, z: 19.5 },
 ];
 
+/*
+ * Kurts verstreutes Werkzeug.
+ *
+ * **Alle drei liegen dort, wohin die Dialoge zeigen** — zwei hinter den
+ * Hecken (darauf weist Frau Brummel hin), eins am nördlichen Straßenende
+ * (Leos „hinten in den Ecken"). Ein Hinweis, der ins Leere führt, ist
+ * schlimmer als gar keiner: Danach glaubt man keinem mehr.
+ */
+const WERKZEUGE_IN_DER_WELT: readonly Sammelstueck[] = [
+  { id: 'wz-schluessel', x: -20.2, y: 0.7, z: -19 },
+  { id: 'wz-zange', x: 20.2, y: 0.7, z: 19 },
+  { id: 'wz-hammer', x: 0, y: 0.7, z: -19 },
+];
+
 const NPCS: readonly NpcPlatz[] = [
   // Am Gartentor gegenüber vom Spawn — der Erste, den man trifft.
   { id: 'nachbarin', x: -9, z: -5.0, blick: 0 },
@@ -251,6 +267,7 @@ export const WOHNVIERTEL: Zone = {
   baeume: BAEUME,
   laternen: LATERNEN,
   sammelstuecke: SAMMELSTUECKE,
+  werkzeuge: WERKZEUGE_IN_DER_WELT,
   npcs: NPCS,
   strassen: STRASSEN,
 };

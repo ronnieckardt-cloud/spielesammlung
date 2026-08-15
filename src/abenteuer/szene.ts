@@ -36,7 +36,13 @@ const ASPHALT = 0x6b6f77;
 const GEHWEG = 0xc9c6bd;
 
 export type Szene = {
-  zeichnen: (spieler: Spieler, dt: number, eingesammelt: ReadonlySet<string>) => void;
+  zeichnen: (
+    spieler: Spieler,
+    dt: number,
+    eingesammelt: ReadonlySet<string>,
+    werkzeugeDa: ReadonlySet<string>,
+    marker: Readonly<Record<string, string | null>>,
+  ) => void;
   groesseAendern: (breite: number, hoehe: number) => void;
   aufraeumen: () => void;
 };
@@ -246,11 +252,19 @@ export function szeneBauen(leinwand: HTMLCanvasElement, zone: Zone): Szene {
     szene.add(weg);
   }
 
+  /*
+   * Alles, was zwischen Kamera und Figur stehen kann. Wird unten für den
+   * Sichtstrahl gebraucht — Zäune und Mülltonnen sind zu niedrig, um die
+   * Sicht zu nehmen, und bleiben deshalb draußen.
+   */
+  const sichtblocker: THREE.Object3D[] = [];
+
   // --- Häuser ---
   for (const h of zone.haeuser) {
     const wand = new THREE.Mesh(new THREE.BoxGeometry(h.breite, h.hoehe, h.tiefe), toon(h.farbe));
     wand.position.set(h.x, h.hoehe / 2, h.z);
     szene.add(wand);
+    sichtblocker.push(wand);
 
     // Satteldach als flache Pyramide. Vier Seiten, um 45° gedreht, damit
     // die Kanten auf den Hausecken sitzen.
@@ -311,6 +325,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, zone: Zone): Szene {
       laub.position.set(b.x, dy * b.groesse, b.z);
       laub.scale.setScalar(gr * b.groesse * 1.15);
       szene.add(laub);
+      sichtblocker.push(laub);
     }
   }
 
@@ -354,6 +369,60 @@ export function szeneBauen(leinwand: HTMLCanvasElement, zone: Zone): Szene {
     sterne.set(s.id, stern);
   }
 
+  /*
+   * --- Kurts Werkzeug ---
+   *
+   * Bewusst **kein** Stern: Missionsgegenstände müssen sich auf einen Blick
+   * von Sammelkram unterscheiden. Ein rotes Kästchen mit Kontur, deutlich
+   * kleiner und ohne Drehung — es liegt herum, es schwebt nicht.
+   */
+  const werkzeugGeo = new THREE.BoxGeometry(0.42, 0.26, 0.42);
+  const werkzeugStoff = new THREE.MeshToonMaterial({ color: 0xe8452f });
+  const werkzeuge = new Map<string, THREE.Mesh>();
+  for (const w of zone.werkzeuge) {
+    const netz = new THREE.Mesh(werkzeugGeo, werkzeugStoff);
+    netz.position.set(w.x, w.y, w.z);
+    netz.rotation.y = w.x * 0.7;
+    kontur(netz, 1.14);
+    netz.visible = false;
+    szene.add(netz);
+    werkzeuge.set(w.id, netz);
+  }
+
+  /*
+   * --- Missionszeichen über den Köpfen ---
+   *
+   * Ein Schild, das **immer zur Kamera schaut**. Ohne das Nachdrehen wäre
+   * es aus der Seitenansicht ein Strich — und genau dann braucht man es,
+   * wenn man von der Seite kommt.
+   *
+   * Die drei Zeichen sind Formen, keine Farben (`!`, `?`, Haken): dieselbe
+   * Regel wie überall im Projekt.
+   */
+  const markerBilder = new Map<string, THREE.Texture>();
+  for (const zeichen of ['!', '?', '✓']) {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 64;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#ffd23c';
+    g.beginPath();
+    g.arc(32, 32, 27, 0, Math.PI * 2);
+    g.fill();
+    g.lineWidth = 5;
+    g.strokeStyle = '#1a1430';
+    g.stroke();
+    g.fillStyle = '#1a1430';
+    g.font = 'bold 42px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(zeichen, 32, 35);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    markerBilder.set(zeichen, t);
+  }
+  const markerGeo = new THREE.PlaneGeometry(0.7, 0.7);
+
   // --- NPCs ---
   const NPC_FARBEN: Record<string, Parameters<typeof figurBauen>[0]> = {
     nachbarin: { haut: 0xf2c19b, oben: 0xe86a92, unten: 0x51406b, haar: 0xa8452c },
@@ -365,7 +434,16 @@ export function szeneBauen(leinwand: HTMLCanvasElement, zone: Zone): Szene {
     f.gruppe.position.set(n.x, 0, n.z);
     f.gruppe.rotation.y = -n.blick + Math.PI / 2;
     szene.add(f.gruppe);
-    return { platz: n, teile: f };
+
+    const schild = new THREE.Mesh(
+      markerGeo,
+      new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
+    );
+    schild.position.set(n.x, 2.5, n.z);
+    schild.visible = false;
+    szene.add(schild);
+
+    return { platz: n, teile: f, schild };
   });
 
   // --- Der Spieler ---
@@ -392,11 +470,33 @@ export function szeneBauen(leinwand: HTMLCanvasElement, zone: Zone): Szene {
   schatten.rotation.x = -Math.PI / 2;
   szene.add(schatten);
 
+  /*
+   * Der Sichtstrahl von der Figur zur Kamera.
+   *
+   * **Ohne ihn steht irgendwann ein Baum im Bild und die Figur ist weg** —
+   * beim ersten Durchgang auf dem iPhone genau so passiert. Bei einer
+   * Kamera mit fester Richtung ist das kein Randfall, sondern der
+   * Normalfall: Man läuft zwangsläufig hinter Dinge.
+   *
+   * Die Lösung ist die übliche: Trifft der Strahl etwas, rückt die Kamera
+   * bis kurz davor auf. Sie kommt dadurch näher heran, statt durchs Holz zu
+   * schauen — und rückt von allein wieder zurück, sobald die Sicht frei ist.
+   */
+  const strahl = new THREE.Raycaster();
+  const nachKamera = new THREE.Vector3();
+  const vonFigur = new THREE.Vector3();
+
   let laufzeit = 0;
   // Die Kamera folgt gedämpft — hart mitzuziehen wirkt hektisch.
   const kameraZiel = new THREE.Vector3(zone.spawn.x, 1.4, zone.spawn.z);
 
-  const zeichnen = (spieler: Spieler, dt: number, eingesammelt: ReadonlySet<string>) => {
+  const zeichnen = (
+    spieler: Spieler,
+    dt: number,
+    eingesammelt: ReadonlySet<string>,
+    werkzeugeDa: ReadonlySet<string>,
+    markerProNpc: Readonly<Record<string, string | null>>,
+  ) => {
     laufzeit += dt;
 
     // --- Figur ---
@@ -425,7 +525,26 @@ export function szeneBauen(leinwand: HTMLCanvasElement, zone: Zone): Szene {
       const w = Math.sin(laufzeit * 1.6 + i * 2.1) * 0.04;
       n.teile.gruppe.position.y = w;
       n.teile.kopf.rotation.y = Math.sin(laufzeit * 0.8 + i) * 0.25;
+
+      const zeichen = markerProNpc[n.platz.id] ?? null;
+      n.schild.visible = zeichen !== null;
+      if (zeichen) {
+        const bild = markerBilder.get(zeichen);
+        const stoff = n.schild.material as THREE.MeshBasicMaterial;
+        if (bild && stoff.map !== bild) {
+          stoff.map = bild;
+          stoff.needsUpdate = true;
+        }
+        // Auf und ab, damit es auffällt — und immer zur Kamera gedreht.
+        n.schild.position.y = 2.5 + Math.sin(laufzeit * 2.6 + i) * 0.1;
+        n.schild.quaternion.copy(kamera.quaternion);
+      }
     });
+
+    // --- Werkzeug: liegt nur da, solange die Mission es braucht ---
+    for (const [id, netz] of werkzeuge) {
+      netz.visible = werkzeugeDa.has(id);
+    }
 
     // --- Sammelstücke drehen sich und schweben ---
     for (const [id, netz] of sterne) {
@@ -461,6 +580,24 @@ export function szeneBauen(leinwand: HTMLCanvasElement, zone: Zone): Szene {
     kameraZiel.x += (spieler.x - kameraZiel.x) * glaettung;
     kameraZiel.y += (spieler.y + 1.55 - kameraZiel.y) * glaettung;
     kameraZiel.z += (spieler.z - kameraZiel.z) * glaettung;
+
+    // Steht etwas im Weg? Dann bis kurz davor aufrücken.
+    vonFigur.set(spieler.x, spieler.y + 1.3, spieler.z);
+    nachKamera.copy(kamera.position).sub(vonFigur);
+    const weite = nachKamera.length();
+    if (weite > 0.2) {
+      nachKamera.divideScalar(weite);
+      strahl.set(vonFigur, nachKamera);
+      strahl.far = weite;
+      const treffer = strahl.intersectObjects(sichtblocker, false);
+      if (treffer.length > 0) {
+        // Ein halber Meter Abstand zum Hindernis, sonst schaut die Kamera
+        // in die Fläche hinein und man sieht nur noch Grün.
+        const nah = Math.max(1.8, treffer[0]!.distance - 0.5);
+        kamera.position.copy(vonFigur).addScaledVector(nachKamera, nah);
+      }
+    }
+
     kamera.lookAt(kameraZiel);
 
     renderer.render(szene, kamera);

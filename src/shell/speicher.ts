@@ -242,6 +242,28 @@ export function fortschrittSchreiben(stand: Fortschritt): void {
   schreiben(FORTSCHRITT, stand);
 }
 
+// ---------------------------------------------------------------------
+// Florianville
+// ---------------------------------------------------------------------
+
+const ABENTEUER = 'abenteuer';
+
+/**
+ * Der Weltzustand des Abenteuers: gefundene Sterne und Missionsstand.
+ *
+ * Bewusst **roh** als `unknown` durchgereicht. Dieser Ordner ist der
+ * einzige, der `localStorage` anfassen darf — er soll aber nicht wissen
+ * müssen, wie eine Mission aufgebaut ist. Das Prüfen und Zurechtbiegen
+ * macht `abenteuer/mission.ts`, wo die Regeln stehen.
+ */
+export function abenteuerLesen(): unknown {
+  return lesen<unknown>(ABENTEUER, null);
+}
+
+export function abenteuerSchreiben(stand: unknown): void {
+  schreiben(ABENTEUER, stand);
+}
+
 const ZULETZT = 'zuletzt';
 
 /**

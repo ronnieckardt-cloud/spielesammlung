@@ -327,3 +327,28 @@ describe('Zeitschritt', () => {
     expect(Number.isFinite(s.y)).toBe(true);
   });
 });
+
+describe('Missionsgegenstände liegen erreichbar', () => {
+  it('steht kein Werkzeug in einer Wand oder außerhalb der Zone', () => {
+    for (const w of WOHNVIERTEL.werkzeuge) {
+      expect(Math.abs(w.x)).toBeLessThanOrEqual(WOHNVIERTEL.grenze);
+      expect(Math.abs(w.z)).toBeLessThanOrEqual(WOHNVIERTEL.grenze);
+      const geloest = kollisionLoesen(w.x, w.z, FIGUR_RADIUS, KAESTEN);
+      expect(Math.hypot(geloest.x - w.x, geloest.z - w.z)).toBeLessThan(0.01);
+    }
+  });
+
+  it('hat eindeutige Namen, die sich nicht mit Sternen überschneiden', () => {
+    const wz = WOHNVIERTEL.werkzeuge.map((w) => w.id);
+    expect(new Set(wz).size).toBe(wz.length);
+    const sterne = new Set(WOHNVIERTEL.sammelstuecke.map((s) => s.id));
+    for (const id of wz) expect(sterne.has(id)).toBe(false);
+  });
+
+  it('liegt jedes Werkzeug tief genug, um es im Gehen mitzunehmen', () => {
+    for (const w of WOHNVIERTEL.werkzeuge) {
+      const s: Spieler = { ...spielerAmStart(WOHNVIERTEL), x: w.x, z: w.z, y: 0 };
+      expect(eingesammelt(s, [w], new Set())).toEqual([w.id]);
+    }
+  });
+});
