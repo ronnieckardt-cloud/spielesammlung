@@ -1000,6 +1000,70 @@
   animation: podest-hoch var(--zeit-lang) var(--kurve-raus) both;
 }
 
+/* --------------------------------------------------------------------
+   Konfetti über dem Rundenende (siehe core/Feier.tsx)
+   --------------------------------------------------------------------
+   Steigt erst auf und fällt dann — ein Teilchen, das nur nach oben
+   fliegt, sieht aus wie ein Funke, eines mit Umkehrpunkt wie geworfenes
+   Papier. Deshalb `--fy` bei 45 % und der Fall darüber hinaus.
+
+   `translate`/`rotate` als eigene Eigenschaften, nicht als `transform`:
+   So kann das Element daneben noch ein eigenes `transform` tragen, ohne
+   dass sich die beiden gegenseitig überschreiben — dieselbe Überlegung
+   wie bei `.konfetti` in Color Pour. */
+@keyframes feier-flug {
+  0% {
+    opacity: 0;
+    translate: 0 0;
+    rotate: 0deg;
+  }
+  12% {
+    opacity: 1;
+  }
+  45% {
+    translate: calc(var(--fx, 0px) * 0.6) var(--fy, -80px);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: var(--fx, 0px) calc(var(--fy, -80px) * -1.4);
+    rotate: var(--fdreh, 180deg);
+  }
+}
+
+.feier-teil {
+  animation-name: feier-flug;
+  animation-timing-function: cubic-bezier(0.25, 0.5, 0.4, 1);
+  animation-fill-mode: both;
+}
+
+/* --------------------------------------------------------------------
+   Der Spielstart
+   --------------------------------------------------------------------
+   Vorher erschien das Spielfeld schlagartig — der Wechsel vom
+   Startbildschirm ins Spiel war der einzige Moment der App ohne jede
+   Inszenierung, ausgerechnet der wichtigste.
+
+   Die Regel hängt an `.spielbuehne` selbst und wirkt dadurch in **allen
+   zwanzig Spielen**, ohne dass eines davon angefasst wird. Sie läuft auch
+   bei „Nochmal", weil die Bühne dann neu eingehängt wird — und genau dort
+   soll sie laufen: Jede Runde beginnt damit, dass das Brett hereinkommt.
+
+   Kurz gehalten (340 ms) und ohne Verzögerung: Wer auf „Spielen" tippt,
+   will spielen. */
+@keyframes buehne-rein {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+}
+
+.spielbuehne {
+  animation: buehne-rein 340ms var(--kurve-raus) both;
+}
+
 .ruhig .kachel-rein,
 .ruhig .rein-von-oben,
 .ruhig .rein-von-unten,

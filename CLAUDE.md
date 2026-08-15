@@ -1987,6 +1987,60 @@ Fläche liest sich als Fehler. Ein Platzhalter in der Form dessen, was gleich
 kommt (`.schimmer`), liest sich als „gleich da" — und wenn die Daten
 eintreffen, springt nichts, weil die Höhe schon stimmt.
 
+## Feiern, Spielstart, Haptik
+
+Stufe 4 des Qualitäts-Umbaus — der Feinschliff, der „native App" ausmacht.
+
+**Der Spielstart ist inszeniert, ohne dass ein Spiel angefasst wurde.** Der
+Wechsel vom Startbildschirm ins Spiel war der einzige Moment der App ganz
+ohne Übergang — ausgerechnet der wichtigste. Die Regel hängt an
+`.spielbuehne` **selbst** und wirkt dadurch in allen zwanzig Spielen; sie
+läuft auch bei „Nochmal", weil die Bühne dann neu eingehängt wird. 340 ms
+und keine Verzögerung: Wer auf „Spielen" tippt, will spielen.
+
+**Konfetti gibt es bei genau drei Anlässen** (`core/Feier.tsx`): neue Stufe,
+frisch freigeschalteter Erfolg, neue persönliche Bestleistung. Jede Runde zu
+feiern macht das Feiern wertlos — und wer gerade nach drei Sekunden verloren
+hat, mit Konfetti überschüttet zu werden, wirkt sogar hämisch.
+
+Zwei Punkte dazu, die beim Bauen wichtig waren:
+
+- **Es ist nicht das `.konfetti` aus Color Pour.** Das sind SVG-Teilchen
+  (`transform-box: fill-box`) innerhalb einer Zeichnung; hier liegen normale
+  Elemente über einem Dialog. Zwei verschiedene Sachen mit demselben Namen
+  wären schlimmer als zwei Namen.
+- **Die Streuung kommt aus dem Index, nicht aus `Math.random`.** Das ist
+  hier nicht Regeltreue um ihrer selbst willen: React rendert eine
+  Komponente auch mehrfach (im Entwicklungsmodus absichtlich doppelt), und
+  mit Zufall bekäme jedes Teilchen dabei eine neue Flugbahn — das Konfetti
+  spränge mitten im Flug.
+
+`gefeiert` wird aus `ende` **abgeleitet** und nicht im Zustand gemerkt: Platz
+und Duellstand kommen später vom Server nach und setzen `ende` neu; eine
+gespeicherte Marke würde mitkopiert und das Konfetti liefe ein zweites Mal
+los, mitten im schon offenen Dialog.
+
+**Haptik (`core/haptik.ts`) tut auf Florians Geräten nichts — und das steht
+dort auch so.** Safari kennt `navigator.vibrate` nicht, weder auf dem iPhone
+noch auf dem iPad; Apple hat es nie eingebaut. Auf Android funktioniert es.
+Zwanzig Zeilen, die nichts kaputt machen können und dort richtig wirken, wo
+es sie gibt — aber es darf nicht so getan werden, als wäre das Hauptgerät
+gemeint. Drei Anlässe (`ende`, `jubel`, `fehler`), bewusst nicht bei jedem
+Antippen: Das ist die Sorte Aufmerksamkeit, die nach zwei Minuten nur noch
+lästig ist. Kein eigener Schalter — Vibration ist systemweit abschaltbar,
+und zwei Stellen, die dasselbe festlegen, sind genau die Falle aus dem
+Abschnitt „Wenn Animationen einfach weg sind".
+
+**Lade- und Leerzustände** auf der Duell-Seite: ein Gerüst mit `.schimmer`
+in der Form der Liste statt „Wird geladen …", und für „kein Netz" bzw. „noch
+kein Duell" je ein eigener Kasten mit Zeichen, Überschrift und einem Satz,
+der weiterhilft.
+
+*Beim Prüfen fast einen Fehler gemeldet, der keiner war:* Der
+Rundenende-Dialog zeigte kurz **0** Punkte. Das ist die hochzählende Zahl am
+Anfang ihres Laufs (`useHochzaehlen`) — ein Bildschirmfoto trifft sie leicht.
+Wer hier etwas ändert: erst das zweite Foto abwarten.
+
 ## Ausliefern
 
 Läuft auf **Netlify** unter `florian-spielesammlung.netlify.app`. Das ist

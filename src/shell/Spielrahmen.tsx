@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Einstellungen, GameApi } from '../core/types';
 import { sfx } from '../core/sfx';
+import { Feier } from '../core/Feier';
+import { haptik } from '../core/haptik';
 import {
   bestwert,
   ergebnisEintragen,
@@ -274,6 +276,13 @@ export function Spielrahmen({
       );
       fortschrittSchreiben(ausbeute.nachher);
 
+      // Ein Stups im Gerät. Doppelschlag, wenn es etwas zu feiern gab.
+      // Auf iPhone und iPad passiert dabei nichts — Safari kennt die
+      // Schnittstelle nicht, siehe `core/haptik.ts`.
+      haptik(
+        ausbeute.neueStufe !== undefined || ausbeute.neueErfolge.length > 0 ? 'jubel' : 'ende',
+      );
+
       setPunkte(wert);
       setEnde({
         punkte: wert,
@@ -371,6 +380,15 @@ export function Spielrahmen({
   const gezeigtesErgebnis = useHochzaehlen(zaehlZiel, einstellungen.reducedMotion);
 
   /*
+   * Ob diese Runde gefeiert wird. Bewusst hier abgeleitet und nicht in
+   * `beiEnde` festgehalten: Der Platz und der Duellstand kommen später vom
+   * Server nach und setzen `ende` neu — eine im Zustand gespeicherte
+   * Feier-Marke würde dabei mitkopiert und das Konfetti liefe ein zweites
+   * Mal los, mitten im schon offenen Dialog.
+   */
+  const gefeiert = !!ende && (ende.neueStufe !== undefined || ende.neueErfolge.length > 0 || ende.rekord);
+
+  /*
    * Der Jubelton bei drei Sternen.
    *
    * Er kommt **zusätzlich** zum Rundenende-Ton, den jedes Spiel selbst
@@ -460,8 +478,15 @@ export function Spielrahmen({
             // Stufe 1 wird über einem mit `auto` gezeichnet — ganz gleich,
             // was weiter unten im Baum steht. Ohne diese Zeile lag das Brett
             // über dem Rundenende, in **jedem** Spiel mit Bühne.
-            className="dialog-grund-auf absolute inset-0 z-20 grid place-items-center bg-grund/85 p-4 backdrop-blur-sm"
+            className="dialog-grund-auf absolute inset-0 z-20 grid place-items-center overflow-hidden bg-grund/85 p-4 backdrop-blur-sm"
           >
+            {/* Konfetti nur bei den drei Anlässen, die es wert sind: neue
+                Stufe, frischer Erfolg, neue Bestleistung. Bei jeder Runde
+                zu feiern macht das Feiern wertlos — und wer gerade nach
+                drei Sekunden verloren hat, mit Konfetti überschüttet zu
+                werden, wirkt sogar hämisch. */}
+            {gefeiert && <Feier ruhig={einstellungen.reducedMotion} />}
+
             {/* Der Moment, in dem man auf sein Ergebnis schaut — deshalb in
                 der Farbe des Spiels statt im grauen Systemkasten. */}
             <div

@@ -116,13 +116,49 @@ export function DuellSeite({
         )}
 
         {duelle === null ? (
-          <p className="rounded-karte border border-rand bg-flaeche p-6 text-center text-sm text-gedaempft">
-            {laedt ? 'Wird geladen …' : 'Duelle brauchen Internet. Spielen geht trotzdem.'}
-          </p>
+          laedt ? (
+            /* Ein Gerüst in der Form der Liste, die gleich kommt — keine
+               leere Fläche mit einem Wort darauf. Die springt beim
+               Eintreffen der Daten auch nicht, weil die Höhe schon stimmt. */
+            <ul aria-hidden="true" className="flex flex-col gap-2">
+              {[0, 1, 2].map((i) => (
+                <li
+                  key={i}
+                  className="flex items-center gap-3 rounded-2xl border border-white/12 bg-white/[0.06] p-4"
+                >
+                  <span className="schimmer size-10 shrink-0 rounded-xl" />
+                  <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <span className="schimmer h-3.5 w-32 rounded" />
+                    <span className="schimmer h-3 w-20 rounded" />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div
+              className="rounded-2xl border border-white/12 bg-white/[0.06] p-6 text-center"
+              style={{ boxShadow: 'var(--schatten-2)' }}
+            >
+              <p className="text-4xl" aria-hidden="true">
+                📡
+              </p>
+              <h3 className="mt-3 font-black">Duelle brauchen Internet</h3>
+              <p className="mt-1.5 text-sm text-gedaempft">
+                Alles andere geht trotzdem — spiel einfach normal weiter, deine Punkte zählen.
+              </p>
+            </div>
+          )
         ) : sortiert.length === 0 ? (
-          <p className="rounded-karte border border-dashed border-rand p-6 text-center text-sm text-gedaempft">
-            Noch kein Duell. Fordere jemanden heraus!
-          </p>
+          <div className="rounded-2xl border border-dashed border-white/25 p-6 text-center">
+            <p className="text-4xl" aria-hidden="true">
+              ⚔️
+            </p>
+            <h3 className="mt-3 font-black">Noch kein Duell</h3>
+            <p className="mt-1.5 text-sm text-gedaempft">
+              Fordere jemanden heraus: Ihr spielt dasselbe Level, und wer mehr Punkte holt,
+              gewinnt.
+            </p>
+          </div>
         ) : (
           <ul className="flex flex-col gap-2">
             {sortiert.map((d) => (
