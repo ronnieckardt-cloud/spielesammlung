@@ -65,7 +65,12 @@ export function Spielrahmen({
   const beste = bestwert(spiel.id);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
+    <div
+      // Genau eine Bildschirmhöhe, nicht mehr: Ohne feste Höhe wächst der
+      // Rahmen mit seinem Inhalt und schiebt die unterste Reihe aus dem
+      // Bild — bei textlastigen Spielen den Weiter-Knopf.
+      className="mx-auto flex h-dvh min-h-0 w-full max-w-3xl flex-col overflow-hidden"
+    >
       <header
         className="flex items-center gap-3 border-b border-rand px-4 pb-3"
         // Siehe Seite.tsx — Abstand zur Statusleiste bei installierter App auf dem iPhone.
@@ -89,7 +94,7 @@ export function Spielrahmen({
         </p>
       </header>
 
-      <main className="relative flex flex-1 flex-col">
+      <main className="relative flex min-h-0 flex-1 flex-col">
         <Spiel
           key={runde}
           onScore={beiPunkten}

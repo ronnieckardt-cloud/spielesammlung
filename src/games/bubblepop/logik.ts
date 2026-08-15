@@ -13,7 +13,11 @@
 import { schritt } from '../../core/rng';
 
 export const SPALTEN = 8;
-export const ZEILEN = 12;
+/* Zehn statt zwölf Zeilen: Bei zwölf war das Feld so hoch, dass es auf dem
+   Handy nur noch schmal in die Bildmitte passte, mit viel totem Rand links
+   und rechts. Unter den fünf Startzeilen bleiben immer noch fünf Zeilen
+   Anflug — genug zum Zielen. */
+export const ZEILEN = 10;
 /** So viele Zeilen sind zu Beginn gefüllt. */
 export const START_ZEILEN = 5;
 /** Ab dieser Gruppengröße platzt eine Gruppe. */

@@ -59,17 +59,22 @@ export function Steuerkreuz({
       onPointerLeave={loslassen}
       onPointerCancel={loslassen}
       onContextMenu={(e) => e.preventDefault()}
-      className="spielknopf grid size-18 touch-none select-none place-items-center rounded-xl border border-rand bg-flaeche text-4xl active:bg-flaeche-hoch disabled:opacity-40 transition-transform active:scale-95"
+      // Ohne Kasten drumherum: Der Rahmen brauchte Platz und Aufmerksamkeit,
+      // ohne etwas zu erklären — der Pfeil allein ist eindeutig. Die
+      // Trefffläche bleibt mit 48 Pixeln über Apples Mindestmaß, das Kreuz
+      // ist dadurch aber rund 80 Pixel flacher. Bei Ghost Chase war es
+      // vorher höher als das Labyrinth selbst.
+      className="grid size-12 touch-none select-none place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
     >
       <span aria-hidden="true">{symbol}</span>
     </button>
   );
 
-  const platz = <div className="size-18" aria-hidden="true" />;
+  const platz = <div className="size-12" aria-hidden="true" />;
 
   return (
     <div
-      className="grid grid-cols-3 grid-rows-3 gap-2"
+      className="grid grid-cols-3 grid-rows-3 gap-0.5"
       style={{ touchAction: 'none' }}
       role="group"
       aria-label="Steuerkreuz"

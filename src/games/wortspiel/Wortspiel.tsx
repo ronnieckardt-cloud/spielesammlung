@@ -53,7 +53,7 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
   const beantwortet = z.ausgewaehlt !== null;
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-4">
+    <div className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3">
       <div className="flex w-full max-w-md items-center justify-between gap-2 text-sm">
         <div className="flex items-center gap-1 font-semibold text-gedaempft">
           <button
@@ -94,6 +94,9 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
         />
       </div>
 
+      {/* Nur dieser Teil scrollt, wenn der Inhalt lang wird — der
+          Weiter-Knopf darunter bleibt dadurch immer erreichbar. */}
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto">
       <div className="w-full max-w-md rounded-karte border border-rand bg-flaeche p-5 text-center">
         <span className="text-xs font-medium tracking-wide text-gedaempft uppercase">{wort.kategorie}</span>
         <p className="mt-2 text-lg font-semibold">Welches Wort ist richtig geschrieben?</p>
@@ -147,6 +150,8 @@ export function Wortspiel({ onScore, onGameOver, settings }: GameProps) {
           <span aria-hidden="true">💡</span> {wort.regel}
         </div>
       )}
+
+      </div>
 
       {beantwortet && !z.vorbei && (
         <button

@@ -145,7 +145,7 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-4">
+    <div className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3">
       <div className="flex w-full max-w-md items-center justify-between gap-2 text-sm">
         <div className="flex items-center gap-1 font-semibold text-gedaempft">
           <button
@@ -168,7 +168,7 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
           </button>
         </div>
         <span className="text-gedaempft">
-          Frage {z.index + 1} / {z.fragen.length}
+          {z.index + 1}/{z.fragen.length} · richtig {z.richtigeAnzahl}
         </span>
       </div>
 
@@ -186,6 +186,9 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
         />
       </div>
 
+      {/* Nur dieser Teil scrollt, wenn eine Frage lang ist — der
+          Weiter-Knopf darunter bleibt dadurch immer erreichbar. */}
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto">
       <div className="w-full max-w-md rounded-karte border border-rand bg-flaeche p-5">
         <span className="text-xs font-medium tracking-wide text-gedaempft uppercase">
           {frage.kategorie}
@@ -242,6 +245,8 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
         </div>
       )}
 
+      </div>
+
       {beantwortet && !z.vorbei && (
         <button
           type="button"
@@ -253,8 +258,6 @@ export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }
           Weiter
         </button>
       )}
-
-      <p className="text-sm text-gedaempft">Richtig beantwortet: {z.richtigeAnzahl}</p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}
     </div>

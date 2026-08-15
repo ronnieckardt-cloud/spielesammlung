@@ -215,24 +215,24 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
 
       </div>
 
-      <div className="grid grid-cols-3 gap-2" role="group" aria-label="Steuerung">
-        <span />
+      <div className="grid grid-cols-3 gap-0.5" role="group" aria-label="Steuerung">
+        <div className="size-12" aria-hidden="true" />
         <button
           type="button"
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'hoch'))}
           disabled={z.vorbei}
           aria-label="Nach oben"
-          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
         >
           <span aria-hidden="true">↑</span>
         </button>
-        <span />
+        <div className="size-12" aria-hidden="true" />
         <button
           type="button"
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'links'))}
           disabled={z.vorbei}
           aria-label="Nach links"
-          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
         >
           <span aria-hidden="true">←</span>
         </button>
@@ -241,7 +241,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'runter'))}
           disabled={z.vorbei}
           aria-label="Nach unten"
-          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
         >
           <span aria-hidden="true">↓</span>
         </button>
@@ -250,7 +250,7 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           onClick={() => setZ((alt) => richtungWaehlen(alt, 'rechts'))}
           disabled={z.vorbei}
           aria-label="Nach rechts"
-          className="spielknopf rounded-lg border border-rand bg-flaeche px-5 py-3 disabled:opacity-30 transition-transform active:scale-95"
+          className="grid size-12 place-items-center text-3xl text-text/80 transition-transform active:scale-90 active:text-text disabled:opacity-30"
         >
           <span aria-hidden="true">→</span>
         </button>
