@@ -1,5 +1,25 @@
+import type { CSSProperties } from 'react';
 import { spiele } from '../core/registry';
 import { bestwert } from './speicher';
+
+/**
+ * Schwebende Farbflecken im Hintergrund der Startseite — feste Liste, rein
+ * dekorativ, deutlich unschärfer/blasser als bei den Startbildschirmen der
+ * einzelnen Spiele, damit sie nicht mit den Kacheln konkurrieren. Gleiches
+ * Muster wie dort (`.block-schweben` in index.css).
+ */
+const DEKO_FLECKEN: readonly {
+  x: number;
+  y: number;
+  groesse: number;
+  farbe: string;
+  verzoegerung: number;
+}[] = [
+  { x: 6, y: 8, groesse: 90, farbe: '#f472b6', verzoegerung: 0 },
+  { x: 88, y: 6, groesse: 70, farbe: '#38bdf8', verzoegerung: 0.8 },
+  { x: 92, y: 60, groesse: 100, farbe: '#facc15', verzoegerung: 1.4 },
+  { x: 4, y: 70, groesse: 80, farbe: '#2dd4bf', verzoegerung: 0.4 },
+];
 
 /** Die Startseite: eine Kachel je Spiel. */
 export function Kachelmenue({
@@ -13,69 +33,99 @@ export function Kachelmenue({
 }) {
   return (
     <div
-      className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-6"
-      // Siehe Seite.tsx — Abstand zur Statusleiste bei installierter App auf dem iPhone.
-      style={{ paddingTop: 'calc(1.5rem + env(safe-area-inset-top))' }}
+      className="relative flex flex-1 flex-col overflow-hidden"
+      style={{ background: 'linear-gradient(165deg, #1e1b4b 0%, #4338ca 30%, #7c3aed 60%, #db2777 100%)' }}
     >
-      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Spielesammlung</h1>
-          <p className="text-sm text-gedaempft">Läuft auch ohne Internet.</p>
-        </div>
-        <nav className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onBestenliste}
-            className="rounded-lg border border-rand bg-flaeche px-3 py-2 text-sm hover:bg-flaeche-hoch"
-          >
-            Bestenliste
-          </button>
-          <button
-            type="button"
-            onClick={onEinstellungen}
-            className="rounded-lg border border-rand bg-flaeche px-3 py-2 text-sm hover:bg-flaeche-hoch"
-          >
-            Einstellungen
-          </button>
-        </nav>
-      </header>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        {DEKO_FLECKEN.map((f, i) => (
+          <span
+            key={i}
+            className="block-schweben absolute rounded-full opacity-20 blur-2xl"
+            style={
+              {
+                left: `${f.x}%`,
+                top: `${f.y}%`,
+                width: f.groesse,
+                height: f.groesse,
+                backgroundColor: f.farbe,
+                animationDelay: `${f.verzoegerung}s`,
+                '--grundwinkel': '0deg',
+              } as CSSProperties
+            }
+          />
+        ))}
+      </div>
 
-      {/* Icon-Kacheln wie kleine App-Symbole vom Handy-Startbildschirm —
-          feste, kleinere Größe statt sich über Grid-Spalten an die
-          Bildschirmbreite anzupassen (Rückmeldung: wirkten zu groß, sollen
-          so wirken wie normale App-Symbole auf dem Handy). Farbverlauf
-          statt Volltonfarbe, Name als kleine, zweizeilig umbrechende
-          Beschriftung darunter. */}
-      <ul className="flex flex-wrap gap-x-5 gap-y-4">
-        {spiele.map((spiel) => {
-          const beste = bestwert(spiel.id);
-          const Icon = spiel.Icon;
-          return (
-            <li key={spiel.id} className="flex w-20 flex-col items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => onSpielen(spiel.id)}
-                aria-label={`${spiel.title} — ${beste > 0 ? `beste Punktzahl ${beste}` : 'noch nicht gespielt'}`}
-                style={{
-                  background: `linear-gradient(150deg, color-mix(in srgb, ${spiel.accent} 100%, white 30%), ${spiel.accent} 55%, color-mix(in srgb, ${spiel.accent} 100%, black 22%))`,
-                  boxShadow: `0 6px 16px -6px color-mix(in srgb, ${spiel.accent} 70%, transparent)`,
-                }}
-                className="grid size-16 place-items-center rounded-2xl text-white transition-transform active:scale-95"
-              >
-                <Icon className="size-7 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />
-              </button>
-              <span className="w-full text-center text-[11px] leading-tight font-medium text-gedaempft">
-                {spiel.title}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      <div
+        className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-6"
+        // Siehe Seite.tsx — Abstand zur Statusleiste bei installierter App auf dem iPhone.
+        style={{ paddingTop: 'calc(1.5rem + env(safe-area-inset-top))' }}
+      >
+        <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1
+              className="text-3xl font-black tracking-tight text-white"
+              style={{ textShadow: '0 3px 0 rgba(0,0,0,0.2), 0 8px 20px rgba(0,0,0,0.3)' }}
+            >
+              Spielesammlung
+            </h1>
+            <p className="text-sm text-white/75">Läuft auch ohne Internet.</p>
+          </div>
+          <nav className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onBestenliste}
+              className="rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-sm text-white backdrop-blur-sm hover:bg-white/25"
+            >
+              Bestenliste
+            </button>
+            <button
+              type="button"
+              onClick={onEinstellungen}
+              className="rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-sm text-white backdrop-blur-sm hover:bg-white/25"
+            >
+              Einstellungen
+            </button>
+          </nav>
+        </header>
 
-      <p className="mt-8 text-xs text-gedaempft">
-        Tastatur: Pfeiltasten oder WASD bewegen, X dreht, Leertaste lässt fallen, Eingabetaste
-        wählt. Am Handy: wischen und tippen.
-      </p>
+        {/* Icon-Kacheln wie kleine App-Symbole vom Handy-Startbildschirm —
+            feste, kleinere Größe statt sich über Grid-Spalten an die
+            Bildschirmbreite anzupassen (Rückmeldung: wirkten zu groß, sollen
+            so wirken wie normale App-Symbole auf dem Handy). Auf einer
+            eigenen, mattierten Karte statt direkt auf dem Verlauf — wirkt
+            wie ein Spiele-Regal, nicht wie lose verstreute Symbole. */}
+        <ul className="flex flex-wrap gap-x-5 gap-y-4 rounded-3xl border border-white/15 bg-white/10 p-5 shadow-2xl backdrop-blur-sm">
+          {spiele.map((spiel) => {
+            const beste = bestwert(spiel.id);
+            const Icon = spiel.Icon;
+            return (
+              <li key={spiel.id} className="flex w-20 flex-col items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onSpielen(spiel.id)}
+                  aria-label={`${spiel.title} — ${beste > 0 ? `beste Punktzahl ${beste}` : 'noch nicht gespielt'}`}
+                  style={{
+                    background: `linear-gradient(150deg, color-mix(in srgb, ${spiel.accent} 100%, white 30%), ${spiel.accent} 55%, color-mix(in srgb, ${spiel.accent} 100%, black 22%))`,
+                    boxShadow: `0 6px 16px -6px color-mix(in srgb, ${spiel.accent} 70%, transparent)`,
+                  }}
+                  className="grid size-16 place-items-center rounded-2xl text-white transition-transform active:scale-95"
+                >
+                  <Icon className="size-7 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />
+                </button>
+                <span className="w-full text-center text-[11px] leading-tight font-medium text-white/90">
+                  {spiel.title}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+
+        <p className="mt-8 text-xs text-white/70">
+          Tastatur: Pfeiltasten oder WASD bewegen, X dreht, Leertaste lässt fallen, Eingabetaste
+          wählt. Am Handy: wischen und tippen.
+        </p>
+      </div>
     </div>
   );
 }

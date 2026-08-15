@@ -144,8 +144,10 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
   );
 }
 
-export function Farbsortierer({ onScore, onGameOver, bestScore }: GameProps) {
-  const [gestartet, setGestartet] = useState(false);
+export function Farbsortierer({ onScore, onGameOver, bestScore, istErsteRunde }: GameProps) {
+  // Nach „Nochmal" (= nächstes Level) direkt weiterspielen statt wieder
+  // über den Startbildschirm zu gehen — der gehört nur ans Betreten.
+  const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
   const [guss, setGuss] = useState<Guss | null>(null);
 
@@ -258,7 +260,9 @@ export function Farbsortierer({ onScore, onGameOver, bestScore }: GameProps) {
   const wackeln = guss ? Math.sin(guss.t * 46) * 2 : 0;
 
   if (!gestartet) {
-    return <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />;
+    return (
+      <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />
+    );
   }
 
   return (

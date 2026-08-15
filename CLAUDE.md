@@ -55,6 +55,7 @@ type GameProps = {
   onExit: () => void;
   settings: { sound: boolean; reducedMotion: boolean };
   bestScore: number;  // bisherige Bestleistung, schreibgeschützt, 0 = noch nie gespielt
+  istErsteRunde: boolean;  // false nach „Nochmal" — Startbildschirm dann überspringen
 };
 ```
 
@@ -66,6 +67,14 @@ dann „🎉 Gewonnen!" statt „Vorbei" im Rundenende-Bildschirm.
 jedem Rendern gelesen) — kein Zugriff aufs Storage selbst, nur diese eine
 Zahl. Gedacht für einen eigenen Startbildschirm wie bei Block Burst
 („Beste Punktzahl: X" anzeigen, ohne die Bestenliste-Regel zu brechen).
+
+`istErsteRunde` ist `runde === 0` aus `Spielrahmen.tsx`. „Nochmal" mountet
+das Spiel per `key={runde}` komplett neu (frischer Zustand, gewollt) — ohne
+diese Zusatzinfo kann ein Spiel nicht unterscheiden, ob es gerade betreten
+oder nur neu gestartet wurde, und zeigt dann nach jeder Runde wieder seinen
+Startbildschirm. Spiele mit Startbildschirm machen deshalb
+`useState(!istErsteRunde)`. Zurück ins Menü und erneut hinein setzt `runde`
+zurück auf 0, der Startbildschirm kommt also wie gewünscht wieder.
 
 **Ein Spiel darf nie direkt auf Bestenliste, Router oder Browser-Speicher
 zugreifen — immer nur über diese Props.** Konkret heißt das: in
@@ -155,6 +164,17 @@ aussehen, nicht wie Kacheln, die die volle Breite ausfüllen. Der Name steht
 in einer eigenen, etwas breiteren Box (`w-20`) und darf bei Bedarf
 zweizeilig umbrechen (`leading-tight`, kein `truncate`) — sonst wurden
 längere Namen wie „Gehirnjogging" oder „Ghost Chase" abgeschnitten.
+
+Die Startseite selbst (`Kachelmenue.tsx`) liegt auf einem eigenen,
+kräftigen Farbverlauf (Indigo→Violett→Pink) mit vier großen, sehr weichen
+Farbflecken (`DEKO_FLECKEN`, stark `blur`, `opacity-20`) — sie sollen den
+Hintergrund beleben, aber nie mit den Kacheln konkurrieren. Die Kacheln
+sitzen auf einer mattierten Karte (`bg-white/10 backdrop-blur-sm`), damit
+es wie ein Spiele-Regal wirkt statt wie lose verstreute Symbole. Kopfzeile
+und Beschriftungen sind entsprechend auf Weiß-Töne umgestellt (nicht mehr
+`text-gedaempft`, das ist für dunklen Grund gedacht). Ausdrücklicher
+Wunsch: Nicht nur die Startbildschirme der einzelnen Spiele, sondern
+gerade die Startseite soll nach „richtigem Spiel" aussehen.
 
 Ausnahme auf ausdrücklichen Wunsch: Die Spielfigur in Sternenfang
 (`games/platzhalter/Platzhalter.tsx`, Komponente `KatzenGesicht`) ist

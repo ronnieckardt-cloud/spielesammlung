@@ -143,8 +143,10 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
   );
 }
 
-export function Reihenfall({ onScore, onGameOver, settings, bestScore }: GameProps) {
-  const [gestartet, setGestartet] = useState(false);
+export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+  // Nach „Nochmal" direkt weiterspielen statt wieder über den
+  // Startbildschirm zu gehen — der gehört nur ans Betreten des Spiels.
+  const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesSpiel(saatAus('reihenfall', Date.now())));
   const feldRef = useRef<HTMLDivElement>(null);
   const zeilenVorherRef = useRef(0);
@@ -224,7 +226,9 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore }: GamePro
   );
 
   if (!gestartet) {
-    return <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />;
+    return (
+      <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />
+    );
   }
 
   return (

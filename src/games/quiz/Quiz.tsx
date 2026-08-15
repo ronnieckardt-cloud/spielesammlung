@@ -97,8 +97,10 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
   );
 }
 
-export function Quiz({ onScore, onGameOver, settings, bestScore }: GameProps) {
-  const [gestartet, setGestartet] = useState(false);
+export function Quiz({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
+  // Nach „Nochmal" (= nächstes Level) direkt weiterspielen statt wieder
+  // über den Startbildschirm zu gehen — der gehört nur ans Betreten.
+  const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesLevel(naechsteLevelNummer));
 
   useEffect(() => {
@@ -137,7 +139,9 @@ export function Quiz({ onScore, onGameOver, settings, bestScore }: GameProps) {
   const beantwortet = z.ausgewaehlt !== null;
 
   if (!gestartet) {
-    return <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />;
+    return (
+      <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />
+    );
   }
 
   return (

@@ -97,6 +97,7 @@ export function Spielrahmen({
           onExit={onExit}
           settings={einstellungen}
           bestScore={beste}
+          istErsteRunde={runde === 0}
         />
 
         {ende && (

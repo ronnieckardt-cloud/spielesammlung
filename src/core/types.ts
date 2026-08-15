@@ -29,6 +29,12 @@ export type GameProps = {
    * einen eigenen Startbildschirm. Kein Zugriff auf die Bestenliste selbst,
    * nur diese eine Zahl. 0, wenn noch nie gespielt. */
   bestScore: number;
+  /** Ob dies die erste Runde seit dem Betreten des Spiels ist. Bei
+   * „Nochmal" mountet die Hülle das Spiel komplett neu (frischer Zustand),
+   * meldet hier aber `false` — Spiele mit eigenem Startbildschirm können
+   * ihn dann überspringen und direkt weiterspielen lassen. Zurück ins Menü
+   * und erneut hinein ergibt wieder `true`. */
+  istErsteRunde: boolean;
 };
 
 export type GameApi = {
