@@ -245,13 +245,20 @@ export function Blockblitz({ onScore, onGameOver, settings }: GameProps) {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4">
+    <div
+      className="flex flex-1 flex-col items-center gap-3 overflow-y-auto p-4"
+      // Extra Luft unten, über die reine Geräte-Aussparung hinaus: Safaris
+      // eigene (schwebende) Adressleiste liegt am unteren Rand über der
+      // Seite, ohne dass CSS ihre Höhe kennt — ohne diesen Puffer landet das
+      // Tablett dahinter und Antippen trifft die Browserleiste statt das Spiel.
+      style={{ paddingBottom: 'max(2.5rem, calc(env(safe-area-inset-bottom) + 2rem))' }}
+    >
       <div className="flex flex-col items-center gap-1">
         <output
           key={z.punkte}
           aria-live="polite"
           aria-label={`${z.punkte} Punkte`}
-          className="punkte-bumsen text-6xl leading-none font-extrabold tabular-nums text-white"
+          className="punkte-bumsen text-5xl leading-none font-extrabold tabular-nums text-white sm:text-6xl"
           style={{ textShadow: '0 2px 16px rgba(0,0,0,0.55)' }}
         >
           {z.punkte}
