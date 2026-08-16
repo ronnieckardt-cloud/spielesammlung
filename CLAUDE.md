@@ -3104,6 +3104,43 @@ Eingabemodell. Ein Bot mit Fähigkeiten, die der echte Spieler strukturell
 nicht hat (hier: Analogsteuerung statt Tastendruck, Reaktion ohne
 Verzögerung), beweist Spielbarkeit für einen Spieler, den es nicht gibt.
 
+### Game-Feel-Runde: weiche Lehnen-Rampe, Landungs-Haptik
+
+Auftrag: Steuerung soll sich weicher anfühlen, ohne die Physik-Grundstruktur
+umzubauen, und Landungen sollen spürbarer sein.
+
+- **`lehnen` läuft jetzt über eine Rampe in `FlowMtb.tsx`**, nicht mehr
+  direkt von Taste/Knopf in `takt()`. Ein neues Ref (`lehnenZielRef`) hält
+  das eigentliche Ziel (weiterhin binär, −1/0/1 — die Eingabe selbst bleibt
+  ein Schalter, siehe `NATUR_NICKEN_VERZOEGERUNG`); der tatsächliche
+  `eingabeRef.current.lehnen`-Wert nähert sich diesem Ziel jedes Bild ein
+  Stück an (volle Auslenkung in `RAMPZEIT` = 0,1 s). `takt()` selbst
+  bekommt dadurch **nie** einen Sprung mehr zu sehen, nur eine stetig
+  veränderliche Zahl — dieselbe Eingabeform, die der Fairness-Bot in
+  `logik.test.ts` ohnehin schon nutzt. `logik.ts` musste dafür nicht
+  angefasst werden.
+- **Die Rampe kostet spürbar Reaktionsgeschwindigkeit**, gemessen am
+  selben realistischen Bot-Modell wie oben (binär + Reaktionsverzögerung),
+  jetzt zusätzlich mit derselben 0,1-s-Rampe wie die echte UI: Bei den
+  alten Werten (`LUFT_DREHUNG=10`, `NATUR_NICKEN=8`) fiel die Erfolgsquote
+  streckenweise auf 3–4 von 10. **`LUFT_DREHUNG` auf 9, `NATUR_NICKEN` auf
+  7 gesenkt** (beide um denselben Betrag, derselbe Sicherheitsabstand wie
+  vorher) gleicht das wieder aus, ohne die Fairness-Garantie (aktiver Bot
+  10/10) oder die Mehrheit-scheitert-Anforderung (passiv 5/10) zu
+  gefährden. `LUFT_DREHUNG=9 > NATUR_NICKEN=7` bleibt dabei zwingend nötig
+  — sonst reißt „dreht das Rad in der Luft, wenn man lehnt".
+- **Landungs-Haptik:** `core/haptik.ts` bekam drei neue, Flow-MTB-eigene
+  Anlässe (`perfekt`/`gut`/`hart`, 8/14/30 ms) zusätzlich zu den
+  ursprünglichen drei projektweiten (`ende`/`jubel`/`fehler`, die andere
+  Spiele unverändert weiternutzen). `FlowMtb.tsx` löst sie beim Wechsel
+  der Landungsart aus — Landungen sind bereits diskrete Ereignisse (nicht
+  jedes Bild), das reicht als Drosselung, ohne extra Cooldown.
+- **Dezenter visueller Impact:** ein sehr kurzer (~150 ms), sehr
+  schwacher (12 % Deckkraft) weißer Vollbild-Blitz in `zeichnen.ts` bei
+  einer perfekten Landung — das optische Gegenstück zum bestehenden
+  Kamera-Wackeln bei harten Landungen. Bewusst **kein Text**, siehe oben
+  (Ronni: „PERFEKT!" wurde ausdrücklich entfernt, das bleibt so).
+
 ## Befehle
 
 ```bash

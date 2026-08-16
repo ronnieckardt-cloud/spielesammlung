@@ -1,5 +1,5 @@
 import { ANLAUF, bodenHoehe, bodenSteigung } from './logik';
-import type { Lauf } from './logik';
+import type { Landung, Lauf } from './logik';
 
 /**
  * Flow MTB — die Darstellung. **Enthält keine einzige Spielregel.**
@@ -192,6 +192,17 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   let radDrehung = 0;
   /** Für die Federung: die senkrechte Geschwindigkeit des letzten Bildes. */
   let vyVorher = 0;
+  /**
+   * Kurzer, sehr dezenter Lichtblitz bei einer perfekten Landung — das
+   * optische Gegenstück zum Kamera-Wackeln oben: Das Wackeln sagt „harter
+   * Einschlag", der Blitz sagt „genau richtig gemacht". Bewusst kein Text
+   * (siehe `FlowMtb.tsx`, „PERFEKT!" wurde ausdrücklich entfernt) — nur
+   * ein kaum wahrnehmbares Aufhellen des ganzen Bildes, das binnen eines
+   * Wimpernschlags wieder verschwindet.
+   */
+  let blitzStaerke = 0;
+  /** Für die Blitz-Erkennung: die Landungsart des letzten Bildes. */
+  let landungVorher: Landung | null = null;
 
   const groesseAendern = (b: number, h: number) => {
     // Bildpunktzahl deckeln — dieselbe Vorsicht wie bei Dash City, ein
@@ -255,10 +266,19 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       // normalen Aufsetzen — sonst zittert das Bild ständig mit.
       if (kraft > 0.35) schuettelStaerke = Math.min(1, schuettelStaerke + kraft);
     }
+    // Lichtblitz beim Wechsel auf eine perfekte Landung auslösen — nur
+    // beim Wechsel, sonst bliebe er die ganze Landungsanzeige über an.
+    if (lauf.letzteLandung === 'perfekt' && landungVorher !== 'perfekt') {
+      blitzStaerke = 1;
+    }
+    landungVorher = lauf.letzteLandung;
+
     // Zurückfedern bzw. Ausklingen.
     federVorn = Math.max(0, federVorn - dt * 3.4);
     federHinten = Math.max(0, federHinten - dt * 3.1);
     schuettelStaerke = Math.max(0, schuettelStaerke - dt * 5);
+    // Schnell ausklingend — rund 150 ms, ein Wimpernschlag, kein Dauerglühen.
+    blitzStaerke = Math.max(0, blitzStaerke - dt * 6.5);
     // Zufällig statt gerichtet — reines Bildschirm-Zittern, keine
     // Spielregel, deshalb ist `Math.random()` hier genau richtig
     // (anders als im Gelände, das aus der Saat kommen muss).
@@ -509,6 +529,14 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       federHinten,
       radDrehung,
     });
+
+    // --- Lichtblitz bei perfekter Landung, ganz zum Schluss ---------
+    // In Bildschirmkoordinaten (nicht Weltkoordinaten) — er soll das
+    // ganze Bild gleichmäßig aufhellen, nicht mit der Kamera mitwandern.
+    if (blitzStaerke > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${(blitzStaerke * 0.12).toFixed(3)})`;
+      ctx.fillRect(0, 0, breite, hoehe);
+    }
   };
 
   return { zeichnen, groesseAendern };

@@ -23,11 +23,18 @@
  */
 
 /**
- * Die drei Anlässe — bewusst nicht mehr.
+ * Wenige, bewusst gewählte Anlässe — kein Stups bei jeder Kleinigkeit.
  *
  * Ein Stups bei **jedem** Antippen wäre auf einem Handy nach zwei Minuten
  * nur noch lästig; genau daran erkennt man Apps, die es übertreiben. Hier
  * gibt es ihn nur, wenn wirklich etwas passiert ist.
+ *
+ * **`perfekt`/`gut`/`hart` kamen für Flow MTBs Landungsgefühl dazu** —
+ * dort ist eine Landung ein eigenes, diskretes Ereignis (nicht jedes
+ * Bild, nur beim Wechsel), und drei kurze, unterschiedlich lange Stupse
+ * lassen sich auch bei einer schnellen Kicker-Kette noch als „mehrere
+ * Landungen" statt als „ein Dauerbrummen" fühlen. Andere Spiele nutzen
+ * weiterhin nur die ursprünglichen drei.
  */
 type Anlass =
   /** Eine Runde ist vorbei. Ein einzelner kurzer Stups. */
@@ -35,13 +42,22 @@ type Anlass =
   /** Neue Stufe oder Erfolg. Doppelschlag — hörbar anders als „ende". */
   | 'jubel'
   /** Etwas ging nicht (belegtes Feld, ungültiger Zug). Sehr kurz. */
-  | 'fehler';
+  | 'fehler'
+  /** Perfekte Landung (Flow MTB). Der kürzeste, leichteste Stups. */
+  | 'perfekt'
+  /** Gute Landung (Flow MTB). Etwas spürbarer als „perfekt". */
+  | 'gut'
+  /** Harte Landung (Flow MTB) — knapp kein Sturz. Ein deutlicher Ruck. */
+  | 'hart';
 
 /** Millisekunden: Zahl = Stups, Liste = Wechsel aus Stups und Pause. */
 const MUSTER: Record<Anlass, number | number[]> = {
   ende: 18,
   jubel: [16, 60, 26],
   fehler: 10,
+  perfekt: 8,
+  gut: 14,
+  hart: 30,
 };
 
 export function haptik(anlass: Anlass): void {
