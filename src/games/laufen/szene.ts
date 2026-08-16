@@ -391,7 +391,16 @@ function figurBauen(): Figur {
   const oberarmGeo = new THREE.CapsuleGeometry(0.078, 0.1, 4, 12);
   const ellbogenGeo = new THREE.SphereGeometry(0.08, 10, 8);
   const unterarmGeo = new THREE.CapsuleGeometry(0.072, 0.12, 4, 12);
-  const handGeo = new THREE.SphereGeometry(0.092, 12, 10);
+  /*
+   * **Eine ordentliche Hand statt einer Kugel am Handgelenk.** Rückmeldung:
+   * „kannst Du auch ordentliche Hände dranmachen?" Eine reine Kugel liest
+   * sich als Murmel, an der der Arm zufällig endet — keine echten Finger
+   * (zu viele Dreiecke für eine Figur aus Grundkörpern), aber eine leicht
+   * gestauchte Faustform plus ein kleiner Daumen brechen die Kugel-
+   * Silhouette und machen daraus erkennbar eine Hand, kein Anhängsel.
+   */
+  const handGeo = new THREE.SphereGeometry(0.095, 12, 10);
+  const daumenGeo = new THREE.SphereGeometry(0.034, 8, 6);
   const oberschenkelGeo = new THREE.CylinderGeometry(0.118, 0.1, 0.28, 14);
   const knieGeo = new THREE.SphereGeometry(0.1, 12, 10);
   const unterschenkelGeo = new THREE.CylinderGeometry(0.098, 0.082, 0.16, 14);
@@ -428,9 +437,19 @@ function figurBauen(): Figur {
     const unterarm = new THREE.Mesh(unterarmGeo, mHaut);
     unterarm.position.y = -0.1;
     ellbogen.add(unterarm);
+    // Leicht gestaucht wie eine lockere Faust, nicht rund wie ein Ball.
     const hand = new THREE.Mesh(handGeo, mHaut);
+    hand.scale.set(0.88, 0.8, 1.05);
     hand.position.y = -0.22;
     ellbogen.add(hand);
+    // Der Daumen sitzt seitlich **auf der Dreh-Achse** des Ellbogens (x),
+    // nicht in Lauf- oder Höhenrichtung — nur so bleibt er an derselben
+    // Stelle der Hand sichtbar, ganz gleich, wie weit der Arm gerade
+    // ein- oder ausschwingt. `-seite`, weil der Daumen nach innen zeigt,
+    // zum Körper hin, wie bei einer echten hängenden Hand.
+    const daumen = new THREE.Mesh(daumenGeo, mHaut);
+    daumen.position.set(-seite * 0.075, -0.185, 0.025);
+    ellbogen.add(daumen);
     gruppe.add(schulter);
     return { schulter, ellbogen };
   };
