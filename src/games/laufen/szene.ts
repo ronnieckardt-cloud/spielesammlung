@@ -977,14 +977,43 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   /*
    * Zwei eigene Formen statt zweier Farben derselben Form: Bei Tempo 20
    * bleibt keine Zeit, eine Beschriftung zu lesen — die Silhouette muss
-   * allein sagen, was man da einsammelt. Turbo ist ein Pfeil (spitz, nach
-   * vorn gerichtet — „schneller"), Sprungschub ein Diamant (nach oben
-   * gestreckt — „höher"). Jeder Vorratsplatz trägt beide Formen und
-   * zeigt per Sichtbarkeit nur die passende, genau wie bei den
-   * Hindernissen mit ihren drei Bauarten.
+   * allein sagen, was man da einsammelt.
+   *
+   * Beide Formen standen erst als Kegel (Turbo) und Diamant (Sprung) da —
+   * Rückmeldung: „da passt die Form ja nicht dazu." Ronni bekam daraufhin
+   * je drei Vorschläge gezeigt (Blitz/Doppelpfeil/Rakete bzw.
+   * Aufwärtspfeil/Doppelpfeil/Flügel) und sich für **Blitz** und
+   * **Aufwärtspfeil** entschieden — beide sofort erkennbare Zeichen, kein
+   * Grundkörper mehr, sondern ein echter flacher Umriss (dieselbe Bauart
+   * wie eine Münze: eine 2-D-Form, extrudiert um eine Handbreit Tiefe).
+   *
+   * Die Eckpunkte beider Formen sind das bewährte, seit Jahren bekannte
+   * Blitz- bzw. Pfeil-Symbol aus den gängigen Icon-Sätzen (Feather „zap"
+   * bzw. „arrow-up") — kein selbst erfundenes Vieleck, das sich beim
+   * nächsten Ändern als sich selbst überschneidend erweisen könnte.
    */
-  const schubTurboGeo = new THREE.ConeGeometry(0.22, 0.5, 5);
-  const schubSprungGeo = new THREE.OctahedronGeometry(0.28);
+  const blitzForm = new THREE.Shape();
+  blitzForm.moveTo(0.025, 0.25);
+  blitzForm.lineTo(-0.225, -0.05);
+  blitzForm.lineTo(0, -0.05);
+  blitzForm.lineTo(-0.025, -0.25);
+  blitzForm.lineTo(0.225, 0.05);
+  blitzForm.lineTo(0, 0.05);
+  blitzForm.closePath();
+  const schubTurboGeo = new THREE.ExtrudeGeometry(blitzForm, { depth: 0.1, bevelEnabled: false });
+  schubTurboGeo.translate(0, 0, -0.05);
+
+  const pfeilForm = new THREE.Shape();
+  pfeilForm.moveTo(0, 0.28);
+  pfeilForm.lineTo(-0.18, 0.02);
+  pfeilForm.lineTo(-0.08, 0.02);
+  pfeilForm.lineTo(-0.08, -0.28);
+  pfeilForm.lineTo(0.08, -0.28);
+  pfeilForm.lineTo(0.08, 0.02);
+  pfeilForm.lineTo(0.18, 0.02);
+  pfeilForm.closePath();
+  const schubSprungGeo = new THREE.ExtrudeGeometry(pfeilForm, { depth: 0.1, bevelEnabled: false });
+  schubSprungGeo.translate(0, 0, -0.05);
   const schubTurboStoff = new THREE.MeshPhongMaterial({
     color: 0xfbbf24,
     emissive: 0x7c4a03,
@@ -999,8 +1028,9 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   });
   const schuebe = Array.from({ length: VORRAT_SCHUEBE }, () => {
     const gruppe = new THREE.Group();
+    // Beide Formen liegen flach in der x/y-Ebene (wie eine Münze) und
+    // stehen deshalb ohne zusätzliche Drehung schon aufrecht zur Kamera.
     const turbo = new THREE.Mesh(schubTurboGeo, schubTurboStoff);
-    turbo.rotation.x = Math.PI / 2; // Spitze zeigt nach vorn (+z), nicht nach oben.
     gruppe.add(turbo);
     const sprung = new THREE.Mesh(schubSprungGeo, schubSprungStoff);
     gruppe.add(sprung);

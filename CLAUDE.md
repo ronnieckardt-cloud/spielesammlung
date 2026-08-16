@@ -1517,11 +1517,21 @@ gleichzeitig aktiv sein.
   oder rutscht, um einem Hindernis auszuweichen.
 - **Zwei Formen statt zweier Farben derselben Form.** Bei Tempo 20 bleibt
   keine Zeit, eine Beschriftung zu lesen — die Silhouette muss allein
-  sagen, was man einsammelt. Turbo ein Pfeil (spitz, nach vorn — „schneller"),
-  Sprungschub ein Diamant (nach oben gestreckt — „höher"). Dieselbe Farbe
-  taucht als Bodenring unter der Figur und als Badge in der Kopfzeile
-  wieder auf, damit die Verbindung „das habe ich eingesammelt, das wirkt
-  gerade" ohne Text ankommt.
+  sagen, was man einsammelt. Dieselbe Farbe taucht als Bodenring unter der
+  Figur und als Badge in der Kopfzeile wieder auf, damit die Verbindung
+  „das habe ich eingesammelt, das wirkt gerade" ohne Text ankommt.
+- **Kegel und Diamant waren die ersten Formen — Rückmeldung: „da passt die
+  Form ja nicht dazu."** Statt selbst zu entscheiden, bekam Ronni je drei
+  Vorschläge gezeigt (Turbo: Blitz/Doppelpfeil/Rakete; Sprungschub:
+  Aufwärtspfeil/Doppelpfeil/Flügel) und sich für **Blitz** und
+  **Aufwärtspfeil** entschieden. Beide sind keine Grundkörper mehr,
+  sondern ein `THREE.Shape` mit den Eckpunkten der altbekannten
+  Feather-Icons „zap" und „arrow-up", extrudiert wie eine Münze (eine
+  flache 2-D-Form mit etwas Tiefe) statt als Kegel oder Oktaeder — kein
+  selbst erfundenes Vieleck, das sich beim nächsten Ändern als sich selbst
+  überschneidend erweisen könnte. *Merksatz:* Bei einer Entscheidung, die
+  rein optisch ist und keinen Rechenweg hat, lohnt sich ein sichtbarer
+  Vorschlag mit Auswahl mehr als eine eigene Wahl vorwegzunehmen.
 - **Eine eigene Uhr für den Laufschritt (`schrittZeit`), getrennt von
   `laufzeit`.** Mit Turbo sollen die Beine sichtbar schneller pumpen —
   aber ein Sprung im *Faktor* an der Verwendungsstelle risse den Schritt
