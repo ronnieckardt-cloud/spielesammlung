@@ -6,9 +6,20 @@ import { AppSymbol, GlanzBlock } from '../../core/AppSymbol';
  */
 
 /** Blöcke auf dem Brett. Kantenlänge 12, Lücke 2. Bis auf das Feld mit dem
- * Funken ist es voll — einzelne leere Felder sahen groß wie Lücken aus. */
+ * Funken ist es voll — einzelne leere Felder sahen groß wie Lücken aus.
+ *
+ * **Oben links keine kalte Farbe.** Dort ist der Grund am hellsten: Der
+ * Verlauf steht an dieser Stelle noch bei einem kräftigen Blau, und der
+ * weiße Lichtschein aus `AppSymbol` liegt genau darüber und hellt ihn
+ * weiter auf. Ein Violett (vorher `#a78bfa`) kam dadurch auf 1,05:1 gegen
+ * seinen Untergrund — ohne Glanzkante und Schatten wäre der Block schlicht
+ * unsichtbar gewesen. Das Limettengrün aus dem eigenen `farben.ts` ist die
+ * hellste Farbe der Spielpalette und liegt mit rund 1,9:1 (2,4:1 ohne den
+ * Lichtschein) auf der Höhe der übrigen Blöcke. Warme Töne helfen hier
+ * ausdrücklich **nicht**: Orange hat fast dieselbe Helligkeit wie das Blau
+ * darunter und käme auf 1,0:1. */
 const BLOECKE: readonly { x: number; y: number; farbe: string }[] = [
-  { x: 5, y: 7, farbe: '#a78bfa' },
+  { x: 5, y: 7, farbe: '#a3e635' },
   { x: 19, y: 7, farbe: '#fbbf24' },
   { x: 33, y: 7, farbe: '#f472b6' },
   { x: 5, y: 21, farbe: '#22d3ee' },

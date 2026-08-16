@@ -45,6 +45,25 @@ export const ABSCHNITT_LAENGE = 14;
 export const TEMPO_START = 9;
 export const TEMPO_MAX = 22;
 
+/**
+ * Nach so vielen Metern ohne Münze fängt die Serie wieder bei null an.
+ *
+ * Der Münzton hängt an der **Serie**, nicht an der Gesamtzahl. Vorher stieg
+ * er mit `muenzenZahl`, und weil er bei zwölf Halbtönen gedeckelt ist, war
+ * er nach rund drei Münzreihen für den Rest des Laufs am Anschlag — ab dann
+ * klang jede Münze gleich, und aus der Belohnung wurde ein Dauerton.
+ *
+ * **Metern, nicht Sekunden** — und das ist der Punkt: Das Tempo wächst im
+ * Lauf von 9 auf 22 m/s, dieselbe Lücke im Bild wäre in Sekunden am Ende
+ * also weniger als halb so lang wie am Anfang. Über die Strecke gemessen
+ * bedeutet die Serie überall dasselbe. Zehn Meter liegen zwischen den
+ * beiden Fällen, die auseinandergehalten werden müssen: Von der letzten
+ * Münze einer Reihe bis zur ersten der nächsten sind es 6,8 m (die Serie
+ * läuft weiter), eine ausgelassene Reihe kostet mindestens 14 m (die Serie
+ * ist weg).
+ */
+export const SERIE_ABSTAND = 10;
+
 /** Wie schnell sich das Tempo dem Höchstwert nähert (Metern). */
 const TEMPO_KONSTANTE = 900;
 
@@ -88,6 +107,10 @@ export type Lauf = {
   muenzen: readonly Muenze[];
   /** Eingesammelte Münzen. */
   muenzenZahl: number;
+  /** Wie viele Münzen ohne größere Lücke hintereinander kamen. */
+  muenzSerie: number;
+  /** Meter seit der letzten Münze — bricht die Serie ab `SERIE_ABSTAND`. */
+  seitMuenze: number;
   /** Bis zu welchem Abschnitt schon erzeugt wurde. */
   erzeugtBis: number;
   vorbei: boolean;
@@ -213,6 +236,8 @@ export function neuesSpiel(saat: number): Lauf {
     hindernisse: [],
     muenzen: [],
     muenzenZahl: 0,
+    muenzSerie: 0,
+    seitMuenze: 0,
     erzeugtBis: 0,
     vorbei: false,
     saat,
@@ -267,11 +292,24 @@ export function kopfhoehe(lauf: Lauf): number {
  *
  * Drei Achsen nacheinander: Tiefe, quer, Höhe. Erst wenn alle drei
  * überlappen, ist es ein Treffer.
+ *
+ * `streckeVorher` ist der Stand **vor** diesem Zeitschritt. Ohne ihn prüft
+ * die Tiefe nur den Momentanabstand, und das ist bei niedriger Bildrate zu
+ * wenig: Ein Zeitschritt ist auf 50 ms gedeckelt, das Tempo läuft gegen 22
+ * m/s — ab rund 2500 Metern ist ein Schritt damit länger (1,06 m) als das
+ * Prüffenster breit (1,00 m). Das Hindernis lag dann zwischen zwei
+ * Prüfungen, wurde nie gesehen und die Figur lief hindurch. Wer bei
+ * ruckelndem Bild unsterblich wird, spielt kein Spiel mehr.
+ *
+ * Geprüft wird deshalb der **zurückgelegte Abschnitt**: Liegt das Hindernis
+ * irgendwo zwischen altem und neuem Stand, zählt es. Ohne Angabe verhält
+ * sich die Funktion wie vorher (Fenster von einem halben Meter um den
+ * aktuellen Stand) — dafür der Vorgabewert.
  */
-export function kollision(lauf: Lauf, h: Hindernis): boolean {
+export function kollision(lauf: Lauf, h: Hindernis, streckeVorher = lauf.strecke): boolean {
   // Tiefe: Das Hindernis ist einen halben Meter dick.
-  const dz = h.z - lauf.strecke;
-  if (dz > 0.5 || dz < -0.5) return false;
+  if (h.z - lauf.strecke > 0.5) return false; // noch davor
+  if (h.z - streckeVorher < -0.5) return false; // schon dahinter
 
   // Quer: Beim Wechseln zählt die tatsächliche Position, nicht die Spur —
   // sonst wäre man mitten im Wechsel schon auf der neuen Spur sicher.
@@ -321,7 +359,12 @@ export function takt(lauf: Lauf, dt: number): Lauf {
   const muenzen = lauf.muenzen.filter((m) => {
     const dz = m.z - strecke;
     if (dz < -1) return false; // hinter uns, weg damit
-    if (dz > 0.6 || dz < -0.6) return true;
+    // Wie bei den Hindernissen der zurückgelegte Abschnitt, nicht der
+    // Momentanabstand: Bei 50 ms Zeitschritt und Höchsttempo ist der Schritt
+    // 1,1 m lang, das alte Fenster war 1,2 m breit — die Münze wäre bei der
+    // nächsten Bildrate-Verschlechterung durchgerutscht, und ein Kind hätte
+    // gesehen, wie es mitten durch sie hindurchläuft.
+    if (dz > 0.6 || m.z - lauf.strecke < -0.6) return true;
     const nah = Math.abs(spurX(m.spur) - x) < SPUR_BREITE / 2;
     const hoehe = Math.abs(m.y - (y + 0.6)) < 0.9;
     if (nah && hoehe) {
@@ -331,14 +374,20 @@ export function takt(lauf: Lauf, dt: number): Lauf {
     return true;
   });
 
+  // Serie: Münzen ohne größere Lücke hintereinander. Siehe `SERIE_ABSTAND`.
+  const geholt = muenzenZahl - lauf.muenzenZahl;
+  const seitMuenze = geholt > 0 ? 0 : Math.min(SERIE_ABSTAND, lauf.seitMuenze + tempo * dt);
+  const muenzSerie =
+    geholt > 0 ? lauf.muenzSerie + geholt : seitMuenze >= SERIE_ABSTAND ? 0 : lauf.muenzSerie;
+
   // Hindernisse prüfen und Vergangenes wegwerfen.
   let vorbei = false;
   const hindernisse = lauf.hindernisse.filter((h) => {
-    if (kollision(zwischen, h)) vorbei = true;
+    if (kollision(zwischen, h, lauf.strecke)) vorbei = true;
     return h.z - strecke > -3;
   });
 
-  zwischen = { ...zwischen, muenzen, muenzenZahl, hindernisse, vorbei };
+  zwischen = { ...zwischen, muenzen, muenzenZahl, muenzSerie, seitMuenze, hindernisse, vorbei };
 
   // Nachschub, solange nicht genug voraus liegt.
   while (zwischen.erzeugtBis * ABSCHNITT_LAENGE < strecke + VORRAT * ABSCHNITT_LAENGE) {

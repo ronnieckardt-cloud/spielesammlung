@@ -36,7 +36,16 @@ export type Zustand = {
   level: number;
   brett: Brett;
   spieler: Punkt;
-  /** Die Kisten, aufsteigend nach Feldnummer — so ist der Vergleich billig. */
+  /**
+   * Die Kisten. Zu Beginn aufsteigend nach Feldnummer, danach bleibt **jede
+   * Kiste auf ihrem Platz in der Liste** — ein Schub tauscht nur die Zahl an
+   * dieser einen Stelle aus.
+   *
+   * Das ist keine Kosmetik: Nur so hat eine Kiste über die Züge hinweg eine
+   * feste Nummer, und nur dann kann die Anzeige sie von A nach B **fahren**
+   * lassen. Wurde die Liste nach jedem Schub neu sortiert, war die
+   * geschobene Kiste für React ein anderes Element — sie sprang.
+   */
   kisten: readonly number[];
   zuege: number;
   /** Frühere Stände für den Zurück-Knopf. */
@@ -83,10 +92,23 @@ export function levelLesen(zeilen: readonly string[]): {
 /** Wie viele Level gibt es? Danach fängt es von vorn an. */
 export const LEVEL_ANZAHL = LEVEL.length;
 
+/**
+ * Welches der zwölf Rätsel eine Levelnummer meint.
+ *
+ * Über die letzte Nummer hinaus geht es von vorn los — besser, als vor einer
+ * Sackgasse zu stehen. **Alle drei Stellen müssen dieselbe Zahl benutzen:**
+ * das Brett, die Anzeige und die Punkte. Vorher rechneten die Punkte mit der
+ * rohen Nummer weiter, während das Brett längst wieder bei eins war — Level
+ * 13 war also das Ein-Schub-Rätsel aus Level 1 und brachte trotzdem mehr
+ * Punkte als das schwerste. In der Bestenliste stand damit, wer am längsten
+ * am Stück gesessen hat, nicht wer sparsam gespielt hat.
+ */
+export function stufe(level: number): number {
+  return ((Math.max(1, level) - 1) % LEVEL_ANZAHL) + 1;
+}
+
 export function neuesLevel(nummer: number): Zustand {
-  // Über die letzte Nummer hinaus geht es von vorn los — besser, als vor
-  // einer Sackgasse zu stehen.
-  const index = (Math.max(1, nummer) - 1) % LEVEL_ANZAHL;
+  const index = stufe(nummer) - 1;
   const { brett, spieler, kisten } = levelLesen(LEVEL[index]!);
   return {
     level: Math.max(1, nummer),
@@ -141,7 +163,10 @@ export function gehen(z: Zustand, richtung: Richtung): Zustand {
   // die kniffligen Stellen aufhängen.
   if (!frei(z.brett, dahinterFeld) || z.kisten.includes(dahinterFeld)) return z;
 
-  const kisten = z.kisten.filter((k) => k !== zielFeld).concat(dahinterFeld).sort((a, b) => a - b);
+  // Nur die eine Zahl austauschen, nicht neu sortieren: Die geschobene Kiste
+  // behält damit ihren Platz in der Liste und die Anzeige kann sie fahren
+  // lassen, statt sie springen zu lassen.
+  const kisten = z.kisten.map((k) => (k === zielFeld ? dahinterFeld : k));
 
   return {
     ...z,
@@ -180,11 +205,21 @@ export function neustart(z: Zustand): Zustand {
 }
 
 /**
- * Punkte für ein gelöstes Level.
+ * Punkte für ein Level.
  *
  * Grundwert nach Levelnummer, Abzug je Zug. Der Abzug ist mild: Ein Kind
  * soll ausprobieren dürfen. Unter den Mindestwert fällt niemand.
+ *
+ * Gerechnet wird mit `stufe(level)`, also mit derselben gedeckelten Nummer
+ * wie beim Brett — sonst brächte dasselbe Rätsel in der zweiten Runde mehr
+ * Punkte als in der ersten.
+ *
+ * Der Wert gilt auch für ein **ungelöstes** Level: Er ist das, was gerade
+ * noch zu holen ist, und schmilzt mit jedem Zug. Genau so steht er auch in
+ * der Kopfzeile — eine Kopfzeile, die die ganze Runde „0" zeigt und im
+ * Augenblick des Lösens auf den Endwert springt, erklärt niemandem, dass
+ * jeder unnötige Zug etwas kostet.
  */
 export function punkteFuerZuege(level: number, zuege: number): number {
-  return Math.max(50, 300 + level * 30 - zuege * 4);
+  return Math.max(50, 300 + stufe(level) * 30 - zuege * 4);
 }

@@ -9,6 +9,7 @@ import {
   neuesLevel,
   neustart,
   punkteFuerZuege,
+  stufe,
   zurueck,
 } from './logik';
 import type { Richtung, Zustand } from './logik';
@@ -133,6 +134,32 @@ describe('gehen', () => {
     expect(geloest.geloest).toBe(true);
     for (const r of RICHTUNGEN) expect(gehen(geloest, r)).toBe(geloest);
   });
+
+  it('lässt eine geschobene Kiste auf ihrem Platz in der Liste', () => {
+    // Daran hängt die Schub-Animation: Nur wenn Kiste Nummer 1 nach dem Zug
+    // immer noch Nummer 1 ist, kann die Anzeige sie fahren lassen statt
+    // springen. Wurde die Liste neu sortiert, überholte die geschobene
+    // Kiste ihre Nachbarin und beide sprangen.
+    const zeilen = ['#######', '#     #', '# $ $ #', '#  @  #', '# . . #', '#######'];
+    const { brett, spieler, kisten } = levelLesen(zeilen);
+    const z: Zustand = { level: 1, brett, spieler, kisten, zuege: 0, verlauf: [], geloest: false };
+    // Die rechte Kiste (Platz 1) einen Schritt nach oben schieben — sie
+    // liegt danach vor der linken, darf aber nicht nach vorn rutschen.
+    const rechts = gehen(z, 'rechts');
+    const geschoben = gehen(rechts, 'oben');
+    expect(geschoben.kisten[0]).toBe(z.kisten[0]);
+    expect(geschoben.kisten[1]).toBeLessThan(z.kisten[1]!);
+    expect(geschoben.kisten).toHaveLength(2);
+  });
+});
+
+describe('stufe', () => {
+  it('fängt nach dem letzten Level wieder von vorn an', () => {
+    expect(stufe(1)).toBe(1);
+    expect(stufe(LEVEL_ANZAHL)).toBe(LEVEL_ANZAHL);
+    expect(stufe(LEVEL_ANZAHL + 1)).toBe(1);
+    expect(stufe(0)).toBe(1);
+  });
 });
 
 describe('zurueck', () => {
@@ -187,6 +214,23 @@ describe('punkteFuerZuege', () => {
 
   it('fällt nie unter den Mindestwert', () => {
     expect(punkteFuerZuege(1, 5000)).toBe(50);
+  });
+
+  it('schmilzt mit jedem Zug, bis der Mindestwert erreicht ist', () => {
+    // Daran hängt die Kopfzeile: Sie zeigt diesen Wert jetzt **laufend** an,
+    // nicht mehr nur beim Lösen. Wäre der Wert eine Weile gleich, sähe es
+    // aus, als koste ein Zug nichts — und genau das soll man sehen.
+    for (let zuege = 0; zuege < 20; zuege++) {
+      expect(punkteFuerZuege(5, zuege + 1)).toBeLessThan(punkteFuerZuege(5, zuege));
+    }
+  });
+
+  it('rechnet nach der letzten Levelnummer wieder von vorn', () => {
+    // Sonst wächst die Punktzahl endlos weiter, obwohl sich die Rätsel
+    // wiederholen: Level 13 ist wieder das Ein-Schub-Rätsel aus Level 1 und
+    // brächte trotzdem mehr Punkte als das schwerste Level überhaupt.
+    expect(punkteFuerZuege(LEVEL_ANZAHL + 1, 4)).toBe(punkteFuerZuege(1, 4));
+    expect(punkteFuerZuege(LEVEL_ANZAHL + 1, 4)).toBeLessThan(punkteFuerZuege(LEVEL_ANZAHL, 4));
   });
 });
 

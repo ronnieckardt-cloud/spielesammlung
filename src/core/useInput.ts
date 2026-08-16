@@ -41,6 +41,18 @@ type Optionen = {
   takt?: number;
   /** Welche Aktion ein kurzes Antippen auslöst. */
   tippen?: Aktion;
+  /**
+   * Welche Aktion ein **weiter oder schneller Wisch nach unten** auslöst.
+   * Standard `drop`.
+   *
+   * Gegenstück zu `tippen`: Nicht jedes Spiel kennt ein „fallen lassen".
+   * Box Push und Merge Up haben vier gleichwertige Richtungen und deuteten
+   * `drop` deshalb selbst als `down` um — und erbten damit stillschweigend
+   * die **Leertaste**, die oben ebenfalls auf `drop` liegt. In Box Push
+   * kostet jeder Zug Punkte, ein versehentlicher Druck also vier. Wer hier
+   * `wurf: 'down'` setzt, bekommt die Geste und nicht die Taste.
+   */
+  wurf?: Aktion;
   /** Auf false setzen, wenn Eingaben gerade nichts bewirken sollen. */
   aktiv?: boolean;
 };
@@ -62,14 +74,15 @@ export function useInput(beiAktion: (aktion: Aktion) => void, optionen: Optionen
     verzoegerung = 170,
     takt = 45,
     tippen = 'select',
+    wurf = 'drop',
     aktiv = true,
   } = optionen;
 
   const aktionRef = useRef(beiAktion);
   aktionRef.current = beiAktion;
 
-  const optionenRef = useRef({ wiederholen, verzoegerung, takt, tippen });
-  optionenRef.current = { wiederholen, verzoegerung, takt, tippen };
+  const optionenRef = useRef({ wiederholen, verzoegerung, takt, tippen, wurf });
+  optionenRef.current = { wiederholen, verzoegerung, takt, tippen, wurf };
 
   useEffect(() => {
     if (!aktiv) return;
@@ -147,7 +160,7 @@ export function useInput(beiAktion: (aktion: Aktion) => void, optionen: Optionen
       } else {
         // Weit und schnell nach unten heißt "fallen lassen", kurz heißt "ein Feld".
         const schnell = dy / Math.max(dauer, 1) > 0.9;
-        aktionRef.current(dy > WURF_STRECKE || schnell ? 'drop' : 'down');
+        aktionRef.current(dy > WURF_STRECKE || schnell ? optionenRef.current.wurf : 'down');
       }
     };
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { sfx } from '../../core/sfx';
 import { Startbildschirm } from '../../core/Startbildschirm';
 import type { DekoTeil } from '../../core/Startbildschirm';
@@ -51,6 +52,7 @@ export function Wortspiel({
   // Startbildschirm gehört nur ans Betreten des Spiels.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechsteLevelNummer));
+  const gewinn = usePunktegewinn(z.punkte);
 
   useEffect(() => {
     onScore(z.punkte);
@@ -65,14 +67,26 @@ export function Wortspiel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [z.vorbei]);
 
-  const beiAntwort = useCallback((index: 0 | 1 | 2 | 3) => {
-    setZ((alt) => {
-      const wort = alt.woerter[alt.index];
-      const nach = antwortWaehlen(alt, index);
-      if (nach !== alt && wort) sfx(index === wort.richtig ? 'gut' : 'schlecht');
-      return nach;
-    });
-  }, []);
+  const beiAntwort = useCallback(
+    (index: 0 | 1 | 2 | 3) => {
+      // Der Ton gehört **vor** `setZ` und nicht hinein: React ruft den
+      // Aktualisierer im StrictMode absichtlich zweimal auf, beide Male mit
+      // demselben `alt` — die Wache „hat sich der Zustand geändert?" greift
+      // dort also nicht, und der Ton klang doppelt. Beim Rendern liegt der
+      // Zustand ohnehin schon vor; gefragt wird deshalb er, und der
+      // Aktualisierer bleibt rein (wie bei Brain Blitz).
+      const wort = z.woerter[z.index];
+      if (!wort || z.ausgewaehlt !== null || z.vorbei) return;
+      const richtig = index === wort.richtig;
+      // Der Ton klettert mit der Serie eine Stufe höher — dasselbe Signal
+      // wie die wachsende Punktzahl, nur hörbar. `z.serie` ist die Serie
+      // **vor** dieser Antwort, die erste richtige bleibt der Grundton.
+      if (richtig) sfx('gut', Math.min(12, z.serie * 2));
+      else sfx('schlecht');
+      setZ((alt) => antwortWaehlen(alt, index));
+    },
+    [z.woerter, z.index, z.ausgewaehlt, z.vorbei, z.serie],
+  );
 
   const beiWeiter = useCallback(() => setZ((alt) => naechstesWort(alt)), []);
 
@@ -148,68 +162,89 @@ export function Wortspiel({
         />
       </div>
 
-      {/* Nur dieser Teil scrollt, wenn der Inhalt lang wird — der
-          Weiter-Knopf darunter bleibt dadurch immer erreichbar. */}
-      <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto">
-      <div className="w-full max-w-md rounded-karte border border-rand bg-flaeche p-5 text-center">
-        <span className="text-xs font-medium tracking-wide text-gedaempft uppercase">{wort.kategorie}</span>
-        <p className="mt-2 text-lg font-semibold">Welches Wort ist richtig geschrieben?</p>
-      </div>
+      {/* Die Bühne wie in den anderen Spielen: Sie bringt den farbigen
+          Schein hinter dem Inhalt (`.spielbuehne::before`) und den Auftritt
+          beim Rundenstart (`buehne-rein`) mit — beides hängt in index.css an
+          `.spielbuehne` selbst, dieses Spiel hatte die Klasse nie gesetzt
+          und ging deshalb leer aus.
 
-      <div className="grid w-full max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
-        {wort.antworten.map((antwort, i) => {
-          const istAusgewaehlt = z.ausgewaehlt === i;
-          const istRichtigeAntwort = i === wort.richtig;
+          Der Aufbau darin ist wichtig: Die Bühne ist ein Größen-Container
+          (`container-type: size`) und holt ihre Höhe aus dem, was nach
+          Kopfzeile, Weiter-Knopf und Fußzeile übrig bleibt — nicht aus
+          ihrem Inhalt. Der Inhalt bekommt deshalb `max-h-full`, und das
+          Scrollen liegt eine Ebene tiefer. So scrollt auf einem kurzen
+          Bildschirm nur der Wortteil, der Weiter-Knopf bleibt erreichbar. */}
+      <div className="spielbuehne">
+        <div className="relative flex max-h-full w-full max-w-md flex-col items-center gap-2">
+          {/* Das Popup gehört in diesen Kasten und nicht direkt in die Bühne
+              — genau wie bei Ghost Chase. Hier hat es den passenden
+              Bezugspunkt (`relative`) und liegt mittig über den Antworten. */}
+          <Punktegewinn gewinn={gewinn} />
 
-          let rahmenfarbe: string | undefined;
-          let hintergrund: string | undefined;
-          let deckkraft: number | undefined;
-          // Siehe Quiz Time: Die richtige Schreibweise ploppt immer auf,
-          // gewackelt wird nur bei der angetippten falschen.
-          let bewegung = '';
-          if (beantwortet && istRichtigeAntwort) {
-            rahmenfarbe = RICHTIG_FARBE;
-            hintergrund = `${RICHTIG_FARBE}26`;
-            bewegung = 'antwort-richtig';
-          } else if (beantwortet && istAusgewaehlt) {
-            rahmenfarbe = FALSCH_FARBE;
-            hintergrund = `${FALSCH_FARBE}26`;
-            bewegung = 'antwort-falsch';
-          } else if (beantwortet) {
-            deckkraft = 0.5;
-          }
+          {/* Nur dieser Teil scrollt, wenn der Inhalt lang wird. */}
+          <div className="flex min-h-0 w-full flex-col items-center gap-2 overflow-y-auto">
+            <div className="w-full rounded-karte border border-rand bg-flaeche p-5 text-center">
+              <span className="text-xs font-medium tracking-wide text-gedaempft uppercase">
+                {wort.kategorie}
+              </span>
+              <p className="mt-2 text-lg font-semibold">Welches Wort ist richtig geschrieben?</p>
+            </div>
 
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => beiAntwort(i as 0 | 1 | 2 | 3)}
-              disabled={beantwortet}
-              className={`rounded-xl border border-rand bg-flaeche p-4 text-center text-lg font-semibold transition-colors disabled:cursor-default ${bewegung}`}
-              style={{ borderColor: rahmenfarbe, backgroundColor: hintergrund, opacity: deckkraft }}
-            >
-              {antwort}
-              {beantwortet && istRichtigeAntwort && (
-                <span aria-hidden="true" className="ml-2">
-                  ✓
-                </span>
-              )}
-              {beantwortet && istAusgewaehlt && !istRichtigeAntwort && (
-                <span aria-hidden="true" className="ml-2">
-                  ✗
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+              {wort.antworten.map((antwort, i) => {
+                const istAusgewaehlt = z.ausgewaehlt === i;
+                const istRichtigeAntwort = i === wort.richtig;
 
-      {beantwortet && (
-        <div className="w-full max-w-md rounded-karte border border-rand bg-flaeche-hoch p-4 text-sm">
-          <span aria-hidden="true">💡</span> {wort.regel}
+                let rahmenfarbe: string | undefined;
+                let hintergrund: string | undefined;
+                let deckkraft: number | undefined;
+                // Siehe Quiz Time: Die richtige Schreibweise ploppt immer auf,
+                // gewackelt wird nur bei der angetippten falschen.
+                let bewegung = '';
+                if (beantwortet && istRichtigeAntwort) {
+                  rahmenfarbe = RICHTIG_FARBE;
+                  hintergrund = `${RICHTIG_FARBE}26`;
+                  bewegung = 'antwort-richtig';
+                } else if (beantwortet && istAusgewaehlt) {
+                  rahmenfarbe = FALSCH_FARBE;
+                  hintergrund = `${FALSCH_FARBE}26`;
+                  bewegung = 'antwort-falsch';
+                } else if (beantwortet) {
+                  deckkraft = 0.5;
+                }
+
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => beiAntwort(i as 0 | 1 | 2 | 3)}
+                    disabled={beantwortet}
+                    className={`rounded-xl border border-rand bg-flaeche p-4 text-center text-lg font-semibold transition-colors disabled:cursor-default ${bewegung}`}
+                    style={{ borderColor: rahmenfarbe, backgroundColor: hintergrund, opacity: deckkraft }}
+                  >
+                    {antwort}
+                    {beantwortet && istRichtigeAntwort && (
+                      <span aria-hidden="true" className="ml-2">
+                        ✓
+                      </span>
+                    )}
+                    {beantwortet && istAusgewaehlt && !istRichtigeAntwort && (
+                      <span aria-hidden="true" className="ml-2">
+                        ✗
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {beantwortet && (
+              <div className="w-full rounded-karte border border-rand bg-flaeche-hoch p-4 text-sm">
+                <span aria-hidden="true">💡</span> {wort.regel}
+              </div>
+            )}
+          </div>
         </div>
-      )}
-
       </div>
 
       {beantwortet && !z.vorbei && (
@@ -224,7 +259,17 @@ export function Wortspiel({
         </button>
       )}
 
-      <p className="text-sm text-gedaempft">Richtig erkannt: {z.richtigeAnzahl}</p>
+      <p className="flex items-center gap-3 text-sm text-gedaempft">
+        <span>Richtig erkannt: {z.richtigeAnzahl}</span>
+        {/* Die Serie steuert die Punkte je Antwort (`punkteFuerAntwort` in
+            logik.ts), war aber nirgends zu sehen — man konnte nicht wissen,
+            warum dieselbe richtige Antwort mal 10 und mal 24 Punkte gibt.
+            Bewusst kein Komboherz, gleiche Überlegung wie bei Brain Blitz:
+            Eine Runde hat acht Wörter, die Serie kommt also höchstens auf 8,
+            und dafür ist ein 86 Pixel großer Aufsatz zu viel Gerät für zu
+            wenig Aussage. Als Wort und Zahl, nicht als Farbe allein. */}
+        {z.serie >= 2 && <span className="font-bold text-fokus tabular-nums">Serie ×{z.serie}</span>}
+      </p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}
     </div>

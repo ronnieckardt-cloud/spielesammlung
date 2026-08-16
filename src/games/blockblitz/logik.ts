@@ -203,6 +203,21 @@ export function punkteFuerZug(zellenGelegt: number, anzahlLinien: number, komboN
 }
 
 /**
+ * Ab wie vielen Punkten auf einmal das „+N" über dem Feld erscheint.
+ *
+ * Die Anzeige liest nur noch den Zuwachs des Punktestands ab
+ * (`usePunktegewinn`) und kann von sich aus nicht wissen, ob dabei eine
+ * Linie gefallen ist. Sie muss es an der Höhe erkennen — und das geht,
+ * weil beide Bereiche sich hier nicht überschneiden: Bloßes Ablegen bringt
+ * höchstens so viele Punkte, wie das größte Teil Zellen hat (neun), jede
+ * Auflösung mindestens `PUNKTE_PRO_LINIE`. Die Zahl steht deshalb in der
+ * Logik und nicht in der Anzeige: Ein neues, größeres Teil oder eine
+ * andere Punkteregel muss sie mitziehen, und der Test unten schlägt an,
+ * wenn das vergessen wird.
+ */
+export const PUNKTE_SCHWELLE_ANZEIGE = PUNKTE_PRO_LINIE;
+
+/**
  * Wie stark größere Teile bei vollerem Feld benachteiligt werden — nie auf
  * 0, ein großes Teil bleibt immer möglich, nur seltener. Ohne das ist der
  * Tod reine Pechsache, sobald zufällig drei große Teile hintereinander

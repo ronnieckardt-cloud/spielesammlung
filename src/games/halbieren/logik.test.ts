@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { flaeche } from './geometrie';
+import { flaeche, genauigkeit, schneiden } from './geometrie';
 import {
   FORMEN_PRO_LEVEL,
   MAX_PRO_FORM,
+  MINDEST_WISCH,
+  TASTE_GRAD_FEIN,
+  TASTE_SCHUB_FEIN,
   bewertung,
+  geradeAus,
+  istZuKurz,
   naechsteForm,
   neuesLevel,
   schneidenAn,
@@ -99,6 +104,87 @@ describe('naechsteForm', () => {
     }
     expect(z.punkte).toBeGreaterThanOrEqual(0);
     expect(z.punkte).toBeLessThanOrEqual(FORMEN_PRO_LEVEL * MAX_PRO_FORM);
+  });
+});
+
+describe('istZuKurz', () => {
+  // Dieselbe Regel, nach der `schneidenAn` den Zug verwirft — die Anzeige
+  // fragt sie ab, um „zu kurz" sagen zu können statt stumm nichts zu tun.
+  it('erkennt genau die Wische, die kein Schnitt werden', () => {
+    const mitte = { x: 0, y: 0 };
+    expect(istZuKurz(mitte, { x: MINDEST_WISCH - 0.1, y: 0 })).toBe(true);
+    expect(istZuKurz(mitte, { x: MINDEST_WISCH + 0.1, y: 0 })).toBe(false);
+  });
+
+  it('sagt für jeden verworfenen Zug dasselbe wie schneidenAn', () => {
+    const z = neuesLevel(1);
+    for (const bis of [
+      { x: 0.5, y: 0.5 },
+      { x: 3, y: 0 },
+      { x: 0, y: 12 },
+      { x: -30, y: 20 },
+    ]) {
+      const von = { x: 0, y: 0 };
+      expect(istZuKurz(von, bis)).toBe(schneidenAn(z, von, bis) === z);
+    }
+  });
+});
+
+describe('geradeAus', () => {
+  // Der Tastaturweg: Pfeile legen die Gerade, Leertaste schneidet.
+  it('legt die Gerade waagerecht durch die Mitte, wenn nichts verstellt ist', () => {
+    const { a, b } = geradeAus(0, 0);
+    expect(a.y).toBeCloseTo(0, 6);
+    expect(b.y).toBeCloseTo(0, 6);
+    expect(a.x).toBeLessThan(b.x);
+  });
+
+  it('dreht sich mit dem Winkel', () => {
+    const { a, b } = geradeAus(90, 0);
+    expect(a.x).toBeCloseTo(0, 6);
+    expect(b.x).toBeCloseTo(0, 6);
+  });
+
+  it('schiebt die Gerade senkrecht zu sich selbst', () => {
+    const { a, b } = geradeAus(0, 7);
+    expect(a.y).toBeCloseTo(7, 6);
+    expect(b.y).toBeCloseTo(7, 6);
+  });
+
+  it('ist lang genug, um jede Form zu durchtrennen', () => {
+    // Sonst läge ein Ende mitten in der Form und die Wertung wäre Unsinn.
+    const { a, b } = geradeAus(37, 0);
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThan(100);
+    expect(istZuKurz(a, b)).toBe(false);
+  });
+
+  it('erreicht auf dem Tastaturraster ein „Perfekt"', () => {
+    /**
+     * Die Zusicherung für den Tastaturweg — dasselbe Versprechen, das
+     * `geometrie.test.ts` für die Wischgeste gibt: Zu jeder Form muss es
+     * eine halbierende Gerade geben, **und sie muss auf dem Raster der
+     * Tastenschritte liegen.** Ohne diese Prüfung wäre die Tastatur ein
+     * Zugang zweiter Klasse: bedienbar, aber nie auf volle Punktzahl.
+     *
+     * Gesucht wird nur mit den feinen Schritten und nur auf zwei Winkeln —
+     * mehr braucht es nicht, denn zu **jedem** Winkel gibt es eine
+     * halbierende Verschiebung; die Frage ist allein, ob das Schub-Raster
+     * fein genug ist, um sie zu treffen.
+     */
+    for (let level = 1; level <= 20; level++) {
+      const form = neuesLevel(level).form;
+      for (const winkelSchritte of [0, 37]) {
+        const winkel = winkelSchritte * TASTE_GRAD_FEIN;
+        let bestes = 0;
+        for (let s = -500; s <= 500; s++) {
+          const { a, b } = geradeAus(winkel, s * TASTE_SCHUB_FEIN);
+          const teile = schneiden(form, a, b);
+          bestes = Math.max(bestes, genauigkeit(teile.links, teile.rechts));
+          if (bestes >= 99.5) break;
+        }
+        expect(bestes, `Level ${level}, Winkel ${winkel}`).toBeGreaterThanOrEqual(99.5);
+      }
+    }
   });
 });
 

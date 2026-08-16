@@ -3,6 +3,7 @@ import { saatAus } from '../../core/rng';
 import {
   ABSCHNITT_LAENGE,
   HOEHE_RUTSCHEND,
+  SERIE_ABSTAND,
   SPUREN,
   SPUR_BREITE,
   TEMPO_MAX,
@@ -21,18 +22,36 @@ import {
   takt,
   tempoBei,
 } from './logik';
-import type { Hindernis, Lauf } from './logik';
+import type { Hindernis, Lauf, Muenze } from './logik';
 
 const SAAT = saatAus('laufen', 1);
 
 /** Lässt die Zeit in Bildschritten laufen. */
-function laufen(l: Lauf, sekunden: number, beiSchritt?: (l: Lauf) => Lauf): Lauf {
-  const dt = 1 / 60;
+function laufen(l: Lauf, sekunden: number, beiSchritt?: (l: Lauf) => Lauf, dt = 1 / 60): Lauf {
   for (let t = 0; t < sekunden && !l.vorbei; t += dt) {
     if (beiSchritt) l = beiSchritt(l);
     l = takt(l, dt);
   }
   return l;
+}
+
+/**
+ * Eine aufgeräumte Teststrecke: nur das, was der Test hineinlegt.
+ *
+ * `erzeugtBis` steht bewusst weit voraus. Sonst schiebt `takt` bei einer
+ * Startstrecke von ein paar tausend Metern erst einmal hunderte Abschnitte
+ * nach — samt eigener Hindernisse, und dann prüft der Test nicht mehr das,
+ * was er prüfen soll.
+ */
+function teststrecke(strecke: number, teile: Partial<Lauf> = {}): Lauf {
+  return {
+    ...neuesSpiel(SAAT),
+    strecke,
+    hindernisse: [],
+    muenzen: [],
+    erzeugtBis: Math.ceil(strecke / ABSCHNITT_LAENGE) + 500,
+    ...teile,
+  };
 }
 
 describe('tempoBei', () => {
@@ -150,6 +169,43 @@ describe('Kollision', () => {
     expect(kollision(l, { art: 'mauer', spur: 1, z: -40 })).toBe(false);
   });
 
+  /**
+   * Der Fehler, der am teuersten war: Bei niedriger Bildrate lief die Figur
+   * ab etwa 2500 Metern durch Hindernisse hindurch.
+   *
+   * Der Zeitschritt ist auf 50 ms gedeckelt, das Tempo läuft gegen 22 m/s —
+   * ein Schritt wird dadurch länger als das alte Prüffenster breit war. Das
+   * Hindernis lag zwischen zwei Prüfungen und wurde nie gesehen.
+   */
+  it('sieht ein Hindernis auch dann, wenn ein Zeitschritt darüber hinwegspringt', () => {
+    const start = 3000;
+    const dt = 0.05; // der Deckel aus `DashCity.tsx`
+    const weite = tempoBei(start) * dt;
+    expect(weite, 'sonst gibt es die Lücke gar nicht').toBeGreaterThan(1);
+
+    // Genau in die Mitte zwischen altem und neuem Prüffenster.
+    const h: Hindernis = { art: 'mauer', spur: 1, z: start + weite / 2 };
+
+    // Der Beleg, dass der Momentanabstand allein es nicht fände:
+    expect(kollision(teststrecke(start + weite), h)).toBe(false);
+    expect(kollision(teststrecke(start), h)).toBe(false);
+
+    // Über den zurückgelegten Abschnitt gesehen ist es ein Treffer.
+    expect(takt(teststrecke(start, { hindernisse: [h] }), dt).vorbei).toBe(true);
+  });
+
+  it('trifft dieselbe Mauer bei jeder Bildrate', () => {
+    for (const dt of [1 / 120, 1 / 60, 1 / 30, 0.05]) {
+      const l = laufen(
+        teststrecke(3000, { hindernisse: [{ art: 'mauer', spur: 1, z: 3020 }] }),
+        3,
+        undefined,
+        dt,
+      );
+      expect(l.vorbei, `Bildschritt ${dt}`).toBe(true);
+    }
+  });
+
   it('zählt beim Wechseln die echte Position, nicht die Zielspur', () => {
     // Mitten im Wechsel ist man noch nicht drüben — sonst könnte man sich
     // aus einer Mauer heraus„denken", ohne sie verlassen zu haben.
@@ -236,6 +292,60 @@ describe('Erzeugung', () => {
   it('schiebt beim Laufen immer neue Abschnitte nach', () => {
     const l = laufen(neuesSpiel(SAAT), 3);
     expect(l.erzeugtBis).toBeGreaterThan(neuesSpiel(SAAT).erzeugtBis);
+  });
+});
+
+describe('Münzserie', () => {
+  /** Läuft, bis eine bestimmte Strecke erreicht ist. */
+  const bisStrecke = (l: Lauf, ziel: number, dt = 1 / 60): Lauf => {
+    while (l.strecke < ziel && !l.vorbei) l = takt(l, dt);
+    return l;
+  };
+
+  /** Eine Reihe wie im Spiel: fünf Münzen im Abstand von 1,8 m. */
+  const reihe = (ab: number): Muenze[] =>
+    Array.from({ length: 5 }, (_, k) => ({ spur: 1, z: ab + k * 1.8, y: 1 }));
+
+  it('zählt Münzen dicht hintereinander hoch', () => {
+    const l = bisStrecke(teststrecke(0, { muenzen: reihe(5) }), 14);
+    expect(l.muenzenZahl).toBe(5);
+    expect(l.muenzSerie).toBe(5);
+  });
+
+  /**
+   * Der Grund für die Serie: Der Münzton steigt mit ihr und ist bei zwölf
+   * Halbtönen gedeckelt. Hinge er wie früher an der Gesamtzahl, wäre er nach
+   * rund drei Reihen für den Rest des Laufs am Anschlag.
+   */
+  it('fängt nach einer Lücke wieder bei null an', () => {
+    const letzte = 5 + 4 * 1.8;
+    const l = bisStrecke(teststrecke(0, { muenzen: reihe(5) }), letzte + SERIE_ABSTAND + 2);
+    expect(l.muenzenZahl).toBe(5);
+    expect(l.muenzSerie).toBe(0);
+  });
+
+  it('misst die Lücke in Metern, nicht in Sekunden', () => {
+    // Das Tempo wächst im Lauf von 9 auf 22 m/s. In Sekunden gemessen
+    // bedeutete dieselbe Lücke im Bild am Ende etwas ganz anderes als am
+    // Anfang — deshalb zählt die Strecke.
+    for (const start of [0, 6000]) {
+      const muenzen: Muenze[] = [start + 5, start + 6.8].map((z) => ({ spur: 1, z, y: 1 }));
+      const kurz = bisStrecke(teststrecke(start, { muenzen }), start + 6.8 + SERIE_ABSTAND - 2);
+      expect(kurz.muenzenZahl, `Start ${start}`).toBe(2);
+      expect(kurz.muenzSerie, `Start ${start}, kurze Lücke`).toBe(2);
+
+      const lang = bisStrecke(kurz, start + 6.8 + SERIE_ABSTAND + 2);
+      expect(lang.muenzSerie, `Start ${start}, lange Lücke`).toBe(0);
+    }
+  });
+
+  it('sammelt eine Münze auch beim größten erlaubten Zeitschritt ein', () => {
+    // Der Abstand war knapp: 1,1 m Schritt gegen 1,2 m Fenster. Auch hier
+    // zählt jetzt der zurückgelegte Abschnitt.
+    const start = 3000;
+    const dt = 0.05;
+    const m: Muenze = { spur: 1, z: start + (tempoBei(start) * dt) / 2, y: 1 };
+    expect(takt(teststrecke(start, { muenzen: [m] }), dt).muenzenZahl).toBe(1);
   });
 });
 

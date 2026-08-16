@@ -11,7 +11,7 @@ import {
   neuesLevel,
   punkteFuerZuege,
   ziehenBeenden,
-  ziehenNach,
+  ziehenBis,
   ziehenStarten,
 } from './logik';
 import type { Zustand } from './logik';
@@ -101,7 +101,10 @@ export function FlowLink({
     const feld = feldUnter(e);
     if (feld === null) return;
     setZ((alt) => {
-      const neu = ziehenNach(alt, feld);
+      // `ziehenBis` statt `ziehenNach`: Springt der Finger über ein Feld
+      // hinweg oder über Eck, werden die Zwischenfelder nachgezogen, statt
+      // den Sprung wegzuwerfen.
+      const neu = ziehenBis(alt, feld);
       // Nur wenn wirklich ein Feld dazugekommen ist — sonst klackert es
       // bei jeder Fingerbewegung.
       if (neu !== alt && neu.wege[alt.zieht!]!.length > alt.wege[alt.zieht!]!.length) {
@@ -118,6 +121,27 @@ export function FlowLink({
       return neu;
     });
   };
+
+  /**
+   * Freie Levelwahl — wie bei Color Pour.
+   *
+   * Ohne sie ist ein Rätsel, das man nicht lösen kann, eine Sackgasse: Die
+   * Levelnummer stieg bisher **ausschließlich** beim Lösen, und weil dieselbe
+   * Nummer immer dasselbe Rätsel ergibt, bekommt man beim erneuten Betreten
+   * exakt dasselbe Brett wieder vorgesetzt.
+   */
+  const beiLevelWechsel = useCallback(
+    (neu: number) => {
+      // Im Duell steht das Level fest — sonst könnte man sich das leichteste
+      // aussuchen und der Vergleich wäre wertlos.
+      if (festesLevel !== undefined) return;
+      const geklemmt = Math.max(1, neu);
+      naechstesLevel = geklemmt;
+      setZ(neuesLevel(geklemmt));
+      sfx('klick');
+    },
+    [festesLevel],
+  );
 
   useEffect(() => {
     onScore(z.geloest ? punkteFuerZuege(z.level, z.raetsel.paare.length, z.zuege) : 0);
@@ -157,8 +181,30 @@ export function FlowLink({
 
   return (
     <div className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 px-3 pt-2">
-      <div className="flex w-full max-w-md items-baseline justify-between text-sm">
-        <span className="font-semibold text-gedaempft">Level {z.level}</span>
+      <div className="flex w-full max-w-md flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
+        <div className="flex items-center gap-1 font-semibold text-gedaempft">
+          <button
+            type="button"
+            onClick={() => beiLevelWechsel(z.level - 1)}
+            disabled={z.level <= 1 || z.geloest || festesLevel !== undefined}
+            aria-label="Voriges Level"
+            className="spielknopf text-base leading-none transition-transform active:scale-95"
+          >
+            ‹
+          </button>
+          <span className="w-16 text-center tabular-nums">Level {z.level}</span>
+          <button
+            type="button"
+            onClick={() => beiLevelWechsel(z.level + 1)}
+            // Während der Feier-Pause gesperrt: Ein Tipp dort würde den
+            // Zeitgeber abräumen und die Runde käme nie in der Bestenliste an.
+            disabled={z.geloest || festesLevel !== undefined}
+            aria-label="Nächstes Level"
+            className="spielknopf text-base leading-none transition-transform active:scale-95"
+          >
+            ›
+          </button>
+        </div>
         <span className="tabular-nums text-gedaempft">
           {geschafft}/{z.raetsel.paare.length} verbunden · {belegt}/{breite * hoehe} Felder
         </span>
@@ -263,6 +309,7 @@ export function FlowLink({
         Verbinde jedes Punktepaar. Wege dürfen sich nicht kreuzen — und am Ende muss
         <em> jedes</em> Feld belegt sein. Läufst du über einen fremden Weg, wird der dort
         gekappt. Ein Punkt noch einmal angetippt löscht seinen Weg.
+        {festesLevel === undefined && ' Zu schwer? Mit den Pfeilen oben wechselst du das Level.'}
       </p>
     </div>
   );

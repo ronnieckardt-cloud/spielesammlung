@@ -175,10 +175,17 @@ export function DropFour({ onScore, onGameOver, settings, bestScore, istErsteRun
   }
 
   const siegerZellen = new Set((z.gewinnlinie ?? []).map((p) => `${p.x},${p.y}`));
+  const stufenTitel = STUFEN.find((s) => s.wert === stufe)!.titel;
+  // Umstellen nur, solange noch kein Stein liegt. Mitten in der Partie
+  // wäre die Wertung sinnlos — direkt nach „Nochmal" ist es dagegen genau
+  // der Moment, in dem man die Stufe wechseln will.
+  const darfStufeWechseln = z.zuege === 0 && !z.vorbei;
 
   return (
     <div className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3">
-      <div className="flex items-center gap-2 text-sm font-semibold">
+      {/* Feste Mindesthöhe: Der Stufenknopf verschwindet nach dem ersten
+          Stein, und ohne sie würde das Brett in diesem Moment springen. */}
+      <div className="flex min-h-11 items-center gap-2 text-sm font-semibold">
         <span
           aria-hidden="true"
           className="size-3 rounded-full"
@@ -195,56 +202,110 @@ export function DropFour({ onScore, onGameOver, settings, bestScore, istErsteRun
               ? 'Du bist dran'
               : 'Der Computer überlegt …'}
         </span>
-        <span className="text-gedaempft">· {STUFEN.find((s) => s.wert === stufe)!.titel}</span>
+        {darfStufeWechseln ? (
+          <button
+            type="button"
+            // Zurück auf den Startbildschirm: Dort steht die Stufenwahl
+            // schon, samt Erklärung, was die drei Stufen unterscheidet.
+            onClick={() => setStufe(null)}
+            className="spielknopf text-xs"
+            aria-label={`Stufe ändern, gerade ${stufenTitel}`}
+          >
+            Stufe: {stufenTitel}
+          </button>
+        ) : (
+          <span className="text-gedaempft">· {stufenTitel}</span>
+        )}
       </div>
 
       <div className="spielbuehne">
+        {/*
+          Eine Spalte ist **ein** Knopf über die ganze Bretthöhe, die Löcher
+          darin sind nur noch Anzeige. Vorher war jedes der 42 Löcher ein
+          eigener Knopf: Auf einem 375 Pixel breiten iPhone war ein Loch
+          damit rund 42 Pixel breit — unter Apples Mindestmaß — und
+          zwischen zwei Spalten lagen 6 Pixel, auf denen ein Tipp gar
+          nichts auslöste, ohne jede Rückmeldung.
+
+          Deshalb liegt der Spaltenabstand jetzt **innen** im Knopf
+          (`p-[3px]`) statt als `gap` zwischen den Knöpfen: Optisch ändert
+          sich nichts, aber die Spaltenknöpfe stoßen lückenlos aneinander
+          und sind rund 48 Pixel breit. Nebenbei sind es sieben statt 42
+          Anlaufpunkte für die Tabulatortaste.
+        */}
         <div
-          className="spielbrett grid touch-none gap-1.5 rounded-2xl p-2"
+          className="spielbrett grid touch-none rounded-2xl p-2"
           style={
             {
               gridTemplateColumns: `repeat(${SPALTEN}, minmax(0, 1fr))`,
-              gridTemplateRows: `repeat(${ZEILEN}, minmax(0, 1fr))`,
+              gridTemplateRows: 'minmax(0, 1fr)',
               '--vz': SPALTEN / ZEILEN,
               background: 'linear-gradient(165deg, #1e3a8a, #172554)',
               boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.14), inset 0 -3px 0 rgba(0,0,0,0.3)',
             } as CSSProperties
           }
-          role="grid"
-          aria-label={`Drop Four, Stufe ${stufe}. ${z.vorbei ? 'Partie beendet.' : `${NAME[z.amZug]} am Zug.`}`}
+          role="group"
+          aria-label={`Drop Four, Stufe ${stufenTitel}. ${z.vorbei ? 'Partie beendet.' : `${NAME[z.amZug]} am Zug.`}`}
         >
-          {Array.from({ length: SPALTEN * ZEILEN }, (_, i) => {
-            const x = i % SPALTEN;
-            const y = Math.floor(i / SPALTEN);
-            const wer = z.feld[y]![x];
-            const istLetzter = z.letzter?.x === x && z.letzter?.y === y;
-            // Fallweg in Prozent der eigenen Höhe: von ganz oben bis hierher.
-            const fallhoehe = -(y + 1) * 100 - 40;
-            // Die ganze Spalte ist ein Ziel — ein Kind trifft keine
-            // einzelne Zelle, es tippt irgendwo in die Spalte.
-            const spalteFrei = einwurfZeile(z.feld, x) !== null;
+          {Array.from({ length: SPALTEN }, (_, x) => {
+            const landung = einwurfZeile(z.feld, x);
+            const spielbar = !z.vorbei && z.amZug === 0 && landung !== null;
+            // Von unten nach oben vorlesen — so, wie die Steine liegen.
+            const belegung = Array.from({ length: ZEILEN }, (_, y) => z.feld[ZEILEN - 1 - y]![x])
+              .filter((wer): wer is Spieler => wer !== null)
+              .map((wer) => NAME[wer]);
 
             return (
               <button
-                key={i}
+                key={x}
                 type="button"
-                disabled={z.vorbei || z.amZug !== 0 || !spalteFrei}
+                disabled={!spielbar}
                 onClick={() => beiSpalte(x)}
                 aria-label={
-                  wer === null
-                    ? `Spalte ${x + 1}, Reihe ${ZEILEN - y}, frei`
-                    : `Spalte ${x + 1}, Reihe ${ZEILEN - y}, ${NAME[wer]}`
+                  landung === null
+                    ? `Spalte ${x + 1} ist voll`
+                    : `Spalte ${x + 1}, ${
+                        belegung.length === 0 ? 'leer' : `von unten: ${belegung.join(', ')}`
+                      }`
                 }
-                className="grid aspect-square place-items-center rounded-full bg-[#0b1226] p-[7%] transition-transform enabled:active:scale-95 disabled:cursor-default"
+                className="group flex flex-col gap-1.5 rounded-2xl p-[3px] transition-colors disabled:cursor-default enabled:active:bg-white/10"
               >
-                {wer !== null && (
-                  <Stein
-                    wer={wer}
-                    faellt={istLetzter && !settings.reducedMotion}
-                    siegt={siegerZellen.has(`${x},${y}`) && !settings.reducedMotion}
-                    fallhoehe={fallhoehe}
-                  />
-                )}
+                {Array.from({ length: ZEILEN }, (_, y) => {
+                  const wer = z.feld[y]![x];
+                  const istLetzter = z.letzter?.x === x && z.letzter?.y === y;
+                  // Fallweg in Prozent der eigenen Höhe: von ganz oben bis hierher.
+                  const fallhoehe = -(y + 1) * 100 - 40;
+
+                  return (
+                    <span
+                      key={y}
+                      className="grid min-h-0 flex-1 place-items-center rounded-full bg-[#0b1226] p-[7%]"
+                    >
+                      {wer !== null ? (
+                        <Stein
+                          wer={wer}
+                          faellt={istLetzter && !settings.reducedMotion}
+                          siegt={siegerZellen.has(`${x},${y}`) && !settings.reducedMotion}
+                          fallhoehe={fallhoehe}
+                        />
+                      ) : (
+                        // Schattenstein im Zielloch: zeigt vor dem Loslassen,
+                        // wo der Stein landet. Er hängt an der Spalte, nicht
+                        // am Loch — angetippt wird ja die ganze Spalte.
+                        spielbar &&
+                        y === landung && (
+                          <span
+                            aria-hidden="true"
+                            className="pointer-events-none block size-full rounded-full opacity-0 transition-opacity group-hover:opacity-40 group-focus-visible:opacity-40 group-active:opacity-70"
+                            style={{
+                              background: `radial-gradient(circle at 34% 28%, ${FARBE[0]}, ${FARBE_DUNKEL[0]})`,
+                            }}
+                          />
+                        )
+                      )}
+                    </span>
+                  );
+                })}
               </button>
             );
           })}

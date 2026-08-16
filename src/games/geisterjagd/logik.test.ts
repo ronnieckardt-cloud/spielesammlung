@@ -3,11 +3,15 @@ import { labyrinthParsen } from './labyrinth';
 import type { Labyrinth } from './labyrinth';
 import {
   STARTLEBEN,
+  angstDauerFuerLevel,
   geistRichtungWaehlen,
   gueltigeRichtungen,
   jagdZiel,
+  modusDauer,
   neuesSpiel,
   richtungEingeben,
+  spielerIntervall,
+  streuFaktorFuerLevel,
   streuZiel,
   zeitFortschritt,
   zielFuerGeist,
@@ -432,6 +436,46 @@ describe('zeitFortschritt — Kollisionen', () => {
     expect(nach.vorbei).toBe(true);
   });
 
+  it('frontal aneinander vorbei geht nicht — der Tausch der Felder ist ein Treffer', () => {
+    // Der Fehler, den dieser Test festhält: Spieler und Geist liefen im
+    // selben Takt aufeinander zu und tauschten die Felder. Danach stand
+    // keiner mehr auf dem Feld des anderen — geprüft wurde aber nur die
+    // Endstellung, also lief man mitten durch den Geist hindurch, ohne ein
+    // Leben zu verlieren.
+    const labyrinth = labyrinthParsen([
+      '###########',
+      '#P.......G#',
+      '#.........#',
+      '#GGG......#',
+      '###########',
+    ]);
+    const z: Zustand = {
+      labyrinth,
+      // Beide sind im selben Takt dran und schauen sich an: Spieler (5,1)
+      // nach rechts, Geist (6,1) jagend nach links.
+      spieler: spieler(5, 1, { richtung: 'right', bewegungRest: 0.001 }),
+      geister: [
+        geist(0, 6, 1, { modus: 'jagen', richtung: 'left', bewegungRest: 0.001 }),
+        geist(1, 1, 3, { bewegungRest: 999 }),
+        geist(2, 2, 3, { bewegungRest: 999 }),
+        geist(3, 3, 3, { bewegungRest: 999 }),
+      ],
+      punkte: new Set(labyrinth.punkteStart),
+      kraftpillen: new Set(),
+      score: 0,
+      leben: STARTLEBEN,
+      level: 1,
+      modusPhase: 0,
+      modusZeitRest: 999,
+      vorbei: false,
+      gewonnen: false,
+      saat: 1,
+    };
+    const nach = zeitFortschritt(z, 0.002);
+    expect(nach.leben).toBe(STARTLEBEN - 1);
+    expect(nach.spieler.position).toEqual(labyrinth.spielerStart);
+  });
+
   it('Augen tun dem Spieler nichts', () => {
     const labyrinth = offenesLabyrinth();
     const z: Zustand = {
@@ -507,6 +551,64 @@ describe('zeitFortschritt — Level abgeschlossen', () => {
     expect(nach.punkte.size).toBe(labyrinth.punkteStart.size); // neu befüllt
     expect(nach.score).toBe(110); // Punktestand bleibt erhalten
     expect(nach.modusPhase).toBe(0); // Modus-Zeittabelle beginnt von vorn
+  });
+});
+
+describe('Schwierigkeit über Level 6 hinaus', () => {
+  it('das Tempo ist ab Level 6 am Anschlag — genau das war der Anlass', () => {
+    expect(spielerIntervall(10)).toBe(spielerIntervall(6));
+  });
+
+  it('die Angst-Dauer sinkt mit dem Level und bleibt bei drei Sekunden stehen', () => {
+    expect(angstDauerFuerLevel(1)).toBeCloseTo(8);
+    expect(angstDauerFuerLevel(6)).toBeCloseTo(4.5);
+    expect(angstDauerFuerLevel(9)).toBeCloseTo(3);
+    expect(angstDauerFuerLevel(30)).toBeCloseTo(3); // Deckel, geht nicht tiefer
+  });
+
+  it('die Streuen-Phasen werden ab Level 5 kürzer, die Jagd-Phasen nicht', () => {
+    expect(streuFaktorFuerLevel(4)).toBeCloseTo(1); // bis Level 4 unverändert
+    expect(modusDauer(0, 1)).toBeCloseTo(7); // Phase 0 ist Streuen
+    expect(modusDauer(0, 5)).toBeCloseTo(7 * 0.85);
+    expect(modusDauer(0, 8)).toBeCloseTo(7 * 0.4); // Deckel
+    expect(modusDauer(0, 30)).toBeCloseTo(7 * 0.4);
+
+    expect(modusDauer(1, 1)).toBe(20); // Phase 1 ist Jagen …
+    expect(modusDauer(1, 30)).toBe(20); // … und bleibt gleich lang
+  });
+
+  it('keine der beiden Stellschrauben geht je zurück', () => {
+    for (let level = 2; level <= 30; level++) {
+      expect(angstDauerFuerLevel(level)).toBeLessThanOrEqual(angstDauerFuerLevel(level - 1));
+      expect(modusDauer(0, level)).toBeLessThanOrEqual(modusDauer(0, level - 1));
+    }
+  });
+
+  it('zwischen Level 6 und Level 10 wird es tatsächlich noch schwerer', () => {
+    expect(angstDauerFuerLevel(10)).toBeLessThan(angstDauerFuerLevel(6));
+    expect(modusDauer(0, 10)).toBeLessThan(modusDauer(0, 6));
+  });
+
+  it('eine Kraftpille macht die Geister im höheren Level kürzer ängstlich', () => {
+    const labyrinth = offenesLabyrinth();
+    const basis: Zustand = {
+      labyrinth,
+      spieler: spieler(7, 6, { richtung: 'up', bewegungRest: 0.01 }),
+      geister: [0, 1, 2, 3].map((id) => geist(id as 0 | 1 | 2 | 3, 0, 0, { modus: 'jagen', bewegungRest: 999 })),
+      punkte: new Set(['1,1']), // damit das Level nicht sofort fertig ist
+      kraftpillen: new Set(['7,5']),
+      score: 0,
+      leben: STARTLEBEN,
+      level: 1,
+      modusPhase: 0,
+      modusZeitRest: 999,
+      vorbei: false,
+      gewonnen: false,
+      saat: 1,
+    };
+    const stufe1 = zeitFortschritt(basis, 0.02);
+    const stufe10 = zeitFortschritt({ ...basis, level: 10 }, 0.02);
+    expect(stufe10.geister[0]!.angstZeitRest).toBeLessThan(stufe1.geister[0]!.angstZeitRest);
   });
 });
 

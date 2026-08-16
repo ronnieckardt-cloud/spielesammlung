@@ -6,15 +6,18 @@ import {
   MESSER_PUNKTE,
   MIN_ABSTAND,
   PAUSE_S,
+  ZERTEILT_S,
   levelAufbauen,
   messerFuerLevel,
   musterFuerLevel,
   neuesSpiel,
   normalisieren,
+  stossPartner,
   vorgestecktFuerLevel,
   werfen,
   winkelAbstand,
   zeitFortschritt,
+  zerteiltFortschritt,
 } from './logik';
 import type { Zustand } from './logik';
 import { rng } from '../../core/rng';
@@ -167,9 +170,23 @@ describe('Werfen und Einschlag', () => {
     expect(z.vorbei).toBe(false);
     z = wurfDurchziehen(z);
     expect(z.vorbei).toBe(true);
-    expect(z.getroffen).toBe(true);
     // Das tödliche Messer wird nicht mitgezählt.
     expect(z.messer).toHaveLength(1);
+  });
+
+  it('merkt sich, wo der Zusammenstoß war, und welche Klinge dran schuld ist', () => {
+    // Ohne diese Angabe endete die Runde ohne jedes Bild: Das geworfene
+    // Messer verschwand, die Stelle des Zusammenstoßes blieb ungenannt.
+    let z = stillstehend(neuesSpiel(1), 0.4);
+    expect(z.stoss).toBeNull();
+    expect(stossPartner(z)).toBe(-1);
+
+    z = wurfDurchziehen(z);
+    z = wurfDurchziehen(z);
+    expect(z.stoss).toBeCloseTo(normalisieren(ANKUNFT - 0.4));
+    // Genau das eine steckende Messer ist gemeint, nicht irgendeines.
+    expect(stossPartner(z)).toBe(0);
+    expect(winkelAbstand(z.messer[stossPartner(z)]!, z.stoss!)).toBeLessThan(MIN_ABSTAND);
   });
 
   it('nimmt nach dem Ende keine Würfe mehr an', () => {
@@ -189,6 +206,46 @@ describe('Werfen und Einschlag', () => {
     expect(nach.aepfel).toHaveLength(0);
     expect(nach.messer).toHaveLength(1);
     expect(nach.punkte).toBe(MESSER_PUNKTE + APFEL_PUNKTE);
+  });
+
+  it('lässt einen zerteilten Apfel eine Weile auseinanderfliegen', () => {
+    // Ohne diese Nachlaufzeit verschwand die größte Einzelbelohnung des
+    // Spiels ohne jede sichtbare Reaktion: Der Apfel war im selben
+    // Augenblick aus `aepfel` heraus, in dem er getroffen wurde.
+    const grund = stillstehend(levelAufbauen(2, 0, 5), 0);
+    const apfel = normalisieren(ANKUNFT);
+    const nach = wurfDurchziehen({ ...grund, aepfel: [apfel] });
+
+    expect(nach.zerteilt).not.toBeNull();
+    // Die Hälften fliegen dort auseinander, wo der Apfel saß.
+    expect(nach.zerteilt!.steck).toBeCloseTo(apfel);
+    expect(zerteiltFortschritt(nach)).toBeLessThan(0.5);
+
+    const spaeter = zeitFortschritt(nach, ZERTEILT_S * 0.5);
+    expect(spaeter.zerteilt).not.toBeNull();
+    expect(zerteiltFortschritt(spaeter)).toBeGreaterThan(zerteiltFortschritt(nach));
+
+    // Danach ist er weg und die Anzeige zeichnet nichts mehr.
+    const fertig = zeitFortschritt(spaeter, ZERTEILT_S);
+    expect(fertig.zerteilt).toBeNull();
+    expect(zerteiltFortschritt(fertig)).toBe(0);
+  });
+
+  it('lässt die Apfeluhr auch während der Levelpause weiterlaufen', () => {
+    // Sonst bliebe ausgerechnet beim Apfeltreffer mit dem letzten Messer
+    // eine halb auseinandergeflogene Frucht über dem Stamm stehen.
+    let z = stillstehend(levelAufbauen(2, 0, 5), 0);
+    for (let i = 0; i < messerFuerLevel(2) - 1; i++) {
+      z = wurfDurchziehen(stillstehend(z, 1.2 + i * 1.2));
+    }
+    // Der letzte Wurf trifft zugleich den Apfel.
+    z = wurfDurchziehen({ ...stillstehend(z, 0), aepfel: [normalisieren(ANKUNFT)] });
+    expect(z.pauseRest).toBeCloseTo(PAUSE_S);
+    expect(z.zerteilt).not.toBeNull();
+
+    const spaeter = zeitFortschritt(z, ZERTEILT_S + 0.01);
+    expect(spaeter.pauseRest).toBeGreaterThan(0);
+    expect(spaeter.zerteilt).toBeNull();
   });
 
   it('schützt ein Apfel nicht vor dem Messer dahinter', () => {

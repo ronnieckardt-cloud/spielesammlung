@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { FRAGEN } from './fragen';
 import {
   FRAGEN_PRO_LEVEL,
+  LEVEL_JE_DURCHGANG,
   antwortWaehlen,
+  fragenFuerLevel,
   naechsteFrage,
   neuesLevel,
   punkteFuerAntwort,
@@ -28,6 +30,29 @@ describe('neuesLevel', () => {
     const z = neuesLevel(7);
     const poolTexte = new Set(FRAGEN.map((f) => f.frage));
     for (const f of z.fragen) expect(poolTexte.has(f.frage)).toBe(true);
+  });
+
+  it('stellt innerhalb eines Durchgangs keine Frage zweimal', () => {
+    const gesehen = new Set<string>();
+    for (let level = 1; level <= LEVEL_JE_DURCHGANG; level++) {
+      for (const f of neuesLevel(level).fragen) {
+        expect(gesehen.has(f.frage)).toBe(false);
+        gesehen.add(f.frage);
+      }
+    }
+    expect(gesehen.size).toBe(LEVEL_JE_DURCHGANG * FRAGEN_PRO_LEVEL);
+  });
+
+  it('fängt nach einem vollen Durchgang neu gemischt an, nicht von vorn', () => {
+    const ersteRunde = neuesLevel(1).fragen.map((f) => f.frage);
+    const zweiteRunde = neuesLevel(1 + LEVEL_JE_DURCHGANG).fragen.map((f) => f.frage);
+    expect(zweiteRunde).not.toEqual(ersteRunde);
+  });
+
+  it('liefert für jedes Level volle FRAGEN_PRO_LEVEL Fragen, auch weit oben', () => {
+    for (const level of [1, LEVEL_JE_DURCHGANG, LEVEL_JE_DURCHGANG + 1, 137]) {
+      expect(fragenFuerLevel(level)).toHaveLength(FRAGEN_PRO_LEVEL);
+    }
   });
 
   it('startet bei Frage 0, 0 Punkten, nicht vorbei', () => {

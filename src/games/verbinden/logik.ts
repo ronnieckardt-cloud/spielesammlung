@@ -1,5 +1,5 @@
 import { saatAus } from '../../core/rng';
-import { raetselErzeugen, sindNachbarn } from './erzeuger';
+import { massFuerLevel, raetselErzeugen, sindNachbarn, zuXY, zuZelle } from './erzeuger';
 import type { Raetsel, Zelle } from './erzeuger';
 
 /**
@@ -136,6 +136,56 @@ export function ziehenNach(z: Zustand, zelle: Zelle): Zustand {
   return { ...neu, geloest: istGeloest(neu) };
 }
 
+/**
+ * Zieht bis zu diesem Feld — auch wenn der Finger dazwischen gesprungen ist.
+ *
+ * Ein Finger ist schneller als die Meldungen des Browsers: Zwischen zwei
+ * `pointermove` liegen leicht zwei Felder, oder eines schräg. `ziehenNach`
+ * verwirft so einen Sprung stillschweigend, und dann bleibt der Weg stehen,
+ * bis der Finger wieder ein **direktes** Nachbarfeld der letzten Wegzelle
+ * berührt — nach einem Schrägsprung kann das lange ausbleiben, und es fühlt
+ * sich an, als klemme das Spiel.
+ *
+ * Deshalb wird die Lücke hier in Einzelschritte über Kreuz zerlegt und Feld
+ * für Feld gezogen. Jeder Schritt läuft durch dieselbe `ziehenNach`-Prüfung
+ * wie sonst auch — es wird also nichts erlaubt, was von Hand nicht auch
+ * ginge. Klemmt der Schritt zur Seite (fremder Punkt), wird über die andere
+ * Achse ausgewichen; klemmen beide, bleibt der Weg genau davor stehen.
+ */
+export function ziehenBis(z: Zustand, zelle: Zelle): Zustand {
+  if (z.zieht === null || z.geloest) return z;
+  const farbe = z.zieht;
+  const { breite, hoehe } = z.raetsel;
+  let neu = z;
+
+  // Mehr Schritte kann es nicht geben: Jeder angenommene Schritt verkleinert
+  // den Abstand zum Ziel um genau eins.
+  for (let n = 0; n < breite + hoehe; n++) {
+    const weg = neu.wege[farbe]!;
+    const letzt = weg[weg.length - 1]!;
+    if (letzt === zelle) break;
+
+    const von = zuXY(letzt, breite);
+    const nach = zuXY(zelle, breite);
+    const kandidaten: Zelle[] = [];
+    if (von.x !== nach.x) kandidaten.push(zuZelle(von.x + Math.sign(nach.x - von.x), von.y, breite));
+    if (von.y !== nach.y) kandidaten.push(zuZelle(von.x, von.y + Math.sign(nach.y - von.y), breite));
+
+    let gegangen = neu;
+    for (const kandidat of kandidaten) {
+      const versuch = ziehenNach(gegangen, kandidat);
+      if (versuch !== gegangen) {
+        gegangen = versuch;
+        break;
+      }
+    }
+    if (gegangen === neu) break;
+    neu = gegangen;
+  }
+
+  return neu;
+}
+
 /** Finger hoch. Der Weg bleibt so stehen, wie er gezogen wurde. */
 export function ziehenBeenden(z: Zustand): Zustand {
   if (z.zieht === null) return z;
@@ -149,9 +199,17 @@ export function ziehenBeenden(z: Zustand): Zustand {
  * nötige Zahl hinaus angesetzt wurde. Wer alles auf Anhieb zieht, bekommt
  * das Doppelte von jemandem, der lange herumprobiert — aber unter den
  * Mindestwert fällt niemand, sonst lohnt sich Weiterspielen nicht mehr.
+ *
+ * Der Grundwert hängt am **tatsächlichen Brett**, nicht an der bloßen
+ * Levelnummer. Feldgröße und Farbzahl sind ab Level 7 gedeckelt (siehe
+ * `massFuerLevel`) — wüchse der Grundwert trotzdem endlos weiter, würde die
+ * Bestenliste ab dort nur noch messen, wer länger durchhält, nicht wer besser
+ * spielt. Die Werte sind so gewählt, dass bis Level 7 fast dasselbe
+ * herauskommt wie mit der alten Formel (Level 1 auf den Punkt genau).
  */
 export function punkteFuerZuege(level: number, farben: number, zuege: number): number {
-  const grund = 200 + level * 40;
+  const { breite, hoehe } = massFuerLevel(level);
+  const grund = breite * hoehe * 6 + farben * 30;
   const zuviel = Math.max(0, zuege - farben);
   return Math.max(50, grund - zuviel * 20);
 }

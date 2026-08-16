@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Startbildschirm } from '../../core/Startbildschirm';
 import type { DekoTeil } from '../../core/Startbildschirm';
 import { sfx } from '../../core/sfx';
+import { haptik } from '../../core/haptik';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
 import { neuesSpiel, punkte, rutschen, spurWechseln, springen, takt, tempoBei } from './logik';
@@ -70,7 +71,13 @@ function DekoHaus({ hoehe }: { hoehe: number }) {
   );
 }
 
-export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: GameProps) {
+export function DashCity({
+  onScore,
+  onGameOver,
+  bestScore,
+  istErsteRunde,
+  settings,
+}: GameProps) {
   const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [laedt, setLaedt] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -83,9 +90,29 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
 
   const leinwandRef = useRef<HTMLCanvasElement>(null);
   const buehneRef = useRef<HTMLDivElement>(null);
-  const laufRef = useRef<Lauf>(neuesSpiel(saatAus('laufen', Date.now())));
+  /**
+   * Der Lauf entsteht **beim ersten Zugriff**, nicht bei jedem Rendern.
+   *
+   * `useRef(neuesSpiel(…))` sieht harmlos aus, wertet sein Argument aber bei
+   * jedem Rendern aus und wirft das Ergebnis danach weg — und `neuesSpiel`
+   * legt acht komplette Abschnitte samt Array-Kopien an. Der Kommentar
+   * weiter unten („React rendert während des Laufens gar nicht") stimmt nur
+   * für die Leinwand: Der Punktestand geht zweimal je Sekunde nach außen,
+   * die Hülle setzt damit ihren Zustand, und diese Komponente rendert mit.
+   * Es waren also zwei weggeworfene Läufe je Sekunde.
+   */
+  const laufRef = useRef<Lauf | null>(null);
+  const holeLauf = useCallback(
+    () => (laufRef.current ??= neuesSpiel(saatAus('laufen', Date.now()))),
+    [],
+  );
   const szeneRef = useRef<Szene | null>(null);
+  /** Ton, Stups und Punktestand des Zusammenstoßes — genau einmal je Runde. */
   const gemeldet = useRef(false);
+  /** `onGameOver` ist raus. Die Schnittstelle erlaubt das genau einmal. */
+  const beendet = useRef(false);
+  /** Der rote Schein am Bildrand beim Aufprall — direkt ins DOM geschrieben. */
+  const blitzRef = useRef<HTMLDivElement>(null);
 
   /**
    * Die Anzeigen werden **direkt ins DOM** geschrieben, nicht über React.
@@ -93,15 +120,21 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
    * Der Lauf wird sechzigmal je Sekunde fortgeschrieben. Ginge davon auch
    * nur viermal je Sekunde ein `setState` aus, rechnete React mitten in die
    * Zeichenschleife hinein — und genau das war der Grund, warum es sich
-   * nicht ganz flüssig anfühlte. Jetzt rendert React während des Laufens
-   * **gar nicht** mehr.
+   * nicht ganz flüssig anfühlte.
+   *
+   * Hier stand früher, React rendere während des Laufens **gar nicht** mehr.
+   * Das stimmt so nicht: Der Punktestand geht zweimal je Sekunde an die
+   * Hülle, die setzt damit ihren Zustand, und diese Komponente rendert mit.
+   * Richtig ist der Kern der Sache — dieses Rendern fasst die Leinwand nicht
+   * an, es kostet ein paar Textknoten in der Kopfzeile. Deshalb darf im
+   * Rumpf dieser Komponente auch nichts Teures stehen (siehe `laufRef`).
    */
   const punkteRef = useRef<HTMLSpanElement>(null);
   const muenzenRef = useRef<HTMLSpanElement>(null);
   const tempoRef = useRef<HTMLDivElement>(null);
 
   const eingabe = useCallback((was: 'links' | 'rechts' | 'hoch' | 'runter') => {
-    const l = laufRef.current;
+    const l = holeLauf();
     if (l.vorbei) return;
     setZeigeHinweis(false);
     if (was === 'links') laufRef.current = spurWechseln(l, -1);
@@ -114,7 +147,7 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
       laufRef.current = rutschen(l);
       sfx('klick');
     }
-  }, []);
+  }, [holeLauf]);
 
   // Der Hinweis blendet sich nach ein paar Sekunden selbst aus.
   useEffect(() => {
@@ -188,16 +221,26 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
       eingabe(was);
     };
 
+    /*
+     * Benannt, nicht anonym — sonst lässt er sich nicht wieder abmelden.
+     * Genau das war hier der Fall: Vier Listener wurden angemeldet, drei
+     * abgemeldet. Jedes „Nochmal" mountet das Spiel neu und hängte einen
+     * weiteren daran, und jeder hielt über seine Closure die alte
+     * Zeiger-Verwaltung fest.
+     */
+    const abgebrochenerZeiger = () => (zeiger = null);
+
     buehne.addEventListener('pointerdown', ab, { passive: true });
     buehne.addEventListener('pointermove', bewegt, { passive: false });
     buehne.addEventListener('pointerup', auf, { passive: true });
-    buehne.addEventListener('pointercancel', () => (zeiger = null), { passive: true });
+    buehne.addEventListener('pointercancel', abgebrochenerZeiger, { passive: true });
     window.addEventListener('keydown', beiTaste, { passive: false });
 
     return () => {
       buehne.removeEventListener('pointerdown', ab);
       buehne.removeEventListener('pointermove', bewegt);
       buehne.removeEventListener('pointerup', auf);
+      buehne.removeEventListener('pointercancel', abgebrochenerZeiger);
       window.removeEventListener('keydown', beiTaste);
     };
   }, [gestartet, fehler, eingabe]);
@@ -208,16 +251,17 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
     let abgebrochen = false;
     let bild = 0;
     let messenAbmelden: (() => void) | null = null;
+    let endeUhr = 0;
     let letzte = performance.now();
 
     setLaedt(true);
 
     void (async () => {
       try {
-        const { szeneBauen } = await import('./szene');
+        const { szeneBauen, AUFPRALL_DAUER } = await import('./szene');
         if (abgebrochen || !leinwandRef.current) return;
 
-        const szene = szeneBauen(leinwandRef.current);
+        const szene = szeneBauen(leinwandRef.current, settings.reducedMotion);
         szeneRef.current = szene;
         const messen = () => {
           const eltern = leinwandRef.current?.parentElement;
@@ -240,6 +284,8 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
         let letztePunkte = -1;
         let letzteMuenzen = -1;
         let seitMeldung = 0;
+        /** Sekunden seit dem Zusammenstoß. */
+        let aufprall = 0;
 
         const schleife = (jetzt: number) => {
           if (abgebrochen) return;
@@ -249,11 +295,15 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
           const dt = Math.min(0.05, (jetzt - letzte) / 1000);
           letzte = jetzt;
 
-          const vorher = laufRef.current;
+          const vorher = holeLauf();
           const neu = takt(vorher, dt);
           laufRef.current = neu;
 
-          if (neu.muenzenZahl > vorher.muenzenZahl) sfx('gut', Math.min(12, neu.muenzenZahl));
+          // Der Ton steigt mit der **Serie**, nicht mit der Gesamtzahl.
+          // Vorher hing er an `muenzenZahl`: Eine Reihe sind fünf Münzen, der
+          // Deckel liegt bei zwölf Halbtönen — nach drei Reihen war er für
+          // den Rest des Laufs am Anschlag und jede Münze klang gleich.
+          if (neu.muenzenZahl > vorher.muenzenZahl) sfx('gut', Math.min(12, neu.muenzSerie));
 
           szene.zeichnen(neu, dt);
 
@@ -286,11 +336,42 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
             if (!gemeldet.current) {
               gemeldet.current = true;
               sfx('ende');
+              haptik('ende');
               onScore(p);
-              // Kurz stehen lassen — man will den Aufprall noch sehen.
-              window.setTimeout(() => onGameOver(p), 700);
             }
-            return;
+            /*
+             * Der Rundenende-Bildschirm kommt über eine **Uhr**, nicht über
+             * die gezählten Bilder: Wechselt jemand genau jetzt in eine
+             * andere App, hält der Browser `requestAnimationFrame` an — die
+             * Runde bliebe sonst für immer im Aufprall stehen.
+             *
+             * Gestellt wird sie hier und nicht oben im einmaligen Zweig, und
+             * das ist wichtig: Wird dieser Effekt mitten im Aufprall neu
+             * aufgesetzt (die Hülle reicht neue Rückrufe herein), räumt seine
+             * Aufräumfunktion die alte Uhr weg. Hinge das Stellen an
+             * `gemeldet`, käme nie eine neue — und die Runde hätte kein Ende.
+             */
+            if (!endeUhr && !beendet.current) {
+              endeUhr = window.setTimeout(() => {
+                beendet.current = true;
+                onGameOver(p);
+              }, AUFPRALL_DAUER * 1000);
+            }
+            aufprall += dt;
+            /*
+             * Ein roter Schein vom Bildrand her, keine ganzflächig
+             * aufblitzende Scheibe: Ganzflächige Hell-Dunkel-Wechsel sind im
+             * Projekt tabu, und die Mitte muss frei bleiben — dort liegt
+             * gerade das Einzige, was man sehen will, nämlich der Sturz.
+             * Bei „weniger Bewegung" bleibt er ganz weg.
+             */
+            if (blitzRef.current && !settings.reducedMotion) {
+              const rest = Math.max(0, 1 - aufprall / (AUFPRALL_DAUER * 0.7));
+              blitzRef.current.style.opacity = (rest * rest).toFixed(3);
+            }
+            // Weiterzeichnen, bis der Aufprall durch ist — vorher blieb hier
+            // ein Standbild stehen, in dem die Figur im Hindernis steckte.
+            if (aufprall >= AUFPRALL_DAUER) return;
           }
           bild = requestAnimationFrame(schleife);
         };
@@ -306,11 +387,14 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
     return () => {
       abgebrochen = true;
       cancelAnimationFrame(bild);
+      // Wer während des Aufpralls „Zurück" drückt, soll nicht eine halbe
+      // Sekunde später doch noch den Rundenende-Bildschirm bekommen.
+      window.clearTimeout(endeUhr);
       messenAbmelden?.();
       szeneRef.current?.aufraeumen();
       szeneRef.current = null;
     };
-  }, [gestartet, onGameOver, onScore]);
+  }, [gestartet, onGameOver, onScore, holeLauf, settings.reducedMotion]);
 
   if (!gestartet) {
     return (
@@ -341,6 +425,21 @@ export function DashCity({ onScore, onGameOver, bestScore, istErsteRunde }: Game
   return (
     <div ref={buehneRef} className="relative min-h-0 flex-1 touch-none select-none">
       <canvas ref={leinwandRef} className="size-full" />
+
+      {/* Der Aufprall-Schein. Er liegt immer im Baum und wird ausschließlich
+          über `style.opacity` aus der Zeichenschleife heraus angefasst —
+          derselbe Weg wie bei Punkten und Tempobalken, damit React während
+          des Laufens die Leinwand nicht anrührt. */}
+      <div
+        ref={blitzRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          opacity: 0,
+          background:
+            'radial-gradient(ellipse at center, rgba(220,38,38,0) 38%, rgba(220,38,38,0.72) 100%)',
+        }}
+      />
 
       {laedt && (
         <p className="absolute inset-0 grid place-items-center text-sm text-white/80">

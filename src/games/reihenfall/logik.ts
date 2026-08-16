@@ -241,6 +241,27 @@ export function levelFuerZeilen(zeilenGesamt: number): number {
   return Math.floor(zeilenGesamt / 10) + 1;
 }
 
+/** Breiteste Form in der Startlage — der I-Stein mit vier Zellen. */
+export const MAX_TEIL_BREITE = 4;
+
+/**
+ * Kantenlänge einer Zelle in den kleinen Kästen für „Halten" und „Nächste".
+ *
+ * Die Kästen hatten vorher eine **feste** Zellgröße von 11 Pixeln. Der
+ * I-Stein ist vier Zellen breit und brauchte damit 4 × 11 + 3 × 2 = 50
+ * Pixel — in einem 36 Pixel breiten Kasten ragte er sichtbar heraus und lag
+ * über den Nachbarkästen.
+ *
+ * Gerechnet wird immer mit der **breitesten** Form, nicht mit der des
+ * gezeigten Teils: So stehen alle sieben Teile im selben Maßstab
+ * nebeneinander, wie in einer echten Vorschau. Sonst wäre der O-Stein
+ * doppelt so groß wie der I-Stein.
+ */
+export function miniZellgroesse(kastenPx: number, luecke: number): number {
+  const platz = kastenPx - (MAX_TEIL_BREITE - 1) * luecke;
+  return Math.max(1, Math.floor(platz / MAX_TEIL_BREITE));
+}
+
 /** Sekunden pro Feld Fallzeit — wird mit dem Level kürzer, nie unter einen Sockel. */
 export function fallintervallFuerLevel(level: number): number {
   return Math.max(0.1, 1 - (level - 1) * 0.08);

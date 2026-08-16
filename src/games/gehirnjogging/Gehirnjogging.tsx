@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { sfx } from '../../core/sfx';
 import { Startbildschirm } from '../../core/Startbildschirm';
 import type { DekoTeil } from '../../core/Startbildschirm';
@@ -60,6 +61,9 @@ export function Gehirnjogging({
   // Nur für Kopfrechnen/Muster: welche der vier Zahlen wurde angeklickt.
   // Merk-Folgen führt seine Eingabe selbst, siehe MerkfolgenAnzeige.
   const [ausgewaehlt, setAusgewaehlt] = useState<number | null>(null);
+  // Das „+N" über dem Aufgabenbereich. Ohne das war die Serie nur an der
+  // Zahl in der Kopfzeile abzulesen, die man beim Antworten nicht ansieht.
+  const gewinn = usePunktegewinn(z.punkte);
 
   useEffect(() => {
     onScore(z.punkte);
@@ -81,10 +85,22 @@ export function Gehirnjogging({
     setAusgewaehlt(null);
   }, [z.index, z.level]);
 
-  const beiErgebnis = useCallback((richtig: boolean) => {
-    sfx(richtig ? 'gut' : 'schlecht');
-    setZ((alt) => aufgabeAbschliessen(alt, richtig));
-  }, []);
+  const beiErgebnis = useCallback(
+    (richtig: boolean) => {
+      // Doppelte Meldungen zur selben Aufgabe verwerfen, bevor ein Ton
+      // läuft: `aufgabeAbschliessen` ist danach ein No-op, der Ton wäre
+      // aber trotzdem zu hören gewesen.
+      if (z.ergebnis !== null || z.vorbei) return;
+      // Der Ton klettert mit der Serie eine Stufe höher — dasselbe Signal
+      // wie die wachsende Punktzahl, nur hörbar (zweites Argument von
+      // `sfx`, wie bei Pair Up). `z.serie` ist die Serie **vor** dieser
+      // Antwort, die erste richtige bleibt also der Grundton.
+      if (richtig) sfx('gut', Math.min(12, z.serie * 2));
+      else sfx('schlecht');
+      setZ((alt) => aufgabeAbschliessen(alt, richtig));
+    },
+    [z.ergebnis, z.serie, z.vorbei],
+  );
 
   const beiZahlAntwort = useCallback(
     (index: 0 | 1 | 2 | 3, richtigIndex: 0 | 1 | 2 | 3) => {
@@ -168,36 +184,56 @@ export function Gehirnjogging({
         />
       </div>
 
-      {/* Nur dieser Teil scrollt, wenn der Inhalt lang wird — der
-          Weiter-Knopf darunter bleibt dadurch immer erreichbar. */}
-      <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto">
-      <span className="text-xs font-medium tracking-wide text-gedaempft uppercase">
-        {VARIANTEN_NAMEN[z.variante]}
-      </span>
+      {/* Die Bühne wie in den anderen Spielen: Sie bringt den farbigen
+          Schein hinter dem Inhalt (`.spielbuehne::before`) und den Auftritt
+          beim Rundenstart (`buehne-rein`) mit — beides hängt in index.css an
+          `.spielbuehne` selbst, dieses Spiel hatte die Klasse als eines von
+          fünf nie gesetzt und ging deshalb leer aus.
 
-      {aufgabe.art === 'kopfrechnen' && (
-        <KopfrechnenAnzeige
-          aufgabe={aufgabe.daten}
-          ausgewaehlt={ausgewaehlt}
-          onWaehlen={(i) => beiZahlAntwort(i, aufgabe.daten.richtig)}
-        />
-      )}
-      {aufgabe.art === 'muster' && (
-        <MusterAnzeige
-          aufgabe={aufgabe.daten}
-          ausgewaehlt={ausgewaehlt}
-          onWaehlen={(i) => beiZahlAntwort(i, aufgabe.daten.richtig)}
-        />
-      )}
-      {aufgabe.art === 'merkfolgen' && (
-        <MerkfolgenAnzeige
-          key={`${z.level}-${z.index}`}
-          aufgabe={aufgabe.daten}
-          reducedMotion={settings.reducedMotion}
-          onFertig={beiErgebnis}
-        />
-      )}
+          Wichtig ist der Aufbau darin: Die Bühne ist ein Größen-Container
+          (`container-type: size`) und holt ihre Höhe aus dem, was nach
+          Kopfzeile, Weiter-Knopf und Fußzeile übrig bleibt — nicht aus
+          ihrem Inhalt. Der Inhalt bekommt deshalb `max-h-full`, und das
+          Scrollen liegt eine Ebene tiefer. Auf einem kurzen Bildschirm
+          scrollt damit nur der Aufgabenteil, der Weiter-Knopf bleibt
+          erreichbar. */}
+      <div className="spielbuehne">
+        <div className="relative flex max-h-full w-full max-w-md flex-col items-center gap-2">
+          {/* Das Popup gehört in diesen Kasten und nicht direkt in die Bühne
+              — genau wie bei Ghost Chase. Ein `absolute`-Kind der Bühne
+              wird von der Regel `.spielbuehne > *:not(.absolute)` zwar
+              verschont, aber hier hat es ohnehin den passenden Bezugspunkt. */}
+          <Punktegewinn gewinn={gewinn} />
 
+          <div className="flex min-h-0 w-full flex-col items-center gap-2 overflow-y-auto">
+            <span className="text-xs font-medium tracking-wide text-gedaempft uppercase">
+              {VARIANTEN_NAMEN[z.variante]}
+            </span>
+
+            {aufgabe.art === 'kopfrechnen' && (
+              <KopfrechnenAnzeige
+                aufgabe={aufgabe.daten}
+                ausgewaehlt={ausgewaehlt}
+                onWaehlen={(i) => beiZahlAntwort(i, aufgabe.daten.richtig)}
+              />
+            )}
+            {aufgabe.art === 'muster' && (
+              <MusterAnzeige
+                aufgabe={aufgabe.daten}
+                ausgewaehlt={ausgewaehlt}
+                onWaehlen={(i) => beiZahlAntwort(i, aufgabe.daten.richtig)}
+              />
+            )}
+            {aufgabe.art === 'merkfolgen' && (
+              <MerkfolgenAnzeige
+                key={`${z.level}-${z.index}`}
+                aufgabe={aufgabe.daten}
+                reducedMotion={settings.reducedMotion}
+                onFertig={beiErgebnis}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
       {beantwortet && !z.vorbei && (
@@ -212,7 +248,19 @@ export function Gehirnjogging({
         </button>
       )}
 
-      <p className="text-sm text-gedaempft">Richtig gelöst: {z.richtigeAnzahl}</p>
+      <p className="flex items-center gap-3 text-sm text-gedaempft">
+        <span>Richtig gelöst: {z.richtigeAnzahl}</span>
+        {/* Die Serie steuert die Punkte je Antwort (`punkteFuerAntwort` in
+            logik.ts), war aber nirgends zu sehen — der Spieler konnte nicht
+            wissen, warum dieselbe richtige Antwort mal 10 und mal 18 Punkte
+            gibt. Bewusst kein Komboherz: Eine Runde hat fünf Aufgaben, die
+            Serie kommt also höchstens auf 5, und dafür ist ein 86 Pixel
+            großer Aufsatz über dem Aufgabenbereich zu viel Gerät für zu
+            wenig Aussage. Als Wort und Zahl, nicht als Farbe allein. */}
+        {z.serie >= 2 && (
+          <span className="font-bold text-fokus tabular-nums">Serie ×{z.serie}</span>
+        )}
+      </p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}
     </div>

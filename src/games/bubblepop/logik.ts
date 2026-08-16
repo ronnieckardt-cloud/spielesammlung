@@ -289,12 +289,27 @@ export function andocken(z: Zustand, ziel: Punkt): SchussErgebnis {
   const gewonnen = wabeLeer(stand);
   const vorbei = gewonnen || tiefsteZeile(stand) >= VERLUST_ZEILE;
 
-  const gezogen = farbeZiehen(stand, saat);
+  // Die Vorschaukugel wurde einen Schuss früher gezogen, als das Feld noch
+  // anders aussah. Platzt mit diesem Schuss die letzte Kugel ihrer Farbe,
+  // läge genau eine Farbe im Rohr, die es gar nicht mehr gibt — dieser eine
+  // Schuss könnte dann unmöglich eine Dreiergruppe bilden und wäre
+  // zwangsläufig verschenkt. Also dieselbe Prüfung wie in `farbeZiehen`,
+  // nur eben auch für die schon gezogene Kugel.
+  const uebrig = vorhandeneFarben(stand);
+  let imRohr = z.naechste;
+  let s = saat;
+  if (uebrig.length > 0 && !uebrig.includes(imRohr)) {
+    const ersatz = farbeZiehen(stand, s);
+    imRohr = ersatz.farbe;
+    s = ersatz.saat;
+  }
+
+  const gezogen = farbeZiehen(stand, s);
 
   return {
     zustand: {
       wabe: stand,
-      aktuell: z.naechste,
+      aktuell: imRohr,
       naechste: gezogen.farbe,
       punkte,
       seitNachschub: zaehler,

@@ -56,6 +56,69 @@ export function neuesLevel(level: number): Zustand {
 }
 
 /**
+ * So lang muss ein Wisch mindestens sein, damit er als Schnitt zählt.
+ *
+ * Das Feld ist 104 Einheiten breit — vier Einheiten sind also knapp vier
+ * Prozent davon und liegen im Bereich eines wackeligen Tipps.
+ */
+export const MINDEST_WISCH = 4;
+
+/**
+ * War der Wisch zu kurz für eine Schnittgerade?
+ *
+ * Steht bewusst hier und nicht in der Anzeige: Es ist dieselbe Regel, nach
+ * der `schneidenAn` den Zug verwirft. Die Anzeige fragt sie nur ab, um
+ * *„zu kurz"* sagen zu können — vorher wurde so ein Wisch stumm geschluckt,
+ * und man rätselte, warum nichts passiert.
+ */
+export function istZuKurz(a: Punkt, b: Punkt): boolean {
+  return Math.hypot(b.x - a.x, b.y - a.y) < MINDEST_WISCH;
+}
+
+/**
+ * Schrittweiten der Tastatursteuerung: grob zum Hinlegen, mit Umschalt fein
+ * zum Nachjustieren.
+ *
+ * Nur ein grober Schritt reichte nicht: Punkte gibt es erst unter zehn
+ * Prozent Abweichung, „Perfekt" erst unter einem halben. Ohne den feinen
+ * Schritt käme man mit der Tastatur nie auf „Perfekt", mit dem Finger aber
+ * schon — die Tastatur wäre ein Zugang zweiter Klasse.
+ *
+ * Der feine Schub ist nachgemessen, nicht geschätzt: Beim Verschieben um
+ * eine Einheit wandert bis zu einer halben Sehnenlänge Fläche von der einen
+ * auf die andere Seite. Mit 0,1 blieb eine Form aus Level 19 bei 99,48 %
+ * hängen und verfehlte „Perfekt" knapp; mit 0,05 schaffen es alle. Ein Test
+ * prüft das nach.
+ */
+export const TASTE_GRAD = 1.5;
+export const TASTE_GRAD_FEIN = 0.3;
+export const TASTE_SCHUB = 1;
+export const TASTE_SCHUB_FEIN = 0.05;
+
+/**
+ * Zwei Punkte auf der Geraden, die mit `winkelGrad` gedreht und um
+ * `abstand` aus der Mitte geschoben ist. Für die Tastatursteuerung.
+ *
+ * Winkel **und** Abstand sind nötig: Eine Gerade, die immer durch den
+ * Nullpunkt läuft, halbiert eine unregelmäßige Form so gut wie nie — mit
+ * nur einer Stellschraube wäre die Tastatur ein unfairer Weg.
+ */
+export function geradeAus(
+  winkelGrad: number,
+  abstand: number,
+  laenge = 60,
+): { a: Punkt; b: Punkt } {
+  const bogen = (winkelGrad * Math.PI) / 180;
+  const richtung = { x: Math.cos(bogen), y: Math.sin(bogen) };
+  // Senkrecht dazu — entlang dieser Achse verschiebt `abstand` die Gerade.
+  const mitte = { x: -richtung.y * abstand, y: richtung.x * abstand };
+  return {
+    a: { x: mitte.x - richtung.x * laenge, y: mitte.y - richtung.y * laenge },
+    b: { x: mitte.x + richtung.x * laenge, y: mitte.y + richtung.y * laenge },
+  };
+}
+
+/**
  * Führt den Schnitt aus.
  *
  * Ein zweiter Schnitt an derselben Form wird stillschweigend verworfen —
@@ -68,7 +131,7 @@ export function schneidenAn(z: Zustand, a: Punkt, b: Punkt): Zustand {
   // Zu kurzer Wisch: Das ist ein Antippen, keine Schnittgerade. Ohne diese
   // Prüfung stünden a und b praktisch aufeinander und die „Gerade" wäre
   // gar keine.
-  if (Math.hypot(b.x - a.x, b.y - a.y) < 4) return z;
+  if (istZuKurz(a, b)) return z;
 
   const { links, rechts } = schneiden(z.form, a, b);
   const genau = genauigkeit(links, rechts);

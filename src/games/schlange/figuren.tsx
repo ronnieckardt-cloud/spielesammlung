@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { Punkt, Richtung } from './logik';
 import { gliedArt, kachelMitte, laeufe, laeuftSenkrecht, pfadDurch } from './geometrie';
 
@@ -215,8 +216,13 @@ export function Goldstern({ ort, ruhig }: { ort: Punkt; ruhig: boolean }) {
   );
 }
 
-/** Schwaches Raster im Hintergrund, damit man die Kacheln noch ahnt. */
-export function Raster({ breite, hoehe }: { breite: number; hoehe: number }) {
+/**
+ * Schwaches Raster im Hintergrund, damit man die Kacheln noch ahnt.
+ *
+ * `memo`, weil die Maße des Bretts fest sind: Ohne das baut React die 32
+ * Linien bei **jedem** Bild neu auf, obwohl sich daran nie etwas ändert.
+ */
+export const Raster = memo(function Raster({ breite, hoehe }: { breite: number; hoehe: number }) {
   const linien = [];
   for (let i = 1; i < breite; i++) {
     linien.push(
@@ -229,4 +235,4 @@ export function Raster({ breite, hoehe }: { breite: number; hoehe: number }) {
     );
   }
   return <>{linien}</>;
-}
+});

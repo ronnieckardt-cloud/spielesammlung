@@ -268,16 +268,16 @@ export function StartSeite({
        * Tastatur laufen also weiter von oben nach unten in der Reihenfolge
        * der Wichtigkeit.
        */}
-      <div className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:items-start md:gap-5">
-        <div className="md:flex md:flex-col md:gap-3">
-          <div className="mb-3 md:mb-0">
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start lg:gap-5">
+        <div className="lg:flex lg:flex-col lg:gap-3">
+          <div className="mb-3 lg:mb-0">
             <Abenteuerkarte onOeffnen={onAbenteuer} />
           </div>
 
           {weiter && <Weiterkarte spiel={weiter} onSpielen={onSpielen} />}
 
           <section
-            className="rein-von-unten mt-4 md:mt-0"
+            className="rein-von-unten mt-4 lg:mt-0"
             style={{ animationDelay: '180ms' }}
             aria-labelledby="ziele-titel"
           >
@@ -298,7 +298,7 @@ export function StartSeite({
         </div>
 
         <section
-          className="rein-von-unten mt-4 md:mt-0"
+          className="rein-von-unten mt-4 lg:mt-0"
           style={{ animationDelay: '240ms' }}
           aria-labelledby="spiele-titel"
         >
@@ -309,12 +309,21 @@ export function StartSeite({
             <button
               type="button"
               onClick={onAlleSpiele}
-              className="min-h-8 rounded-full px-2 text-xs font-bold text-white/80"
+              className="-mr-2 flex min-h-11 items-center rounded-full px-2 text-xs font-bold text-white/80"
             >
               Alle {spiele.length} ›
             </button>
           </div>
-          <ul className="buehne-3d flex flex-wrap justify-center gap-x-3 gap-y-3 rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm sm:gap-x-6">
+          <ul className="buehne-3d grid justify-items-center gap-x-2 gap-y-3 rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm sm:gap-x-3"
+          /*
+           * `auto-fit` statt `flex-wrap`: Das Raster teilt jede Breite
+           * selbst in gleich breite Spalten auf. Damit gibt es keine
+           * Breite mehr, bei der die Reihe unerwartet umbricht — der
+           * Fehler, der zwischen 640 und 833 Pixeln zweimal auftrat.
+           */
+          style={{
+            gridTemplateColumns: 'repeat(auto-fit, minmax(calc(var(--kachel) + 0.75rem), 1fr))',
+          }}>
             {auswahl.map((spiel, i) => (
               <Spielkachel
                 key={spiel.id}
@@ -419,7 +428,7 @@ function Kontoknopf({ konto, onKonto }: { konto: Konto | null; onKonto: () => vo
       <button
         type="button"
         onClick={onKonto}
-        className="druckbar flex min-h-9 shrink-0 items-center gap-1.5 rounded-full bg-white/18 px-3 text-xs font-bold text-white"
+        className="druckbar flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-white/18 px-3.5 text-xs font-bold text-white"
       >
         <span aria-hidden="true">👤</span> Anmelden
       </button>
@@ -431,7 +440,7 @@ function Kontoknopf({ konto, onKonto }: { konto: Konto | null; onKonto: () => vo
       type="button"
       onClick={onKonto}
       aria-label={`Konto von ${konto.name}`}
-      className="flex min-h-9 min-w-0 shrink items-center gap-2 rounded-full px-1 text-white"
+      className="flex min-h-11 min-w-0 shrink items-center gap-2 rounded-full px-1 text-white"
     >
       {/* Der erste Buchstabe als Zeichen — bis es Avatare gibt, ist das die
           schnellste Art zu erkennen, wer angemeldet ist. */}

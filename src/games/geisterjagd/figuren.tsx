@@ -20,6 +20,13 @@ const GEIST_PFAD =
   'M4,34 L4,17 Q4,4 20,4 Q36,4 36,17 L36,34 L30,29 L24,34 L20,29 L16,34 L10,29 Z';
 
 /**
+ * Die Kraftpille als Stern, in einer 24er-Zeichenfläche. Steht hier und
+ * nicht dreimal einzeln im Spielfeld, im Startbildschirm und im App-Symbol
+ * — sonst zeigt jede Stelle irgendwann einen anderen Stern.
+ */
+export const KRAFTPILLE_PFAD = 'M12 2l2.5 6.9H21l-5.6 4.4 2.1 7.1L12 16.2 6.5 20.4l2.1-7.1L3 8.9h6.5z';
+
+/**
  * Verlaufs-ids. Fest und nicht zufällig: Auf dem Spielfeld stehen vier
  * Geister gleichzeitig, alle vier definieren denselben Verlauf. Es ist
  * also gleichgültig, welche Definition gewinnt — dieselbe Überlegung wie
@@ -140,10 +147,41 @@ export function Geist({
     );
   }
 
-  const koerperfarbe = modus === 'angst' ? (blinkt ? '#e2e8f0' : '#475569') : farbe;
+  if (modus === 'angst') {
+    // Im Angst-Modus bleibt der Geist flach und stumpf, ohne Wölbung und
+    // ohne Augen — genau das ist dort das Signal, dass er fressbar ist.
+    return (
+      <svg viewBox="0 0 40 40">
+        <path
+          d={GEIST_PFAD}
+          fill={blinkt ? '#e2e8f0' : '#475569'}
+          stroke={SAUM}
+          strokeWidth="1.6"
+          paintOrder="stroke"
+        />
+      </svg>
+    );
+  }
 
   return (
     <svg viewBox="0 0 40 40">
+      <GeistTeile farbe={farbe} />
+    </svg>
+  );
+}
+
+/**
+ * Der Geist als reine Teile, ohne eigenes `<svg>` — Koordinaten 0…40.
+ *
+ * Dieselbe Bauweise wie beim Sternenschlucker in Star Dash und aus demselben
+ * Grund: So zeigt das App-Symbol wirklich **die** Figur aus dem Spiel und
+ * nicht eine zweite, nachgezeichnete. Vorher hatte das Symbol einen eigenen
+ * Geist mit anderem Dach und anderem Saum; änderte sich der Geist im Spiel,
+ * lief das Symbol still davon.
+ */
+export function GeistTeile({ farbe }: { farbe: string }) {
+  return (
+    <>
       {/* Licht oben, Schatten unten — als Verlauf über **derselben** Form,
           nicht als aufgelegter Balken. Der erste Versuch war ein waagerechter
           Strich mit wenig Deckkraft; der las sich als Gürtel quer über den
@@ -157,22 +195,10 @@ export function Geist({
         </linearGradient>
       </defs>
 
-      <path
-        d={GEIST_PFAD}
-        fill={koerperfarbe}
-        stroke={SAUM}
-        strokeWidth="1.6"
-        paintOrder="stroke"
-      />
-      {/* Im Angst-Modus bleibt der Geist flach und stumpf — genau das ist
-          dort das Signal, dass er gerade fressbar ist. */}
-      {modus !== 'angst' && (
-        <>
-          <path d={GEIST_PFAD} fill={`url(#${WOELBUNG_ID})`} />
-          <Augen />
-        </>
-      )}
-    </svg>
+      <path d={GEIST_PFAD} fill={farbe} stroke={SAUM} strokeWidth="1.6" paintOrder="stroke" />
+      <path d={GEIST_PFAD} fill={`url(#${WOELBUNG_ID})`} />
+      <Augen />
+    </>
   );
 }
 

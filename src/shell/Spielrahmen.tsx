@@ -469,7 +469,15 @@ export function Spielrahmen({
       // Genau eine Bildschirmhöhe, nicht mehr: Ohne feste Höhe wächst der
       // Rahmen mit seinem Inhalt und schiebt die unterste Reihe aus dem
       // Bild — bei textlastigen Spielen den Weiter-Knopf.
-      className="mx-auto flex h-dvh min-h-0 w-full max-w-3xl flex-col overflow-hidden"
+      /*
+       * Auf Tablets breiter. `max-w-3xl` (768 px) deckelte **jedes** Spiel:
+       * Auf einem 13-Zoll-iPad im Hochformat blieben je Seite rund 130 px
+       * ungenutzt, und das Brett konnte nie größer als 744 px werden,
+       * obwohl über 1000 zur Verfügung stehen. `.spielbrett` rechnet seine
+       * Größe aus der Bühne (`100cqw`/`100cqh`) — es wächst also von allein
+       * mit, sobald der Deckel steigt.
+       */
+      className="mx-auto flex h-dvh min-h-0 w-full max-w-3xl flex-col overflow-hidden md:max-w-5xl"
       // Färbt die vier Grundtokens leicht in der Spielfarbe ein. Wirkt
       // dadurch in jedem Element des Spiels, ohne dass ein Spiel etwas
       // davon wissen muss. Siehe `spielfarbe.ts`.

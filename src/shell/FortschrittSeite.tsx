@@ -64,7 +64,10 @@ export function FortschrittSeite() {
       </div>
 
       <ul
-        className="rein-von-unten mb-4 grid grid-cols-4 gap-2"
+        /* Zwei Spalten auf sehr schmalen Geraeten. Bei vier Spalten auf 320
+           Pixeln blieben je Kachel 70 Pixel, und "Tage (Rekord 12)" brach
+           auf drei Zeilen um. */
+        className="rein-von-unten mb-4 grid grid-cols-2 gap-2 min-[380px]:grid-cols-4"
         style={{ animationDelay: '120ms' }}
       >
         <Zahlenkachel wert={f.partien} bezeichnung="Runden" symbol="🎮" />

@@ -13,6 +13,7 @@ import {
   zugMoeglich,
 } from './logik';
 import type { Feld, Zustand } from './logik';
+import { kachelFarbe, kachelTextFarbe, kontrast } from './farben';
 
 /** Kurzschreibweise: aus Zeilen von Stufen ein Raster bauen (0 = leer). */
 function r(...zeilen: number[][]): Feld[][] {
@@ -27,9 +28,39 @@ function stand(raster: Feld[][], rest: Partial<Zustand> = {}): Zustand {
     gewonnen: false,
     vorbei: false,
     saat: 1,
+    zug: 0,
+    bild: null,
     ...rest,
   };
 }
+
+/**
+ * Die Zahl auf der Kachel muss lesbar sein — und zwar auf **jeder** Stufe.
+ *
+ * Vorher entschied eine Handliste, welche Kachel als hell gilt; sie nannte nur
+ * 32 und 64, tatsächlich ist aber die ganze Reihe hell. Auf neun von elf
+ * Kacheln stand deshalb weiße Schrift mit 1,7:1 bis 4,0:1. Der Test hängt an
+ * der Farbliste und nicht an der Rechnung: Er schlägt an, sobald jemand eine
+ * Kachelfarbe ändert, mit der keine der beiden Schriftfarben mehr auskommt.
+ */
+describe('kachelTextFarbe', () => {
+  it('bleibt auf jeder Stufe über der Lesbarkeitsgrenze von 4,5:1', () => {
+    for (let stufe = 1; stufe <= ZIEL_STUFE; stufe++) {
+      const wert = kontrast(kachelFarbe(stufe), kachelTextFarbe(stufe));
+      expect(wert, `Stufe ${stufe} (${wertVonStufe(stufe)})`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('wählt immer die bessere der beiden Schriftfarben', () => {
+    for (let stufe = 1; stufe <= ZIEL_STUFE; stufe++) {
+      const gewaehlt = kachelTextFarbe(stufe);
+      const andere = gewaehlt === '#ffffff' ? '#0b0f14' : '#ffffff';
+      expect(kontrast(kachelFarbe(stufe), gewaehlt)).toBeGreaterThanOrEqual(
+        kontrast(kachelFarbe(stufe), andere),
+      );
+    }
+  });
+});
 
 describe('wertVonStufe', () => {
   it('rechnet Stufen in angezeigte Werte um', () => {
@@ -66,6 +97,21 @@ describe('reiheSchieben', () => {
     const e = reiheSchieben([1, 2, 3, 4]);
     expect(e.reihe).toEqual([1, 2, 3, 4]);
     expect(e.punkte).toBe(0);
+  });
+
+  it('sagt für jedes Ergebnisfeld, aus welchem Feld die Kachel kommt', () => {
+    const e = reiheSchieben([null, 1, null, 2]);
+    expect(e.reihe).toEqual([1, 2, null, null]);
+    expect(e.herkunft).toEqual([1, 3, -1, -1]);
+    expect(e.verschmolzen).toEqual([false, false, false, false]);
+  });
+
+  it('nennt beim Verschmelzen die hintere Kachel — die legt den Weg zurück', () => {
+    // Ohne diese Wahl liefe in der Anzeige die vordere Kachel los und die
+    // hintere verschwände an Ort und Stelle: genau andersherum als gedacht.
+    const e = reiheSchieben([1, null, null, 1]);
+    expect(e.herkunft[0]).toBe(3);
+    expect(e.verschmolzen[0]).toBe(true);
   });
 });
 
@@ -117,6 +163,64 @@ describe('schieben', () => {
         // es gibt also nichts zu verschmelzen.
         expect(werte).toEqual([1, 1, 1, 1]);
       }
+    }
+  });
+});
+
+/**
+ * Das Zugbild ist die heikelste Stelle im ganzen Spiel: Die Herkunft wird in
+ * einem zweiten Raster durch dieselben Drehungen mitgeführt wie die Kacheln.
+ * Ein Vertauscher fällt beim Spielen kaum auf — die Kachel landet ja richtig,
+ * sie kommt nur aus der falschen Ecke angerutscht. Genau derselbe Fehler
+ * steckte schon einmal in `DREHUNGEN` und wurde erst von den Tests gefunden.
+ */
+describe('schieben — woher jede Kachel kommt', () => {
+  it('nach links: die verschmolzene kommt von rechts', () => {
+    const e = schieben(r([1, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), 'links');
+    expect(e.bild[0]![0]).toEqual({ vonX: 3, vonY: 0, verschmolzen: true, neu: false });
+  });
+
+  it('nach rechts: die verschmolzene kommt von links', () => {
+    const e = schieben(r([1, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), 'rechts');
+    expect(e.bild[0]![3]).toEqual({ vonX: 0, vonY: 0, verschmolzen: true, neu: false });
+  });
+
+  it('nach oben: die verschmolzene kommt von unten', () => {
+    const e = schieben(r([0, 0, 0, 0], [0, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]), 'hoch');
+    expect(e.bild[0]![0]).toEqual({ vonX: 0, vonY: 3, verschmolzen: true, neu: false });
+  });
+
+  it('nach unten: die verschmolzene kommt von oben', () => {
+    const e = schieben(r([1, 0, 0, 0], [1, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), 'runter');
+    expect(e.bild[3]![0]).toEqual({ vonX: 0, vonY: 0, verschmolzen: true, neu: false });
+  });
+
+  it('meldet ein bloßes Nachrücken als nicht verschmolzen', () => {
+    const e = schieben(r([0, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), 'links');
+    expect(e.bild[0]![0]).toEqual({ vonX: 3, vonY: 0, verschmolzen: false, neu: false });
+  });
+
+  it('hat genau dort ein Bild, wo auch eine Kachel liegt', () => {
+    for (const richtung of ['links', 'rechts', 'hoch', 'runter'] as const) {
+      const e = schieben(r([0, 1, 0, 2], [3, 0, 3, 0], [0, 0, 1, 1], [4, 0, 0, 4]), richtung);
+      e.raster.forEach((reihe, y) =>
+        reihe.forEach((f, x) => {
+          expect(e.bild[y]![x] === null).toBe(f === null);
+        }),
+      );
+    }
+  });
+
+  it('lässt jede Kachel von einem Feld kommen, auf dem vorher wirklich etwas lag', () => {
+    // Sonst rutscht in der Anzeige eine Kachel aus einem leeren Feld heran.
+    const vorher = r([0, 1, 0, 2], [3, 0, 3, 0], [0, 0, 1, 1], [4, 0, 0, 4]);
+    for (const richtung of ['links', 'rechts', 'hoch', 'runter'] as const) {
+      const e = schieben(vorher, richtung);
+      e.bild.forEach((reihe) =>
+        reihe.forEach((b) => {
+          if (b) expect(vorher[b.vonY]![b.vonX]).not.toBeNull();
+        }),
+      );
     }
   });
 });
@@ -224,5 +328,47 @@ describe('ziehen', () => {
   it('ändert nichts mehr, wenn die Runde vorbei ist', () => {
     const z = stand(leeresRaster(), { vorbei: true });
     expect(ziehen(z, 'links')).toBe(z);
+  });
+
+  it('zählt die Zugnummer nur bei einem Zug hoch, der wirklich etwas bewegt', () => {
+    // Die Anzeige startet ihre Bewegung an dieser Nummer. Liefe sie bei einem
+    // wirkungslosen Wisch mit, zuckte das Brett ohne Grund; bliebe sie bei
+    // zwei gleichen Zügen stehen, liefe die zweite Bewegung gar nicht erst an.
+    const beweglich = stand(r([1, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]));
+    expect(ziehen(beweglich, 'links').zug).toBe(1);
+
+    const fest = stand(r([1, 2, 3, 4], [2, 3, 4, 5], [3, 4, 5, 6], [4, 5, 6, 7]));
+    expect(ziehen(fest, 'links').zug).toBe(0);
+  });
+
+  it('markiert genau die dazugelegte Kachel als neu', () => {
+    // Nur sie ploppt in der Anzeige auf; alle anderen rutschen.
+    for (let saat = 0; saat < 20; saat++) {
+      const z = stand(r([1, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { saat });
+      const nach = ziehen(z, 'links');
+      const neue = nach.bild!.flat().filter((b) => b?.neu);
+      expect(neue).toHaveLength(1);
+      // Die neue Kachel kommt von nirgendwo her: Sie zeigt auf ihr eigenes Feld.
+      nach.bild!.forEach((reihe, y) =>
+        reihe.forEach((b, x) => {
+          if (b?.neu) {
+            expect(b.vonX).toBe(x);
+            expect(b.vonY).toBe(y);
+          }
+        }),
+      );
+    }
+  });
+
+  it('hat nach dem Zug für jede Kachel ein Bild und für jedes leere Feld keines', () => {
+    for (let saat = 0; saat < 20; saat++) {
+      const z = stand(r([0, 1, 0, 2], [3, 0, 3, 0], [0, 0, 1, 1], [4, 0, 0, 4]), { saat });
+      const nach = ziehen(z, 'links');
+      nach.raster.forEach((reihe, y) =>
+        reihe.forEach((f, x) => {
+          expect(nach.bild![y]![x] === null).toBe(f === null);
+        }),
+      );
+    }
   });
 });

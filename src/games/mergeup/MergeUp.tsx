@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useInput } from '../../core/useInput';
 import { Steuerkreuz } from '../../core/Steuerkreuz';
 import { sfx } from '../../core/sfx';
+import { haptik } from '../../core/haptik';
+import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
 import { GROESSE, neuesSpiel, wertVonStufe, ziehen } from './logik';
@@ -72,12 +74,16 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
         >
           Merge Up
         </h1>
+        {/* Die Regel, nicht „Wie weit kommst du?". Das war die einzige Stelle
+            im Spiel, die vor der ersten Runde noch etwas erklären konnte —
+            der Hilfetext unten im Spiel fällt auf Handys unter 720 Pixel Höhe
+            weg (`.nur-bei-platz`), und nach „Nochmal" kommt dieser Bildschirm
+            gar nicht mehr. Steht bewusst **neben** der Bestleistung, nicht
+            statt ihrer — siehe core/Startbildschirm.tsx. */}
         <p className="mt-3 text-sm font-semibold text-white/85">
-          Wie weit kommst du?
+          Wische die Kacheln zusammen — zwei gleiche werden eine doppelte.
         </p>
         {bestScore > 0 && (
-          /* Regel und Bestleistung stehen nebeneinander, nicht
-             statt einander — siehe core/Startbildschirm.tsx. */
           <p className="mt-1.5 text-sm font-bold text-white/70">
             <span aria-hidden="true">🏆</span> Beste Punktzahl: {bestScore}
           </p>
@@ -96,6 +102,38 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
   );
 }
 
+/**
+ * Die vier Himmelsrichtungen des Eingabe-Bausteins heißen im Spiel anders.
+ * Eine Abbildung für Tastatur, Wischen **und** Steuerkreuz.
+ */
+const RICHTUNGEN: Record<'up' | 'down' | 'left' | 'right', Richtung> = {
+  up: 'hoch',
+  down: 'runter',
+  left: 'links',
+  right: 'rechts',
+};
+
+/**
+ * Muss zur Tailwind-Klasse `gap-2` am Brett passen: Ein Feld weiter heißt für
+ * eine Kachel „die eigene Breite plus die Lücke dazwischen". Über Prozent
+ * gerechnet statt in Pixeln, damit die Bewegung auf jeder Brettgröße stimmt,
+ * ohne etwas messen zu müssen.
+ */
+const LUECKE = '0.5rem';
+
+/** Wie lange eine Kachel für ihren Weg braucht — kurz genug, dass ein
+ *  schnelles Kind nicht wartet, lang genug, dass man die Bewegung sieht. */
+const RUTSCH_MS = 130;
+
+/** Wie weit das Brett nachgibt, wenn ein Zug nichts bewegt. */
+const STUPS_PX = 7;
+const STUPS_VERSATZ: Record<Richtung, string> = {
+  hoch: `translateY(-${STUPS_PX}px)`,
+  runter: `translateY(${STUPS_PX}px)`,
+  links: `translateX(-${STUPS_PX}px)`,
+  rechts: `translateX(${STUPS_PX}px)`,
+};
+
 export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
   // Nach „Nochmal" direkt weiterspielen statt wieder über den
   // Startbildschirm zu gehen — der gehört nur ans Betreten des Spiels.
@@ -104,28 +142,96 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
   const feldRef = useRef<HTMLDivElement>(null);
   const punkteVorherRef = useRef(0);
   const gewonnenVorherRef = useRef(false);
+  // Schwelle 32: Bei jedem Vierer-Verschmelzen ein „+4" quer über das Brett
+  // wäre Dauerflimmern — gemeldet wird, was sich lohnt (siehe Ghost Chase).
+  const gewinn = usePunktegewinn(z.punkte, 32);
 
-  // Die vier Himmelsrichtungen des Eingabe-Bausteins heißen im Spiel anders.
-  // Eine Abbildung für Tastatur, Wischen **und** Steuerkreuz.
-  const beiKreuz = useCallback((eingabe: 'up' | 'down' | 'left' | 'right') => {
-    const richtungen: Record<typeof eingabe, Richtung> = {
-      up: 'hoch',
-      down: 'runter',
-      left: 'links',
-      right: 'rechts',
+  const ruhig = settings.reducedMotion;
+
+  // Der Zustand zusätzlich als Ref: `beiKreuz` rechnet den Zug selbst aus, um
+  // einen wirkungslosen Zug zu erkennen, und darf dabei nicht in einer
+  // veralteten Closure hängen (gleicher Griff wie beim Ziehen in Block Burst).
+  const zRef = useRef(z);
+  zRef.current = z;
+
+  // Ein Zug wird in zwei Bildern gezeichnet: erst stehen die Kacheln noch auf
+  // ihrem Herkunftsfeld, dann rutschen sie ins Ziel. `false` heißt „noch am
+  // Start". Ohne diesen Zwischenschritt gäbe es kein Von-Bild, von dem aus
+  // der Übergang laufen könnte.
+  const [gelandet, setGelandet] = useState(true);
+  const [stups, setStups] = useState<Richtung | null>(null);
+  const stupsUhrRef = useRef(0);
+
+  useLayoutEffect(() => {
+    if (ruhig || z.bild === null) return;
+    // `useLayoutEffect`, nicht `useEffect`: Das Zurücksetzen auf die
+    // Startfelder muss **vor** dem Zeichnen passieren, sonst blitzt das
+    // Endbild für ein Bild auf und die Bewegung fängt zu spät an.
+    setGelandet(false);
+    let zweiter = 0;
+    const erster = requestAnimationFrame(() => {
+      zweiter = requestAnimationFrame(() => setGelandet(true));
+    });
+    return () => {
+      cancelAnimationFrame(erster);
+      cancelAnimationFrame(zweiter);
     };
-    setZ((alt) => ziehen(alt, richtungen[eingabe]));
-  }, []);
+    // Nur die Zugnummer zählt: Zwei gleiche Züge hintereinander sollen die
+    // Bewegung erneut auslösen, ein bloßes Neuzeichnen nicht.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [z.zug]);
+
+  const fehlzug = useCallback(
+    (richtung: Richtung) => {
+      // „Geht nicht" muss sich anders anfühlen als „nicht angekommen": Ohne
+      // jede Rückmeldung war ein Wisch gegen die Wand von einer verschluckten
+      // Eingabe nicht zu unterscheiden. Das Brett gibt kurz in die
+      // gewünschte Richtung nach und federt zurück.
+      sfx('klick');
+      haptik('fehler');
+      if (ruhig) return;
+      setStups(richtung);
+      window.clearTimeout(stupsUhrRef.current);
+      stupsUhrRef.current = window.setTimeout(() => setStups(null), 110);
+    },
+    [ruhig],
+  );
+
+  useEffect(() => () => window.clearTimeout(stupsUhrRef.current), []);
+
+  const beiKreuz = useCallback(
+    (eingabe: 'up' | 'down' | 'left' | 'right') => {
+      const alt = zRef.current;
+      const richtung = RICHTUNGEN[eingabe];
+      const neu = ziehen(alt, richtung);
+      if (neu === alt) {
+        // `ziehen` gibt denselben Zustand zurück, wenn sich nichts bewegt hat.
+        if (!alt.vorbei) fehlzug(richtung);
+        return;
+      }
+      // Sofort mitschreiben: Zwei schnelle Wische hintereinander sollen nicht
+      // beide vom selben, noch nicht gezeichneten Stand ausgehen.
+      zRef.current = neu;
+      setZ(neu);
+    },
+    [fehlzug],
+  );
 
   useInput(
     (eingabe) => {
+      // Ein schneller Wisch nach unten ist hier schlicht ein Zug nach
+      // unten — es gibt nichts fallen zu lassen. Das steht als
+      // `wurf: 'down'` unten in den Optionen und **nicht** mehr als
+      // Umdeutung von 'drop' an dieser Stelle: Die Leertaste liegt in
+      // `useInput` ebenfalls auf 'drop' und löste über die alte Umdeutung
+      // still einen Zug aus.
       if (eingabe === 'up' || eingabe === 'down' || eingabe === 'left' || eingabe === 'right') {
         beiKreuz(eingabe);
       }
     },
     // Kein Wiederholen bei gehaltener Taste — ein Zug soll ein Tastendruck
     // sein, sonst rauscht das halbe Spiel bei einem zu langen Druck durch.
-    { bereich: feldRef, wiederholen: [], aktiv: gestartet && !z.vorbei },
+    { bereich: feldRef, wiederholen: [], wurf: 'down', aktiv: gestartet && !z.vorbei },
   );
 
   useEffect(() => {
@@ -186,41 +292,84 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
       <div className="spielbuehne">
       <div
         ref={feldRef}
-        className="spielbrett spielbrett-rahmen grid touch-none gap-2 bg-flaeche p-2"
+        className="spielbrett spielbrett-rahmen relative grid touch-none gap-2 bg-flaeche p-2"
         style={
           {
             gridTemplateColumns: `repeat(${GROESSE}, minmax(0, 1fr))`,
             gridTemplateRows: `repeat(${GROESSE}, minmax(0, 1fr))`,
             '--vz': 1,
+            transform: stups ? STUPS_VERSATZ[stups] : undefined,
+            transition: 'transform 90ms ease-out',
           } as CSSProperties
         }
         role="img"
         aria-label={`Spielfeld. ${beschreibung}.${z.vorbei ? ' Vorbei.' : ''}`}
       >
-        {z.raster.flat().map((feld, i) => (
-          <div
-            key={i}
-            className="grid place-items-center rounded-xl bg-flaeche-hoch"
-          >
-            {feld !== null && (
-              <div
-                // key auf den Wert: bei jeder Änderung spielt der kurze Puls
-                // erneut ab, dadurch sieht man das Verschmelzen.
-                key={feld}
-                className="punkte-bumsen glanzstein grid size-full place-items-center rounded-xl font-black tabular-nums"
-                style={{
-                  backgroundColor: kachelFarbe(feld),
-                  color: kachelTextFarbe(feld),
-                  // Große Zahlen brauchen kleinere Schrift, sonst passen sie nicht.
-                  fontSize: wertVonStufe(feld) >= 1024 ? '1.1rem' : wertVonStufe(feld) >= 128 ? '1.4rem' : '1.7rem',
-                  boxShadow: `0 4px 12px -4px ${kachelFarbe(feld)}`,
-                }}
-              >
-                {wertVonStufe(feld)}
-              </div>
-            )}
-          </div>
-        ))}
+        {z.raster.flat().map((feld, i) => {
+          const x = i % GROESSE;
+          const y = Math.floor(i / GROESSE);
+          const bild = z.bild?.[y]?.[x] ?? null;
+          // Nur im ersten der beiden Bilder sitzt die Kachel auf ihrem
+          // Herkunftsfeld; danach steht sie im Ziel und der Übergang
+          // erledigt den Weg.
+          const dx = bild && !gelandet ? bild.vonX - x : 0;
+          const dy = bild && !gelandet ? bild.vonY - y : 0;
+          return (
+            <div key={i} className="grid place-items-center rounded-xl bg-flaeche-hoch">
+              {feld !== null && (
+                <div
+                  // `relative z-10`: Eine rutschende Kachel zieht über fremde
+                  // Felder hinweg. Ohne eigene Ebene malt der Hintergrund des
+                  // später kommenden Feldes sie unterwegs zu.
+                  //
+                  // Der farbige Schein sitzt hier und nicht auf der Kachel
+                  // selbst: Dort überschrieb er als Inline-Stil die
+                  // Lichtkanten von `.glanzstein` restlos — der Stein sah
+                  // flach aus, obwohl die Klasse dranstand.
+                  className="relative z-10 size-full rounded-xl"
+                  style={{
+                    transform:
+                      dx || dy
+                        ? `translate(calc(${dx} * (100% + ${LUECKE})), calc(${dy} * (100% + ${LUECKE})))`
+                        : undefined,
+                    transition: gelandet ? `transform ${RUTSCH_MS}ms ease-out` : 'none',
+                    boxShadow: `0 4px 12px -4px ${kachelFarbe(feld)}`,
+                  }}
+                >
+                  <div
+                    // Schlüsselwechsel nur beim Verschmelzen — dann läuft der
+                    // Puls neu an. Vorher hing er am Wert und pulste auch beim
+                    // bloßen Nachrücken; dadurch sahen Rutschen, Verschmelzen
+                    // und neue Kachel alle drei gleich aus.
+                    key={bild?.verschmolzen ? `v${z.zug}` : 'kachel'}
+                    className={`glanzstein grid size-full place-items-center rounded-xl font-black tabular-nums${
+                      bild?.verschmolzen && !ruhig ? ' punkte-bumsen' : ''
+                    }`}
+                    style={{
+                      backgroundColor: kachelFarbe(feld),
+                      color: kachelTextFarbe(feld),
+                      // Große Zahlen brauchen kleinere Schrift, sonst passen sie nicht.
+                      fontSize: wertVonStufe(feld) >= 1024 ? '1.1rem' : wertVonStufe(feld) >= 128 ? '1.4rem' : '1.7rem',
+                      // Die frisch dazugelegte Kachel ploppt auf — das dritte
+                      // der drei Ereignisse, und das einzige, das keinen Weg
+                      // zurücklegt. `scale` als eigene Eigenschaft, damit es
+                      // sich nicht mit dem `transform` oben beißt.
+                      scale: bild?.neu && !gelandet ? '0.3' : '1',
+                      transition: gelandet ? `scale ${RUTSCH_MS}ms ease-out` : 'none',
+                    }}
+                  >
+                    {wertVonStufe(feld)}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Gehört ins Brett, nicht in die Bühne: In der Bühne würde die Regel
+            `.spielbuehne > *:not(.absolute)` das Popup zu einem zweiten
+            Flex-Kind machen und das Brett zur Seite schieben. */}
+        <Punktegewinn gewinn={gewinn} />
       </div>
 
       </div>

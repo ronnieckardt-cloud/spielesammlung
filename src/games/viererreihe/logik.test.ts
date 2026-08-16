@@ -14,6 +14,8 @@ import {
 } from './logik';
 import type { Feld, Spieler, Zelle } from './logik';
 import { besterZug, bewerten } from './gegner';
+import { EINBLICK } from './Icon';
+import { BAND_OBEN } from '../../core/AppSymbol';
 
 /**
  * Baut ein Feld aus Textzeilen — oben ist oben.
@@ -255,5 +257,78 @@ describe('Gegner — Zugwahl', () => {
       amZug = amZug === 0 ? 1 : 0;
     }
     expect(sieger).toBe(1);
+  });
+});
+
+/**
+ * Am App-Symbol war dreierlei falsch, und alles drei sind Zahlen: Das Brett
+ * ragte unter das Schriftband, der fallende Stein wurde von den runden Ecken
+ * angeschnitten, und die gezeigte Stellung war im Zugwechsel gar nicht
+ * erreichbar (fünf blaue gegen drei orange, ohne Viererreihe). Als Test
+ * fällt so etwas beim nächsten Mal sofort auf statt erst auf dem Handy.
+ */
+describe('App-Symbol — der Einblick', () => {
+  const { spalten, zeilen, steine, fallSpalte } = EINBLICK;
+
+  /** Vier gleiche in einer Geraden — dieselben vier Richtungen wie im Spiel. */
+  function hatVierer(stellung: Record<string, 'm' | 'c'>): boolean {
+    const richtungen = [
+      [1, 0],
+      [0, 1],
+      [1, 1],
+      [1, -1],
+    ];
+    for (let x = 0; x < spalten; x++) {
+      for (let y = 0; y < zeilen; y++) {
+        const wer = stellung[`${x},${y}`];
+        if (!wer) continue;
+        // Nur vorwärts zählen reicht, weil jedes Feld einmal Startfeld ist.
+        for (const [dx, dy] of richtungen) {
+          let laenge = 1;
+          while (stellung[`${x + dx! * laenge},${y + dy! * laenge}`] === wer) laenge++;
+          if (laenge >= 4) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  it('bleibt über dem Schriftband und ganz im Bild', () => {
+    expect(EINBLICK.brettUnten).toBeLessThanOrEqual(BAND_OBEN);
+    expect(EINBLICK.fallOben).toBeGreaterThan(0);
+    // Der fallende Stein schwebt über dem Brett, er steckt nicht darin.
+    expect(EINBLICK.fallUnten).toBeLessThanOrEqual(EINBLICK.brettOben);
+    expect(EINBLICK.brettLinks).toBeGreaterThan(0);
+    expect(EINBLICK.brettRechts).toBeLessThan(64);
+  });
+
+  it('füllt jede Spalte von unten — die Schwerkraft gilt auch im Symbol', () => {
+    for (let x = 0; x < spalten; x++) {
+      const belegt = Array.from({ length: zeilen }, (_, y) => Boolean(steine[`${x},${y}`]));
+      const oberster = belegt.indexOf(true);
+      if (oberster >= 0) expect(belegt.slice(oberster).every(Boolean)).toBe(true);
+    }
+  });
+
+  it('zeigt eine Stellung, die im Zugwechsel erreichbar ist', () => {
+    const anzahl = (art: 'm' | 'c') => Object.values(steine).filter((w) => w === art).length;
+    // Der Mensch fängt an; als Nächstes fällt wieder ein blauer Stein.
+    // Dann müssen bis dahin gleich viele von beiden liegen.
+    expect(anzahl('m')).toBe(anzahl('c'));
+  });
+
+  it('zeigt noch keine Viererreihe, und der fallende Stein macht sie voll', () => {
+    expect(hatVierer(steine)).toBe(false);
+
+    let landung: number | null = null;
+    for (let y = zeilen - 1; y >= 0; y--) {
+      if (!steine[`${fallSpalte},${y}`]) {
+        landung = y;
+        break;
+      }
+    }
+    expect(landung).not.toBeNull();
+
+    expect(hatVierer({ ...steine, [`${fallSpalte},${landung}`]: 'm' })).toBe(true);
   });
 });

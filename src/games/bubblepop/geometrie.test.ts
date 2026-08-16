@@ -4,6 +4,8 @@ import {
   KANONE,
   MAX_ABWEICHUNG,
   RADIUS,
+  SENKRECHT,
+  begrenzeWinkel,
   flugbahn,
   mittelpunkt,
   naechstesFeld,
@@ -45,6 +47,26 @@ describe('winkelZu', () => {
     const weitLinks = winkelZu({ x: -500, y: KANONE.y - 1 });
     const abweichung = Math.abs(weitLinks - -Math.PI / 2);
     expect(abweichung).toBeLessThanOrEqual(MAX_ABWEICHUNG + 1e-9);
+  });
+});
+
+describe('begrenzeWinkel', () => {
+  it('lässt Winkel innerhalb des erlaubten Bereichs unverändert', () => {
+    const leichtSchraeg = SENKRECHT + MAX_ABWEICHUNG / 2;
+    expect(begrenzeWinkel(leichtSchraeg)).toBeCloseTo(leichtSchraeg);
+  });
+
+  it('stutzt zu weit gedrehte Winkel auf beiden Seiten', () => {
+    // Die Pfeiltasten drehen immer weiter; an der Kante muss Schluss sein,
+    // sonst schießt die Tastatur waagerecht und die Kugel läuft ewig.
+    expect(begrenzeWinkel(SENKRECHT + MAX_ABWEICHUNG * 3)).toBeCloseTo(SENKRECHT + MAX_ABWEICHUNG);
+    expect(begrenzeWinkel(SENKRECHT - MAX_ABWEICHUNG * 3)).toBeCloseTo(SENKRECHT - MAX_ABWEICHUNG);
+  });
+
+  it('hält bei ganz vielen Tastenschritten dieselbe Kante wie der Finger', () => {
+    let winkel = SENKRECHT;
+    for (let i = 0; i < 200; i++) winkel = begrenzeWinkel(winkel + (Math.PI / 180) * 2);
+    expect(winkel).toBeCloseTo(winkelZu({ x: 1e6, y: KANONE.y - 1 }));
   });
 });
 

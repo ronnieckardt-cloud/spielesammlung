@@ -1,8 +1,20 @@
 import { AppSymbol, GlanzBlock } from '../../core/AppSymbol';
+import { FARB_INDEX } from './logik';
+import { reihenfallFarbe } from './farben';
 
 /**
  * App-Symbol: ein Ausschnitt des Stapels mit einer Reihe, die gerade
  * aufblitzt und verschwindet. Aufbau siehe `core/AppSymbol.tsx`.
+ *
+ * **Alle Farben kommen aus `farben.ts`**, so wie Merge Up seine Kachelfarben
+ * aus dem eigenen Farbsatz holt. Vorher standen hier eigene Werte, und die
+ * volle Reihe war ausgerechnet ein Rot-Orange-Gelb-Grün-Blau-Regenbogen —
+ * also genau die klassische Zuordnung, von der sich das Spiel bewusst gelöst
+ * hat. Das Symbol zeigt jetzt wirklich die Steine, die im Spiel fallen, und
+ * ändert sich von allein mit, wenn der Farbsatz sich ändert.
+ *
+ * Nur der S-Stein (Indigo) bleibt außen vor: Er liegt genau auf dem
+ * indigo-violetten Verlauf des Symbols und wäre darauf kaum zu sehen.
  */
 
 const BLOCK = 10;
@@ -10,17 +22,17 @@ const BLOCK = 10;
 const SPALTEN = [4, 15, 26, 37, 48];
 
 /** Der Stapel: zwei lockere Zeilen und darunter die volle, blitzende Reihe. */
-const STAPEL: readonly { x: number; y: number; farbe: string }[] = [
-  { x: SPALTEN[1]!, y: 7, farbe: '#22d3ee' },
-  { x: SPALTEN[2]!, y: 7, farbe: '#22d3ee' },
-  { x: SPALTEN[0]!, y: 18, farbe: '#a855f7' },
-  { x: SPALTEN[1]!, y: 18, farbe: '#4ade80' },
-  { x: SPALTEN[3]!, y: 18, farbe: '#fbbf24' },
-  { x: SPALTEN[4]!, y: 18, farbe: '#fbbf24' },
+const STAPEL: readonly { x: number; y: number; teil: keyof typeof FARB_INDEX }[] = [
+  { x: SPALTEN[1]!, y: 7, teil: 'L' },
+  { x: SPALTEN[2]!, y: 7, teil: 'L' },
+  { x: SPALTEN[0]!, y: 18, teil: 'J' },
+  { x: SPALTEN[1]!, y: 18, teil: 'Z' },
+  { x: SPALTEN[3]!, y: 18, teil: 'T' },
+  { x: SPALTEN[4]!, y: 18, teil: 'T' },
 ];
 
-/** Farben der vollen Reihe, die gleich verschwindet. */
-const VOLLE_REIHE: readonly string[] = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#60a5fa'];
+/** Die volle Reihe, die gleich verschwindet — fünf verschiedene Teilfarben. */
+const VOLLE_REIHE: readonly (keyof typeof FARB_INDEX)[] = ['I', 'O', 'T', 'Z', 'L'];
 const REIHE_Y = 29;
 
 export function ReihenfallIcon({ className }: { className?: string }) {
@@ -48,16 +60,23 @@ export function ReihenfallIcon({ className }: { className?: string }) {
       )}
 
       {STAPEL.map((b) => (
-        <GlanzBlock key={`${b.x},${b.y}`} x={b.x} y={b.y} groesse={BLOCK} farbe={b.farbe} rundung={2.5} />
+        <GlanzBlock
+          key={`${b.x},${b.y}`}
+          x={b.x}
+          y={b.y}
+          groesse={BLOCK}
+          farbe={reihenfallFarbe(FARB_INDEX[b.teil])}
+          rundung={2.5}
+        />
       ))}
 
-      {VOLLE_REIHE.map((farbe, i) => (
+      {VOLLE_REIHE.map((teil, i) => (
         <GlanzBlock
           key={`reihe-${i}`}
           x={SPALTEN[i]!}
           y={REIHE_Y}
           groesse={BLOCK}
-          farbe={farbe}
+          farbe={reihenfallFarbe(FARB_INDEX[teil])}
           rundung={2.5}
         />
       ))}

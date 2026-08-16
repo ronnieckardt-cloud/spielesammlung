@@ -5,6 +5,7 @@ import {
   FORMEN,
   HOEHE,
   MAX_SPERR_VERLAENGERUNGEN,
+  MAX_TEIL_BREITE,
   SPERR_VERZOEGERUNG,
   VORSCHAU_ANZAHL,
   aktionAnwenden,
@@ -14,6 +15,7 @@ import {
   kollidiert,
   leeresFeld,
   levelFuerZeilen,
+  miniZellgroesse,
   neuesSpiel,
   punkteFuerHartesFallen,
   punkteFuerWeichesFallen,
@@ -477,5 +479,43 @@ describe('geloescht — Daten für die Auflös-Animation', () => {
     const ohneLoeschung = zeileSchliessen({ ...mitLoeschung, feld: leeresFeld() });
     // Gleiche Referenz: Die Anzeige startet die Animation dadurch nicht neu.
     expect(ohneLoeschung.geloescht).toBe(mitLoeschung.geloescht);
+  });
+});
+
+describe('miniZellgroesse — die kleinen Kästen für Halten und Vorschau', () => {
+  /** Lücke zwischen zwei Zellen im Mini-Raster, siehe `MiniTeil`. */
+  const LUECKE = 2;
+
+  it('MAX_TEIL_BREITE stimmt mit dem breitesten Teil in der Startlage überein', () => {
+    const breiteste = Math.max(
+      ...TEIL_TYPEN.map((typ) => Math.max(...FORMEN[typ][0].map((v) => v.dx)) + 1),
+    );
+    expect(MAX_TEIL_BREITE).toBe(breiteste);
+  });
+
+  it('kein Teil ragt aus seinem Kasten heraus — für jede Kastengröße', () => {
+    for (let kasten = 24; kasten <= 80; kasten++) {
+      const groesse = miniZellgroesse(kasten, LUECKE);
+      for (const typ of TEIL_TYPEN) {
+        const form = FORMEN[typ][0];
+        const spalten = Math.max(...form.map((v) => v.dx)) + 1;
+        const zeilen = Math.max(...form.map((v) => v.dy)) + 1;
+        expect(spalten * groesse + (spalten - 1) * LUECKE).toBeLessThanOrEqual(kasten);
+        expect(zeilen * groesse + (zeilen - 1) * LUECKE).toBeLessThanOrEqual(kasten);
+      }
+    }
+  });
+
+  it('nutzt den Kasten aus, statt die Teile winzig zu zeichnen', () => {
+    // Der I-Stein füllt den Kasten in der Breite bis auf weniger als eine
+    // ganze Zelle aus — sonst wäre die Vorschau unnötig klein.
+    const kasten = 46;
+    const groesse = miniZellgroesse(kasten, LUECKE);
+    const belegt = MAX_TEIL_BREITE * groesse + (MAX_TEIL_BREITE - 1) * LUECKE;
+    expect(kasten - belegt).toBeLessThan(MAX_TEIL_BREITE);
+  });
+
+  it('bleibt auch bei einem winzigen Kasten mindestens ein Pixel groß', () => {
+    expect(miniZellgroesse(4, LUECKE)).toBeGreaterThanOrEqual(1);
   });
 });

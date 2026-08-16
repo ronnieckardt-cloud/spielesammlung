@@ -62,6 +62,7 @@ export type Zustand = {
 };
 
 export const STARTLEBEN = 3;
+/** Angst-Dauer auf Level 1. Ab da sinkt sie, siehe `angstDauerFuerLevel`. */
 export const ANGST_DAUER = 8;
 const PUNKTE_PRO_PUNKT = 10;
 const PUNKTE_PRO_KRAFTPILLE = 50;
@@ -89,6 +90,42 @@ export function spielerIntervall(level: number): number {
 
 function geistBasisIntervall(level: number): number {
   return Math.max(0.13, 0.18 - (level - 1) * 0.01);
+}
+
+/**
+ * Beide Tempo-Regler oben sind ab Level 6 am Anschlag (0,11 und 0,13) — ohne
+ * eine weitere Stellschraube wurde das Spiel ab da nie wieder schwerer, egal
+ * wie weit man kam. Die Streuen-Phasen sind der billigste Hebel dagegen: Sie
+ * sind die einzigen Pausen, in denen die Geister nicht hinter dem Spieler her
+ * sind, sondern in ihre Ecken abziehen. Ab Level 5 werden sie kürzer, ab
+ * Level 8 dauern sie nur noch 40 Prozent. Weiter herunter absichtlich nicht —
+ * eine Streuen-Phase unter zwei Sekunden nimmt man gar nicht mehr als Pause
+ * wahr, sie wäre dann nur noch ein Zucken der Geister.
+ *
+ * Die Jagd-Phasen bleiben unverändert: Die letzte dauert ohnehin ewig, und
+ * längeres Jagen ändert nichts, solange man dazwischen keine Luft bekommt.
+ */
+export function streuFaktorFuerLevel(level: number): number {
+  return Math.max(0.4, 1 - Math.max(0, level - 4) * 0.15);
+}
+
+/** Die Dauer einer Phase der Zeittabelle, mit dem Level verrechnet. */
+export function modusDauer(phase: number, level: number): number {
+  const eintrag = MODUS_ZEITTABELLE[phase]!;
+  return eintrag.modus === 'streuen' ? eintrag.dauer * streuFaktorFuerLevel(level) : eintrag.dauer;
+}
+
+/**
+ * Wie lange die Geister nach einer Kraftpille ängstlich bleiben — die zweite
+ * Stellschraube, die über Level 6 hinaus noch greift.
+ *
+ * Auf Stufe 1 sind acht Sekunden reichlich Zeit, alle vier einzusammeln; ab
+ * Stufe 9 sind es nur noch drei. Tiefer geht es bewusst nicht: Bei weniger
+ * als drei Sekunden ist ein Geist im Nachbargang schlicht nicht mehr zu
+ * erreichen, und die Kraftpille verlöre ihren Sinn.
+ */
+export function angstDauerFuerLevel(level: number): number {
+  return Math.max(3, ANGST_DAUER - (level - 1) * 0.7);
 }
 
 function istTunnelfeld(labyrinth: Labyrinth, position: Position): boolean {
@@ -258,7 +295,7 @@ export function neuesSpiel(saat: number): Zustand {
     leben: STARTLEBEN,
     level: 1,
     modusPhase: 0,
-    modusZeitRest: MODUS_ZEITTABELLE[0]!.dauer,
+    modusZeitRest: modusDauer(0, 1),
     vorbei: false,
     gewonnen: false,
     saat,
@@ -306,7 +343,7 @@ function startpositionenZuruecksetzen(z: Zustand): Zustand {
 
 function naechstesLevel(z: Zustand): Zustand {
   const level = z.level + 1;
-  const zurueckgesetzt = startpositionenZuruecksetzen({ ...z, level, modusPhase: 0, modusZeitRest: MODUS_ZEITTABELLE[0]!.dauer });
+  const zurueckgesetzt = startpositionenZuruecksetzen({ ...z, level, modusPhase: 0, modusZeitRest: modusDauer(0, level) });
   return {
     ...zurueckgesetzt,
     punkte: new Set(z.labyrinth.punkteStart),
@@ -329,10 +366,11 @@ function spielerBewegenUndFressen(z: Zustand): Zustand {
   } else if (kraftpillen.has(schl)) {
     kraftpillen = neuesSetOhne(kraftpillen, schl);
     score += PUNKTE_PRO_KRAFTPILLE;
+    const angstDauer = angstDauerFuerLevel(bewegt.level);
     geister = geister.map((g) =>
       g.modus === 'augen'
         ? g
-        : { ...g, modus: 'angst', angstZeitRest: ANGST_DAUER, richtung: GEGENRICHTUNG[g.richtung] },
+        : { ...g, modus: 'angst', angstZeitRest: angstDauer, richtung: GEGENRICHTUNG[g.richtung] },
     );
   }
 
@@ -350,7 +388,7 @@ function modusPhaseFortschritt(z: Zustand, dt: number): Zustand {
   return {
     ...z,
     modusPhase: naechstePhase,
-    modusZeitRest: MODUS_ZEITTABELLE[naechstePhase]!.dauer,
+    modusZeitRest: modusDauer(naechstePhase, z.level),
     // Beim Wechsel kehren nicht-ängstliche, nicht-heimkehrende Geister sofort um.
     geister: z.geister.map((g) =>
       g.modus === 'angst' || g.modus === 'augen'
@@ -436,7 +474,23 @@ export function richtungEingeben(z: Zustand, richtung: Richtung): Zustand {
   return { ...z, spieler: { ...z.spieler, gepuffert: richtung } };
 }
 
-/** Zeit vergehen lassen: Spieler- und Geisterbewegung, Modus-Zeittabelle, Kollisionen. */
+/**
+ * Zeit vergehen lassen: Spieler- und Geisterbewegung, Modus-Zeittabelle,
+ * Kollisionen.
+ *
+ * **Die Kollision wird zweimal geprüft, nicht nur einmal am Schluss.**
+ * Spieler und Geister ziehen nacheinander, aber im selben Takt. Wer nur die
+ * Endstellung vergleicht, übersieht jede Begegnung, die *während* des Takts
+ * passiert — allen voran den frontalen Tausch: Der Spieler geht auf das Feld
+ * des Geists, der Geist im selben Takt auf das des Spielers. Danach steht
+ * keiner mehr auf dem Feld des anderen, und man lief mitten durch den Geist
+ * hindurch, ohne ein Leben zu verlieren.
+ *
+ * Zwei Prüfungen an den richtigen Stellen decken beide Richtungen ab: die
+ * erste „der Spieler ist in den Geist hineingelaufen", die zweite „der Geist
+ * ist in den Spieler hineingelaufen". Ein Ausrechnen der Vorher-Positionen
+ * braucht es dafür nicht.
+ */
 export function zeitFortschritt(z: Zustand, dt: number): Zustand {
   if (z.vorbei) return z;
 
@@ -448,6 +502,9 @@ export function zeitFortschritt(z: Zustand, dt: number): Zustand {
       ? spielerBewegenUndFressen({ ...zustand, spieler: { ...zustand.spieler, bewegungRest: spielerBewegungRest } })
       : { ...zustand, spieler: { ...zustand.spieler, bewegungRest: spielerBewegungRest } };
 
+  if (zustand.vorbei) return zustand;
+
+  zustand = kollisionenPruefen(zustand);
   if (zustand.vorbei) return zustand;
 
   zustand = geisterFortschritt(zustand, dt);

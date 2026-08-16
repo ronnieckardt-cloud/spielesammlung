@@ -353,6 +353,19 @@
   animation: punkte-auftauchen 0.9s ease-out forwards;
 }
 
+/* Bei „weniger Bewegung" steht das Popup einfach still.
+
+   Ohne diese Regel war es dann **unsichtbar**: `.ruhig` kürzt nur die
+   Dauer auf 0,01 ms, und `forwards` lässt das Element auf dem Schlussbild
+   stehen — das ist hier `opacity: 0`. Wer weniger Bewegung wollte, bekam
+   gar keine Rückmeldung mehr, in fünf Spielen. Das Verschwinden übernimmt
+   ohnehin JavaScript (nach 900 ms wird das Element ausgehängt), die
+   Animation ist nur Schmuck — also darf sie ersatzlos entfallen. */
+.ruhig .punkte-auftauchen {
+  animation: none;
+  opacity: 1;
+}
+
 /* Sanft schwebende Deko-Blöcke auf den Startbildschirmen — Winkel je Block
    über --grundwinkel, damit nicht alle gleich kippen.
 
@@ -376,20 +389,33 @@
   animation: block-schweben 3.4s ease-in-out infinite;
 }
 
-/* Leichtes, einladendes Pulsieren am Spielen-Knopf auf dem Startbildschirm. */
+/* Leichtes, einladendes Pulsieren am Spielen-Knopf auf dem Startbildschirm.
+
+   **Nur noch `transform`, kein `box-shadow` mehr.** Ein Schatten lässt sich
+   nicht auf die Grafikeinheit auslagern: Der Browser musste den Knopf samt
+   Weichzeichnung sechzigmal je Sekunde neu zeichnen, und zwar **dauerhaft**,
+   solange irgendein Startbildschirm offen ist. Das ist genau die Sorte
+   Animation, die auf einem Handy Akku kostet, ohne dass jemand den
+   Unterschied sähe.
+
+   Der Schatten steht jetzt fest am Element, gepulst wird nur die Größe —
+   dieselbe Wirkung, aber der Browser schiebt eine fertige Ebene hin und
+   her, statt neu zu rendern. */
 @keyframes startknopf-puls {
   0%,
   100% {
     transform: scale(1);
-    box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.35);
   }
   50% {
     transform: scale(1.045);
-    box-shadow: 0 14px 30px -8px rgba(0, 0, 0, 0.45);
   }
 }
 
 .startknopf-puls {
+  box-shadow: 0 12px 26px -8px rgb(0 0 0 / 0.4);
+  /* Eigene Ebene auf der Grafikeinheit — sonst wandert bei jedem Puls das
+     ganze Umfeld mit in die Neuberechnung. */
+  will-change: transform;
   animation: startknopf-puls 1.8s ease-in-out infinite;
 }
 
@@ -627,6 +653,67 @@
 .spielseite {
   padding-bottom: max(3.25rem, calc(env(safe-area-inset-bottom) + 2.5rem));
 }
+
+/* **Auf dem Tablet sitzt diese Leiste oben.**
+
+   Der Zuschlag darüber ist für Safaris schwebende Adressleiste am unteren
+   Rand gedacht — die gibt es aber nur auf dem iPhone. Auf dem iPad steht
+   die Adressleiste am oberen Rand, und der Zuschlag verschenkt dort gut
+   fünfzig Pixel Spielhöhe für nichts. Genau die Höhe, über die die
+   Rückmeldung zum Hochformat ging.
+
+   Die 0,5rem bleiben als normale Luft nach unten stehen; der eigentliche
+   Fehler (Antippen der untersten Reihe landet auf Safaris Leiste) kann
+   hier nicht zurückkommen, weil es die Leiste an dieser Stelle nicht
+   gibt. */
+@media (min-width: 768px) {
+  .spielseite {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+  }
+}
+
+/* ══ Handy im Querformat — gemessen, aber bewusst NICHT umgebaut ══
+
+   Nachgemessen auf 844 × 390 (iPhone quer), jedes Spiel einzeln gestartet:
+
+   | Spiel | Brett | Zellgröße |
+   |---|---|---|
+   | Line Fall | 53 × 106 | 5,3 px bei 10 Spalten |
+   | Ghost Chase | 105 × 110 | 5 px bei 21 Kacheln |
+   | Snake Rush | 119 × 119 | 7 px bei 17 Kacheln |
+   | Merge Up | 93 × 93 | 23 px bei 4 Spalten |
+   | Block Burst | 121 × 121 | 15 px bei 8 Spalten |
+   | Blade Toss | 111 × 124 | — |
+   | Ring Rise | 126 × 208 | — |
+   | Box Push | 161 × 161 | — |
+
+   Gut nutzbar bleiben Color Pour (508 × 249), Even Cut und Flow Link
+   (je 200 × 200), Pair Up (196 × 174), Bubble Pop (170 × 193) sowie die
+   drei Textspiele. Drop Four, Tap Rush und Dash City haben keine
+   `.spielseite`; Dash City ist im Querformat sogar im Vorteil.
+
+   **Der Befund ist echt: Bei den ersten drei ist das Spiel quer nicht
+   spielbar**, während 844 Pixel Breite ungenutzt danebenliegen.
+
+   **Trotzdem steht hier keine Regel.** Der naheliegende Umbau — Bühne
+   links über die volle Höhe, alles andere rechts daneben — wurde dreimal
+   versucht und dreimal verworfen, jedes Mal aus einem anderen Grund:
+
+   1. `grid-auto-rows: min-content` + `align-content: center` ließ die
+      Bühne auf ihre Inhaltsgröße zusammenfallen (Line Fall: 9 × 19 Pixel,
+      also schlechter als vorher).
+   2. `grid-row: 1 / -1` ergab eine Zeile der Höhe null — `-1` bezeichnet
+      das Ende des **expliziten** Rasters, und ohne `grid-template-rows`
+      sind alle Zeilen implizit.
+   3. `grid-row: 1 / span 20` traf die Zeilen richtig, aber die neunzehn
+      Zeilenabstände (`gap-2` = 8 px) fraßen 152 der 321 verfügbaren
+      Pixel auf.
+
+   Eine Fassung, die wirklich trägt, braucht in jedem Spiel eine
+   Umhüllung um die Nicht-Bühnen-Kinder — also einen Eingriff in
+   neunzehn Spieldateien. Das ist eine eigene Etappe und gehört
+   abgesprochen, nicht nebenbei erledigt. Die Messung oben ist die
+   Vorarbeit dafür; wer sie fortsetzt, fängt nicht bei null an. */
 
 /* **In der installierten App gibt es diese Leiste nicht.**
 
@@ -1046,8 +1133,16 @@ html.eigenstaendig .spielseite {
 @media (min-width: 768px) {
   .seiten-auftritt {
     /* Auf dem Tablet etwas größer: Dieselbe Kachel wirkt auf einer
-       doppelt so großen Fläche verloren. */
-    --kachel: clamp(4rem, 7vw, 5.5rem);
+       doppelt so großen Fläche verloren.
+
+       **Die Untergrenze muss die Obergrenze der Regel darüber sein.**
+       Vorher stand hier `clamp(4rem, …)`: Bei 767 Pixeln lieferte die
+       Grundregel ihre gedeckelten 5rem (80 px), bei 768 sprang diese Regel
+       ein und `7vw` ergab nur 53,8 px — also 4rem, die Untergrenze. Die
+       Kachel **schrumpfte am Haltepunkt um zwanzig Prozent**, genau dort,
+       wo der Bildschirm größer wird. Mit 5rem als Untergrenze geht es
+       stufenlos weiter. */
+    --kachel: clamp(5rem, 7vw, 5.5rem);
   }
 }
 
@@ -1494,7 +1589,36 @@ html.eigenstaendig .spielseite {
   }
 }
 
+/* Das Feld bewegt eine **verschobene Ebene**, kein `background-position`.
+
+   `background-position` ist keine Kompositor-Eigenschaft — die halbe
+   Bildschirmfläche wurde 60-mal je Sekunde neu gezeichnet, solange die
+   höchste Stufe stand. Jetzt liegt der Verlauf auf einem `::before`, das
+   dreimal so breit ist wie das Feld und per `transform` um genau eine
+   Kachelbreite (66,667 % seiner selbst = 200 % des Feldes) wandert — das
+   ist dieselbe Kachel, dieselbe Naht und dieselbe Geschwindigkeit wie
+   vorher, aber reine Zusammensetzungsarbeit auf der Grafikeinheit.
+
+   `isolation: isolate` hält das `z-index: -1` des `::before` im Knopf:
+   Ohne eigenen Stapelkontext rutschte die Ebene **unter** den Knopf und
+   wäre unsichtbar. `overflow: hidden` schneidet die Überbreite an der
+   runden Ecke des `spielbrett-rahmen` ab.
+
+   Die Zählzahl darüber bleibt absichtlich bei `background-position`
+   (unten): Ihre Fläche ist der Text selbst, `background-clip: text` kann
+   nicht auf eine eigene Ebene ausweichen, und ein paar Ziffern neu zu
+   zeichnen kostet nichts — das Problem war das Feld. */
 .tempo-regenbogen {
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.tempo-regenbogen::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0 auto 0 0;
+  width: 300%;
   background: linear-gradient(
     100deg,
     #ef4444,
@@ -1506,8 +1630,15 @@ html.eigenstaendig .spielseite {
     #d946ef,
     #ef4444
   );
-  background-size: 200% 100%;
-  animation: regenbogen-wandern 3s linear infinite;
+  background-size: 66.667% 100%;
+  animation: regenbogen-schieben 3s linear infinite;
+  will-change: transform;
+}
+
+@keyframes regenbogen-schieben {
+  to {
+    transform: translateX(-66.667%);
+  }
 }
 
 /* Die Zählzahl in Tap Rush auf der höchsten Stufe: selbst ein Regenbogen.

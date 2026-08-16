@@ -43,12 +43,27 @@ export const MIN_ABSTAND = 0.2;
 /** So nah muss ein Wurf an einem Apfel liegen, um ihn zu treffen. */
 const APFEL_TREFFER = 0.26;
 
+/**
+ * Wie lange die beiden Hälften eines zerteilten Apfels auseinanderfliegen.
+ *
+ * Warum das in der Logik steht und nicht als CSS-Animation in der Anzeige:
+ * Der Apfel ist im selben Augenblick aus `aepfel` verschwunden, in dem er
+ * getroffen wird — die Anzeige hat danach nichts mehr, woran sie eine
+ * Animation aufhängen könnte. Der Zustand muss sich also merken, dass eben
+ * einer zerteilt wurde. Und wenn er das ohnehin tut, kann er die Zeit auch
+ * gleich selbst mitzählen; dann ist der Ablauf getestet statt geraten.
+ */
+export const ZERTEILT_S = 0.45;
+
 export const MESSER_PUNKTE = 10;
 export const APFEL_PUNKTE = 25;
 const LEVEL_BONUS = 20;
 
 /** Ein Abschnitt der Drehung: so lange mit diesem Tempo, dann der nächste. */
 export type Phase = { dauer: number; tempo: number };
+
+/** Ein eben zerteilter Apfel: wo er saß und wie lange er noch zu sehen ist. */
+export type Zerteilt = { steck: number; rest: number };
 
 export type Zustand = {
   level: number;
@@ -67,10 +82,20 @@ export type Zustand = {
   fliegend: number | null;
   /** Restzeit der Pause zwischen zwei Leveln, sonst 0. */
   pauseRest: number;
+  /** Der zuletzt zerteilte Apfel, solange er noch auseinanderfliegt. */
+  zerteilt: Zerteilt | null;
   punkte: number;
   vorbei: boolean;
-  /** Warum die Runde vorbei ist — nur für die Anzeige. */
-  getroffen: boolean;
+  /**
+   * Steckwinkel des tödlichen Messers, sonst null.
+   *
+   * Nur für die Anzeige — aber eben nicht nur „es ist passiert", sondern
+   * **wo**. Vorher stand hier ein bloßes `getroffen: boolean`, mit dem die
+   * Anzeige nichts anfangen konnte: Das geworfene Messer verschwand, und
+   * die Runde war ohne ein einziges Bild vorbei. Ein Kind soll sehen,
+   * woran es lag.
+   */
+  stoss: number | null;
   saat: number;
 };
 
@@ -178,9 +203,10 @@ export function levelAufbauen(level: number, punkte: number, saat: number): Zust
     uebrig: messerFuerLevel(level),
     fliegend: null,
     pauseRest: 0,
+    zerteilt: null,
     punkte,
     vorbei: false,
-    getroffen: false,
+    stoss: null,
     saat,
   };
 }
@@ -208,15 +234,21 @@ function einschlag(z: Zustand): Zustand {
   const getroffenerApfel = z.aepfel.findIndex((w) => winkelAbstand(w, steck) < APFEL_TREFFER);
   const aepfel = getroffenerApfel >= 0 ? z.aepfel.filter((_, i) => i !== getroffenerApfel) : z.aepfel;
   const apfelPunkte = getroffenerApfel >= 0 ? APFEL_PUNKTE : 0;
+  // Die Hälften fliegen dort auseinander, wo der Apfel saß — nicht am
+  // Einschlagpunkt. Bei einem Streiftreffer sind das bis zu 0,26 Bogenmaß
+  // Unterschied, und die Frucht soll da zerspringen, wo sie hing.
+  const zerteilt: Zerteilt | null =
+    getroffenerApfel >= 0 ? { steck: z.aepfel[getroffenerApfel]!, rest: ZERTEILT_S } : z.zerteilt;
 
   if (z.messer.some((w) => winkelAbstand(w, steck) < MIN_ABSTAND)) {
     return {
       ...z,
       aepfel,
+      zerteilt,
       punkte: z.punkte + apfelPunkte,
       fliegend: null,
       vorbei: true,
-      getroffen: true,
+      stoss: steck,
     };
   }
 
@@ -227,6 +259,7 @@ function einschlag(z: Zustand): Zustand {
     ...z,
     messer: [...z.messer, steck],
     aepfel,
+    zerteilt,
     uebrig,
     punkte,
     fliegend: null,
@@ -235,13 +268,33 @@ function einschlag(z: Zustand): Zustand {
   };
 }
 
+/**
+ * In welches steckende Messer der tödliche Wurf gefahren ist — sonst −1.
+ *
+ * Steht hier und nicht in der Anzeige, weil dieselbe Regel wie im Einschlag
+ * gilt (`MIN_ABSTAND`): Die Anzeige soll genau die Klinge rot färben, die
+ * das Spiel auch gemeint hat.
+ */
+export function stossPartner(z: Zustand): number {
+  const stoss = z.stoss;
+  if (stoss === null) return -1;
+  return z.messer.findIndex((w) => winkelAbstand(w, stoss) < MIN_ABSTAND);
+}
+
 /** Zeit vergehen lassen: Drehung, Flug, Pause, Levelwechsel. */
 export function zeitFortschritt(z: Zustand, dt: number): Zustand {
   if (z.vorbei) return z;
 
+  // Der zerteilte Apfel hat eine eigene kleine Uhr, und die läuft in jeder
+  // Lage weiter — auch während der Pause zwischen zwei Leveln. Sonst bliebe
+  // ausgerechnet beim Apfeltreffer mit dem letzten Messer eine halb
+  // auseinandergeflogene Frucht stehen.
+  const zerteilt: Zerteilt | null =
+    z.zerteilt === null || z.zerteilt.rest <= dt ? null : { ...z.zerteilt, rest: z.zerteilt.rest - dt };
+
   if (z.pauseRest > 0) {
     const pauseRest = z.pauseRest - dt;
-    if (pauseRest > 0) return { ...z, pauseRest };
+    if (pauseRest > 0) return { ...z, zerteilt, pauseRest };
     // Punkte und Saat wandern mit ins nächste Level, der Rest ist neu.
     return levelAufbauen(z.level + 1, z.punkte + LEVEL_BONUS * z.level, z.saat);
   }
@@ -264,7 +317,7 @@ export function zeitFortschritt(z: Zustand, dt: number): Zustand {
     }
   }
 
-  const gedreht = { ...z, winkel: normalisieren(winkel), phaseIndex, phaseRest };
+  const gedreht = { ...z, zerteilt, winkel: normalisieren(winkel), phaseIndex, phaseRest };
 
   if (gedreht.fliegend === null) return gedreht;
   const fliegend = gedreht.fliegend - dt;
@@ -276,4 +329,10 @@ export function zeitFortschritt(z: Zustand, dt: number): Zustand {
 export function flugFortschritt(z: Zustand): number {
   if (z.fliegend === null) return 0;
   return Math.max(0, Math.min(1, 1 - z.fliegend / FLUG_S));
+}
+
+/** Anteil des Auseinanderfliegens, 0 = gerade zerteilt, 1 = verschwunden. */
+export function zerteiltFortschritt(z: Zustand): number {
+  if (z.zerteilt === null) return 0;
+  return Math.max(0, Math.min(1, 1 - z.zerteilt.rest / ZERTEILT_S));
 }

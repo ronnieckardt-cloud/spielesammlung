@@ -138,13 +138,54 @@ export function punkteFuerSchnitt(genau: number): number {
 export const FORM_GROESSE = 38;
 
 /**
+ * Erste Stellschraube: Wie schmal die Form im gegebenen Level werden darf.
+ *
+ * Eine gestreckte Form hat weniger offensichtliche Halbierungslinien. Der
+ * Deckel ist Absicht — eine hauchdünne Form wäre kein Rätsel mehr, sondern
+ * Millimeterarbeit. Er ist aber schon **ab Level 10** erreicht; deshalb gibt
+ * es die zweite Stellschraube darunter.
+ */
+export function maxDehnungFuerLevel(level: number): number {
+  return Math.min(0.55, 0.12 + level * 0.045);
+}
+
+/**
+ * Zweite Stellschraube: Wie stark die Abstände der Ecken zur Mitte schwanken
+ * dürfen, ohne dass die Form eingedellt wird.
+ *
+ * **Die Grenze ist gerechnet, nicht geraten.** Liegen drei aufeinander-
+ * folgende Ecken bei den Winkeln −Δ, 0, +Δ mit den Abständen a, b, c, dann
+ * ist das Kreuzprodukt der beiden Kanten
+ * `sin Δ · (a·b + b·c − 2·a·c·cos Δ)`. Konvex bleibt es, solange dieser Wert
+ * das Vorzeichen behält, also solange `b > 2ac·cos Δ / (a + c)` gilt — im
+ * ungünstigsten Fall (a = c = größter Abstand) also solange der kleinste
+ * Abstand über `cos Δ` des größten liegt. Bei gleichmäßig verteilten Ecken
+ * ist Δ = 2π/n.
+ *
+ * `0.7` ist der Sicherheitsabstand zu dieser Grenze. Der Deckel `0.45` fängt
+ * Drei- und Vierecke ab, bei denen die Rechnung gar keine Grenze setzt
+ * (cos 120° und cos 90° sind ≤ 0) — ohne ihn käme dort ein Splitter heraus,
+ * der zwar konvex, aber winzig ist.
+ *
+ * Anders als die Dehnung steigt sie bis **Level 20** weiter. Zwischen zehn
+ * und zwanzig ändert sich damit noch etwas, und danach ist Schluss: mehr
+ * Unregelmäßigkeit hieße nur noch kleinere Fläche, nicht mehr Rätsel.
+ */
+export function maxSchwankungFuerLevel(level: number, ecken: number): number {
+  const grenze = 1 - Math.cos((2 * Math.PI) / ecken);
+  return Math.min(0.45, grenze * 0.7) * Math.min(1, Math.max(0, level) / 20);
+}
+
+/**
  * Eine konvexe Form aus der Levelnummer.
  *
  * Der Trick für „konvex, aber unregelmäßig": Punkte werden über den Kreis
  * verteilt und nur ihr **Abstand** zum Mittelpunkt wird verändert, nie ihre
- * Reihenfolge. Winkelmäßig aufsteigende Punkte auf einem Kreis ergeben immer
- * ein konvexes Vieleck — bei gleichem Abstand ohnehin, und ein gedehnter
- * Kreis (Ellipse) bleibt es auch.
+ * Reihenfolge. Wie weit dieser Abstand schwanken darf, sagt
+ * `maxSchwankungFuerLevel` — dort steht auch, warum die Form dabei konvex
+ * bleibt. Der anschließende gedehnte Kreis (Ellipse) ändert daran nichts:
+ * Das Stauchen einer Achse ist eine affine Abbildung, und die erhält
+ * Konvexität.
  *
  * Ein Zufallshaufen von Punkten wäre nicht konvex, und dafür bräuchte es
  * eine Hüllenberechnung, die hier niemand gebraucht.
@@ -157,21 +198,24 @@ export function formErzeugen(saat: number, level: number): Form {
   // 3 bis 8 Ecken; ab 12 Ecken wirkt es rund und ist zu leicht zu treffen.
   const ecken = 3 + Math.floor(a.wert * 6);
 
-  // Streckung: Je höher das Level, desto schmaler darf die Form werden.
-  // Eine gestreckte Form hat weniger offensichtliche Halbierungslinien.
-  const maxDehnung = Math.min(0.55, 0.12 + level * 0.045);
-  const dehnung = 1 - b.wert * maxDehnung;
+  const dehnung = 1 - b.wert * maxDehnungFuerLevel(level);
 
   // Drehung: Ohne sie liegt bei jeder Form eine Symmetrieachse waagerecht
   // oder senkrecht, und man könnte immer stumpf gerade durchziehen.
   const drehung = c.wert * 2 * Math.PI;
 
+  const schwankung = maxSchwankungFuerLevel(level, ecken);
+
   const punkte: Punkt[] = [];
+  let laufendeSaat = c.saat;
   for (let i = 0; i < ecken; i++) {
+    const zug = schritt(laufendeSaat);
+    laufendeSaat = zug.saat;
+    const abstand = FORM_GROESSE * (1 - zug.wert * schwankung);
     const winkel = drehung + (i / ecken) * 2 * Math.PI;
     punkte.push({
-      x: Math.cos(winkel) * FORM_GROESSE,
-      y: Math.sin(winkel) * FORM_GROESSE * dehnung,
+      x: Math.cos(winkel) * abstand,
+      y: Math.sin(winkel) * abstand * dehnung,
     });
   }
   return punkte;

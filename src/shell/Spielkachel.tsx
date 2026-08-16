@@ -37,10 +37,14 @@ export function Spielkachel({
   /**
    * Nur auf breiten Bildschirmen zeigen.
    *
-   * Auf einem Handy passen vier Kacheln je Reihe, auf einem Tablet fünf.
-   * Acht Kacheln ergeben dort 5 + 3 — eine halbe Reihe, die schief im
-   * Regal hängt. Mit zwei zusätzlichen Kacheln stehen auf beiden Geräten
-   * **volle** Reihen: 4 + 4 auf dem Handy, 5 + 5 auf dem Tablet.
+   * Auf dem Handy stehen acht Kacheln auf der Startseite, auf einem Tablet
+   * alle zwanzig — dort ist Platz, und sie füllen genau die Höhe, die sonst
+   * leer bliebe. Umgesetzt als CSS-Regel statt als Abfrage in JavaScript,
+   * damit beim Drehen des Geräts nichts nachgerechnet werden muss.
+   *
+   * Wie viele je Reihe stehen, entscheidet nicht diese Marke, sondern das
+   * Raster der Liste (`repeat(auto-fit, …)`) — es füllt jede Breite von
+   * selbst aus.
    */
   nurBreit?: boolean;
 }) {
@@ -51,16 +55,16 @@ export function Spielkachel({
 
   return (
     <li
-      className={`kachel-rein flex-col items-center gap-1 ${nurBreit ? 'hidden md:flex' : 'flex'}`}
-      style={
-        {
-          // Beschriftungsbreite wächst mit der Kachel mit. Knapp bemessen:
-          // Jeder zusätzliche Zentimeter kostet auf einem 375er-iPhone die
-          // vierte Kachel je Reihe — und damit eine ganze Reihe.
-          width: 'calc(var(--kachel) + 0.5rem)',
-          '--verzoegerung': `${verzoegerung ?? 0}ms`,
-        } as CSSProperties
-      }
+      /*
+       * **Keine feste Breite mehr.** Die Kachel ist jetzt eine Rasterzelle
+       * und füllt sie aus; wie breit die Zelle ist, entscheidet die Liste.
+       * Mit der früheren festen Breite plus `flex-wrap` brach die Reihe bei
+       * jeder Bildschirmbreite anders um — zwischen 640 und 767 Pixeln
+       * ergaben acht Kacheln 6+2, zwischen 768 und 833 standen nur drei je
+       * Reihe, weniger als auf einem 375er-iPhone.
+       */
+      className={`kachel-rein w-full flex-col items-center gap-1 ${nurBreit ? 'hidden md:flex' : 'flex'}`}
+      style={{ '--verzoegerung': `${verzoegerung ?? 0}ms` } as CSSProperties}
     >
       <button
         type="button"
@@ -87,7 +91,14 @@ export function Spielkachel({
           `aria-label` des Knopfes, und zweimal vorgelesen nervt. */}
       <span aria-hidden="true" className="flex gap-px">
         {[1, 2, 3].map((n) => (
-          <svg key={n} viewBox="-12 -12 24 24" className="size-2.5">
+          <svg
+            key={n}
+            viewBox="-12 -12 24 24"
+            /* Waechst mit der Kachel mit. Vorher fest 10 Pixel: Auf einem
+               Tablet mit 88er-Kachel schrumpften die Sterne optisch zu
+               Staub, obwohl sie die Auszeichnung des Spiels sind. */
+            style={{ width: 'calc(var(--kachel) * 0.13)', height: 'calc(var(--kachel) * 0.13)' }}
+          >
             <path
               d="M0-11 3.2-3.9 11-3.1 5.2 2.1 6.8 9.7 0 5.9-6.8 9.7-5.2 2.1-11-3.1-3.2-3.9Z"
               fill={n <= sterne ? 'var(--color-gold)' : 'rgba(255,255,255,0.18)'}
@@ -96,7 +107,10 @@ export function Spielkachel({
         ))}
       </span>
 
-      <span className="w-full text-center text-[11px] leading-tight font-medium text-white/90">
+      {/* `min-w-0` ist nötig, damit ein langer Name die Rasterzelle nicht
+          auseinanderdrückt — „Ghost Chase" bricht dann um, statt die ganze
+          Reihe breiter zu machen. */}
+      <span className="w-full min-w-0 text-center text-[11px] leading-tight font-medium text-white/90">
         {spiel.title}
       </span>
     </li>

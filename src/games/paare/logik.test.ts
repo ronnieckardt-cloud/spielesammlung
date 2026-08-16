@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  DECKEL_LEVEL,
   MOTIV_ANZAHL,
   aufdecken,
   gefundenePaare,
@@ -7,6 +8,7 @@ import {
   punkteFuerZuege,
   schliessen,
   stufeFuerLevel,
+  zugGrenzeFuerLevel,
 } from './logik';
 import type { Zustand } from './logik';
 
@@ -18,9 +20,13 @@ function partnerVon(z: Zustand, a: number): number {
   return partner;
 }
 
-/** Irgendeine Karte mit einem anderen Motiv als `a`. */
+/** Irgendeine noch liegende Karte mit einem anderen Motiv als `a`. */
 function fremdeKarteZu(z: Zustand, a: number): number {
-  const fremd = z.karten.findIndex((k, i) => i !== a && k.motiv !== z.karten[a]!.motiv);
+  // `gefunden` muss mitgeprüft werden: Eine längst gefundene Karte lässt
+  // sich nicht mehr antippen, der „Fehlgriff" käme also gar nicht zustande.
+  const fremd = z.karten.findIndex(
+    (k, i) => i !== a && !k.gefunden && k.motiv !== z.karten[a]!.motiv,
+  );
   expect(fremd).toBeGreaterThanOrEqual(0);
   return fremd;
 }
@@ -32,6 +38,27 @@ function perfektDurchspielen(start: Zustand): Zustand {
     if (z.karten[i]!.gefunden) continue;
     z = aufdecken(z, i);
     z = aufdecken(z, partnerVon(z, i));
+  }
+  return z;
+}
+
+/**
+ * Spielt eine Runde ohne jedes Gedächtnis: Jeder Zug ist ein Fehlgriff.
+ * Endet, sobald die Runde vorbei ist — oder bricht ab, damit ein Fehler in
+ * der Abbruchbedingung nicht zu einer Endlosschleife wird.
+ */
+function nurDanebenGreifen(start: Zustand, hoechstensZuege = 500): Zustand {
+  let z = start;
+  while (!z.vorbei && z.zuege < hoechstensZuege) {
+    const erste = z.karten.findIndex((k) => !k.gefunden);
+    const zweite = z.karten.findIndex(
+      (k, i) => i !== erste && !k.gefunden && k.motiv !== z.karten[erste]!.motiv,
+    );
+    // Liegt nur noch ein Paar, kann man gar nicht mehr danebengreifen.
+    if (zweite < 0) break;
+    z = aufdecken(z, erste);
+    z = aufdecken(z, zweite);
+    z = schliessen(z);
   }
   return z;
 }
@@ -61,6 +88,37 @@ describe('stufeFuerLevel', () => {
     for (let level = 1; level <= 40; level++) {
       const { spalten, zeilen } = stufeFuerLevel(level);
       expect((spalten * zeilen) / 2).toBeLessThanOrEqual(MOTIV_ANZAHL);
+    }
+  });
+});
+
+describe('zugGrenzeFuerLevel', () => {
+  it('lässt die Level bis zur Deckelstufe ohne Grenze', () => {
+    for (let level = 1; level < DECKEL_LEVEL; level++) {
+      expect(zugGrenzeFuerLevel(level)).toBeNull();
+    }
+    expect(zugGrenzeFuerLevel(DECKEL_LEVEL)).not.toBeNull();
+  });
+
+  it('wird nie großzügiger, je höher das Level', () => {
+    // Der eigentliche Befund: Ab der Deckelstufe wuchs das Feld nicht mehr,
+    // und damit war jedes weitere Level exakt gleich schwer.
+    let vorher = Number.POSITIVE_INFINITY;
+    for (let level = DECKEL_LEVEL; level <= 40; level++) {
+      const grenze = zugGrenzeFuerLevel(level)!;
+      expect(grenze).toBeLessThanOrEqual(vorher);
+      vorher = grenze;
+    }
+    expect(zugGrenzeFuerLevel(40)!).toBeLessThan(zugGrenzeFuerLevel(DECKEL_LEVEL)!);
+  });
+
+  it('bleibt auch ganz oben schaffbar', () => {
+    for (let level = DECKEL_LEVEL; level <= 200; level++) {
+      const { spalten, zeilen } = stufeFuerLevel(level);
+      const paare = (spalten * zeilen) / 2;
+      // Selbst mit lückenlosem Gedächtnis braucht man rund 1,6 Züge je Paar,
+      // weil die erste Karte jedes unbekannten Motivs blind gezogen wird.
+      expect(zugGrenzeFuerLevel(level)!).toBeGreaterThanOrEqual(paare * 2);
     }
   });
 });
@@ -204,5 +262,64 @@ describe('Rundenende und Punkte', () => {
   it('belohnt ein größeres Feld stärker als ein kleines', () => {
     // Sonst lohnte es sich, immer nur Level 1 zu spielen.
     expect(punkteFuerZuege(15, 15)).toBeGreaterThan(punkteFuerZuege(3, 3));
+  });
+});
+
+describe('Punktestand während der Runde', () => {
+  it('steigt bei jedem Treffer und sinkt bei jedem Fehlgriff', () => {
+    // Vorher stand die ganze Runde über eine 0 in der Kopfzeile, und erst
+    // das letzte Paar ließ sie auf den Endwert springen.
+    let z = neuesSpiel(5);
+    expect(z.punkte).toBe(0);
+
+    z = aufdecken(z, 0);
+    z = aufdecken(z, partnerVon(z, 0));
+    expect(z.punkte).toBe(100);
+
+    const naechste = z.karten.findIndex((k) => !k.gefunden);
+    z = aufdecken(z, naechste);
+    z = aufdecken(z, fremdeKarteZu(z, naechste));
+    expect(z.punkte).toBe(88);
+    z = schliessen(z);
+
+    z = aufdecken(z, naechste);
+    z = aufdecken(z, partnerVon(z, naechste));
+    expect(z.punkte).toBe(188);
+  });
+
+  it('endet auf demselben Wert wie die Schlussrechnung', () => {
+    for (const level of [1, 4, 9]) {
+      const z = perfektDurchspielen(neuesSpiel(level));
+      expect(z.punkte).toBe(punkteFuerZuege(z.karten.length / 2, z.zuege));
+    }
+  });
+});
+
+describe('Zuggrenze', () => {
+  it('beendet die Runde als Niederlage, wenn die Züge alle sind', () => {
+    const start = neuesSpiel(DECKEL_LEVEL);
+    const grenze = start.zugGrenze!;
+    const z = nurDanebenGreifen(start);
+    expect(z.zuege).toBe(grenze);
+    expect(z.vorbei).toBe(true);
+    expect(z.gewonnen).toBe(false);
+    expect(gefundenePaare(z)).toBe(0);
+  });
+
+  it('zählt einen Sieg mit dem allerletzten erlaubten Zug als Sieg', () => {
+    const paare = neuesSpiel(DECKEL_LEVEL).karten.length / 2;
+    // Genau so viele Züge erlaubt, wie perfektes Spiel braucht.
+    const z = perfektDurchspielen({ ...neuesSpiel(DECKEL_LEVEL), zugGrenze: paare });
+    expect(z.zuege).toBe(paare);
+    expect(z.vorbei).toBe(true);
+    expect(z.gewonnen).toBe(true);
+  });
+
+  it('lässt die frühen Level unbegrenzt weiterspielen', () => {
+    const z = nurDanebenGreifen(neuesSpiel(1), 80);
+    // Ohne Grenze läuft die Runde bis zum Anschlag der Testschleife weiter.
+    expect(z.zugGrenze).toBeNull();
+    expect(z.vorbei).toBe(false);
+    expect(z.zuege).toBe(80);
   });
 });

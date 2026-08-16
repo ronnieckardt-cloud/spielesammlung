@@ -32,9 +32,41 @@ export function punkteFuerAntwort(richtig: boolean, serieNachAntwort: number): n
   return PUNKTE_BASIS + Math.min(PUNKTE_SERIE_MAX_BONUS, (serieNachAntwort - 1) * PUNKTE_SERIE_SCHRITT);
 }
 
+/**
+ * Wie viele Level am Stück ohne eine einzige Wiederholung auskommen —
+ * ergibt sich allein aus Poolgröße und Fragen je Level. Mehr Fragen in
+ * `fragen.ts` verlängern den Durchgang also von selbst.
+ */
+export const LEVEL_JE_DURCHGANG = Math.max(1, Math.floor(FRAGEN.length / FRAGEN_PRO_LEVEL));
+
+/**
+ * Die zehn Fragen eines Levels.
+ *
+ * Vorher mischte **jedes** Level den ganzen Pool neu und nahm die ersten
+ * zehn. Bei 100 Fragen und 10 je Level heißt das rechnerisch eine
+ * Wiederholung pro Level: schon Level 2 stellt im Schnitt eine Frage aus
+ * Level 1 noch einmal, und ab etwa Level 10 kommt gar nichts Neues mehr.
+ *
+ * Jetzt wird der Pool **einmal je Durchgang** gemischt und in Abschnitte von
+ * zehn geteilt. Level 1 bis 10 sind dadurch garantiert überschneidungsfrei;
+ * erst danach fängt ein neuer Durchgang mit einer anderen Mischung an, Level
+ * 11 ist also nicht einfach Level 1 noch einmal.
+ *
+ * Gleiche Levelnummer ergibt weiterhin überall dieselben Fragen — sonst
+ * wäre das Duell (`duellFaehig` in `index.ts`) wertlos.
+ */
+export function fragenFuerLevel(level: number): readonly Frage[] {
+  // Ab 0 zählen macht die Rechnung mit Abschnitt und Durchgang lesbar.
+  const nummer = Math.max(1, Math.floor(level)) - 1;
+  const durchgang = Math.floor(nummer / LEVEL_JE_DURCHGANG);
+  const abschnitt = nummer % LEVEL_JE_DURCHGANG;
+  const gemischt = rng(saatAus('quiz', 'durchgang', durchgang)).mischen(FRAGEN);
+  const von = abschnitt * FRAGEN_PRO_LEVEL;
+  return gemischt.slice(von, von + FRAGEN_PRO_LEVEL);
+}
+
 export function neuesLevel(level: number): Zustand {
-  const gemischt = rng(saatAus('quiz', level)).mischen(FRAGEN);
-  const fragen = gemischt.slice(0, Math.min(FRAGEN_PRO_LEVEL, gemischt.length));
+  const fragen = fragenFuerLevel(level);
   return {
     level,
     fragen,

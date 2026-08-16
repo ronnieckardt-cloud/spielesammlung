@@ -5,9 +5,17 @@ import { useInput } from '../../core/useInput';
 import { Steuerkreuz } from '../../core/Steuerkreuz';
 import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { sfx } from '../../core/sfx';
+import { haptik } from '../../core/haptik';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
-import { BREITE, HOEHE, neuesSpiel, richtungWaehlen, zeitFortschritt } from './logik';
+import {
+  BREITE,
+  HOEHE,
+  bildGeaendert,
+  neuesSpiel,
+  richtungWaehlen,
+  zeitFortschritt,
+} from './logik';
 import type { Richtung, Zustand } from './logik';
 import { SchlangeIcon } from './Icon';
 import { Apfel, Goldstern, Kopf, Koerper, Raster, Ringe } from './figuren';
@@ -32,6 +40,66 @@ const DEKO_PUNKTE: readonly {
   { x: 5, y: 46, groesse: 17, farbe: '#4ade80', verzoegerung: 0.9 },
 ];
 
+/** Sinnbild für den Rand-Durchlauf: rechts hinaus, links wieder herein. */
+function RandPfeil() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5 shrink-0" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="4" fill="#0b0f14" opacity="0.5" />
+      <rect
+        x="3"
+        y="4"
+        width="18"
+        height="16"
+        rx="4"
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth="1.3"
+        strokeDasharray="3 3"
+        opacity="0.8"
+      />
+      <g stroke="#facc15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <path d="M13 12 h9 M19 9 l3 3 l-3 3" />
+        <path d="M2 12 h6 M5 9 l3 3 l-3 3" opacity="0.7" />
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * Die drei Regeln, die man ohne Erklärung nicht errät.
+ *
+ * Sie standen bisher **nur** im Hinweistext unter dem Feld — und der trägt
+ * `nur-bei-platz`, ist auf Bildschirmen unter 720 Pixel Höhe also
+ * ausgeblendet. Auf genau den Geräten erfuhr man nie, was der Goldstern
+ * soll und dass die Ränder durchlässig sind. Hier ist Platz, und man liest
+ * es einmal in Ruhe vor dem Start.
+ *
+ * Apfel und Stern werden mit denselben Figuren gezeichnet wie im Spiel —
+ * ein nachgebautes Symbol wäre genau das, was man später nicht wiedererkennt.
+ */
+function Regeln() {
+  return (
+    <ul className="relative flex w-full max-w-xs flex-col gap-2 rounded-2xl bg-black/25 p-3 text-left text-xs font-semibold text-white">
+      <li className="flex items-center gap-2.5">
+        <svg viewBox="-0.15 -0.25 1.3 1.4" className="size-5 shrink-0" aria-hidden="true">
+          <Apfel ort={{ x: 0, y: 0 }} />
+        </svg>
+        <span>Rote Äpfel machen dich länger und schneller.</span>
+      </li>
+      <li className="flex items-center gap-2.5">
+        <svg viewBox="-0.15 -0.25 1.3 1.4" className="size-5 shrink-0" aria-hidden="true">
+          <Goldstern ort={{ x: 0, y: 0 }} ruhig />
+        </svg>
+        <span>Goldsterne geben Extrapunkte — sie liegen aber nur kurz.</span>
+      </li>
+      <li className="flex items-center gap-2.5">
+        <RandPfeil />
+        <span>An den Rändern läufst du auf der anderen Seite weiter.</span>
+      </li>
+    </ul>
+  );
+}
+
 /**
  * Titelbild im Stil klassischer Arcade-Spiele — kräftiges Grün, schwebende
  * Punkte, dicke Schrift. Eigene Gestaltung, siehe Blockblitz-Startbildschirm
@@ -40,10 +108,10 @@ const DEKO_PUNKTE: readonly {
 function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: () => void }) {
   return (
     <div
-      className="relative flex flex-1 flex-col items-center justify-center gap-7 overflow-hidden p-6 text-center"
+      className="relative flex flex-1 flex-col items-center justify-center gap-5 overflow-hidden p-6 text-center"
       style={{ background: 'linear-gradient(160deg, #065f46 0%, #16a34a 45%, #65a30d 75%, #ca8a04 100%)' }}
     >
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
         {DEKO_PUNKTE.map((p, i) => (
           <span
             key={i}
@@ -79,6 +147,8 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
         </p>
       </div>
 
+      <Regeln />
+
       <button
         type="button"
         onClick={onStart}
@@ -99,10 +169,23 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
   const feldRef = useRef<SVGSVGElement>(null);
   const punkteVorherRef = useRef(0);
 
-  useGameLoop((dt) => setZ((alt) => zeitFortschritt(alt, dt)), {
-    fps: 60,
-    running: gestartet && !z.vorbei,
-  });
+  // Der Zustand wird **hier** geführt, nicht im React-Zustand: Die Uhr
+  // tickt 60-mal je Sekunde, die Schlange rückt aber nur 4,5- bis 12,5-mal
+  // je Sekunde weiter. Ginge jeder Tick durch `setZ`, würde React
+  // achtzig Prozent der Bilder umsonst neu aufbauen. Die angesammelte Zeit
+  // muss dabei trotzdem weiterlaufen — deshalb ein Ref und nicht einfach
+  // ein unverändert zurückgegebenes `z`.
+  const standRef = useRef(z);
+
+  useGameLoop(
+    (dt) => {
+      const vorher = standRef.current;
+      const nachher = zeitFortschritt(vorher, dt);
+      standRef.current = nachher;
+      if (bildGeaendert(vorher, nachher)) setZ(nachher);
+    },
+    { fps: 60, running: gestartet && !z.vorbei },
+  );
 
   // Die vier Himmelsrichtungen des Eingabe-Bausteins heißen im Spiel anders.
   // Eine Abbildung für Tastatur, Wischen **und** Steuerkreuz.
@@ -113,7 +196,12 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
       left: 'links',
       right: 'rechts',
     };
-    setZ((alt) => richtungWaehlen(alt, richtungen[eingabe]));
+    // Auch die Eingabe geht durch das Ref: Die Uhr liest von dort, eine
+    // nur im React-Zustand vermerkte Richtung wäre im nächsten Takt weg.
+    const neu = richtungWaehlen(standRef.current, richtungen[eingabe]);
+    if (neu === standRef.current) return;
+    standRef.current = neu;
+    setZ(neu);
   }, []);
 
   useInput(
@@ -143,8 +231,9 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
 
   useEffect(() => {
     if (z.vorbei) {
-      sfx('ende');
-      onGameOver(z.punkte);
+      sfx(z.gewonnen ? 'stufe' : 'ende');
+      haptik(z.gewonnen ? 'jubel' : 'ende');
+      onGameOver(z.punkte, z.gewonnen);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [z.vorbei]);
@@ -176,7 +265,9 @@ export function Schlange({ onScore, onGameOver, settings, bestScore, istErsteRun
           className="spielbrett spielbrett-rahmen touch-none bg-flaeche"
           style={{ '--vz': BREITE / HOEHE } as CSSProperties}
           role="img"
-          aria-label={`Spielfeld. Schlange ${z.schlange.length} Glieder lang, ${z.punkte} Punkte.${z.vorbei ? ' Vorbei.' : ''}`}
+          aria-label={`Spielfeld. Schlange ${z.schlange.length} Glieder lang, ${z.punkte} Punkte.${
+            z.gewonnen ? ' Das ganze Brett ist voll — gewonnen!' : z.vorbei ? ' Vorbei.' : ''
+          }`}
         >
           <Raster breite={BREITE} hoehe={HOEHE} />
           <Apfel ort={z.futter} />

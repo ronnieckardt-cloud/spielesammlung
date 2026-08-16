@@ -75,7 +75,10 @@ export const WOERTER: readonly Wort[] = [
   { kategorie: 'Schule', antworten: ['Bleistieft', 'Bleystift', 'Bleisstift', 'Bleistift'], richtig: 3, stufe: 2, regel: 'In der Mitte steht "stift", nicht "stieft", und nur ein "s" davor.' },
   { kategorie: 'Schule', antworten: ['Rucksack', 'Ruckzack', 'Rucksak', 'Rukzack'], richtig: 0, stufe: 2, regel: 'Zusammengesetzt aus "Rücken" und "Sack" — deshalb "ck" in der Mitte.' },
   { kategorie: 'Essen', antworten: ['Löfel', 'Löffel', 'Loeffel', 'Löffell'], richtig: 1, stufe: 2, regel: 'Nach kurzem Vokal steht "ff", das Doppel-f.' },
-  { kategorie: 'Essen', antworten: ['Gabbel', 'Gabhel', 'Gabel', 'Gabäl'], richtig: 2, stufe: 2, regel: 'Am Anfang steht "G", kein "K", und kein Dehnungs-h.' },
+  // Die Erklärung nannte vorher ein "K" am Wortanfang als Falle — die stand
+  // aber gar nicht zur Auswahl. Jetzt beschreibt sie die drei Fehler, die
+  // wirklich dastehen.
+  { kategorie: 'Essen', antworten: ['Gabbel', 'Gabhel', 'Gabel', 'Gabäl'], richtig: 2, stufe: 2, regel: 'Nur ein "b", kein Dehnungs-h danach, und am Ende "el" mit "e", nicht mit "ä".' },
   { kategorie: 'Essen', antworten: ['Teler', 'Dehler', 'Tellär', 'Teller'], richtig: 3, stufe: 2, regel: 'Nach kurzem Vokal steht "ll", das Doppel-l.' },
   { kategorie: 'Alltag', antworten: ['Treppe', 'Trepe', 'Träppe', 'Treppä'], richtig: 0, stufe: 2, regel: 'Nach kurzem Vokal steht "pp", das Doppel-p.' },
   { kategorie: 'Alltag', antworten: ['Schranck', 'Schrank', 'Schrang', 'Schrangk'], richtig: 1, stufe: 2, regel: 'Am Ende steht "nk", nicht "ng" oder "ngk".' },
@@ -91,8 +94,15 @@ export const WOERTER: readonly Wort[] = [
   { kategorie: 'Essen', antworten: ['Ertbeere', 'Erdbehre', 'Erdbeerä', 'Erdbeere'], richtig: 3, stufe: 2, regel: 'Zusammengesetzt aus "Erde" und "Beere" — deshalb "rdb", kein "rtb".' },
 
   // Stufe 3 — lange Wörter, Fremdwörter, Fugenlaute
-  { kategorie: 'Technik', antworten: ['Fotografie', 'Photographie', 'Fotografi', 'Fotokrafie'], richtig: 0, stufe: 3, regel: 'Die moderne Schreibweise ist mit "F", nicht mit "Ph".' },
-  { kategorie: 'Technik', antworten: ['Telephon', 'Telefon', 'Teleffon', 'Telefonn'], richtig: 1, stufe: 3, regel: 'Die moderne Schreibweise ist mit "f", nicht mit "ph".' },
+  // Hier standen „Photographie" und „Telephon" als Fehlschreibungen. Beide
+  // sind aber keine Fehler: „Fotografie/Photographie" führt das amtliche
+  // Regelwerk ausdrücklich als erlaubtes Schreibweisen-Paar, und „Telephon"
+  // ist die ältere, lange gültige Form desselben Worts. Dasselbe Muster wie
+  // bei „Kühe" oben — ein Kind, das die Ph-Schreibung kennt, wurde für
+  // richtiges Wissen bestraft. Ersetzt durch echte Fehler; die Ph-Regel
+  // steht weiter in der Erklärung, nur eben nicht mehr als Falle.
+  { kategorie: 'Technik', antworten: ['Fotografie', 'Fotograffie', 'Fotografi', 'Fotokrafie'], richtig: 0, stufe: 3, regel: 'Nur ein "f" in der Mitte, "graf" mit "g" und am Ende "fie" mit "ie". Die ältere Schreibweise "Photographie" ist übrigens auch erlaubt.' },
+  { kategorie: 'Technik', antworten: ['Telefohn', 'Telefon', 'Teleffon', 'Telefonn'], richtig: 1, stufe: 3, regel: 'Kein Dehnungs-h nach dem "o", nur ein "f" und am Ende ein einfaches "n".' },
   { kategorie: 'Alltag', antworten: ['Situazion', 'Sittuation', 'Situation', 'Situatsion'], richtig: 2, stufe: 3, regel: 'Am Ende steht "tion", nicht "zion" oder "tsion".' },
   { kategorie: 'Schule', antworten: ['Informazion', 'Informattion', 'Informasjon', 'Information'], richtig: 3, stufe: 3, regel: 'Am Ende steht "tion", nicht "zion", "ttion" oder "sjon".' },
   { kategorie: 'Schule', antworten: ['Bibliothek', 'Biliothek', 'Bibliotek', 'Bibliothäk'], richtig: 0, stufe: 3, regel: 'In der Mitte steht "bli", mit zwei "b", und am Ende "ek", kein Umlaut.' },

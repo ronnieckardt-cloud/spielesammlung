@@ -55,6 +55,8 @@ export type Zustand = {
   /** Aufgelaufene Zeit seit dem letzten Feldwechsel. */
   angesammelt: number;
   vorbei: boolean;
+  /** Nur wahr, wenn die Schlange das ganze Brett gefüllt hat. */
+  gewonnen: boolean;
   saat: number;
 };
 
@@ -122,6 +124,7 @@ export function neuesSpiel(saat: number): Zustand {
     taktS: TAKT_START_S,
     angesammelt: 0,
     vorbei: false,
+    gewonnen: false,
     saat: ersteFutter.saat,
   };
 }
@@ -176,9 +179,41 @@ export function feldWechseln(z: Zustand): Zustand {
     taktS = Math.max(TAKT_MIN_S, taktS - TAKT_STUFE_S);
     seitGold += 1;
 
+    // Das Brett ist restlos voll — das ist der einzige echte Sieg, den
+    // Snake Rush kennt. Vorher blieb `futter` in diesem Fall auf seinem
+    // alten Platz stehen, und der ist nach dem Fressen genau der Kopf: Der
+    // Schwanz gab die Kachel später wieder frei, der Kopf lief erneut
+    // darüber und kassierte dieselben zehn Punkte noch einmal.
+    if (schlange.length >= BREITE * HOEHE) {
+      return {
+        ...z,
+        schlange,
+        richtung,
+        gepuffert: null,
+        futter: kopf,
+        gold: null,
+        goldRest: 0,
+        seitGold,
+        punkte,
+        taktS,
+        vorbei: true,
+        gewonnen: true,
+        saat,
+      };
+    }
+
     const neues = freiesFeld(gold ? [...schlange, gold] : schlange, saat);
     saat = neues.saat;
-    futter = neues.feld ?? futter;
+    if (neues.feld) {
+      futter = neues.feld;
+    } else if (gold) {
+      // Es ist nur noch die Kachel unter dem Goldstück frei. Dann räumt das
+      // Gold den Platz für den Apfel — sonst läge das Futter auf der
+      // Schlange und wäre gar nicht mehr zu holen.
+      futter = gold;
+      gold = null;
+      goldRest = 0;
+    }
 
     // Alle paar Futter ein Goldstück dazulegen — aber nur, wenn gerade
     // keines liegt, sonst häufen sie sich bei schnellem Spiel.
@@ -215,6 +250,33 @@ export function feldWechseln(z: Zustand): Zustand {
     vorbei: false,
     saat,
   };
+}
+
+/**
+ * Sieht das Brett nach diesem Zeitschritt anders aus als vorher?
+ *
+ * Die Uhr läuft mit 60 Bildern je Sekunde, die Schlange rückt aber nur 4,5-
+ * bis 12,5-mal je Sekunde ein Feld weiter (`TAKT_START_S` bis
+ * `TAKT_MIN_S`). Dazwischen wächst allein `angesammelt`, und daran hängt
+ * kein einziger Pixel. Die Anzeige fragt hier nach, ob sich das Neuzeichnen
+ * überhaupt lohnt — sonst baut React rund achtzigmal je Sekunde dasselbe
+ * Bild noch einmal auf.
+ *
+ * Verglichen wird über Objektgleichheit, nicht Feld für Feld: `feldWechseln`
+ * legt bei jedem Schritt eine neue Kette und (beim Fressen) ein neues
+ * Futterfeld an, ohne Schritt bleiben es dieselben Objekte.
+ */
+export function bildGeaendert(vorher: Zustand, nachher: Zustand): boolean {
+  return (
+    vorher.schlange !== nachher.schlange ||
+    vorher.futter !== nachher.futter ||
+    vorher.gold !== nachher.gold ||
+    vorher.punkte !== nachher.punkte ||
+    // Beim Zusammenstoß bleibt die Kette stehen, nur diese beiden ändern
+    // sich — der Kopf zeigt danach in die zuletzt gewählte Richtung.
+    vorher.richtung !== nachher.richtung ||
+    vorher.vorbei !== nachher.vorbei
+  );
 }
 
 /**

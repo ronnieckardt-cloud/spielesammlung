@@ -80,11 +80,11 @@ export function Startbildschirm({
 
       {/* Das App-Symbol bringt Hintergrund und Ecken selbst mit — es steht
           hier für sich, wie auf einer Store-Seite. */}
-      <Symbol className="relative size-32 rounded-[2rem] shadow-2xl" />
+      <Symbol className="relative size-32 rounded-[2rem] shadow-2xl md:size-40 md:rounded-[2.5rem]" />
 
       <div className="relative">
         <h1
-          className="text-5xl leading-none font-black tracking-tight text-white"
+          className="text-5xl leading-none font-black tracking-tight text-white md:text-6xl"
           style={{ textShadow: '0 4px 0 rgba(0,0,0,0.24), 0 10px 24px rgba(0,0,0,0.35)' }}
         >
           {titel}
@@ -105,9 +105,9 @@ export function Startbildschirm({
          * andere, wie gut man schon war. Das sind zwei verschiedene
          * Auskünfte und keine Alternative.
          */}
-        <p className="mt-3 text-sm font-semibold text-white/85">{untertitel}</p>
+        <p className="mt-3 text-sm font-semibold text-white/85 md:text-base">{untertitel}</p>
         {bestScore > 0 && (
-          <p className="mt-1.5 text-sm font-bold text-white/70">
+          <p className="mt-1.5 text-sm font-bold text-white/70 md:text-base">
             <span aria-hidden="true">🏆</span> Beste Punktzahl: {bestScore}
           </p>
         )}
@@ -118,7 +118,11 @@ export function Startbildschirm({
         onClick={onStart}
         // Wer mit der Tastatur kommt, soll sofort loslegen können.
         autoFocus
-        className="startknopf-puls relative rounded-2xl bg-white px-14 py-4 text-xl font-extrabold shadow-2xl transition-transform duration-100 ease-out active:scale-95"
+        /* Wächst auf dem Tablet mit. Der Startbildschirm ist die einzige
+           Seite, die nur aus drei Dingen besteht — Symbol, Name, Knopf —,
+           und wenn keines davon mitwächst, steht auf einem iPad eine
+           Handy-Ansicht in der Mitte einer großen leeren Fläche. */
+        className="startknopf-puls relative rounded-2xl bg-white px-14 py-4 text-xl font-extrabold shadow-2xl transition-transform duration-100 ease-out active:scale-95 md:px-16 md:py-5 md:text-2xl"
         style={{ color: knopfFarbe }}
       >
         Spielen

@@ -13,6 +13,7 @@ import {
   passtAn,
   passtIrgendwo,
   punkteFuerZug,
+  PUNKTE_SCHWELLE_ANZEIGE,
   teilLegen,
   loesbareLinien,
   volleZeilenUndSpalten,
@@ -145,6 +146,23 @@ describe('punkteFuerZug', () => {
     const ersterTreffer = punkteFuerZug(0, 1, 1);
     const dritterTreffer = punkteFuerZug(0, 1, 3);
     expect(dritterTreffer).toBeGreaterThan(ersterTreffer);
+  });
+});
+
+describe('PUNKTE_SCHWELLE_ANZEIGE', () => {
+  // Das „+N" über dem Feld erkennt eine Auflösung nur an der Höhe des
+  // Zuwachses. Diese beiden Prüfungen sind die Bedingung dafür, dass das
+  // überhaupt eindeutig geht — sie schlagen an, sobald ein größeres Teil
+  // dazukommt oder sich die Punkteregel verschiebt.
+  it('kein Zug ohne Auflösung erreicht die Schwelle', () => {
+    const groessteForm = Math.max(...FORMEN.map((f) => f.length));
+    expect(punkteFuerZug(groessteForm, 0, 0)).toBeLessThan(PUNKTE_SCHWELLE_ANZEIGE);
+  });
+
+  it('jede Auflösung liegt darüber, auch die kleinstmögliche', () => {
+    // Kleinster denkbarer Treffer: ein einzelnes Feld gelegt, genau eine
+    // Linie gefallen, keine Serie davor.
+    expect(punkteFuerZug(1, 1, 1)).toBeGreaterThanOrEqual(PUNKTE_SCHWELLE_ANZEIGE);
   });
 });
 

@@ -36,7 +36,7 @@ export type FarbEintrag = {
  */
 
 /** Helle Töne — hoher Weißanteil, Verlauf bleibt innerhalb der Stufe. */
-const HELLE: readonly FarbEintrag[] = [
+export const HELLE: readonly FarbEintrag[] = [
   { id: 'hellgelb', hex: '#fef08a', dunkel: '#facc15', name: 'Hellgelb' },
   { id: 'hellblau', hex: '#bae6fd', dunkel: '#38bdf8', name: 'Hellblau' },
   { id: 'hellgruen', hex: '#bbf7d0', dunkel: '#4ade80', name: 'Hellgrün' },
@@ -45,7 +45,7 @@ const HELLE: readonly FarbEintrag[] = [
 
 /** Dunkle Töne — vier klar getrennte Farbtöne, damit sie sich nicht nur
  *  gegen die hellen, sondern auch untereinander unterscheiden. */
-const DUNKLE: readonly FarbEintrag[] = [
+export const DUNKLE: readonly FarbEintrag[] = [
   { id: 'dunkellila', hex: '#7e22ce', dunkel: '#4a0e7a', name: 'Dunkellila' },
   { id: 'dunkelrot', hex: '#b91c1c', dunkel: '#6d1010', name: 'Dunkelrot' },
   { id: 'dunkelblau', hex: '#1d4ed8', dunkel: '#122f80', name: 'Dunkelblau' },
@@ -53,6 +53,13 @@ const DUNKLE: readonly FarbEintrag[] = [
 ];
 
 export const FARBEN: readonly FarbEintrag[] = [...HELLE, ...DUNKLE];
+
+/**
+ * Beide Töpfe sind einzeln nach außen sichtbar, weil auch das App-Symbol
+ * die Hell/Dunkel-Teilung zeigen soll: Es zieht seine Schichtfarben von
+ * hier statt eigene zu erfinden, sonst wirbt die Kachel mit Farben, die im
+ * Spiel gar nicht vorkommen.
+ */
 
 /**
  * Welche Farben ein Level bekommt — aus der Levelnummer gemischt, damit

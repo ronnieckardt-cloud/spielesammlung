@@ -114,7 +114,7 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
           <button
             type="button"
             onClick={abmelden}
-            className="text-sm text-gedaempft underline underline-offset-4"
+            className="inline-flex min-h-11 items-center text-sm text-gedaempft underline underline-offset-4"
           >
             Abmelden
           </button>
@@ -229,7 +229,7 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
             setModus(modus === 'neu' ? 'anmelden' : 'neu');
             setFehler(null);
           }}
-          className="text-sm text-gedaempft underline underline-offset-4"
+          className="inline-flex min-h-11 items-center text-sm text-gedaempft underline underline-offset-4"
         >
           {modus === 'neu' ? 'Ich habe schon ein Konto' : 'Ich brauche ein neues Konto'}
         </button>

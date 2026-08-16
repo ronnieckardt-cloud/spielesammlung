@@ -70,8 +70,37 @@ const KAMERA_Z = -6.2;
 const KAMERA_ZIEL_Y = 1.75;
 const SICHTFELD = 58;
 
-/** So viele Hindernisse, Münzen und Häuser hält der Vorrat bereit. */
-const VORRAT_HINDERNISSE = 26;
+/**
+ * Wie lange der Aufprall dauert, in Sekunden.
+ *
+ * `DashCity.tsx` holt sich den Wert von hier und wartet genau so lange, bevor
+ * es `onGameOver` meldet — **eine** Zahl für Bild und Ablauf. Zwei getrennte
+ * Zahlen wären die Sorte Fehler, die niemand bemerkt: Der Sturz liefe noch,
+ * während der Rundenende-Bildschirm schon darüberliegt.
+ *
+ * Vorher wurde die Zeit gar nicht genutzt: Es gab einen Ton, danach stand
+ * 700 ms lang ein Standbild, in dem die Figur mitten im Laufschritt im
+ * Hindernis steckte. Ein Zusammenstoß ohne Bild liest sich wie ein Fehler des
+ * Spiels, nicht wie ein eigener.
+ */
+export const AUFPRALL_DAUER = 0.7;
+
+/**
+ * So viele Hindernisse hält der Vorrat bereit — und **achtzehn reichen
+ * beweisbar.**
+ *
+ * Gezeichnet wird alles zwischen `dz = −4` und der Sichtweite (110 m), das
+ * ist ein Fenster von 114 m. Hindernisse stehen nur an Abschnittsgrenzen,
+ * also alle 14 m — in 114 m liegen davon höchstens neun. Und je Abschnitt
+ * gibt es höchstens zwei (`abschnittErzeugen` belegt eine oder zwei Spuren,
+ * nie drei). Neun mal zwei sind achtzehn.
+ *
+ * Vorher standen hier 26. Jeder Vorratsplatz hält alle drei Bauarten
+ * gleichzeitig bereit (Hürde, Balken, Mauer à fünf Körper) — acht Plätze zu
+ * viel waren also 120 Netze, die in jedem Bild durch die Matrixrechnung
+ * liefen und nie zu sehen waren.
+ */
+const VORRAT_HINDERNISSE = 18;
 const VORRAT_MUENZEN = 48;
 const VORRAT_HAEUSER = 24;
 const VORRAT_LATERNEN = 12;
@@ -98,7 +127,6 @@ const FARBEN = {
   huerde: '#f97316',
   balken: 0xdc2626,
   mauer: '#d2492a',
-  muenze: 0xfacc15,
 } as const;
 
 export type Szene = {
@@ -338,7 +366,16 @@ function figurBauen(): Figur {
   };
 }
 
-export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
+/**
+ * Baut die Szene auf einer Leinwand auf.
+ *
+ * `ruhig` ist `settings.reducedMotion` aus der Hülle. Es betrifft **nur den
+ * Aufprall**: Kein Rütteln der Kamera, kein roter Blitz über dem Bild. Das
+ * Kippen der Figur bleibt auch dann — es ist keine Verzierung, sondern die
+ * Auskunft darüber, was gerade passiert ist. Der Lauf selbst wird nicht
+ * beruhigt: Ein Endlosläufer ohne Bewegung wäre kein Spiel mehr.
+ */
+export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   const renderer = new THREE.WebGLRenderer({
     canvas: leinwand,
     // Kantenglättung an: Die Szene besteht aus wenigen großen Flächen, und
@@ -499,11 +536,22 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
     ['#aaa295', '#ffe4a3'],
     ['#84939f', '#cfeaff'],
   ];
-  const hausStoffe = hausFarben.flatMap(([grund, fenster]) =>
-    [2, 3, 5].map((dichte) => {
-      const bild = hauswandTextur(grund, fenster);
-      bild.repeat.set(1, dichte);
-      return new THREE.MeshPhongMaterial({ map: bild, shininess: 14, specular: 0x1c1c1c });
+  /*
+   * **Je Farbpaar wird genau ein Bild gezeichnet, die Dichtestufen sind
+   * Klone davon.** Vorher entstanden achtzehn Texturen — drei je Farbpaar,
+   * und die drei waren bildgleich: `hauswandTextur` hängt nur von den beiden
+   * Farben ab, die Körnung kommt aus einer festen Saat. Unterschiedlich ist
+   * allein `repeat`, und genau das ist die eine Eigenschaft, die ein Klon
+   * für sich hat — Bild und Grafikspeicher teilt er sich mit dem Original.
+   * Gespart sind damit zwölf Mal 4200 Körnungsrechtecke auf 256×256 beim
+   * Aufbau und zwölf Texturen im Grafikspeicher.
+   */
+  const hausBilder = hausFarben.map(([grund, fenster]) => hauswandTextur(grund, fenster));
+  const hausStoffe = hausBilder.flatMap((bild) =>
+    [2, 3, 5].map((dichte, i) => {
+      const eigenes = i === 0 ? bild : bild.clone();
+      eigenes.repeat.set(1, dichte);
+      return new THREE.MeshPhongMaterial({ map: eigenes, shininess: 14, specular: 0x1c1c1c });
     }),
   );
   const sockelBild = sockelTextur();
@@ -739,20 +787,28 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
   const muenzGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.07, 22);
   muenzGeo.rotateZ(Math.PI / 2);
   const muenzBild = muenzTextur();
-  const muenzRandStoff = new THREE.MeshPhongMaterial({
-    color: FARBEN.muenze,
-    emissive: 0x5a4400,
-    shininess: 90,
-    specular: 0xfff3c4,
-  });
-  const muenzFlaecheStoff = new THREE.MeshPhongMaterial({
+  /*
+   * **Ein Werkstoff, nicht drei.** Vorher bekam jede Münze ein Feld aus drei
+   * Materialien (Rand, Deckel, Boden). Ein Zylinder hat genau diese drei
+   * Materialgruppen, und three.js setzt daraus je Netz **drei** getrennte
+   * Zeichenaufrufe ab — bei 48 gleichzeitig sichtbaren Münzen also 144 statt
+   * 48, mehr als für Häuser, Bäume und Laternen zusammen. Mit einem einzigen
+   * Werkstoff wird das Netz als **ein** Eintrag in die Zeichenliste gestellt,
+   * ganz gleich wie viele Gruppen die Geometrie mitbringt.
+   *
+   * Optisch kostet das nichts: Der Mantel ist sieben Millimeter breit und
+   * greift den dunklen Außenrand derselben Prägung ab — im Bild ein bis zwei
+   * Bildpunkte, und die in genau dem Goldton, den er vorher als eigene Farbe
+   * hatte.
+   */
+  const muenzStoff = new THREE.MeshPhongMaterial({
     map: muenzBild,
     emissive: 0x4a3800,
     shininess: 90,
     specular: 0xfff3c4,
   });
   const muenzen = Array.from({ length: VORRAT_MUENZEN }, () => {
-    const m = new THREE.Mesh(muenzGeo, [muenzRandStoff, muenzFlaecheStoff, muenzFlaecheStoff]);
+    const m = new THREE.Mesh(muenzGeo, muenzStoff);
     m.visible = false;
     szene.add(m);
     return m;
@@ -775,6 +831,17 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
   szene.add(schatten);
 
   let laufzeit = 0;
+  /** Sekunden seit dem Zusammenstoß. Läuft erst, wenn `lauf.vorbei` gilt. */
+  let aufprall = 0;
+  /**
+   * Die seitliche Kameraposition **ohne** den Aufprallstoß.
+   *
+   * Der Stoß darf nicht in `kamera.position.x` hineingerechnet werden: Dort
+   * steht ein gedämpfter Nachlauf, der seinen eigenen letzten Wert
+   * weiterverwendet — der Ruckler bliebe darin hängen und zöge sich zäh
+   * wieder heraus, statt kurz und hart zu sein.
+   */
+  let kameraX = 0;
 
   /** Ringförmig weiterrücken: was hinten rausläuft, kommt vorn wieder rein. */
   const ringZ = (reihe: number, abstand: number, anzahl: number, s: number, schub: number) => {
@@ -783,7 +850,15 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
   };
 
   const zeichnen = (lauf: Lauf, dt: number) => {
-    laufzeit += dt;
+    /*
+     * Zwei getrennte Uhren, und das ist der Kern des Aufpralls: `laufzeit`
+     * treibt Laufschritt, Münzdrehung und Hüpfer — nach dem Zusammenstoß
+     * muss sie **stehen**, sonst zappelt die Figur im Hindernis weiter, als
+     * wäre nichts gewesen. `aufprall` läuft erst danach los und treibt
+     * ausschließlich den Sturz.
+     */
+    if (lauf.vorbei) aufprall = Math.min(AUFPRALL_DAUER, aufprall + dt);
+    else laufzeit += dt;
     const s = lauf.strecke;
 
     /*
@@ -872,20 +947,66 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
     // Ein leichtes Auf und Ab beim Laufen. Ohne das gleitet die Figur, statt
     // zu rennen — der Boden zieht zwar vorbei, aber der Körper bleibt starr.
     const huepfer = inDerLuft || rutscht ? 0 : Math.abs(Math.sin(laufzeit * 13)) * 0.06;
-    figur.gruppe.position.set(fx, lauf.y + huepfer, 0);
-    figur.gruppe.rotation.x = rutscht ? -1.15 : 0;
-    // Leichte Neigung in die Bewegungsrichtung beim Spurwechsel.
-    figur.gruppe.rotation.z = rutscht ? 0 : (bildX(spurX(lauf.zielSpur)) - fx) * 0.18;
-    figur.gruppe.scale.setScalar(rutscht ? 0.92 : 1);
+    /** Tiefe der Figur — beim Sturz rutscht sie zur Kamera hin. */
+    let figurZ = 0;
 
-    const takt = laufzeit * 13;
-    const schwung = inDerLuft ? 0 : Math.sin(takt) * 0.95;
-    figur.beinL.rotation.x = inDerLuft ? -0.5 : schwung;
-    figur.beinR.rotation.x = inDerLuft ? 0.3 : -schwung;
-    figur.armL.rotation.x = inDerLuft ? -2.2 : -schwung * 0.85;
-    figur.armR.rotation.x = inDerLuft ? -2.2 : schwung * 0.85;
+    if (lauf.vorbei) {
+      /*
+       * **Der Sturz.** Vorher passierte hier gar nichts: Es gab einen Ton,
+       * danach stand 700 ms lang ein Standbild, in dem die Figur mitten im
+       * Laufschritt im Hindernis steckte. Ein Zusammenstoß ohne Bild liest
+       * sich wie ein Fehler des Spiels — man sieht nicht, dass man
+       * angestoßen ist, sondern nur, dass es plötzlich aufhört.
+       *
+       * Die Figur wird nach hinten geworfen, also zur Kamera hin: Sie läuft
+       * in +z, dort steht das Hindernis, und eine **negative** Drehung um x
+       * kippt den Kopf nach −z. Dazu ein kurzer Aufwärtsschlenker (die
+       * Sinuskurve), der oben umkehrt — sonst sackt sie einfach in sich
+       * zusammen, statt wegzuprallen.
+       */
+      const p = aufprall / AUFPRALL_DAUER;
+      // Schnell losstoßen, weich auslaufen. Ein linearer Sturz sieht aus wie
+      // eine Tür, die zufällt.
+      const weich = 1 - (1 - p) * (1 - p);
+      figurZ = -0.65 * weich;
+      /*
+       * Der Aufsatz von 0,22 m ist kein Geschmack: Gedreht wird um die Füße,
+       * und wenn die Figur waagerecht liegt, liegt damit ihre **Achse** auf
+       * der Fahrbahn — der halbe Rumpf steckte im Asphalt. Angehoben liegt
+       * sie auf der Straße statt darin.
+       */
+      figur.gruppe.position.set(
+        fx,
+        lauf.y + Math.sin(Math.PI * p) * 0.3 + 0.22 * weich,
+        figurZ,
+      );
+      figur.gruppe.rotation.x = -1.5 * weich;
+      figur.gruppe.rotation.z = 0.55 * weich;
+      figur.gruppe.scale.setScalar(1);
+      // Arme und Beine fahren aus dem Laufschritt in eine Sturzhaltung —
+      // stehen bleiben mitten im Schritt sähe nach eingefrorenem Bild aus.
+      figur.armL.rotation.x = -2.4 * weich;
+      figur.armR.rotation.x = -1.9 * weich;
+      figur.beinL.rotation.x = 0.95 * weich;
+      figur.beinR.rotation.x = 0.4 * weich;
+    } else {
+      figur.gruppe.position.set(fx, lauf.y + huepfer, figurZ);
+      figur.gruppe.rotation.x = rutscht ? -1.15 : 0;
+      // Leichte Neigung in die Bewegungsrichtung beim Spurwechsel.
+      figur.gruppe.rotation.z = rutscht ? 0 : (bildX(spurX(lauf.zielSpur)) - fx) * 0.18;
+      figur.gruppe.scale.setScalar(rutscht ? 0.92 : 1);
 
-    schatten.position.set(fx, 0.03, 0);
+      const takt = laufzeit * 13;
+      const schwung = inDerLuft ? 0 : Math.sin(takt) * 0.95;
+      figur.beinL.rotation.x = inDerLuft ? -0.5 : schwung;
+      figur.beinR.rotation.x = inDerLuft ? 0.3 : -schwung;
+      figur.armL.rotation.x = inDerLuft ? -2.2 : -schwung * 0.85;
+      figur.armR.rotation.x = inDerLuft ? -2.2 : schwung * 0.85;
+    }
+
+    // Der Fleck bleibt unter der Figur, auch wenn sie beim Sturz nach hinten
+    // rutscht — ein Schatten, der stehen bleibt, verrät sich sofort.
+    schatten.position.set(fx, 0.03, figurZ);
     const hoch = Math.min(1, lauf.y / 2.2);
     const sk = 1 - hoch * 0.5;
     schatten.scale.set(sk, sk * 1.3, 1);
@@ -894,8 +1015,24 @@ export function szeneBauen(leinwand: HTMLCanvasElement): Szene {
     // --- Kamera ---
     // Folgt gedämpft zur Seite; hart mitzuziehen wirkt hektisch, gar nicht
     // mitzuziehen unbeteiligt.
-    kamera.position.x += (fx * 0.5 - kamera.position.x) * Math.min(1, dt * 6);
-    kamera.position.y = KAMERA_Y + lauf.y * 0.22;
+    kameraX += (fx * 0.5 - kameraX) * Math.min(1, dt * 6);
+    let kx = kameraX;
+    let ky = KAMERA_Y + lauf.y * 0.22;
+    if (lauf.vorbei && !ruhig) {
+      /*
+       * Der Kamerastoß. Er klingt in der ersten Hälfte des Aufpralls ab, ist
+       * also vorbei, bevor der Rundenende-Bildschirm kommt — ein Wackeln,
+       * das noch läuft, während man schon lesen soll, ist nur ärgerlich.
+       *
+       * Bei „weniger Bewegung" bleibt die Kamera ruhig; das Kippen der Figur
+       * sagt auch ohne sie, was passiert ist. Deshalb ist der Stoß hier
+       * abschaltbar und der Sturz nicht.
+       */
+      const staerke = 0.2 * Math.max(0, 1 - aufprall / (AUFPRALL_DAUER * 0.5));
+      kx += Math.sin(aufprall * 74) * staerke;
+      ky += Math.cos(aufprall * 63) * staerke * 0.7;
+    }
+    kamera.position.set(kx, ky, KAMERA_Z);
     kamera.lookAt(fx * 0.32, KAMERA_ZIEL_Y + lauf.y * 0.28, 18);
 
     renderer.render(szene, kamera);

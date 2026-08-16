@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, PointerEvent } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { useInput } from '../../core/useInput';
 import { sfx } from '../../core/sfx';
@@ -14,6 +14,7 @@ import {
   HOEHE,
   aktionAnwenden,
   geisterStein,
+  miniZellgroesse,
   neuesSpiel,
   zeitFortschritt,
   zellenVonStein,
@@ -23,6 +24,34 @@ import { TEIL_NAMEN, reihenfallFarbe } from './farben';
 import { ReihenfallIcon } from './Icon';
 
 const ZELLE_PX = 22;
+
+/**
+ * Feld, Stein-Aufsatz und Zerbrösel-Animation liegen als drei Ebenen
+ * übereinander und müssen sich deckungsgleich aufteilen — deshalb steht das
+ * Raster genau einmal hier und nicht dreimal im Code.
+ */
+const RASTER_STIL: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))`,
+  gridTemplateRows: `repeat(${HOEHE}, minmax(0, 1fr))`,
+  gap: 1,
+};
+
+/**
+ * Erst ab einem echten Zeilentreffer melden.
+ *
+ * Weiches Fallen gibt einen Punkt je Feld — mit der Voreinstellung (jeder
+ * Zuwachs zählt) sprang bei gehaltener Pfeiltaste zwanzigmal hintereinander
+ * ein riesiges „+1" mitten über das Brett. Die kleinste echte Löschung
+ * bringt 100 Punkte (`PUNKTE_PRO_ZEILEN` in `logik.ts`), hartes Fallen
+ * höchstens 38 — die Schwelle trennt also genau richtig.
+ */
+const GEWINN_SCHWELLE = 100;
+
+/** Lücke zwischen zwei Zellen in den kleinen Kästen, in Pixeln (`gap`). */
+const MINI_LUECKE = 2;
+/** Innenmaß der Kästen: `size-12` (48 px) minus je ein Pixel Rand. */
+const MINI_KASTEN = 46;
 
 /** Zeitversatz je Spalte beim Zerbröseln — die Zeile löst sich von links
  *  nach rechts auf statt schlagartig. Bei zehn Spalten macht das rund
@@ -65,12 +94,8 @@ function ZerbroeselndeZeilen({
       // Raster neu eingehängt, und die CSS-Animationen laufen von vorn.
       key={geloescht.tick}
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 grid"
-      style={{
-        gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))`,
-        gridTemplateRows: `repeat(${HOEHE}, minmax(0, 1fr))`,
-        gap: 1,
-      }}
+      className="pointer-events-none absolute inset-0"
+      style={RASTER_STIL}
     >
       {geloescht.zeilen.flatMap(({ y, farben }) =>
         farben.map((farbe, x) => {
@@ -110,19 +135,39 @@ function ZerbroeselndeZeilen({
   );
 }
 
-/** Zeigt ein Teil in seiner Start-Lage als kleines Raster — für Halten und Vorschau. */
+/**
+ * Zeigt ein Teil in seiner Start-Lage als kleines Raster — für Halten und
+ * Vorschau.
+ *
+ * Die Zellgröße kommt aus dem Kasten (`miniZellgroesse`) und ist nicht mehr
+ * fest: Mit den früheren 11 Pixeln brauchte der I-Stein 50 Pixel Breite und
+ * ragte damit aus seinem 36 Pixel breiten Kästchen heraus — er lag über den
+ * Nachbarkästchen.
+ */
 function MiniTeil({ typ, abgedunkelt = false }: { typ: TeilTyp; abgedunkelt?: boolean }) {
   const form = FORMEN[typ][0];
-  const breite = Math.max(...form.map((v) => v.dx)) + 1;
-  const hoehe = Math.max(...form.map((v) => v.dy)) + 1;
-  const belegt = new Set(form.map((v) => `${v.dx},${v.dy}`));
-  const groesse = 11;
+  /*
+   * **Auf den kleinsten Wert normiert, nicht bloß auf den größten.**
+   *
+   * Die Formen stehen in einem Raster, das nicht bei 0 anfangen muss: Beim
+   * I-Stein liegen alle vier Zellen auf `dy = 1`. Ohne diese Verschiebung
+   * bekam sein Vorschaukasten eine **leere Kopfzeile**, und als einziges
+   * der sieben Teile saß er rund sechs Pixel unter der Mitte — in einer
+   * Reihe nebeneinander fällt genau das auf.
+   */
+  const minDx = Math.min(...form.map((v) => v.dx));
+  const minDy = Math.min(...form.map((v) => v.dy));
+  const breite = Math.max(...form.map((v) => v.dx)) - minDx + 1;
+  const hoehe = Math.max(...form.map((v) => v.dy)) - minDy + 1;
+  const belegt = new Set(form.map((v) => `${v.dx - minDx},${v.dy - minDy}`));
+  const groesse = miniZellgroesse(MINI_KASTEN, MINI_LUECKE);
   return (
     <div
-      className="grid gap-0.5"
+      className="grid"
       style={{
         gridTemplateColumns: `repeat(${breite}, ${groesse}px)`,
         gridTemplateRows: `repeat(${hoehe}, ${groesse}px)`,
+        gap: MINI_LUECKE,
         opacity: abgedunkelt ? 0.35 : 1,
       }}
     >
@@ -139,6 +184,91 @@ function MiniTeil({ typ, abgedunkelt = false }: { typ: TeilTyp; abgedunkelt?: bo
         );
       })}
     </div>
+  );
+}
+
+/** Wartezeit bis zur ersten Wiederholung — wie in `core/Steuerkreuz.tsx`. */
+const WIEDERHOL_VERZOEGERUNG = 170;
+/** Abstand der weiteren Wiederholungen, ebenfalls wie beim Steuerkreuz. */
+const WIEDERHOL_TAKT = 45;
+
+/**
+ * Ein Knopf, der seine Aktion bei gehaltenem Finger wiederholt.
+ *
+ * Zur Seite ging es bisher **nur** per Wischgeste, und `useInput` wertet je
+ * Wisch genau einen Zug aus (es sperrt den Zeiger, sobald die Richtung
+ * erkannt ist). Drei Spalten nach links waren also drei einzelne Wischer —
+ * während eine gehaltene Pfeiltaste längst wiederholt. Auf dem Touchgerät,
+ * also überall dort, wo dieses Spiel wirklich gespielt wird, fehlte das
+ * Gegenstück komplett.
+ *
+ * Zeiten und Aufbau bewusst wie in `core/Steuerkreuz.tsx`. Das Kreuz selbst
+ * passt hier nicht — siehe den Kommentar dort: Line Fall braucht daneben
+ * Drehen, hartes Fallen und Halten, und dafür wären die vier Richtungen
+ * eines Kreuzes plus drei Knöpfe zu viel Höhe.
+ */
+function WiederholKnopf({
+  onAktion,
+  beschriftung,
+  symbol,
+  aktiv,
+}: {
+  onAktion: () => void;
+  beschriftung: string;
+  symbol: string;
+  aktiv: boolean;
+}) {
+  // Über eine Ref, damit die laufende Wiederholung nicht auf einer alten
+  // Fassung der Funktion hängen bleibt — dasselbe Muster wie in useInput.
+  const aktionRef = useRef(onAktion);
+  aktionRef.current = onAktion;
+
+  const start = useRef<number | undefined>(undefined);
+  const folge = useRef<number | undefined>(undefined);
+
+  const loslassen = useCallback(() => {
+    window.clearTimeout(start.current);
+    window.clearInterval(folge.current);
+  }, []);
+
+  // Aufräumen, wenn die Runde endet, während der Finger noch liegt — und
+  // wenn der Knopf ganz verschwindet.
+  useEffect(() => {
+    if (!aktiv) loslassen();
+  }, [aktiv, loslassen]);
+  useEffect(() => loslassen, [loslassen]);
+
+  const druecken = (e: PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    loslassen();
+    aktionRef.current();
+    start.current = window.setTimeout(() => {
+      folge.current = window.setInterval(() => aktionRef.current(), WIEDERHOL_TAKT);
+    }, WIEDERHOL_VERZOEGERUNG);
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label={beschriftung}
+      disabled={!aktiv}
+      onPointerDown={druecken}
+      onPointerUp={loslassen}
+      onPointerLeave={loslassen}
+      onPointerCancel={loslassen}
+      // `detail === 0` heißt: Der Klick kam von der Tastatur (Enter oder
+      // Leertaste auf dem fokussierten Knopf), nicht vom Finger. Ohne diese
+      // Zeile wäre der Knopf für Tastaturbedienung tot, mit einem
+      // ungeprüften `onClick` würde jede Berührung doppelt zählen.
+      onClick={(e) => {
+        if (e.detail === 0) aktionRef.current();
+      }}
+      // Ohne das öffnet langes Drücken auf einem Handy das Auswahlmenü.
+      onContextMenu={(e) => e.preventDefault()}
+      className="spielknopf touch-none select-none text-xl"
+    >
+      <span aria-hidden="true">{symbol}</span>
+    </button>
   );
 }
 
@@ -304,7 +434,7 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
   // Line Fall zeigte die Punktzahl bisher gar nicht im Spielbereich — nur in
   // der Kopfzeile der Hülle. Das Popup über dem Brett bringt den Gewinn
   // dorthin, wo man ohnehin hinsieht, und kostet keine Höhe.
-  const gewinn = usePunktegewinn(z.punkte);
+  const gewinn = usePunktegewinn(z.punkte, GEWINN_SCHWELLE);
 
   useEffect(() => {
     const differenz = z.zeilenGesamt - zeilenVorherRef.current;
@@ -322,12 +452,44 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [z.vorbei]);
 
+  /**
+   * Das ruhende Feld wird nur neu gezeichnet, wenn sich wirklich etwas darin
+   * ändert — also wenn ein Stein einrastet oder Zeilen wegfallen.
+   *
+   * Ohne die Merkung wurden alle 10 × 20 = 200 Zellen dreißigmal je Sekunde
+   * neu abgeglichen, obwohl sich je Bild höchstens die vier Zellen des
+   * fallenden Steins bewegen: 6000 React-Elemente in der Sekunde für ein
+   * Raster, das zwischen zwei Einrastungen unverändert bleibt. Genau dieselbe
+   * Stelle war bei Ghost Chase die teuerste im ganzen Projekt.
+   *
+   * `zeitFortschritt` liefert zwar jedes Bild ein frisches Zustandsobjekt,
+   * aber `z.feld` bleibt dabei dasselbe Feld — die eine Abhängigkeit reicht.
+   */
+  const ruhendesFeld = useMemo(
+    () => (
+      <div className="absolute inset-0" style={RASTER_STIL}>
+        {z.feld.flatMap((zeile, y) =>
+          zeile.map((farbe, x) => (
+            <div
+              key={`${x},${y}`}
+              className={`rounded-[3px] ${farbe !== null ? 'glanzstein' : ''}`}
+              style={{
+                backgroundColor: farbe === null ? 'var(--color-flaeche)' : reihenfallFarbe(farbe),
+              }}
+            />
+          )),
+        )}
+      </div>
+    ),
+    [z.feld],
+  );
+
   const geist = z.aktuell ? geisterStein(z.feld, z.aktuell) : null;
+  // Vier Schlüssel, kein Raster: Wo der Stein schon aufliegt, deckt er den
+  // Geist genau zu — und ein Umriss wird immer **zuletzt** gezeichnet, läge
+  // also sonst als doppelter Rand über dem Stein.
   const aktuelleZellen = new Set(
     z.aktuell ? zellenVonStein(z.aktuell).map((p) => `${p.x},${p.y}`) : [],
-  );
-  const geisterZellen = new Set(
-    geist ? zellenVonStein(geist).filter((p) => p.y >= 0).map((p) => `${p.x},${p.y}`) : [],
   );
 
   if (!gestartet) {
@@ -349,14 +511,20 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
       <div className="flex w-full max-w-xs items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-gedaempft">Halten</span>
-          <div className="grid size-10 place-items-center rounded-lg border border-rand bg-flaeche">
+          {/* `overflow-hidden` ist die Absicherung: Sollte die Zellgröße je
+              wieder nicht zum Kasten passen, bleibt der Überstand wenigstens
+              im Kasten und liegt nicht über dem Nachbarn. */}
+          <div className="grid size-12 place-items-center overflow-hidden rounded-lg border border-rand bg-flaeche">
             {z.haltePosition && <MiniTeil typ={z.haltePosition} abgedunkelt={z.halteBenutzt} />}
           </div>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-gedaempft">Nächste</span>
           {z.warteschlange.slice(0, 3).map((typ, i) => (
-            <div key={i} className="grid size-9 place-items-center rounded-lg border border-rand bg-flaeche">
+            <div
+              key={i}
+              className="grid size-12 place-items-center overflow-hidden rounded-lg border border-rand bg-flaeche"
+            >
               <MiniTeil typ={typ} />
             </div>
           ))}
@@ -367,7 +535,6 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
         {/* Dasselbe Kombo-Herz wie in Block Burst. Hier zählt es die Serie
             von Vierfach-Löschungen — die ist selten, und genau deshalb darf
             sie auffallen. */}
-        <Punktegewinn gewinn={gewinn} />
         <Komboherz
           kombo={z.vierfachStreak}
           ruhig={settings.reducedMotion}
@@ -377,46 +544,57 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
         <div
           ref={feldRef}
           className="spielbrett spielbrett-rahmen relative touch-none bg-rand"
-          style={
-            {
-              maxWidth: BREITE * ZELLE_PX,
-              '--vz': BREITE / HOEHE,
-              display: 'grid',
-              gridTemplateColumns: `repeat(${BREITE}, minmax(0, 1fr))`,
-              gridTemplateRows: `repeat(${HOEHE}, minmax(0, 1fr))`,
-              gap: 1,
-            } as CSSProperties
-          }
+          style={{ maxWidth: BREITE * ZELLE_PX, '--vz': BREITE / HOEHE } as CSSProperties}
           role="img"
           aria-label={`Spielfeld, Level ${z.level}, ${z.zeilenGesamt} Zeilen geschafft.${z.vorbei ? ' Spiel vorbei.' : ''}`}
         >
-          {Array.from({ length: BREITE * HOEHE }, (_, i) => {
-            const x = i % BREITE;
-            const y = Math.floor(i / BREITE);
-            const schluessel = `${x},${y}`;
-            const istAktuell = aktuelleZellen.has(schluessel);
-            const belegtFarbe = z.feld[y]![x];
-            const istGeist = !istAktuell && belegtFarbe === null && geisterZellen.has(schluessel);
+          {ruhendesFeld}
 
-            const istStein = istAktuell || belegtFarbe !== null;
-            let hintergrund = 'var(--color-flaeche)';
-            if (istAktuell) hintergrund = reihenfallFarbe(FARB_INDEX[z.aktuell!.typ]);
-            else if (belegtFarbe !== null) hintergrund = reihenfallFarbe(belegtFarbe);
-
-            return (
-              <div
-                key={i}
-                className={`rounded-[3px] ${istStein ? 'glanzstein' : ''}`}
-                style={{
-                  backgroundColor: hintergrund,
-                  outline: istGeist ? '2px solid var(--color-gedaempft)' : undefined,
-                  outlineOffset: istGeist ? -2 : undefined,
-                }}
-              />
-            );
-          })}
+          {/* Der fallende Stein und sein Schatten als dünner Aufsatz über dem
+              ruhenden Feld — acht Elemente je Bild statt zweihundert. Zellen
+              oberhalb der Feldkante (y < 0) fallen weg, sie haben keine
+              Rasterzeile. */}
+          <div className="pointer-events-none absolute inset-0" style={RASTER_STIL} aria-hidden="true">
+            {geist &&
+              zellenVonStein(geist)
+                .filter((p) => p.y >= 0 && !aktuelleZellen.has(`${p.x},${p.y}`))
+                .map((p) => (
+                  <div
+                    key={`geist-${p.x},${p.y}`}
+                    className="rounded-[3px]"
+                    style={{
+                      gridColumn: p.x + 1,
+                      gridRow: p.y + 1,
+                      outline: '2px solid var(--color-gedaempft)',
+                      outlineOffset: -2,
+                    }}
+                  />
+                ))}
+            {z.aktuell &&
+              zellenVonStein(z.aktuell)
+                .filter((p) => p.y >= 0)
+                .map((p) => (
+                  <div
+                    key={`stein-${p.x},${p.y}`}
+                    className="glanzstein rounded-[3px]"
+                    style={{
+                      gridColumn: p.x + 1,
+                      gridRow: p.y + 1,
+                      backgroundColor: reihenfallFarbe(FARB_INDEX[z.aktuell!.typ]),
+                    }}
+                  />
+                ))}
+          </div>
 
           <ZerbroeselndeZeilen geloescht={z.geloescht} ruhig={settings.reducedMotion} />
+
+          {/* Das „+N" liegt im Brett, nicht in der Bühne — so macht es Ghost
+              Chase, und das ist die haltbarere Bauweise: Es erscheint mittig
+              über dem Feld statt mittig über der ganzen (breiteren) Bühne,
+              und es hängt nicht an der Sonderregel `.spielbuehne > .absolute`
+              in index.css, die genau dieses Popup einmal zum zweiten
+              Flex-Kind gemacht und das Brett zur Seite geschoben hat. */}
+          <Punktegewinn gewinn={gewinn} />
 
           {/* Kein eigenes „Vorbei" mehr im Feld — die Hülle legt direkt
               darüber ihr Rundenende-Fenster, das stand doppelt. */}
@@ -424,36 +602,57 @@ export function Reihenfall({ onScore, onGameOver, settings, bestScore, istErsteR
 
       </div>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => anwenden('drehenUhr')}
-          disabled={z.vorbei}
-          className="spielknopf text-sm"
-        >
-          <span aria-hidden="true">↺</span> Drehen
-        </button>
-        <button
-          type="button"
-          onClick={() => anwenden('hartFallen')}
-          disabled={z.vorbei}
-          className="spielknopf text-sm"
-        >
-          <span aria-hidden="true">⬇</span> Fallen
-        </button>
-        <button
-          type="button"
-          onClick={() => anwenden('halten')}
-          disabled={z.vorbei || z.halteBenutzt}
-          className="spielknopf text-sm"
-        >
-          <span aria-hidden="true">⇄</span> Halten
-        </button>
+      {/* Zwei Reihen, nicht eine: Fünf Knöpfe nebeneinander passen auf einem
+          Handy nicht mehr in die Breite (die drei beschrifteten allein
+          brauchen rund 270 Pixel). Oben steht, was man ständig braucht —
+          seitwärts und drehen. */}
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex gap-2">
+          <WiederholKnopf
+            onAktion={() => anwenden('links')}
+            beschriftung="Nach links"
+            symbol="←"
+            aktiv={!z.vorbei}
+          />
+          <button
+            type="button"
+            onClick={() => anwenden('drehenUhr')}
+            disabled={z.vorbei}
+            className="spielknopf text-sm"
+          >
+            <span aria-hidden="true">↺</span> Drehen
+          </button>
+          <WiederholKnopf
+            onAktion={() => anwenden('rechts')}
+            beschriftung="Nach rechts"
+            symbol="→"
+            aktiv={!z.vorbei}
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => anwenden('hartFallen')}
+            disabled={z.vorbei}
+            className="spielknopf text-sm"
+          >
+            <span aria-hidden="true">⬇</span> Fallen
+          </button>
+          <button
+            type="button"
+            onClick={() => anwenden('halten')}
+            disabled={z.vorbei || z.halteBenutzt}
+            className="spielknopf text-sm"
+          >
+            <span aria-hidden="true">⇄</span> Halten
+          </button>
+        </div>
       </div>
 
       <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
-        Pfeiltasten oder Wischen bewegen, X oder Antippen dreht, Leertaste
-        oder schnelles Wischen nach unten lässt hart fallen. Aktuell:{' '}
+        Pfeiltasten, Wischen oder die Pfeilknöpfe bewegen — gedrückt halten
+        wiederholt. X oder Antippen dreht, Leertaste oder schnelles Wischen
+        nach unten lässt hart fallen. Aktuell:{' '}
         {z.aktuell ? TEIL_NAMEN[z.aktuell.typ] : '–'}.
       </p>
 

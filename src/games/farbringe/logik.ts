@@ -42,8 +42,38 @@ export const RING_ABSTAND = 88;
 /** Wo der erste Ring hängt — knapp im Bild, damit man ihn gleich sieht. */
 export const ERSTER_RING = 95;
 
-/** Wie weit die Kugel unter die Bildkante fallen darf, bevor Schluss ist. */
-export const FALL_GRENZE = 120;
+/**
+ * Das Sichtfenster in Welteinheiten: so weit sieht man über und unter der
+ * Kugel.
+ *
+ * Steht bewusst hier und nicht in der Anzeige, obwohl es reine Optik ist:
+ * `FALL_GRENZE` hängt daran, und die beiden dürfen nicht auseinanderlaufen.
+ * Genau das war passiert (siehe unten). Nebeneinander in einer Datei fällt
+ * so ein Auseinanderdriften auf, über zwei Dateien verteilt nicht.
+ *
+ * `SICHT_HOCH` ist knapp größer als `RING_ABSTAND` — man muss den nächsten
+ * Ring ganz sehen, während man noch unter dem vorigen steht.
+ */
+export const SICHT_HOCH = 105;
+export const SICHT_RUNTER = 60;
+
+/**
+ * Wie weit die Kugel unter ihren Höchststand fallen darf, bevor Schluss ist.
+ *
+ * Muss unter `SICHT_RUNTER` bleiben, sonst läuft die Runde weiter, während
+ * die Kugel längst unten aus dem Bild verschwunden ist. Vorher stand hier
+ * 120 bei 45 Einheiten Sicht: Die letzten 0,35 Sekunden jedes Absturzes
+ * tippte man blind auf ein leeres Feld und wusste nicht, ob es noch etwas
+ * zu retten gab. Jetzt bleibt die Kugel samt ihrem Musterring bis zum
+ * letzten Moment sichtbar — man sieht selbst, wie knapp es steht, und dass
+ * man sich mit ein paar schnellen Tippern noch fangen könnte.
+ *
+ * Der Abstand zu `SICHT_RUNTER` ist mit Absicht kein Haar breit: Ein
+ * Zeitschritt bei 60 Bildern je Sekunde trägt die fallende Kugel hier noch
+ * einmal knapp drei Einheiten weiter, die Grenze wird also immer ein wenig
+ * überschritten. Ein Test rechnet den echten Ablauf nach.
+ */
+export const FALL_GRENZE = 48;
 
 /** Strichstärke eines Rings — geht in die Trefferprüfung ein. */
 export const RING_STRICH = 6;
@@ -265,7 +295,7 @@ export function takt(z: Zustand, dt: number): Zustand {
   }
 
   const hoehe = Math.max(z.hoehe, kugelY);
-  // Zu tief gefallen — die Kugel ist unten aus dem Bild.
+  // Zu tief gefallen — die Kugel steht unten an der Bildkante an.
   if (kugelY < hoehe - FALL_GRENZE) vorbei = true;
 
   let neu: Zustand = {

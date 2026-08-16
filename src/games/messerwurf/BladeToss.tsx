@@ -1,20 +1,41 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, PointerEvent as ZeigerEreignis } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
+import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import type { GameProps } from '../../core/types';
 import {
   ANKUNFT,
+  MESSER_PUNKTE,
   flugFortschritt,
   messerFuerLevel,
   neuesSpiel,
+  stossPartner,
   werfen,
   zeitFortschritt,
+  zerteiltFortschritt,
 } from './logik';
 import type { Zustand } from './logik';
-import { Apfel, FliegendesMesser, HOEHE, SteckendesMesser, Stamm, VorratsMesser } from './figuren';
+import {
+  Apfel,
+  Bretterwand,
+  FliegendesMesser,
+  HOEHE,
+  SteckendesMesser,
+  Stamm,
+  VorratsMesser,
+  ZerteilterApfel,
+  Zusammenstoss,
+} from './figuren';
 import { BladeTossIcon } from './Icon';
+
+/**
+ * Wie lange das Bild des Zusammenstoßes stehen bleibt, bevor die Hülle den
+ * Rundenende-Bildschirm zeigt. Ohne diese Pause verschwände genau der eine
+ * Augenblick, an dem man sieht, woran es lag.
+ */
+const STOSS_ZEIGEN_MS = 750;
 
 /** Rechnet einen Steckwinkel in die Drehung um, die die Anzeige braucht. */
 const alsGrad = (steck: number, stammwinkel: number) =>
@@ -65,9 +86,13 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
         >
           Blade Toss
         </h1>
-        <p className="mt-3 text-sm font-semibold text-white/85">
-          {bestScore > 0 ? `🏆 Beste Punktzahl: ${bestScore}` : 'Triff das Holz, nicht dein Messer!'}
-        </p>
+        {/* Regel **und** Bestleistung, nicht die eine statt der anderen:
+            Sobald ein Bestwert vorlag, verschwand die einzige Stelle, an
+            der die zentrale Regel des Spiels überhaupt noch stand. */}
+        <p className="mt-3 text-sm font-semibold text-white/85">Triff das Holz, nicht dein Messer!</p>
+        {bestScore > 0 && (
+          <p className="mt-1 text-sm font-semibold text-white/70">🏆 Beste Punktzahl: {bestScore}</p>
+        )}
       </div>
 
       <button
@@ -85,15 +110,47 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
 export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
   const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesSpiel(saatAus('messerwurf', Date.now())));
-  const buehne = useRef<HTMLDivElement>(null);
+
+  /**
+   * Das „+N" über dem Brett. Die Schwelle liegt über `MESSER_PUNKTE`: Jeder
+   * Treffer ins Holz gibt ohnehin schon Ton, Vorratsmesser und eine neue
+   * Klinge im Stamm — ein Popup dazu wäre Dauerflimmern. Gemeldet wird, was
+   * wirklich außer der Reihe ist: der zerteilte Apfel und der Levelbonus.
+   */
+  const gewinn = usePunktegewinn(z.punkte, MESSER_PUNKTE + 1);
 
   const wirf = useCallback(() => setZ((alt) => werfen(alt)), []);
+
+  /**
+   * Werfen auf der **ganzen Seite**, nicht nur auf dem Brett.
+   *
+   * Vorher hing der Griff am Brett allein: Der Messervorrat direkt darunter
+   * — der aussieht wie der Vorrat, aus dem man wirft —, der Punktestand
+   * darüber und die Ränder links und rechts waren tot. Beim schnellen
+   * Tippen trifft man aber genau dorthin, und ein Wurfspiel, das jeden
+   * dritten Tipp verschluckt, fühlt sich kaputt an. Genau wie Ring Rise.
+   *
+   * Knöpfe und Verweise bleiben ausgenommen, dieselbe Prüfung wie im
+   * Tastatur-Listener unten. Ein doppelter Wurf kann dabei nicht
+   * herauskommen: `werfen` gibt den Zustand unverändert zurück, solange
+   * noch ein Messer unterwegs ist.
+   */
+  const antippen = useCallback(
+    (e: ZeigerEreignis<HTMLDivElement>) => {
+      if (e.target instanceof Element && e.target.closest('button, a[href]')) return;
+      // Beim Berühren, nicht beim Loslassen: Alles andere fühlt sich bei
+      // einem Wurfspiel träge an.
+      e.preventDefault();
+      wirf();
+    },
+    [wirf],
+  );
 
   /**
    * Eigener, schmaler Tastatur-Listener statt `useInput`.
    *
    * Grund: `useInput` erkennt ein Antippen erst beim **Loslassen**. Zusammen
-   * mit dem `onPointerDown` unten (das den Wurf im Moment der Berührung
+   * mit `antippen` oben (das den Wurf im Moment der Berührung
    * auslöst, weil sich alles andere träge anfühlt) käme pro Tipp zweimal
    * ein Wurf an — der erste beim Berühren, der zweite beim Loslassen, sobald
    * das erste Messer schon eingeschlagen ist. Das kostete jedes Mal ein
@@ -136,11 +193,13 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
     vorLevelRef.current = z.level;
   }, [z]);
 
+  // Das Rundenende wird bewusst verzögert gemeldet: Erst steht das Bild vom
+  // Zusammenstoß, dann kommt der Bildschirm der Hülle darüber.
   useEffect(() => {
-    if (z.vorbei) {
-      sfx('ende');
-      onGameOver(z.punkte);
-    }
+    if (!z.vorbei) return;
+    sfx('ende');
+    const uhr = window.setTimeout(() => onGameOver(z.punkte), STOSS_ZEIGEN_MS);
+    return () => window.clearTimeout(uhr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [z.vorbei]);
 
@@ -150,9 +209,15 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
 
   const gesamt = messerFuerLevel(z.level);
   const geworfen = gesamt - z.uebrig;
+  // Welche steckende Klinge der tödliche Wurf erwischt hat — beide werden
+  // rot, damit der Zusammenstoß als Paar zu lesen ist.
+  const stossIndex = stossPartner(z);
 
   return (
-    <div className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3">
+    <div
+      className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3"
+      onPointerDown={antippen}
+    >
       <output
         key={z.punkte}
         aria-live="polite"
@@ -166,37 +231,63 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
         Level {z.level} · {z.messer.length} im Holz
       </span>
 
-      <div className="spielbuehne" ref={buehne}>
-        <svg
-          viewBox={`0 0 100 ${HOEHE}`}
-          className="spielbrett touch-none"
+      <div className="spielbuehne">
+        {/* Das Brett ist ein eigenes Element um das SVG herum, nicht das SVG
+            selbst: Der Punktegewinn ist ein `div` und gehört ins Brett (so
+            macht es Ghost Chase) — direkt in der Bühne würde er das Brett
+            zur Seite schieben, siehe Kommentar in `index.css`. */}
+        <div
+          className="spielbrett spielbrett-rahmen relative touch-none overflow-hidden"
           style={{ '--vz': 100 / HOEHE } as CSSProperties}
-          role="img"
-          aria-label={`Blade Toss, Level ${z.level}. Noch ${z.uebrig} von ${gesamt} Messern zu werfen.${z.vorbei ? ' Vorbei — eigenes Messer getroffen.' : ''}`}
-          // Antippen wird zusätzlich hier abgefangen: `useInput` erkennt ein
-          // Tippen erst beim Loslassen, das fühlt sich bei einem Wurfspiel
-          // träge an. Der Wurf soll im Moment der Berührung losgehen.
-          onPointerDown={(e) => {
-            e.preventDefault();
-            wirf();
-          }}
         >
-          {/* Stamm zuerst, Messer darüber. Die Klinge liegt damit sichtbar
-              auf dem Holz — genauso machen es die Vorbilder, und man
-              erkennt auf einen Blick, wie viel Platz noch frei ist. Ein
-              erster Versuch zeichnete die Messer unter den Stamm, damit die
-              Klinge „im Holz verschwindet"; dann waren aber alle Messer
-              unsichtbar, sobald sie nach oben zeigten. */}
-          <Stamm />
-          {z.aepfel.map((steck, i) => (
-            <Apfel key={i} drehung={alsGrad(steck, z.winkel)} />
-          ))}
-          {z.messer.map((steck, i) => (
-            <SteckendesMesser key={i} drehung={alsGrad(steck, z.winkel)} />
-          ))}
+          <svg
+            viewBox={`0 0 100 ${HOEHE}`}
+            className="h-full w-full"
+            role="img"
+            aria-label={`Blade Toss, Level ${z.level}. Noch ${z.uebrig} von ${gesamt} Messern zu werfen.${z.vorbei ? ' Vorbei — eigenes Messer getroffen.' : ''}`}
+          >
+            <Bretterwand />
 
-          {z.fliegend !== null && <FliegendesMesser fortschritt={flugFortschritt(z)} />}
-        </svg>
+            {/* Stamm zuerst, Messer darüber. Die Klinge liegt damit sichtbar
+                auf dem Holz — genauso machen es die Vorbilder, und man
+                erkennt auf einen Blick, wie viel Platz noch frei ist. Ein
+                erster Versuch zeichnete die Messer unter den Stamm, damit die
+                Klinge „im Holz verschwindet"; dann waren aber alle Messer
+                unsichtbar, sobald sie nach oben zeigten. */}
+            <Stamm />
+            {z.aepfel.map((steck, i) => (
+              <Apfel key={i} drehung={alsGrad(steck, z.winkel)} />
+            ))}
+            {z.messer.map((steck, i) => (
+              <SteckendesMesser key={i} drehung={alsGrad(steck, z.winkel)} alarm={i === stossIndex} />
+            ))}
+
+            {/* Der zerteilte Apfel über den Klingen: Die Hälften fliegen nach
+                vorn weg, sie sollen nicht hinter einem Messer hervorlugen. */}
+            {z.zerteilt !== null && (
+              <ZerteilterApfel
+                drehung={alsGrad(z.zerteilt.steck, z.winkel)}
+                fortschritt={zerteiltFortschritt(z)}
+              />
+            )}
+
+            {z.fliegend !== null && <FliegendesMesser fortschritt={flugFortschritt(z)} />}
+
+            {/* Das tödliche Messer bleibt stehen, wo es aufgeschlagen ist,
+                und darüber blitzt der Zusammenstoß auf — sonst wäre die
+                Runde ohne ein einziges Bild vorbei. */}
+            {z.stoss !== null && (
+              <>
+                {/* Funken zuerst, Messer darüber: Andersherum verdeckt der
+                    Stern genau die beiden Klingen, um die es geht. */}
+                <Zusammenstoss drehung={alsGrad(z.stoss, z.winkel)} />
+                <SteckendesMesser drehung={alsGrad(z.stoss, z.winkel)} alarm />
+              </>
+            )}
+          </svg>
+
+          <Punktegewinn gewinn={gewinn} />
+        </div>
       </div>
 
       {/* Vorrat: ein Symbol je Messer dieses Levels, verbrauchte blass. */}
@@ -206,9 +297,13 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
         ))}
       </div>
 
-      <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
-        Antippen wirft ein Messer. Triff das Holz — aber nie ein Messer, das
-        schon steckt. Äpfel geben Extrapunkte.
+      {/* Der Kern der Regel bleibt immer stehen; nur der Zusatz weicht auf
+          kurzen Bildschirmen. Vorher verschwand der ganze Absatz unter 720
+          Pixeln Höhe — und damit ab der zweiten Runde die einzige Stelle,
+          an der überhaupt noch stand, worum es geht. */}
+      <p className="max-w-sm text-center text-xs text-gedaempft">
+        Irgendwo antippen wirft ein Messer — nie in ein Messer, das schon steckt.
+        <span className="nur-bei-platz"> Äpfel geben Extrapunkte.</span>
       </p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
@@ -132,16 +137,63 @@ export function TapRush({ onScore, onGameOver, settings, bestScore, istErsteRund
     running: dauer !== null && !z.vorbei,
   });
 
-  const antippen = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
-    // Beim Berühren, nicht beim Loslassen — bei einem Tempospiel ist alles
-    // andere spürbar träge, und man könnte durch Halten schummeln.
-    e.preventDefault();
+  /** Ein Tipp — von woher auch immer er kommt. */
+  const antippen = useCallback(() => {
     setZ((alt) => {
       const neu = tippen(alt);
       if (neu !== alt) sfx('klick', Math.min(12, Math.round(tempo(neu))));
       return neu;
     });
   }, []);
+
+  const beiZeiger = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
+      // Beim Berühren, nicht beim Loslassen — bei einem Tempospiel ist alles
+      // andere spürbar träge, und man könnte durch Halten schummeln.
+      e.preventDefault();
+      antippen();
+    },
+    [antippen],
+  );
+
+  /**
+   * Dasselbe mit der Tastatur.
+   *
+   * Muss sein: Ein Knopf schickt bei Leertaste und Enter von sich aus nur
+   * ein `click`-Ereignis, nie ein `pointerdown` — das Feld ließ sich also
+   * anfokussieren und tat dann nichts. Ein `onClick` ohne Prüfung wäre der
+   * falsche Weg: Mit Maus käme jeder Tipp doppelt, weil auf `pointerdown`
+   * ohnehin noch ein `click` folgt. `preventDefault` unterdrückt hier auch
+   * gleich den Klick, den die Taste sonst auslösen würde — der Tipp zählt
+   * also genau einmal.
+   */
+  const beiTaste = useCallback(
+    (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (e.key !== ' ' && e.key !== 'Enter') return;
+      // Vor der Wiederholungsprüfung: Sonst scrollt die gehaltene Leertaste
+      // die Seite, während man denkt, man tippe.
+      e.preventDefault();
+      // Wer die Taste hält, tippt sonst mit der Tastenwiederholung des
+      // Systems — gleichmäßig schnell, ohne einen Finger zu bewegen.
+      if (e.repeat) return;
+      antippen();
+    },
+    [antippen],
+  );
+
+  /**
+   * Klicks, die **nicht** von einem Zeiger kommen: Bedienhilfen wie
+   * VoiceOver schicken beim Doppeltippen einen nackten `click` ohne
+   * `pointerdown` und ohne `keydown` (`detail === 0`). Dieselbe Stelle wie
+   * in Block Burst. Für Maus und Finger passiert hier nichts, weil deren
+   * `click` immer `detail >= 1` hat — der Tipp käme sonst doppelt.
+   */
+  const beiKlick = useCallback(
+    (e: ReactMouseEvent<HTMLButtonElement>) => {
+      if (e.detail === 0) antippen();
+    },
+    [antippen],
+  );
 
   useEffect(() => {
     onScore(punkte(z.tipps, z.dauer));
@@ -196,9 +248,16 @@ export function TapRush({ onScore, onGameOver, settings, bestScore, istErsteRund
 
       <button
         type="button"
-        onPointerDown={antippen}
+        onPointerDown={beiZeiger}
+        onKeyDown={beiTaste}
+        onClick={beiKlick}
+        // Damit die Leertaste sofort zieht: Ohne das läge der Fokus nach der
+        // Zeitwahl im Nichts, und man müsste sich erst durch die Kopfzeile
+        // der Hülle tabben. Für Finger und Maus ändert sich nichts — der
+        // Fokusrahmen kommt nur über `:focus-visible`.
+        autoFocus
         disabled={z.vorbei}
-        aria-label={`Zum Tippen. ${z.tipps} Tipps, ${jetzt.toFixed(1)} pro Sekunde.`}
+        aria-label={`Zum Tippen, mit der Tastatur die Leertaste. ${z.tipps} Tipps, ${jetzt.toFixed(1)} pro Sekunde.`}
         className={`spielbrett-rahmen relative flex min-h-0 flex-1 touch-none flex-col items-center justify-center gap-2 select-none ${
           stufe === 'regenbogen' ? 'tempo-regenbogen' : ''
         }`}

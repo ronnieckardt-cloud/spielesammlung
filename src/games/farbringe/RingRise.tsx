@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, PointerEvent as ZeigerEreignis } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
 import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { Startbildschirm } from '../../core/Startbildschirm';
@@ -7,7 +7,7 @@ import type { DekoTeil } from '../../core/Startbildschirm';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
-import { neuesSpiel, springen, takt } from './logik';
+import { SICHT_HOCH, SICHT_RUNTER, neuesSpiel, springen, takt } from './logik';
 import type { Zustand } from './logik';
 import { FARBEN, farbe } from './farben';
 import { Farbring, Farbwechsel, Kugel } from './figuren';
@@ -23,9 +23,13 @@ import { FarbringeIcon } from './Icon';
  * steht in `logik.ts` und ist ohne Browser geprüft.
  */
 
-/** Wie weit man über und unter der Kugel sieht (Welteinheiten). */
-const SICHT_HOCH = 105;
-const SICHT_RUNTER = 45;
+/**
+ * Die Größe des Ausschnitts in Welteinheiten.
+ *
+ * `SICHT_HOCH` und `SICHT_RUNTER` stehen in `logik.ts`, weil die Fallgrenze
+ * daran hängt: Die Runde soll genau dann enden, wenn die Kugel unten an der
+ * Bildkante ankommt.
+ */
 const BREITE = 100;
 const HOEHE = SICHT_HOCH + SICHT_RUNTER;
 
@@ -82,11 +86,34 @@ export function RingRise({ onScore, onGameOver, bestScore, istErsteRunde }: Game
   }, [z.vorbei]);
 
   /**
+   * Springen auf der **ganzen Seite**, nicht nur auf dem Brett.
+   *
+   * Vorher hing der Griff am Brett allein. Daneben — auf dem Punktestand,
+   * der Zeile „Deine Farbe", dem Hilfetext oder den Rändern links und
+   * rechts — passierte nichts, und die Kugel fiel weiter. Beim schnellen
+   * Tippen trifft man aber genau dorthin, und ein Sprungspiel, das jeden
+   * dritten Tipp verschluckt, fühlt sich kaputt an.
+   *
+   * Knöpfe und Verweise bleiben ausgenommen, dieselbe Prüfung wie im
+   * Tastatur-Listener unten.
+   */
+  const antippen = useCallback(
+    (e: ZeigerEreignis<HTMLDivElement>) => {
+      if (e.target instanceof Element && e.target.closest('button, a[href]')) return;
+      // Beim Berühren, nicht beim Loslassen: Alles andere fühlt sich bei
+      // einem Sprungspiel träge an.
+      e.preventDefault();
+      hopsen();
+    },
+    [hopsen],
+  );
+
+  /**
    * Eigener Tastatur-Listener statt `useInput`.
    *
    * Genau wie bei Blade Toss: `useInput` meldet ein Antippen erst beim
-   * Loslassen. Zusammen mit dem `onPointerDown` unten käme jeder Tipp
-   * zweimal an — und ein doppelter Sprung wirft die Kugel viel zu hoch.
+   * Loslassen. Zusammen mit `antippen` oben käme jeder Tipp zweimal an —
+   * und ein doppelter Sprung wirft die Kugel viel zu hoch.
    */
   useEffect(() => {
     if (!gestartet || z.vorbei) return;
@@ -129,7 +156,10 @@ export function RingRise({ onScore, onGameOver, bestScore, istErsteRunde }: Game
   const meine = farbe(z.farbe);
 
   return (
-    <div className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 px-3 pt-2">
+    <div
+      className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 px-3 pt-2"
+      onPointerDown={antippen}
+    >
       <p
         key={z.punkte}
         className="punkte-bumsen text-5xl leading-none font-black tabular-nums"
@@ -138,17 +168,10 @@ export function RingRise({ onScore, onGameOver, bestScore, istErsteRunde }: Game
         {z.punkte}
       </p>
 
-      <div className="spielbuehne relative">
-        <Punktegewinn gewinn={gewinn} />
+      <div className="spielbuehne">
         <div
           className="spielbrett spielbrett-rahmen relative overflow-hidden"
           style={{ '--vz': BREITE / HOEHE } as CSSProperties}
-          onPointerDown={(e) => {
-            // Beim Berühren, nicht beim Loslassen: Alles andere fühlt sich
-            // bei einem Sprungspiel träge an.
-            e.preventDefault();
-            hopsen();
-          }}
           role="button"
           tabIndex={0}
           aria-label={`Ring Rise. Deine Farbe: ${meine.name}. Punkte: ${z.punkte}. Antippen springt.`}
@@ -188,6 +211,12 @@ export function RingRise({ onScore, onGameOver, bestScore, istErsteRunde }: Game
               <Kugel farbIndex={z.farbe} />
             </g>
           </svg>
+
+          {/* Das „+N" gehört **ins Brett**, nicht in die Bühne — genau wie
+              bei Ghost Chase. In der Bühne war es ein zweites Flex-Kind
+              neben dem Brett und schob es bei jedem geschafften Ring eine
+              knappe Sekunde lang zur Seite. */}
+          <Punktegewinn gewinn={gewinn} />
         </div>
       </div>
 

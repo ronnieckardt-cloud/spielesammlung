@@ -156,14 +156,25 @@ export function flugbahn(wabe: Wabe, winkel: number): Flugbahn {
  */
 export const MAX_ABWEICHUNG = (Math.PI / 180) * 78; // vom Senkrechten aus
 
+/** Genau senkrecht nach oben — die Ausgangslage des Rohrs. */
+export const SENKRECHT = -Math.PI / 2;
+
+/**
+ * Einen Zielwinkel auf den erlaubten Bereich um die Senkrechte stutzen.
+ *
+ * Eigene Funktion, weil es zwei Wege zum Zielwinkel gibt: die Fingerposition
+ * (`winkelZu`) und die Pfeiltasten, die den vorhandenen Winkel weiterdrehen.
+ * Beide müssen an derselben Kante stehenbleiben, sonst zielt die Tastatur
+ * flacher als der Finger.
+ */
+export function begrenzeWinkel(winkel: number): number {
+  const abweichung = winkel - SENKRECHT;
+  return SENKRECHT + Math.max(-MAX_ABWEICHUNG, Math.min(MAX_ABWEICHUNG, abweichung));
+}
+
 export function winkelZu(stelle: Stelle): number {
   const dx = stelle.x - KANONE.x;
   const dy = stelle.y - KANONE.y;
   // Immer nach oben schießen.
-  const winkel = Math.atan2(Math.min(dy, -0.001), dx);
-
-  const senkrecht = -Math.PI / 2;
-  const abweichung = winkel - senkrecht;
-  const begrenzt = Math.max(-MAX_ABWEICHUNG, Math.min(MAX_ABWEICHUNG, abweichung));
-  return senkrecht + begrenzt;
+  return begrenzeWinkel(Math.atan2(Math.min(dy, -0.001), dx));
 }

@@ -65,6 +65,21 @@ function Karte({ children, className = '' }: { children: React.ReactNode; classN
  * umsortiert. Ein Vorleseprogramm liest sonst „Silber, Gold, Bronze", und
  * das ist schlicht falsch.
  */
+/**
+ * Die drei Stufenhöhen — **nach Platz**, nicht nach Anzeigereihenfolge.
+ *
+ * Stehen auf Modulebene, weil sie an zwei Stellen gebraucht werden: im
+ * Podest selbst und im Ladegerüst darunter. Vorher standen dieselben drei
+ * Werte doppelt im Code, im Gerüst sogar in der Anzeigereihenfolge
+ * umsortiert (Silber, Gold, Bronze). Wer eine Stufe ändert und die andere
+ * Stelle übersieht, bekommt ein Gerüst, das beim Umschalten auf die
+ * echten Daten sichtbar springt.
+ */
+const PODESTHOEHEN = ['4.75rem', '3.25rem', '2.5rem'] as const;
+
+/** Höchstbreite einer Podeststufe — ebenfalls in Anzeige und Gerüst gebraucht. */
+const PODESTBREITE = '7.5rem';
+
 function Podest({ oben }: { oben: readonly { name: string; punkte: number; ich?: boolean }[] }) {
   // Anzeigereihenfolge: Silber, Gold, Bronze. Fehlt jemand, rückt nichts nach —
   // ein Podest mit zwei Stufen ist ehrlicher als eines mit einer Lücke in der Mitte.
@@ -77,7 +92,7 @@ function Podest({ oben }: { oben: readonly { name: string; punkte: number; ich?:
    * Gegenteil dessen aus, was es zeigen soll. Im Bild fällt so etwas sofort
    * auf, im Code überhaupt nicht.
    */
-  const hoehen = ['4.75rem', '3.25rem', '2.5rem'] as const;
+  const hoehen = PODESTHOEHEN;
 
   return (
     <ol className="flex items-end justify-center gap-2 pt-2">
@@ -89,7 +104,7 @@ function Podest({ oben }: { oben: readonly { name: string; punkte: number; ich?:
           <li
             key={platzIndex}
             className="podest-auf flex min-w-0 flex-1 flex-col items-center"
-            style={{ animationDelay: `${platzIndex * 130}ms`, maxWidth: '7.5rem' }}
+            style={{ animationDelay: `${platzIndex * 130}ms`, maxWidth: PODESTBREITE }}
           >
             <span aria-hidden="true" className="text-2xl leading-none">
               {MEDAILLEN[platzIndex]}
@@ -239,11 +254,12 @@ function Geruest() {
       <Karte>
         <span className="schimmer block h-4 w-32 rounded" />
         <div className="mt-4 flex items-end justify-center gap-2">
-          {['3.25rem', '4.75rem', '2.5rem'].map((h, i) => (
-            <span key={i} className="flex flex-1 flex-col items-center gap-1.5" style={{ maxWidth: '7.5rem' }}>
+          {/* Dieselbe Reihenfolge wie oben: Silber, Gold, Bronze. */}
+          {[1, 0, 2].map((platz, i) => (
+            <span key={i} className="flex flex-1 flex-col items-center gap-1.5" style={{ maxWidth: PODESTBREITE }}>
               <span className="schimmer size-11 rounded-full" />
               <span className="schimmer h-3 w-14 rounded" />
-              <span className="schimmer w-full rounded-t-lg" style={{ height: h }} />
+              <span className="schimmer w-full rounded-t-lg" style={{ height: PODESTHOEHEN[platz] }} />
             </span>
           ))}
         </div>
@@ -563,8 +579,18 @@ function NurIch({
   eigenePlaetze: Map<string, Bestenlisten['eigene'][number]>;
 }) {
   const fortschritt = fortschrittLesen();
-  const mitEintrag = spiele.filter((s) => bestenlisteLesen(s.id).length > 0);
-  const ohne = spiele.filter((s) => bestenlisteLesen(s.id).length === 0);
+  /*
+   * **Einmal lesen, viermal benutzen.**
+   *
+   * Vorher stand `bestenlisteLesen(id)` an vier Stellen: zweimal beim
+   * Filtern, einmal beim Zählen, einmal beim Anzeigen. Jeder Aufruf ist ein
+   * `localStorage.getItem` plus `JSON.parse` — bei zwanzig Spielen achtzig
+   * Stück, und zwar bei **jedem** Rendern der Seite. `localStorage` ist
+   * dabei nicht nur langsam, sondern blockiert den Hauptstrang.
+   */
+  const listen = new Map(spiele.map((s) => [s.id, bestenlisteLesen(s.id)]));
+  const mitEintrag = spiele.filter((s) => (listen.get(s.id)?.length ?? 0) > 0);
+  const ohne = spiele.filter((s) => (listen.get(s.id)?.length ?? 0) === 0);
 
   if (mitEintrag.length === 0) {
     return (
@@ -581,7 +607,7 @@ function NurIch({
   }
 
   const sterne = spiele.reduce((s, sp) => s + (fortschritt.jeSpiel[sp.id]?.besteSterne ?? 0), 0);
-  const ergebnisse = mitEintrag.reduce((s, sp) => s + bestenlisteLesen(sp.id).length, 0);
+  const ergebnisse = mitEintrag.reduce((s, sp) => s + (listen.get(sp.id)?.length ?? 0), 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -616,7 +642,7 @@ function NurIch({
       </Karte>
 
       {mitEintrag.map((spiel) => {
-        const eintraege = bestenlisteLesen(spiel.id);
+        const eintraege = listen.get(spiel.id) ?? [];
         const eigen = eigenePlaetze.get(spiel.id);
         const meine = fortschritt.jeSpiel[spiel.id]?.besteSterne ?? 0;
         return (

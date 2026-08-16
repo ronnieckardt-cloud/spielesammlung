@@ -68,7 +68,10 @@ export function EinstellungenSeite({
             onClick={() => {
               if (confirm('Wirklich alle Punktestände löschen?')) bestenlisteLoeschen();
             }}
-            className="mt-3 rounded-lg border border-rand px-3 py-2 text-sm hover:bg-flaeche-hoch"
+            /* 44 Pixel — Apples Mindestmaß, das dieses Projekt selbst als Regel
+               führt. Ausgerechnet der einzige Knopf der App, der Daten
+               unwiederbringlich löscht, war mit 36 Pixeln der zu kleine. */
+            className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-rand px-4 text-sm hover:bg-flaeche-hoch"
           >
             Alle Punktestände löschen
           </button>

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
+import { haptik } from '../../core/haptik';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
 import {
@@ -18,6 +19,7 @@ import {
   ROEHRCHEN_HOEHE,
   ausgusskante,
   fliegendePosition,
+  flugLuft,
   giessFortschritt,
   rasterBreite,
   rasterHoehe,
@@ -36,6 +38,17 @@ const GIESS_DAUER_MS = 950;
 
 /** So lange fliegt das Konfetti über einem fertigen Röhrchen. */
 const KONFETTI_DAUER_MS = 1350;
+
+/**
+ * So lange wackelt ein Röhrchen, wenn ein Antippen nichts bewirkt.
+ *
+ * Kurz genug, dass man weiterspielen kann, während es noch ausschwingt —
+ * es soll antworten, nicht bremsen.
+ */
+const FEHLANZEIGE_DAUER_MS = 320;
+
+/** Wie weit das Röhrchen dabei ausschlägt (in Rasterkoordinaten). */
+const FEHLANZEIGE_AUSSCHLAG = 7;
 
 const SCHICHTHOEHE = schichthoehe(KAPAZITAET);
 
@@ -166,6 +179,40 @@ export function Farbsortierer({
   const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechsteLevelNummer));
   const [guss, setGuss] = useState<Guss | null>(null);
+  /** Läuft, wenn ein Antippen ins Leere ging — das Röhrchen wackelt kurz. */
+  const [fehlanzeige, setFehlanzeige] = useState<{ index: number; t: number } | null>(null);
+
+  /**
+   * Breite geteilt durch Höhe der Bühne, sobald sie gemessen ist.
+   *
+   * Das Raster braucht diesen Wert, um zu entscheiden, ob die Röhrchen in
+   * eine Reihe passen oder ob zwei kurze Reihen größere Röhrchen ergeben
+   * (siehe `spaltenFuerAnzahl`). Gemessen statt geraten, weil die Bühne je
+   * nach Gerät, Ausrichtung und Browserleiste sehr unterschiedlich hoch ist.
+   */
+  const buehneRef = useRef<HTMLDivElement | null>(null);
+  const [buehnenVerhaeltnis, setBuehnenVerhaeltnis] = useState<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const buehne = buehneRef.current;
+    if (!buehne) return;
+
+    const messen = () => {
+      const breite = buehne.clientWidth;
+      const hoehe = buehne.clientHeight;
+      // React verwirft ein setState mit demselben Wert von allein — die
+      // Beobachtung kann also ruhig bei jeder Größenmeldung rechnen.
+      if (breite > 0 && hoehe > 0) setBuehnenVerhaeltnis(breite / hoehe);
+    };
+
+    messen();
+    if (typeof ResizeObserver === 'undefined') return;
+    // Kein Endlos-Kreisel: Die Bühne bekommt ihre Größe vom Flex-Eltern-
+    // element, nicht vom Brett darin. Ein anderes Raster ändert sie nicht.
+    const beobachter = new ResizeObserver(messen);
+    beobachter.observe(buehne);
+    return () => beobachter.disconnect();
+  }, [gestartet]);
 
   // Welche Farben dieses Level zeigt — aus der Levelnummer gemischt, damit
   // nicht immer dieselbe Reihenfolge der Palette drankommt.
@@ -180,7 +227,16 @@ export function Farbsortierer({
 
       const quelleVorher = z.ausgewaehlt;
       const nachher = roehrchenAntippen(z, index);
-      if (nachher === z) return;
+      if (nachher === z) {
+        // Ein leeres Röhrchen anzutippen, ohne etwas ausgewählt zu haben,
+        // ändert nichts. Ohne Antwort wirkt die App in dem Moment kaputt
+        // statt „geht nicht" — also ein kurzer Ton, ein Stups und ein
+        // Wackeln. Bei „weniger Bewegung" bleibt es bei Ton und Stups.
+        sfx('schlecht');
+        haptik('fehler');
+        if (!settings.reducedMotion) setFehlanzeige({ index, t: 0 });
+        return;
+      }
 
       const wurdeGegossen = nachher.zuege > z.zuege;
       if (!wurdeGegossen || quelleVorher === null) {
@@ -209,7 +265,7 @@ export function Farbsortierer({
         dauerMs: GIESS_DAUER_MS,
       });
     },
-    [z, guss],
+    [z, guss, settings.reducedMotion],
   );
 
   useGameLoop(
@@ -219,13 +275,28 @@ export function Farbsortierer({
         const naechstesT = g.t + (dt * 1000) / g.dauerMs;
         return naechstesT >= 1 ? null : { ...g, t: naechstesT };
       });
+      setFehlanzeige((f) => {
+        if (!f) return f;
+        const naechstesT = f.t + (dt * 1000) / FEHLANZEIGE_DAUER_MS;
+        return naechstesT >= 1 ? null : { ...f, t: naechstesT };
+      });
     },
-    { fps: 60, running: guss !== null },
+    // Dieselbe Uhr für beides — zwei Schleifen nebeneinander wären zwei
+    // Bildanforderungen für dieselbe Bewegung.
+    { fps: 60, running: guss !== null || fehlanzeige !== null },
   );
 
   useEffect(() => {
+    // Erst ab dem Startbildschirm: Vorher stand in der Kopfzeile schon ein
+    // Punktestand, obwohl noch gar nicht gespielt wurde.
+    //
+    // Der Wert ist das, was bei dieser Zugzahl noch zu holen ist, und zählt
+    // deshalb abwärts — was in der Kopfzeile allein nach Punkteverlust
+    // aussieht. Erklärt wird er im Spiel selbst: der Zugzähler in der
+    // Leiste und der Satz im Hilfetext gehören zu dieser Zeile dazu.
+    if (!gestartet) return;
     onScore(punkteFuerLoesung(z.zuege, z.farbenAnzahl));
-  }, [z.zuege, z.farbenAnzahl, onScore]);
+  }, [gestartet, z.zuege, z.farbenAnzahl, onScore]);
 
   useEffect(() => {
     if (z.geloest && !guss) {
@@ -295,11 +366,19 @@ export function Farbsortierer({
     [guss],
   );
 
-  const breite = rasterBreite(z.roehrchen.length);
-  const hoehe = rasterHoehe(z.roehrchen.length);
+  const breite = rasterBreite(z.roehrchen.length, buehnenVerhaeltnis);
+  // Über der obersten Reihe bleibt Platz für das fliegende Röhrchen: Beim
+  // Kippen ragt es weit nach oben, und sobald das Brett die Bühne wirklich
+  // ausfüllt, läge dieser Teil sonst über Leiste und Kopfzeile.
+  const flugLuftOben = flugLuft(z.roehrchen.length, buehnenVerhaeltnis);
+  const hoehe = rasterHoehe(z.roehrchen.length, buehnenVerhaeltnis) + flugLuftOben;
 
-  const posVon = guss ? roehrchenPosition(guss.von, guss.anzahlRoehrchen) : null;
-  const posNach = guss ? roehrchenPosition(guss.nach, guss.anzahlRoehrchen) : null;
+  const posVon = guss
+    ? roehrchenPosition(guss.von, guss.anzahlRoehrchen, buehnenVerhaeltnis)
+    : null;
+  const posNach = guss
+    ? roehrchenPosition(guss.nach, guss.anzahlRoehrchen, buehnenVerhaeltnis)
+    : null;
   const flug = guss && posVon && posNach ? fliegendePosition(guss.t, posVon, posNach) : null;
   const giessAnteil = guss ? giessFortschritt(guss.t) : 0;
 
@@ -310,6 +389,19 @@ export function Farbsortierer({
   const strahlSichtbar =
     !!guss && !!flug && !!kante && Math.abs(flug.winkelGrad) > 85 && giessAnteil < 1;
   const wackeln = guss ? Math.sin(guss.t * 46) * 2 : 0;
+
+  /**
+   * Seitlicher Ausschlag der Fehlanzeige: drei Schwünge, die zum Ende hin
+   * kleiner werden. Als Rechnung im Anzeigecode und nicht als CSS-Klasse,
+   * weil die Klasse in die gemeinsame `index.css` müsste — die gehört allen
+   * Spielen, und hier reicht die Uhr, die für den Guss ohnehin schon läuft.
+   */
+  const ruettelVersatz = (index: number): number => {
+    if (!fehlanzeige || fehlanzeige.index !== index) return 0;
+    return (
+      Math.sin(fehlanzeige.t * Math.PI * 6) * FEHLANZEIGE_AUSSCHLAG * (1 - fehlanzeige.t)
+    );
+  };
 
   if (!gestartet) {
     return (
@@ -326,7 +418,9 @@ export function Farbsortierer({
           <button
             type="button"
             onClick={() => beiLevelWechsel(z.level - 1)}
-            disabled={z.level <= 1 || !!guss}
+            // Im Duell steht das Level fest — dann muss auch dieser Pfeil
+            // gesperrt aussehen und nicht nur wirkungslos klicken.
+            disabled={z.level <= 1 || !!guss || festesLevel !== undefined}
             aria-label="Voriges Level"
             className="spielknopf text-base leading-none transition-transform active:scale-95"
           >
@@ -342,6 +436,12 @@ export function Farbsortierer({
           >
             ›
           </button>
+          {/* Der Zugzähler erklärt die Kopfzeile: Dort zählen die Punkte
+              mit jedem Zug herunter, und ohne diese Zahl daneben sieht das
+              aus wie Punkteverlust ohne Grund. */}
+          <span className="ml-1 w-16 text-center tabular-nums">
+            {z.zuege} {z.zuege === 1 ? 'Zug' : 'Züge'}
+          </span>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -363,11 +463,11 @@ export function Farbsortierer({
         </div>
       </div>
 
-      <div className="spielbuehne">
+      <div className="spielbuehne" ref={buehneRef}>
       <svg
-        viewBox={`0 0 ${breite} ${hoehe}`}
+        viewBox={`0 ${-flugLuftOben} ${breite} ${hoehe}`}
         role="group"
-        aria-label={`Farbsortierer, Level ${z.level}. ${z.roehrchen.map((r, i) => beschreibung(i, r, palette)).join('. ')}.`}
+        aria-label={`Farbsortierer, Level ${z.level}. ${z.zuege} ${z.zuege === 1 ? 'Zug' : 'Züge'}, noch ${punkteFuerLoesung(z.zuege, z.farbenAnzahl)} Punkte zu holen. ${z.roehrchen.map((r, i) => beschreibung(i, r, palette)).join('. ')}.`}
         className="spielbrett"
         // `overflow: visible`, weil Deckel und Konfetti über den Rand des
         // Kastens hinausragen dürfen.
@@ -376,12 +476,12 @@ export function Farbsortierer({
         {z.roehrchen.map((inhalt, i) => {
           const istVon = guss?.von === i;
           const istNach = guss?.nach === i;
-          const pos = roehrchenPosition(i, z.roehrchen.length);
+          const pos = roehrchenPosition(i, z.roehrchen.length, buehnenVerhaeltnis);
 
           return (
             <g
               key={i}
-              transform={`translate(${pos.x} ${pos.y})`}
+              transform={`translate(${pos.x + ruettelVersatz(i)} ${pos.y})`}
               role="button"
               tabIndex={istVon ? -1 : 0}
               aria-label={beschreibung(i, inhalt, palette)}
@@ -451,7 +551,9 @@ export function Farbsortierer({
       </div>
 
       <p className="nur-bei-platz max-w-md text-center text-xs text-gedaempft">
-        Antippen wählt ein Röhrchen, nochmal Antippen gießt hinein.
+        Antippen wählt ein Röhrchen, nochmal Antippen gießt hinein. Je weniger
+        Züge du brauchst, desto mehr Punkte gibt es — oben steht, wie viele
+        gerade noch zu holen sind.
         <br />
         Gelöst? „Nochmal" im nächsten Bildschirm startet automatisch das
         nächste Level — mit den Pfeilen oben lässt sich auch direkt ein

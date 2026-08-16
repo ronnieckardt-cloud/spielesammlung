@@ -43,8 +43,11 @@ export function BunterGrund({ children }: { children: ReactNode }) {
               {
                 left: `${f.x}%`,
                 top: `${f.y}%`,
-                width: f.groesse,
-                height: f.groesse,
+                // In vmin statt Pixeln: Auf einem 13-Zoll-iPad waren die
+                // vier Flecken sonst kleine Punkte in einer riesigen
+                // Flaeche statt eines belebten Hintergrunds.
+                width: `${f.groesse / 4}vmin`,
+                height: `${f.groesse / 4}vmin`,
                 backgroundColor: f.farbe,
                 animationDelay: `${f.verzoegerung}s`,
                 '--grundwinkel': '0deg',

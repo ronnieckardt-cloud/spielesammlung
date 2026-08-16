@@ -94,7 +94,16 @@ export function Unternavigation({
       {/* Auf dem Handy schmal (Daumenbereich), auf dem Tablet etwas
           breiter. Voll ausgereizt wäre falsch: Auf einem 13-Zoll-iPad
           stünden fünf Punkte dreißig Zentimeter auseinander, und man
-          zielt quer über den Bildschirm. */}
+          zielt quer über den Bildschirm.
+
+          **Absichtlich enger als der Inhalt darüber** (der steht in
+          `max-w-3xl md:max-w-5xl`, also 768/1024 Pixel). Die beiden Raster
+          fallen dadurch nicht zusammen — das ist geprüft und so gewollt.
+          Erreichbarkeit schlägt Rasterreinheit: Eine Navigationsleiste
+          bedient man im Vorbeigehen mit dem Daumen, ein Inhalt wird
+          gelesen. Wer das angleichen will, muss vorher entscheiden, ob
+          Florian auf dem iPad wirklich quer über den Bildschirm greifen
+          soll. */}
       <ul className="mx-auto flex w-full max-w-md md:max-w-lg">
         {PUNKTE.map((p) => {
           const istAktiv = p.ziel === aktiv;

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { haptik } from '../../core/haptik';
+import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
 import { aufdecken, gefundenePaare, neuesSpiel, schliessen } from './logik';
@@ -69,12 +71,16 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
       <PaarUpIcon className="relative size-32 rounded-[2rem] shadow-2xl" />
 
       <div className="relative">
-        <h2
+        {/* `h1`, nicht `h2`: Der Spieltitel ist auf diesem Bildschirm die
+            oberste Überschrift — mit `h2` fehlt Screenreadern die erste
+            Ebene, und man springt beim Durchblättern der Überschriften ins
+            Leere. Merge Up und Bubble Pop machen es genauso. */}
+        <h1
           className="text-5xl leading-none font-black tracking-tight text-white"
           style={{ textShadow: '0 4px 0 rgba(0,0,0,0.22), 0 10px 24px rgba(0,0,0,0.35)' }}
         >
           Pair Up
-        </h2>
+        </h1>
         <p className="mt-3 text-sm font-semibold text-white/80">
           Finde alle Paare!
         </p>
@@ -90,6 +96,10 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
       <button
         type="button"
         onClick={onStart}
+        // Wer mit der Tastatur kommt, soll sofort loslegen können — genau
+        // wie in core/Startbildschirm.tsx, Merge Up und Bubble Pop. Hier
+        // fehlte es als einzigem der drei Titelbilder.
+        autoFocus
         className="startknopf-puls relative rounded-2xl bg-white px-14 py-4 text-xl font-extrabold text-fuchsia-700 shadow-2xl transition-transform active:scale-95"
       >
         Spielen
@@ -113,14 +123,28 @@ export function PaarUp({
     setZ((alt) => aufdecken(alt, position));
   }, []);
 
-  const beiLevelWechsel = useCallback((level: number) => {
-    // Im Duell steht das Level fest — sonst könnte man sich das
-    // leichteste aussuchen und der Vergleich wäre wertlos.
-    if (festesLevel !== undefined) return;
-    const ziel = Math.max(1, level);
-    naechsteLevelNummer = ziel;
-    setZ(neuesSpiel(ziel));
-  }, []);
+  // Merker für den Ton-Effekt weiter unten. Sie stehen hier oben, weil der
+  // Levelwechsel sie mit zurücksetzen muss.
+  const vorZuegenRef = useRef(z.zuege);
+  const vorPaarenRef = useRef(0);
+
+  const beiLevelWechsel = useCallback(
+    (level: number) => {
+      // Im Duell steht das Level fest — sonst könnte man sich das
+      // leichteste aussuchen und der Vergleich wäre wertlos.
+      if (festesLevel !== undefined) return;
+      const ziel = Math.max(1, level);
+      naechsteLevelNummer = ziel;
+      // Beide Merker müssen mit auf null: Das neue Feld fängt bei null Zügen
+      // und null Paaren an. Ohne das sah der Ton-Effekt einen veränderten
+      // Zugzähler und kein neues Paar — und spielte den Fehlerton, als hätte
+      // man sich vertippt, obwohl man nur weitergeblättert hat.
+      vorZuegenRef.current = 0;
+      vorPaarenRef.current = 0;
+      setZ(neuesSpiel(ziel));
+    },
+    [festesLevel],
+  );
 
   // Ein Fehlgriff bleibt kurz liegen, damit man ihn sich merken kann, und
   // deckt sich dann selbst wieder zu. Die Logik kennt keine Uhr — sie merkt
@@ -135,10 +159,12 @@ export function PaarUp({
     onScore(z.punkte);
   }, [z.punkte, onScore]);
 
+  // Das „+N" über dem Brett. Ein Treffer bringt immer glatte 100, ein
+  // Fehlgriff kostet 12 — Abzüge zeigt der Baustein bewusst nicht an.
+  const gewinn = usePunktegewinn(z.punkte);
+
   // Ton bei Treffer und Fehlgriff. Hängt an `zuege`, nicht an `fehlgriff` —
   // sonst käme bei zwei Fehlgriffen hintereinander nur einmal ein Ton.
-  const vorZuegenRef = useRef(z.zuege);
-  const vorPaarenRef = useRef(0);
   useEffect(() => {
     if (z.zuege === vorZuegenRef.current) return;
     vorZuegenRef.current = z.zuege;
@@ -151,10 +177,15 @@ export function PaarUp({
 
   useEffect(() => {
     if (!z.vorbei) return;
-    sfx('stufe');
-    // Nach einem geschafften Level geht „Nochmal" ins nächste.
-    if (festesLevel === undefined) naechsteLevelNummer = z.level + 1;
-    onGameOver(z.punkte, true);
+    sfx(z.gewonnen ? 'stufe' : 'ende');
+    haptik(z.gewonnen ? 'jubel' : 'ende');
+    // Nach einem geschafften Level geht „Nochmal" ins nächste — dasselbe
+    // Feld noch einmal wäre bei einem Merkspiel sinnlos, man weiß ja noch,
+    // wo alles liegt. Nach einer aufgebrauchten Zuggrenze bleibt es beim
+    // selben Level: Da ist das Wissen aus der verlorenen Runde genau das,
+    // womit man den zweiten Versuch schafft.
+    if (festesLevel === undefined && z.gewonnen) naechsteLevelNummer = z.level + 1;
+    onGameOver(z.punkte, z.gewonnen);
     // onGameOver darf nur einmal kommen — deshalb hängt das nur an "vorbei".
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [z.vorbei]);
@@ -165,9 +196,29 @@ export function PaarUp({
 
   const paare = z.karten.length / 2;
   const geschafft = gefundenePaare(z);
+  const uebrig = z.zugGrenze === null ? null : z.zugGrenze - z.zuege;
+  // Ab fünf verbleibenden Zügen wird die Zahl farbig. Die Zahl selbst steht
+  // ohnehin da — die Farbe verstärkt nur, sie ist nie das einzige Merkmal.
+  const knapp = uebrig !== null && uebrig <= 5;
 
   return (
     <div className="spielseite flex min-h-0 flex-1 flex-col items-center gap-3 overflow-hidden p-3">
+      {/* Der Punktestand stand bisher nur klein in der Kopfzeile der Hülle —
+          und dort die ganze Runde über auf 0, weil er erst am Schluss
+          gerechnet wurde. Jetzt läuft er mit und steht groß über dem Feld,
+          wie bei Merge Up und Bubble Pop. Eine Stufe kleiner als dort
+          (4xl/5xl statt 5xl/6xl): Hier steht darunter noch die Zeile mit
+          Level, Paaren und Zügen, und die Karten sind hochkant — der Platz
+          über dem Brett ist knapper als in den beiden anderen Spielen. */}
+      <output
+        aria-live="off"
+        key={z.punkte}
+        className="punkte-bumsen text-4xl font-black tabular-nums text-text sm:text-5xl"
+        style={{ textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
+      >
+        {z.punkte}
+      </output>
+
       <div className="flex w-full max-w-md items-center justify-between text-sm">
         <div className="flex items-center gap-1 font-semibold text-gedaempft">
           <button
@@ -191,13 +242,18 @@ export function PaarUp({
           </button>
         </div>
         <span className="tabular-nums text-gedaempft">
-          {geschafft}/{paare} Paare · {z.zuege} {z.zuege === 1 ? 'Zug' : 'Züge'}
+          {geschafft}/{paare} Paare ·{' '}
+          <span className={knapp ? 'font-bold text-warnung' : undefined}>
+            {z.zugGrenze === null
+              ? `${z.zuege} ${z.zuege === 1 ? 'Zug' : 'Züge'}`
+              : `${z.zuege}/${z.zugGrenze} Züge`}
+          </span>
         </span>
       </div>
 
       <div className="spielbuehne">
         <div
-          className="spielbrett spielbrett-rahmen grid gap-2 p-2"
+          className="spielbrett spielbrett-rahmen relative grid gap-2 p-2"
           style={
             {
               gridTemplateColumns: `repeat(${z.spalten}, minmax(0, 1fr))`,
@@ -244,16 +300,25 @@ export function PaarUp({
               </button>
             );
           })}
+
+          {/* Gehört ins Brett, nicht in die Bühne: Die Bühne ist der ganze
+              freie Platz, das „+N" soll aber über den Karten stehen. */}
+          <Punktegewinn gewinn={gewinn} />
         </div>
       </div>
 
       <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
         Tippe zwei Karten an. Passen sie zusammen, bleiben sie liegen. Je
         weniger Züge du brauchst, desto mehr Punkte gibt es.
+        {z.zugGrenze !== null && ` Auf diesem Level hast du höchstens ${z.zugGrenze} Züge.`}
       </p>
 
+      {/* Die verbleibenden Züge kommen erst dazu, wenn es knapp wird. Sonst
+          läse ein Screenreader nach **jedem** Zug den ganzen Satz vor,
+          obwohl bei fünfzig freien Zügen nichts zu entscheiden ist. */}
       <p className="sr-only" aria-live="polite">
         {geschafft} von {paare} Paaren gefunden.
+        {knapp && ` Noch ${uebrig} ${uebrig === 1 ? 'Zug' : 'Züge'} übrig.`}
       </p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}

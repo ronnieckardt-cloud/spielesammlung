@@ -2245,6 +2245,92 @@ steht hinter dem Rautezeichen, der Server sieht immer nur `/`.
 `netlify.toml` bleibt vorerst liegen, damit während des Umzugs beide Wege
 funktionieren.
 
+## Die zweite große Prüfrunde
+
+Zwanzig Agenten haben je ein Spiel durchgesehen, danach hat je ein zweiter
+versucht, die Befunde zu **widerlegen**. 117 Befunde behoben, 26
+Beanstandungen aus der Gegenprüfung. Was daraus gelernt wurde:
+
+**Eine Prüfung, die dieselbe Rechnung benutzt wie der geprüfte Code,
+prüft nichts.** Die neuen Kontrast-Tests in Merge Up importieren `kontrast`
+aus `farben.ts` — und `kachelTextFarbe` benutzt genau diese Funktion. Wäre
+die Luminanz-Formel falsch, wären Test und Umsetzung gemeinsam falsch und
+trotzdem grün. Der Test sichert die **Farbliste** ab, nicht die Rechnung;
+die musste von Hand gegen WCAG nachgerechnet werden.
+
+**Ein Test über die Aufgabe deckt die Antworten nicht mit ab.** Brain Blitz
+prüfte die sichtbare Zahlenfolge — die war immer sauber. Die drei
+**Ablenker** daneben nicht: Bei fallenden Folgen richtete sich ihr Abstand
+nach der Schrittweite (bis 20), die richtige Antwort lag aber nur zwischen
+5 und 30. Level 33 zeigte unter „29, 23, 17, 11, ?" die Auswahl
+−1 / 5 / 1 / 11. Gefunden wurde das erst über 12 000 durchgerechnete
+Aufgaben mit den **echten** Saaten aus `saatAus` — mit ausgedachten Saaten
+wäre der Test grün gewesen, während das Spiel den Fehler zeigt.
+
+**Die Leertaste war ein Zug.** `useInput` bildet Space auf `drop` ab, und
+Box Push wie Merge Up deuteten `drop` selbst zu „nach unten" um — weil ein
+schneller Abwärtswisch ebenfalls als `drop` ankommt. Damit erbten sie
+stillschweigend die Taste. In Box Push kostet jeder Zug Punkte, ein
+versehentlicher Druck also vier. Behoben mit der neuen Option
+`wurf` (Gegenstück zu `tippen`): Wer `wurf: 'down'` setzt, bekommt die
+**Geste** und nicht die Taste. Die Umdeutung im Spiel entfällt.
+
+**Ein Updater darf keine Nebenwirkungen haben.** In Box Push stand
+`haptik('fehler')` innerhalb der `setZ`-Funktion. React ruft Updater
+mehrfach auf, unter `<StrictMode>` in der Entwicklung grundsätzlich — der
+Stups kam zweimal. Der Updater rechnet jetzt nur noch und merkt sich den
+Ausgang; gemeldet wird danach, genau einmal je Zug.
+
+**Ein Auffangnetz, das nichts auffangen kann, ist nur eine Nebenwirkung.**
+Am Steuerkreuz von Box Push stand neben `bereitRef` eine Zeitsperre von
+110 ms, begründet als Absicherung gegen ein ausbleibendes `pointerup`. Das
+konnte sie nie sein: Bleibt das `pointerup` aus, steht `bereitRef` dauerhaft
+auf `false` und **kein** Zug kommt mehr durch. Übrig blieb, dass ab etwa
+neun Tipps je Sekunde jeder zweite lautlos verfiel.
+
+**Ein Übergang schlägt eine Animation.** In Brain Blitz stand `scale` in der
+`transition`-Liste der Antwortknöpfe. Im Moment der Antwort wird der Knopf
+`disabled`, die Antipp-Stauchung fällt weg, und der Übergang ließ `scale`
+100 ms lang zurücklaufen — genau über den Anfang der Aufplopp-Animation
+(Höhepunkt bei 119 ms). Ergebnis: ein sichtbarer Ruck bei der wichtigsten
+Rückmeldung des Spiels. `scale` gehört dort nicht hinein.
+
+**`-1` bezeichnet das Ende des expliziten Rasters.** Beim Versuch, das
+Querformat umzubauen, ergab `grid-row: 1 / -1` eine Zeile der Höhe null —
+alle Zeilen entstanden erst durch automatische Platzierung, waren also
+implizit. Siehe den Block „Handy im Querformat" in `index.css`; der Umbau
+selbst ist begründet zurückgestellt.
+
+**Zwei Leistungsstellen, beide über eine Eigenschaft, die nicht auf die
+Grafikeinheit geht.** Der pulsierende Spielen-Knopf animierte `box-shadow`,
+das Regenbogenfeld von Tap Rush `background-position` — beides erzwingt
+Neuzeichnen, das Feld über den halben Bildschirm, sechzigmal je Sekunde.
+Der Knopf hat jetzt einen festen Schatten, das Feld eine überbreite Ebene
+im `::before`, die per `transform` wandert. Gleiches Bild, reine
+Zusammensetzungsarbeit. Die **Zahl** darüber bleibt bewusst bei
+`background-position`: Ihre Fläche ist der Text selbst
+(`background-clip: text`), sie kann nicht auf eine eigene Ebene ausweichen
+— und ein paar Ziffern kosten nichts.
+
+**Das Punktgewinn-Popup war bei „weniger Bewegung" unsichtbar.**
+`.punkte-auftauchen` endet mit `opacity: 0` und `forwards`; `.ruhig` kürzt
+nur die Dauer, das Schlussbild bleibt. Wer weniger Bewegung wollte, bekam in
+fünf Spielen gar keine Rückmeldung mehr. Das Verschwinden übernimmt ohnehin
+JavaScript nach 900 ms — die Animation darf unter `.ruhig` ersatzlos
+entfallen.
+
+**Der I-Stein saß als einziger tiefer.** `MiniTeil` in Line Fall rechnete
+Breite und Höhe aus dem **größten** dx/dy, nicht aus der Spanne. Beim
+I-Stein liegen alle vier Zellen auf `dy = 1` — sein Vorschaukasten bekam
+eine leere Kopfzeile. Jetzt wird auf den kleinsten Wert normiert.
+
+**Was ein Agent nicht anfassen darf, muss jemand anders nachziehen.** Alle
+zwanzig arbeiteten ausschließlich in ihrem eigenen `src/games/<id>/`. Alles
+darüber hinaus — CLAUDE.md, `index.css`, `core/useInput.ts`,
+`shell/spielfarbe.ts` — haben sie gemeldet statt geändert. Das ist die
+richtige Regel; sie erzeugt aber eine Nachliste, und die ist Teil der
+Arbeit, nicht ihr Rest.
+
 ## Befehle
 
 ```bash

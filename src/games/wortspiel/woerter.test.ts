@@ -31,6 +31,20 @@ describe('Wortpool', () => {
     expect(new Set(richtigeWoerter).size).toBe(richtigeWoerter.length);
   });
 
+  // Anlass: „Kühe" stand als Fehlschreibung von „Küche" im Pool, ist aber
+  // ein völlig korrekt geschriebenes Wort — wer es kannte, wurde für
+  // richtiges Wissen bestraft. Dieser Test kann das nicht allgemein
+  // erkennen (dafür bräuchte es ein Wörterbuch), er fängt aber den Fall ab,
+  // in dem der Pool sich selbst widerspricht: eine Schreibweise, die hier
+  // falsch sein soll und ein paar Zeilen weiter die richtige Lösung ist.
+  it('keine Fehlschreibung ist anderswo im Pool die richtige Schreibweise', () => {
+    const richtige = new Set(WOERTER.map((w) => w.antworten[w.richtig]));
+    for (const w of WOERTER) {
+      const falsche = w.antworten.filter((_, i) => i !== w.richtig);
+      for (const a of falsche) expect(richtige.has(a), `"${a}" ist anderswo die Lösung`).toBe(false);
+    }
+  });
+
   it('jede Kategorie und jede Regel ist ausgefüllt', () => {
     for (const w of WOERTER) {
       expect(w.kategorie.trim().length).toBeGreaterThan(0);

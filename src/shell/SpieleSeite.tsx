@@ -55,7 +55,16 @@ export function SpieleSeite({ onSpielen }: { onSpielen: (id: string) => void }) 
         </p>
       </header>
 
-      <ul className="buehne-3d flex flex-wrap justify-center gap-x-3 gap-y-4 rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm sm:gap-x-6 sm:p-5">
+      <ul className="buehne-3d grid justify-items-center gap-x-2 gap-y-4 rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm sm:gap-x-3 sm:p-5"
+          /*
+           * `auto-fit` statt `flex-wrap`: Das Raster teilt jede Breite
+           * selbst in gleich breite Spalten auf. Damit gibt es keine
+           * Breite mehr, bei der die Reihe unerwartet umbricht — der
+           * Fehler, der zwischen 640 und 833 Pixeln zweimal auftrat.
+           */
+          style={{
+            gridTemplateColumns: 'repeat(auto-fit, minmax(calc(var(--kachel) + 0.75rem), 1fr))',
+          }}>
         {spiele.map((spiel, i) => (
           <Spielkachel
             key={spiel.id}

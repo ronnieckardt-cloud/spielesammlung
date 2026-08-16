@@ -6,6 +6,8 @@ import {
   formErzeugen,
   genauigkeit,
   istKonvex,
+  maxDehnungFuerLevel,
+  maxSchwankungFuerLevel,
   punkteFuerSchnitt,
   schneiden,
   schwerpunkt,
@@ -19,6 +21,9 @@ const QUADRAT: Form = [
   { x: 10, y: 10 },
   { x: -10, y: 10 },
 ];
+
+/** Wie viele Formen je Level in eine Stichprobe gehen. */
+const FORMEN_STICHPROBE = 8;
 
 describe('flaeche', () => {
   it('rechnet das Quadrat richtig aus', () => {
@@ -187,6 +192,84 @@ describe('formErzeugen', () => {
     // mehr, sondern Millimeterarbeit.
     const hoch = formErzeugen(saatAus('halbieren', 99, 0), 99);
     expect(flaeche(hoch)).toBeGreaterThan(500);
+  });
+});
+
+describe('Schwierigkeit über die Level', () => {
+  /**
+   * Der eigentliche Grund für diesen Block: Bis Level 9 war die Dehnung die
+   * **einzige** levelabhängige Stellschraube, und ab Level 10 lag sie an
+   * ihrem Deckel — danach wurde gar nichts mehr schwerer. Die Schwankung der
+   * Eckenabstände trägt jetzt bis Level 20 weiter.
+   */
+  it('geht nie zurück', () => {
+    for (let level = 1; level < 60; level++) {
+      expect(maxDehnungFuerLevel(level + 1)).toBeGreaterThanOrEqual(maxDehnungFuerLevel(level));
+      for (let ecken = 3; ecken <= 8; ecken++) {
+        expect(maxSchwankungFuerLevel(level + 1, ecken)).toBeGreaterThanOrEqual(
+          maxSchwankungFuerLevel(level, ecken),
+        );
+      }
+    }
+  });
+
+  it('ändert sich auch noch zwischen Level 10 und 20', () => {
+    // Genau hier stand das Spiel vorher still.
+    expect(maxDehnungFuerLevel(10)).toBe(maxDehnungFuerLevel(20));
+    for (let ecken = 3; ecken <= 8; ecken++) {
+      expect(maxSchwankungFuerLevel(20, ecken)).toBeGreaterThan(
+        maxSchwankungFuerLevel(10, ecken) * 1.5,
+      );
+    }
+  });
+
+  it('fängt fast regelmäßig an', () => {
+    // Level 1 soll ein freundliches Vieleck sein, kein Splitter.
+    for (let ecken = 3; ecken <= 8; ecken++) {
+      expect(maxSchwankungFuerLevel(1, ecken)).toBeLessThan(0.06);
+    }
+  });
+
+  it('bleibt unter der Grenze, ab der eine Form eingedellt wäre', () => {
+    // Herleitung siehe `maxSchwankungFuerLevel`: Der kleinste Eckenabstand
+    // muss über cos(2π/n) des größten bleiben. Hier mit Sicherheitsabstand.
+    for (let ecken = 3; ecken <= 8; ecken++) {
+      const kleinster = 1 - maxSchwankungFuerLevel(999, ecken);
+      expect(kleinster).toBeGreaterThan(Math.cos((2 * Math.PI) / ecken));
+    }
+  });
+
+  it('liefert auch in hohen Leveln konvexe Formen mit ordentlicher Fläche', () => {
+    // Die Schwankung darf die Form unregelmäßig machen, aber niemals
+    // eindellen oder zum Splitter schrumpfen lassen.
+    for (let level = 1; level <= 120; level++) {
+      for (let i = 0; i < FORMEN_STICHPROBE; i++) {
+        const form = formErzeugen(saatAus('halbieren', level, i), level);
+        expect(istKonvex(form), `Level ${level}, Form ${i} ist eingedellt`).toBe(true);
+        expect(flaeche(form), `Level ${level}, Form ${i} ist zu klein`).toBeGreaterThan(200);
+      }
+    }
+  });
+
+  it('macht die Formen mit steigendem Level wirklich unregelmäßiger', () => {
+    // Gemessen an den fertigen Formen, nicht an der Stellschraube: Wie weit
+    // liegen größter und kleinster Eckenabstand im Mittel auseinander?
+    //
+    // Der Vergleich 20 gegen 10 ist der aussagekräftige: Dort ist die
+    // Dehnung längst an ihrem Deckel, jeder Unterschied kommt also allein
+    // aus der neuen Schwankung.
+    const spanne = (level: number) => {
+      let summe = 0;
+      for (let i = 0; i < FORMEN_STICHPROBE; i++) {
+        const abstaende = formErzeugen(saatAus('halbieren', level, i), level).map((p) =>
+          Math.hypot(p.x, p.y),
+        );
+        summe += Math.max(...abstaende) - Math.min(...abstaende);
+      }
+      return summe / FORMEN_STICHPROBE;
+    };
+    expect(spanne(20)).toBeGreaterThan(spanne(10));
+    expect(spanne(10)).toBeGreaterThan(spanne(1));
   });
 });
 

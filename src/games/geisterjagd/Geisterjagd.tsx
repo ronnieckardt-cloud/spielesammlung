@@ -14,7 +14,7 @@ import { istWand, schluessel } from './labyrinth';
 import { STARTLEBEN, neuesSpiel, richtungEingeben, zeitFortschritt } from './logik';
 import type { Richtung, Zustand } from './logik';
 import { GEIST_FARBEN, PILLE_FARBE, PUNKT_FARBE, WAND_FARBE } from './farben';
-import { Geist, Spieler } from './figuren';
+import { Geist, GeistTeile, KRAFTPILLE_PFAD, Spieler } from './figuren';
 
 /** Größte Kachelgröße. Auf schmalen Handys wird kleiner gerechnet, siehe
  *  unten — vorher stand hier eine feste Größe, und 21 Spalten mal 18 Pixel
@@ -70,17 +70,12 @@ const DEKO: readonly DekoTeil[] = [
   { x: 3, y: 43, winkel: -18, verzoegerung: 0.95, inhalt: <DekoGeist farbe={GEIST_FARBEN[1]!} groesse={28} /> },
 ];
 
+/** Derselbe Geist wie auf dem Spielfeld — der Startbildschirm hatte ihn
+ *  vorher noch einmal von Hand nachgezeichnet, ohne Saum und Wölbung. */
 function DekoGeist({ farbe, groesse }: { farbe: string; groesse: number }) {
   return (
     <svg viewBox="0 0 40 40" width={groesse} height={groesse} aria-hidden="true">
-      <path
-        d="M4,34 L4,17 Q4,4 20,4 Q36,4 36,17 L36,34 L30,29 L24,34 L20,29 L16,34 L10,29 Z"
-        fill={farbe}
-      />
-      <circle cx="14" cy="17" r="4.2" fill="white" />
-      <circle cx="26" cy="17" r="4.2" fill="white" />
-      <circle cx="14" cy="17" r="2" fill="#1e293b" />
-      <circle cx="26" cy="17" r="2" fill="#1e293b" />
+      <GeistTeile farbe={farbe} />
     </svg>
   );
 }
@@ -88,7 +83,7 @@ function DekoGeist({ farbe, groesse }: { farbe: string; groesse: number }) {
 function DekoStern({ groesse }: { groesse: number }) {
   return (
     <svg viewBox="0 0 24 24" width={groesse} height={groesse} fill={PILLE_FARBE} aria-hidden="true">
-      <path d="M12 2l2.5 6.9H21l-5.6 4.4 2.1 7.1L12 16.2 6.5 20.4l2.1-7.1L3 8.9h6.5z" />
+      <path d={KRAFTPILLE_PFAD} />
     </svg>
   );
 }
@@ -212,7 +207,7 @@ export function Geisterjagd({ onScore, onGameOver, settings, bestScore, istErste
               {hatPille && (
                 <div className="pulsiert absolute inset-0 grid place-items-center">
                   <svg viewBox="0 0 24 24" className="size-3.5" fill={PILLE_FARBE} aria-hidden="true">
-                    <path d="M12 2l2.5 6.9H21l-5.6 4.4 2.1 7.1L12 16.2 6.5 20.4l2.1-7.1L3 8.9h6.5z" />
+                    <path d={KRAFTPILLE_PFAD} />
                   </svg>
                 </div>
               )}
@@ -311,7 +306,7 @@ export function Geisterjagd({ onScore, onGameOver, settings, bestScore, istErste
       <Steuerkreuz onRichtung={bewege} aktiv={!z.vorbei} />
 
       <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
-        Pfeiltasten, Wischen oder das Kreuz oben bewegen. Die großen Sterne
+        Pfeiltasten, Wischen oder die Pfeilknöpfe unten bewegen. Die großen Sterne
         machen die Geister kurz ängstlich — dann kannst du sie fangen. Frisst
         du alle vier auf einmal, ist die Runde sofort gewonnen!
       </p>

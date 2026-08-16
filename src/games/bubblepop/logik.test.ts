@@ -226,8 +226,31 @@ describe('andocken', () => {
   it('rückt die Kugeln im Rohr nach', () => {
     const wabe = leereWabe();
     wabe[0]![0] = 1;
+    wabe[0]![7] = 4; // Farbe 4 liegt im Feld, darf also ins Rohr nachrücken.
     const e = andocken(stand(wabe, { aktuell: 3, naechste: 4 }), { spalte: 5, zeile: 0 });
     expect(e.zustand.aktuell).toBe(4);
+  });
+
+  it('tauscht die Kugel im Rohr, wenn ihre Farbe nicht mehr im Feld liegt', () => {
+    // Die drei Zweier platzen mit diesem Schuss weg — danach gibt es im Feld
+    // nur noch Farbe 1. Die Vorschaukugel (Farbe 2) wäre unbrauchbar.
+    const wabe = leereWabe();
+    wabe[0]![0] = 2;
+    wabe[0]![1] = 2;
+    wabe[0]![7] = 1;
+    const e = andocken(stand(wabe, { aktuell: 2, naechste: 2 }), { spalte: 2, zeile: 0 });
+    expect(vorhandeneFarben(e.zustand.wabe)).toEqual([1]);
+    expect(e.zustand.aktuell).toBe(1);
+  });
+
+  it('lässt die Kugel im Rohr in Ruhe, solange es ihre Farbe noch gibt', () => {
+    const wabe = leereWabe();
+    wabe[0]![0] = 2;
+    wabe[0]![1] = 2;
+    wabe[0]![7] = 3;
+    wabe[1]![7] = 1;
+    const e = andocken(stand(wabe, { aktuell: 2, naechste: 3 }), { spalte: 2, zeile: 0 });
+    expect(e.zustand.aktuell).toBe(3);
   });
 
   it('lässt eine Gruppe ab drei gleichen platzen und gibt Punkte', () => {

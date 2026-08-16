@@ -1,8 +1,15 @@
 import { AppSymbol } from '../../core/AppSymbol';
+import { HOLZ, HOLZ_BAND, HOLZ_RAND, ZIELRING } from './farben';
 
 /**
  * App-Symbol: eine Kiste kurz vor ihrem Zielring, ein Pfeil zeigt die
  * Schubrichtung. Aufbau siehe `core/AppSymbol.tsx`.
+ *
+ * Die Kistenfarben kommen aus `farben.ts` und stehen **nicht** mehr hier:
+ * Vorher war die Füllung `#b45309` — und genau diese Farbe ist der mittlere
+ * Stopp des Verlaufs unten. In der Kachelmitte lag der Kontrast damit bei
+ * 1,00:1, übrig blieb ein 1,6 Einheiten dünner Umriss. Auf einem 64 Pixel
+ * großen Symbol war die Kiste damit praktisch unsichtbar.
  */
 export function KistenIcon({ className }: { className?: string }) {
   return (
@@ -23,13 +30,13 @@ export function KistenIcon({ className }: { className?: string }) {
       </g>
 
       {/* Der Zielring, rechts. */}
-      <circle cx={44} cy={26} r={5} fill="none" stroke="#facc15" strokeWidth={2.4} />
+      <circle cx={44} cy={26} r={5} fill="none" stroke={ZIELRING} strokeWidth={2.4} />
 
       {/* Die Kiste, links daneben. */}
       <g transform="translate(20 18)">
-        <rect x={0} y={0} width={16} height={16} rx={2.4} fill="#b45309" stroke="#78350f" strokeWidth={1.6} />
-        <path d="M0,0 L16,16 M16,0 L0,16" stroke="#92400e" strokeWidth={1.6} />
-        <path d="M2.4,2.6 H13.6" stroke="#ffffff" strokeWidth={1.2} strokeLinecap="round" opacity={0.35} />
+        <rect x={0} y={0} width={16} height={16} rx={2.4} fill={HOLZ} stroke={HOLZ_RAND} strokeWidth={1.6} />
+        <path d="M0,0 L16,16 M16,0 L0,16" fill="none" stroke={HOLZ_BAND} strokeWidth={1.6} />
+        <path d="M2.4,2.6 H13.6" stroke="#ffffff" strokeWidth={1.2} strokeLinecap="round" opacity={0.5} />
       </g>
 
       {/* Der Schubpfeil dazwischen. */}

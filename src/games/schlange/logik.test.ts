@@ -8,6 +8,7 @@ import {
   START_LAENGE,
   TAKT_MIN_S,
   TAKT_START_S,
+  bildGeaendert,
   feldWechseln,
   freiesFeld,
   neuesSpiel,
@@ -20,6 +21,22 @@ import type { Punkt, Zustand } from './logik';
 function stand(teile: Partial<Zustand> = {}): Zustand {
   const basis = neuesSpiel(1);
   return { ...basis, futter: { x: BREITE - 1, y: HOEHE - 1 }, gold: null, ...teile };
+}
+
+/**
+ * Alle Kacheln in Schlangenlinien — Zeile für Zeile, jede zweite rückwärts.
+ * Zwei aufeinanderfolgende Einträge sind dadurch immer Nachbarn, die Liste
+ * ist also ein gültiger Schlangenkörper über das ganze Brett.
+ */
+function alleKachelnAlsWeg(): Punkt[] {
+  const weg: Punkt[] = [];
+  for (let y = 0; y < HOEHE; y++) {
+    for (let i = 0; i < BREITE; i++) {
+      const x = y % 2 === 0 ? i : BREITE - 1 - i;
+      weg.push({ x, y });
+    }
+  }
+  return weg;
 }
 
 describe('neuesSpiel', () => {
@@ -173,6 +190,59 @@ describe('feldWechseln', () => {
   });
 });
 
+describe('volles Brett', () => {
+  it('ist gewonnen, wenn die Schlange die letzte Kachel füllt', () => {
+    const weg = alleKachelnAlsWeg();
+    const frei = weg[weg.length - 1]!;
+    // Kopf zuerst: der Körper läuft rückwärts durch alle Kacheln bis auf
+    // die eine, auf der das letzte Futter liegt.
+    const schlange = weg.slice(0, -1).reverse();
+    const z = stand({ schlange, richtung: 'rechts', futter: frei, gold: null });
+    expect(schlange[0]).toEqual({ x: frei.x - 1, y: frei.y });
+
+    const nach = feldWechseln(z);
+    expect(nach.schlange).toHaveLength(BREITE * HOEHE);
+    expect(nach.vorbei).toBe(true);
+    expect(nach.gewonnen).toBe(true);
+    expect(nach.punkte).toBe(PUNKTE_JE_FUTTER);
+  });
+
+  it('gibt danach keine Punkte mehr — vorher lag das Futter unter dem Kopf', () => {
+    const weg = alleKachelnAlsWeg();
+    const z = stand({
+      schlange: weg.slice(0, -1).reverse(),
+      richtung: 'rechts',
+      futter: weg[weg.length - 1]!,
+      gold: null,
+      taktS: 0.1,
+    });
+    const gewonnen = feldWechseln(z);
+    // Zehn volle Sekunden weiterlaufen lassen: Der Punktestand darf sich
+    // nicht mehr rühren, sonst sammelt man dieselbe Kachel endlos ein.
+    expect(zeitFortschritt(gewonnen, 10)).toBe(gewonnen);
+  });
+
+  it('lässt das Goldstück dem letzten Apfel den Platz', () => {
+    const weg = alleKachelnAlsWeg();
+    const goldFeld = weg[weg.length - 1]!;
+    const futterFeld = weg[weg.length - 2]!;
+    const z = stand({
+      schlange: weg.slice(0, -2).reverse(),
+      richtung: 'rechts',
+      futter: futterFeld,
+      gold: goldFeld,
+      goldRest: 20,
+    });
+
+    const nach = feldWechseln(z);
+    expect(nach.gewonnen).toBe(false);
+    expect(nach.futter).toEqual(goldFeld);
+    expect(nach.gold).toBeNull();
+    // Das Futter darf auf keinen Fall unter der Schlange liegen.
+    expect(nach.schlange.some((p) => p.x === nach.futter.x && p.y === nach.futter.y)).toBe(false);
+  });
+});
+
 describe('Goldstücke', () => {
   it('erscheinen nach genügend Futter', () => {
     let z = stand({
@@ -249,5 +319,39 @@ describe('zeitFortschritt', () => {
   it('ändert nichts mehr, wenn die Runde vorbei ist', () => {
     const z = stand({ vorbei: true });
     expect(zeitFortschritt(z, 1)).toBe(z);
+  });
+});
+
+describe('bildGeaendert', () => {
+  it('meldet nichts, solange nur Zeit angesammelt wird', () => {
+    // Genau der Fall, der das Spiel 60-mal je Sekunde neu zeichnen ließ:
+    // Es hat sich nur `angesammelt` bewegt, und daran hängt kein Pixel.
+    const z = stand({ taktS: 0.2 });
+    const kurz = zeitFortschritt(z, 0.05);
+    expect(kurz).not.toBe(z);
+    expect(bildGeaendert(z, kurz)).toBe(false);
+  });
+
+  it('meldet einen Feldwechsel', () => {
+    const z = stand({ taktS: 0.1 });
+    expect(bildGeaendert(z, zeitFortschritt(z, 0.2))).toBe(true);
+  });
+
+  it('meldet auch den Zusammenstoß, bei dem die Kette stehen bleibt', () => {
+    const z = stand({
+      schlange: [
+        { x: 5, y: 5 },
+        { x: 5, y: 6 },
+        { x: 6, y: 6 },
+        { x: 6, y: 5 },
+        { x: 7, y: 5 },
+      ],
+      richtung: 'rechts',
+      taktS: 0.1,
+    });
+    const nach = zeitFortschritt(z, 0.2);
+    expect(nach.vorbei).toBe(true);
+    expect(nach.schlange).toBe(z.schlange);
+    expect(bildGeaendert(z, nach)).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ANHEBEN_BIS,
   AUFRICHTEN_BIS,
+  FLUG_UEBERSTAND,
   GIESSEN_BIS,
   HINFLIEGEN_BIS,
   KIPPEN_BIS,
@@ -11,6 +12,7 @@ import {
   ausgusskante,
   drehpunkt,
   fliegendePosition,
+  flugLuft,
   giessFortschritt,
   rasterBreite,
   rasterHoehe,
@@ -35,6 +37,107 @@ describe('spaltenFuerAnzahl / zeilenFuerAnzahl', () => {
   });
 });
 
+describe('spaltenFuerAnzahl mit Bühnen-Seitenverhältnis', () => {
+  const VERHAELTNISSE = [0.4, 0.55, 0.6, 0.8, 1, 1.4, 2, 3];
+
+  /** Größe eines Röhrchens, wenn die Bühne auf die Höhe 1 normiert ist. */
+  const massstab = (breite: number, hoehe: number, verhaeltnis: number) =>
+    Math.min(verhaeltnis / breite, 1 / hoehe);
+
+  /** Maße, die die Anzeige aus der Aufteilung wirklich zieht. */
+  const brett = (anzahl: number, verhaeltnis?: number) => {
+    const breite = rasterBreite(anzahl, verhaeltnis);
+    const luft = flugLuft(anzahl, verhaeltnis);
+    return { breite, hoehe: rasterHoehe(anzahl, verhaeltnis) + luft, luft };
+  };
+
+  it('bricht im Hochformat schon bei fünf Röhrchen um', () => {
+    // Gemessene Bühne auf einem 393 × 852 großen iPhone: rund 369 zu 600.
+    const hochformat = 369 / 600;
+    expect(spaltenFuerAnzahl(5, hochformat)).toBe(3);
+    expect(zeilenFuerAnzahl(5, hochformat)).toBe(2);
+
+    // Und die Röhrchen werden dadurch wirklich größer, nicht nur anders
+    // angeordnet — inklusive der Luft, die der Umbruch oben kostet.
+    const neu = brett(5, hochformat);
+    const alt = { breite: rasterBreite(5), hoehe: rasterHoehe(5) };
+    expect(massstab(neu.breite, neu.hoehe, hochformat)).toBeGreaterThan(
+      massstab(alt.breite, alt.hoehe, hochformat),
+    );
+  });
+
+  it('lässt im Querformat alles in einer Reihe stehen', () => {
+    expect(spaltenFuerAnzahl(5, 2)).toBe(5);
+    expect(zeilenFuerAnzahl(5, 2)).toBe(1);
+  });
+
+  it('macht die Röhrchen nie kleiner als die feste Regel', () => {
+    for (const verhaeltnis of VERHAELTNISSE) {
+      for (let anzahl = 3; anzahl <= 8; anzahl++) {
+        const gewaehlt = spaltenFuerAnzahl(anzahl, verhaeltnis);
+        expect(gewaehlt).toBeGreaterThanOrEqual(1);
+        expect(gewaehlt).toBeLessThanOrEqual(Math.min(anzahl, 6));
+
+        const neu = brett(anzahl, verhaeltnis);
+        const alt = { breite: rasterBreite(anzahl), hoehe: rasterHoehe(anzahl) };
+        expect(massstab(neu.breite, neu.hoehe, verhaeltnis)).toBeGreaterThanOrEqual(
+          massstab(alt.breite, alt.hoehe, verhaeltnis) - 1e-9,
+        );
+      }
+    }
+  });
+
+  it('hält den Flug im Bild, wo umgebrochen wird', () => {
+    for (const verhaeltnis of VERHAELTNISSE) {
+      for (let anzahl = 3; anzahl <= 8; anzahl++) {
+        // Wo die feste Regel bleibt, bleibt auch ihr Verhalten — der Flug
+        // ragt dort wie bisher über das Brett hinaus.
+        if (spaltenFuerAnzahl(anzahl, verhaeltnis) === spaltenFuerAnzahl(anzahl)) continue;
+
+        const { breite, hoehe, luft } = brett(anzahl, verhaeltnis);
+        const m = massstab(breite, hoehe, verhaeltnis);
+        // Die Bühne stellt das Brett mittig: über dem Brett bleibt die halbe
+        // Differenz zur Bühnenhöhe frei, umgerechnet in Rastereinheiten.
+        const ueberDemBrett = (1 - hoehe * m) / (2 * m);
+        expect(luft + ueberDemBrett).toBeGreaterThanOrEqual(FLUG_UEBERSTAND - 1e-6);
+      }
+    }
+  });
+
+  it('bleibt ohne Verhältnis bei der alten Regel', () => {
+    expect(spaltenFuerAnzahl(5, undefined)).toBe(5);
+    expect(spaltenFuerAnzahl(5, 0)).toBe(5);
+    expect(flugLuft(5, undefined)).toBe(0);
+  });
+});
+
+describe('FLUG_UEBERSTAND', () => {
+  it('deckt den höchsten Punkt des fliegenden Röhrchens ab', () => {
+    // Unabhängig nachgerechnet: alle vier Ecken über den ganzen Flug selbst
+    // drehen und schauen, wie weit sie über die Reihe hinausragen.
+    const reihe = { x: 0, y: 0 };
+    let hoechster = 0;
+    for (let i = 0; i <= 200; i++) {
+      const { position, winkelGrad } = fliegendePosition(i / 200, reihe, reihe);
+      const dp = drehpunkt(position);
+      const w = (winkelGrad * Math.PI) / 180;
+      for (const ecke of [
+        { x: position.x, y: position.y },
+        { x: position.x + ROEHRCHEN_BREITE, y: position.y },
+        { x: position.x, y: position.y + ROEHRCHEN_HOEHE },
+        { x: position.x + ROEHRCHEN_BREITE, y: position.y + ROEHRCHEN_HOEHE },
+      ]) {
+        const dx = ecke.x - dp.x;
+        const dy = ecke.y - dp.y;
+        hoechster = Math.min(hoechster, dp.y + dx * Math.sin(w) + dy * Math.cos(w));
+      }
+    }
+    expect(FLUG_UEBERSTAND).toBeGreaterThanOrEqual(-hoechster);
+    // Und nicht großzügig danebengegriffen — höchstens ein paar Einheiten mehr.
+    expect(FLUG_UEBERSTAND).toBeLessThanOrEqual(-hoechster + 5);
+  });
+});
+
 describe('roehrchenPosition', () => {
   it('reiht in einer einzigen Zeile nebeneinander, wenn alles hineinpasst', () => {
     expect(roehrchenPosition(0, 5)).toEqual({ x: 0, y: 0 });
@@ -48,6 +151,22 @@ describe('roehrchenPosition', () => {
     expect(roehrchenPosition(4, 8)).toEqual({ x: 0, y: ROEHRCHEN_HOEHE + ROEHRCHEN_ABSTAND });
     expect(roehrchenPosition(7, 8)).toEqual({
       x: 3 * (ROEHRCHEN_BREITE + ROEHRCHEN_ABSTAND),
+      y: ROEHRCHEN_HOEHE + ROEHRCHEN_ABSTAND,
+    });
+  });
+
+  it('rückt eine nicht volle letzte Reihe mittig ein', () => {
+    // 5 Röhrchen im Hochformat -> 3 Spalten, zweite Reihe hat nur zwei:
+    // sie steht um einen halben Platz eingerückt statt links bündig.
+    const hochformat = 369 / 600;
+    const platz = ROEHRCHEN_BREITE + ROEHRCHEN_ABSTAND;
+    expect(roehrchenPosition(0, 5, hochformat)).toEqual({ x: 0, y: 0 });
+    expect(roehrchenPosition(3, 5, hochformat)).toEqual({
+      x: platz / 2,
+      y: ROEHRCHEN_HOEHE + ROEHRCHEN_ABSTAND,
+    });
+    expect(roehrchenPosition(4, 5, hochformat)).toEqual({
+      x: platz / 2 + platz,
       y: ROEHRCHEN_HOEHE + ROEHRCHEN_ABSTAND,
     });
   });

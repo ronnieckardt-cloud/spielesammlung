@@ -33,35 +33,152 @@ export function schichthoehe(kapazitaet: number): number {
 
 export type Punkt = { x: number; y: number };
 
-/** Ab wann wird umgebrochen — bis MAX_SPALTEN eine Reihe, sonst zwei gleich lange. */
-export function spaltenFuerAnzahl(anzahlRoehrchen: number): number {
+function breiteFuerSpalten(spalten: number): number {
+  return spalten * ROEHRCHEN_BREITE + (spalten - 1) * ROEHRCHEN_ABSTAND;
+}
+
+function hoeheFuerZeilen(zeilen: number): number {
+  return zeilen * ROEHRCHEN_HOEHE + (zeilen - 1) * ROEHRCHEN_ABSTAND;
+}
+
+/** Die alte, feste Regel: bis MAX_SPALTEN eine Reihe, sonst zwei gleich lange. */
+function festeSpalten(anzahlRoehrchen: number): number {
   if (anzahlRoehrchen <= MAX_SPALTEN) return anzahlRoehrchen;
   return Math.ceil(anzahlRoehrchen / 2);
 }
 
-export function zeilenFuerAnzahl(anzahlRoehrchen: number): number {
-  return Math.ceil(anzahlRoehrchen / spaltenFuerAnzahl(anzahlRoehrchen));
+/**
+ * Wie groß ein Röhrchen wird, wenn die Bühne auf die Höhe 1 normiert ist
+ * (ihre Breite ist dann genau das Verhältnis). Dieselbe Rechnung wie
+ * `min(100cqw, 100cqh * --vz)` im CSS, nur ohne Browser.
+ */
+function massstab(breite: number, hoehe: number, buehnenVerhaeltnis: number): number {
+  return Math.min(buehnenVerhaeltnis / breite, 1 / hoehe);
+}
+
+/**
+ * Die Aufteilung des Bretts: Spaltenzahl und die oben freigehaltene Luft
+ * für den Flug.
+ *
+ * Ohne `buehnenVerhaeltnis` (Breite geteilt durch Höhe des verfügbaren
+ * Platzes) bleibt es bei der festen Regel und ohne Luft — so sah es bisher
+ * überall aus.
+ *
+ * Mit dem Verhältnis gewinnt die Aufteilung, bei der die Röhrchen am
+ * größten werden. Das ist kein Schönheitsgriff: Ein Röhrchen ist gut
+ * dreimal so hoch wie breit. Fünf davon nebeneinander ergeben ein sehr
+ * breites, flaches Raster (408 zu 200) — im Hochformat eines Handys passt
+ * das nur in die Breite, zwei Drittel der Bühne bleiben leerer Hintergrund
+ * und die Röhrchen bleiben klein. Zwei kurze Reihen füllen denselben Platz
+ * mit deutlich größeren Röhrchen.
+ *
+ * **Die bisherige Aufteilung ist dabei die Messlatte, nicht bloß ein
+ * Kandidat:** Gewechselt wird nur, wenn die Röhrchen dadurch wirklich
+ * größer werden. Sonst bliebe im Querformat, wo eine Reihe schon die volle
+ * Höhe braucht, nur der Nachteil der reservierten Luft übrig.
+ */
+function aufteilung(
+  anzahlRoehrchen: number,
+  buehnenVerhaeltnis?: number,
+): { spalten: number; luft: number } {
+  const fest = festeSpalten(anzahlRoehrchen);
+  if (buehnenVerhaeltnis === undefined || !(buehnenVerhaeltnis > 0)) {
+    return { spalten: fest, luft: 0 };
+  }
+
+  // So groß wurden die Röhrchen bisher — ohne reservierte Luft, der Flug
+  // ragte dafür oben aus dem Brett heraus.
+  let beste = { spalten: fest, luft: 0 };
+  let besterMassstab = massstab(
+    breiteFuerSpalten(fest),
+    hoeheFuerZeilen(Math.ceil(anzahlRoehrchen / fest)),
+    buehnenVerhaeltnis,
+  );
+
+  const hoechstens = Math.min(Math.max(1, anzahlRoehrchen), MAX_SPALTEN);
+  for (let spalten = 1; spalten <= hoechstens; spalten++) {
+    const breite = breiteFuerSpalten(spalten);
+    const hoeheOhneLuft = hoeheFuerZeilen(Math.ceil(anzahlRoehrchen / spalten));
+    const luft = luftFuerFlug(breite, hoeheOhneLuft, buehnenVerhaeltnis);
+    const wert = massstab(breite, hoeheOhneLuft + luft, buehnenVerhaeltnis);
+    // Streng größer, aufsteigend durchgezählt: Bei gleichem Maßstab gewinnt
+    // die Aufteilung mit weniger Spalten, also die gleichmäßigere — fünf
+    // Röhrchen werden dann 3 + 2 und nicht 4 + 1.
+    if (wert > besterMassstab) {
+      besterMassstab = wert;
+      beste = { spalten, luft };
+    }
+  }
+  return beste;
+}
+
+export function spaltenFuerAnzahl(anzahlRoehrchen: number, buehnenVerhaeltnis?: number): number {
+  return aufteilung(anzahlRoehrchen, buehnenVerhaeltnis).spalten;
+}
+
+export function zeilenFuerAnzahl(anzahlRoehrchen: number, buehnenVerhaeltnis?: number): number {
+  return Math.ceil(anzahlRoehrchen / spaltenFuerAnzahl(anzahlRoehrchen, buehnenVerhaeltnis));
 }
 
 /** Obere linke Ecke der Standposition eines Röhrchens im Raster. */
-export function roehrchenPosition(index: number, anzahlRoehrchen: number): Punkt {
-  const spalten = spaltenFuerAnzahl(anzahlRoehrchen);
+export function roehrchenPosition(
+  index: number,
+  anzahlRoehrchen: number,
+  buehnenVerhaeltnis?: number,
+): Punkt {
+  const spalten = spaltenFuerAnzahl(anzahlRoehrchen, buehnenVerhaeltnis);
   const spalte = index % spalten;
   const zeile = Math.floor(index / spalten);
+  // Die letzte Reihe ist selten voll. Links ausgerichtet hinge sie sichtbar
+  // schief unter der Reihe darüber, deshalb wird sie um die fehlenden
+  // Plätze eingerückt.
+  const inDieserZeile = Math.min(spalten, anzahlRoehrchen - zeile * spalten);
+  const einrueckung = ((spalten - inDieserZeile) * (ROEHRCHEN_BREITE + ROEHRCHEN_ABSTAND)) / 2;
   return {
-    x: spalte * (ROEHRCHEN_BREITE + ROEHRCHEN_ABSTAND),
+    x: einrueckung + spalte * (ROEHRCHEN_BREITE + ROEHRCHEN_ABSTAND),
     y: zeile * (ROEHRCHEN_HOEHE + ROEHRCHEN_ABSTAND),
   };
 }
 
-export function rasterBreite(anzahlRoehrchen: number): number {
-  const spalten = spaltenFuerAnzahl(anzahlRoehrchen);
-  return spalten * ROEHRCHEN_BREITE + (spalten - 1) * ROEHRCHEN_ABSTAND;
+/**
+ * Wie viel Luft über der obersten Reihe im Brett reserviert wird, damit das
+ * fliegende Röhrchen nicht darüber hinausragt.
+ *
+ * Die Bühne stellt das Brett mittig, oberhalb bleibt also von selbst Platz,
+ * solange das Brett nicht die volle Bühnenhöhe braucht. Reserviert wird nur
+ * das, was dieser Platz nicht schon hergibt — sonst würde ein Brett, das
+ * ohnehin Luft hat, ohne Not kleiner.
+ *
+ * Rechnung (Bühne auf die Höhe 1 normiert, Breite ist dann das Verhältnis):
+ * Solange die Breite die Grenze ist, steht dem Brett in seinen eigenen
+ * Einheiten die Höhe `breite / verhaeltnis` zur Verfügung. Was davon über
+ * das Raster hinausgeht, ist `frei` — und weil mittig gestellt wird, liegt
+ * die Hälfte davon oben.
+ */
+function luftFuerFlug(breite: number, hoehe: number, buehnenVerhaeltnis?: number): number {
+  if (buehnenVerhaeltnis === undefined || !(buehnenVerhaeltnis > 0)) return 0;
+  const frei = Math.max(0, breite / buehnenVerhaeltnis - hoehe);
+  if (frei >= 2 * FLUG_UEBERSTAND) return 0;
+  // Jede reservierte Einheit schiebt das Raster nur um eine halbe Einheit
+  // nach unten, solange die Breite die Grenze ist — deshalb der Faktor 2.
+  if (frei >= FLUG_UEBERSTAND) return 2 * FLUG_UEBERSTAND - frei;
+  return FLUG_UEBERSTAND;
 }
 
-export function rasterHoehe(anzahlRoehrchen: number): number {
-  const zeilen = zeilenFuerAnzahl(anzahlRoehrchen);
-  return zeilen * ROEHRCHEN_HOEHE + (zeilen - 1) * ROEHRCHEN_ABSTAND;
+/**
+ * Der Streifen, den das Brett über der obersten Reihe freihält — die
+ * Anzeige zieht damit den oberen Rand ihrer viewBox nach oben.
+ */
+export function flugLuft(anzahlRoehrchen: number, buehnenVerhaeltnis?: number): number {
+  return aufteilung(anzahlRoehrchen, buehnenVerhaeltnis).luft;
+}
+
+export function rasterBreite(anzahlRoehrchen: number, buehnenVerhaeltnis?: number): number {
+  return breiteFuerSpalten(spaltenFuerAnzahl(anzahlRoehrchen, buehnenVerhaeltnis));
+}
+
+export function rasterHoehe(anzahlRoehrchen: number, buehnenVerhaeltnis?: number): number {
+  return hoeheFuerZeilen(zeilenFuerAnzahl(anzahlRoehrchen, buehnenVerhaeltnis));
 }
 
 function drehen(punkt: Punkt, drehpunkt: Punkt, winkelGrad: number): Punkt {
@@ -185,3 +302,36 @@ export function giessFortschritt(t: number): number {
   if (t >= GIESSEN_BIS) return 1;
   return (t - KIPPEN_BIS) / (GIESSEN_BIS - KIPPEN_BIS);
 }
+
+/**
+ * Wie weit das fliegende Röhrchen über die Reihe hinausragt, aus der es
+ * kommt — in Rastereinheiten.
+ *
+ * Ausgerechnet statt geschätzt, aus derselben Bewegung und derselben
+ * Drehung, die die Anzeige zeichnet: Der Ausschlag kommt nicht vom Anheben
+ * allein, sondern vom Kippen. Bei 128 Grad steht das Röhrchen fast auf dem
+ * Kopf und sein Boden ragt weit über den Drehpunkt hinaus.
+ *
+ * Gebraucht wird der Wert, weil das Brett diesen Streifen oben freihalten
+ * muss. Ohne ihn liegt der Flug außerhalb des Bretts und wird über Leiste
+ * und Kopfzeile gezeichnet — was nicht auffiel, solange das Brett die Bühne
+ * gar nicht ausfüllte.
+ */
+export const FLUG_UEBERSTAND = (() => {
+  const reihe = { x: 0, y: 0 };
+  let hoechster = 0; // kleinstes y, also der höchste Punkt
+  for (let i = 0; i <= 100; i++) {
+    const { position, winkelGrad } = fliegendePosition(i / 100, reihe, reihe);
+    const dp = drehpunkt(position);
+    for (const ecke of [
+      { x: position.x, y: position.y },
+      { x: position.x + ROEHRCHEN_BREITE, y: position.y },
+      { x: position.x, y: position.y + ROEHRCHEN_HOEHE },
+      { x: position.x + ROEHRCHEN_BREITE, y: position.y + ROEHRCHEN_HOEHE },
+    ]) {
+      hoechster = Math.min(hoechster, drehen(ecke, dp, winkelGrad).y);
+    }
+  }
+  // Zwei Einheiten Zugabe für die Glaskante, die auf der Umrisslinie liegt.
+  return Math.ceil(-hoechster) + 2;
+})();

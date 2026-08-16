@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { massFuerLevel } from './erzeuger';
+import type { Raetsel } from './erzeuger';
 import {
   fertig,
   istGeloest,
@@ -7,6 +9,7 @@ import {
   punktFarbe,
   wegFarbe,
   ziehenBeenden,
+  ziehenBis,
   ziehenNach,
   ziehenStarten,
 } from './logik';
@@ -25,6 +28,16 @@ function allesLoesen(z: Zustand): Zustand {
   let neu = z;
   for (let f = 0; f < z.raetsel.paare.length; f++) neu = loesungZiehen(neu, f);
   return neu;
+}
+
+/**
+ * Ein 3×3-Brett von Hand — nur so lässt sich genau nachrechnen, welche
+ * Felder ein Fingersprung nachziehen muss. Ein erzeugtes Rätsel wäre dafür
+ * zu beliebig.
+ */
+function brettVonHand(paare: Raetsel['paare']): Zustand {
+  const raetsel: Raetsel = { breite: 3, hoehe: 3, paare, loesung: paare.map(() => []) };
+  return { level: 1, raetsel, wege: paare.map(() => []), zieht: null, zuege: 0, geloest: false };
 }
 
 describe('neuesLevel', () => {
@@ -145,6 +158,49 @@ describe('Ziehen', () => {
   });
 });
 
+describe('ziehenBis — der Finger springt', () => {
+  it('holt die übersprungenen Felder nach', () => {
+    // 3×3, Punkte in den gegenüberliegenden Ecken. Der Finger springt in
+    // einem Rutsch von der einen in die andere — erst waagerecht, dann
+    // senkrecht müssen vier Felder dazwischen entstehen.
+    const z = ziehenStarten(brettVonHand([{ farbe: 0, a: 0, b: 8 }]), 0);
+    const neu = ziehenBis(z, 8);
+    expect(neu.wege[0]).toEqual([0, 1, 2, 5, 8]);
+    expect(fertig(neu, 0)).toBe(true);
+  });
+
+  it('weicht über die andere Achse aus, wenn ein fremder Punkt im Weg liegt', () => {
+    // Feld 1 gehört jetzt einem anderen Paar — der Schritt zur Seite ist
+    // damit gesperrt, und der Weg muss stattdessen nach unten ausweichen.
+    const z = ziehenStarten(
+      brettVonHand([
+        { farbe: 0, a: 0, b: 8 },
+        { farbe: 1, a: 1, b: 7 },
+      ]),
+      0,
+    );
+    expect(ziehenBis(z, 8).wege[0]).toEqual([0, 3, 4, 5, 8]);
+  });
+
+  it('rührt nichts an, solange gar nicht gezogen wird', () => {
+    const z = brettVonHand([{ farbe: 0, a: 0, b: 8 }]);
+    expect(ziehenBis(z, 8)).toBe(z);
+  });
+
+  it('bleibt stehen, wenn beide Wege versperrt sind', () => {
+    // Beide Nachbarfelder der Ecke sind fremde Punkte — weiter geht es nicht,
+    // aber das Spiel darf deswegen nicht anfangen zu zappeln.
+    const z = ziehenStarten(
+      brettVonHand([
+        { farbe: 0, a: 0, b: 8 },
+        { farbe: 1, a: 1, b: 3 },
+      ]),
+      0,
+    );
+    expect(ziehenBis(z, 8).wege[0]).toEqual([0]);
+  });
+});
+
 describe('Lösung', () => {
   it('erkennt ein vollständig gelöstes Rätsel', () => {
     for (let level = 1; level <= 25; level++) {
@@ -197,5 +253,17 @@ describe('punkteFuerZuege', () => {
 
   it('fällt nie unter den Mindestwert', () => {
     expect(punkteFuerZuege(1, 3, 500)).toBe(50);
+  });
+
+  it('wächst nur so lange, wie das Brett schwerer wird', () => {
+    const beiLevel = (l: number) => {
+      const { farben } = massFuerLevel(l);
+      return punkteFuerZuege(l, farben, farben);
+    };
+    expect(beiLevel(7)).toBeGreaterThan(beiLevel(1));
+    // Ab Level 7 sind Feldgröße und Farbzahl gedeckelt. Gäbe es trotzdem
+    // weiter mehr Punkte, wäre die Bestenliste nur noch eine Ausdauerliste.
+    expect(beiLevel(30)).toBe(beiLevel(7));
+    expect(beiLevel(99)).toBe(beiLevel(7));
   });
 });

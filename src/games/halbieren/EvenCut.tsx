@@ -6,7 +6,19 @@ import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
 import { schwerpunkt } from './geometrie';
 import type { Form, Punkt } from './geometrie';
-import { FORMEN_PRO_LEVEL, bewertung, naechsteForm, neuesLevel, schneidenAn } from './logik';
+import {
+  FORMEN_PRO_LEVEL,
+  TASTE_GRAD,
+  TASTE_GRAD_FEIN,
+  TASTE_SCHUB,
+  TASTE_SCHUB_FEIN,
+  bewertung,
+  geradeAus,
+  istZuKurz,
+  naechsteForm,
+  neuesLevel,
+  schneidenAn,
+} from './logik';
 import type { Zustand } from './logik';
 import { HalbierenIcon } from './Icon';
 
@@ -29,6 +41,9 @@ const AUSEINANDER = 9;
 
 /** Wie lange das Ergebnis stehen bleibt, bevor die nächste Form kommt. */
 const SCHAU_MS = 1250;
+
+/** So lange steht ein Hinweis wie „zu kurz", danach kommt die Grundanleitung zurück. */
+const HINWEIS_MS = 2600;
 
 /**
  * Welches Level als Nächstes drankommt — als Modul-Variable, nicht als
@@ -100,6 +115,15 @@ export function EvenCut({
   const [zug, setZug] = useState<{ von: Punkt; bis: Punkt } | null>(null);
   /** Eine Bildfolge später auf true — erst dann rutschen die Stücke weg. */
   const [getrennt, setGetrennt] = useState(false);
+  /**
+   * Die Schnittgerade der Tastatur: Drehung in Grad, Verschiebung aus der
+   * Mitte. `null` heißt „gerade kein Tastaturweg im Bild" — sie taucht erst
+   * auf, wenn wirklich eine Taste gedrückt wurde, und verschwindet wieder,
+   * sobald jemand den Finger benutzt.
+   */
+  const [tastenlinie, setTastenlinie] = useState<{ winkel: number; schub: number } | null>(null);
+  /** Kurze Zusatzmeldung unter dem Brett, etwa nach einem zu kurzen Wisch. */
+  const [hinweis, setHinweis] = useState<string | null>(null);
   const brettRef = useRef<SVGSVGElement>(null);
   const gemeldet = useRef(false);
 
@@ -113,11 +137,25 @@ export function EvenCut({
     };
   }, []);
 
+  /** Schneidet an einer fertigen Geraden — von der Wischgeste wie von der Tastatur. */
+  const schneiden = useCallback((a: Punkt, b: Punkt) => {
+    setZ((alt) => {
+      const neu = schneidenAn(alt, a, b);
+      if (neu === alt) return alt;
+      sfx(neu.schnitt!.punkte > 0 ? 'stufe' : 'schlecht');
+      return neu;
+    });
+  }, []);
+
   const beiZiehStart = (e: ReactPointerEvent<SVGSVGElement>) => {
     if (z.schnitt || z.vorbei) return;
     const p = alsFeld(e);
     if (!p) return;
     e.currentTarget.setPointerCapture(e.pointerId);
+    // Finger schlägt Tastatur: Zwei Schnittlinien gleichzeitig im Bild wären
+    // nicht zu unterscheiden.
+    setTastenlinie(null);
+    setHinweis(null);
     setZug({ von: p, bis: p });
   };
 
@@ -131,13 +169,90 @@ export function EvenCut({
     if (!zug) return;
     const { von, bis } = zug;
     setZug(null);
-    setZ((alt) => {
-      const neu = schneidenAn(alt, von, bis);
-      if (neu === alt) return alt;
-      sfx(neu.schnitt!.punkte > 0 ? 'stufe' : 'schlecht');
-      return neu;
-    });
+    // Zu kurz war früher ein stummes Nichts: kein Ton, kein Text, nicht
+    // einmal eine Linie. Wer daneben tippt, soll erfahren, warum.
+    if (istZuKurz(von, bis)) {
+      sfx('klick');
+      setHinweis('Zu kurz — zieh in einem Zug quer über die Form.');
+      return;
+    }
+    schneiden(von, bis);
   };
+
+  /**
+   * Tastaturweg: Pfeile legen eine Schnittgerade an, Leertaste schneidet.
+   *
+   * Eigener Listener am Fenster statt `useInput` — genau wie bei Ring Rise
+   * und Blade Toss: `useInput` kennt nur sieben grobe Aktionen und meldet
+   * ein Antippen erst beim Loslassen, hier braucht es aber Tastenwieder-
+   * holung beim Halten und einen feinen Schritt mit Umschalt.
+   */
+  useEffect(() => {
+    if (!gestartet || z.schnitt || z.vorbei) return;
+    const beiTaste = (e: KeyboardEvent) => {
+      // Die Hülle hat eigene Knöpfe (Zurück, Level) — dort gehören die
+      // Tasten dem Knopf, nicht dem Spielfeld.
+      if (e.target instanceof Element && e.target.closest('button, a[href], input, select')) return;
+      const grad = e.shiftKey ? TASTE_GRAD_FEIN : TASTE_GRAD;
+      const schub = e.shiftKey ? TASTE_SCHUB_FEIN : TASTE_SCHUB;
+      const start = { winkel: 0, schub: 0 };
+      switch (e.key) {
+        case 'ArrowLeft':
+        case 'ArrowRight': {
+          e.preventDefault();
+          const richtung = e.key === 'ArrowLeft' ? -1 : 1;
+          setHinweis(null);
+          setTastenlinie((alt) =>
+            // Die Drehung läuft im Kreis: Nach 180 Grad liegt dieselbe
+            // Gerade wieder da, ein Anschlag wäre nur lästig.
+            alt ? { ...alt, winkel: (alt.winkel + richtung * grad + 180) % 180 } : start,
+          );
+          break;
+        }
+        case 'ArrowUp':
+        case 'ArrowDown': {
+          e.preventDefault();
+          const richtung = e.key === 'ArrowUp' ? -1 : 1;
+          setHinweis(null);
+          setTastenlinie((alt) =>
+            alt
+              ? // Am Feldrand ist Schluss — weiter draußen trifft die Gerade
+                // die Form ohnehin nicht mehr.
+                { ...alt, schub: Math.max(-FELD, Math.min(FELD, alt.schub + richtung * schub)) }
+              : start,
+          );
+          break;
+        }
+        case ' ':
+        case 'Enter': {
+          e.preventDefault();
+          if (e.repeat) return;
+          if (!tastenlinie) {
+            // Erst zeigen, dann schneiden: Blind auslösen, ohne die Gerade
+            // je gesehen zu haben, wäre nur geraten.
+            setTastenlinie(start);
+            setHinweis('Mit den Pfeiltasten drehen und schieben, dann Leertaste.');
+            return;
+          }
+          const { a, b } = geradeAus(tastenlinie.winkel, tastenlinie.schub);
+          schneiden(a, b);
+          break;
+        }
+        default:
+          break;
+      }
+    };
+    window.addEventListener('keydown', beiTaste);
+    return () => window.removeEventListener('keydown', beiTaste);
+  }, [gestartet, z.schnitt, z.vorbei, tastenlinie, schneiden]);
+
+  // Ein Hinweis verschwindet von selbst wieder, sonst steht „zu kurz" noch
+  // da, wenn längst geschnitten wurde.
+  useEffect(() => {
+    if (!hinweis) return;
+    const uhr = window.setTimeout(() => setHinweis(null), HINWEIS_MS);
+    return () => window.clearTimeout(uhr);
+  }, [hinweis]);
 
   // Erst im nächsten Bild trennen, damit der Übergang wirklich läuft —
   // setzt man beides im selben Bild, springt es ohne Bewegung.
@@ -146,6 +261,10 @@ export function EvenCut({
       setGetrennt(false);
       return;
     }
+    // Die Tastaturgerade hat ihren Zweck erfüllt — über den auseinander-
+    // rutschenden Stücken wäre sie nur noch ein Strich im Bild.
+    setTastenlinie(null);
+    setHinweis(null);
     const bild = requestAnimationFrame(() => setGetrennt(true));
     const uhr = window.setTimeout(() => setZ((alt) => naechsteForm(alt)), SCHAU_MS);
     return () => {
@@ -187,6 +306,7 @@ export function EvenCut({
   // Bei „weniger Bewegung" rutschen die Stücke sofort auseinander, statt zu
   // gleiten — das Ergebnis ist dasselbe, nur ohne Weg dorthin.
   const versatz = getrennt || settings.reducedMotion ? AUSEINANDER : 0;
+  const tastenGerade = tastenlinie ? geradeAus(tastenlinie.winkel, tastenlinie.schub) : null;
 
   return (
     <div className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 px-3 pt-2">
@@ -207,11 +327,14 @@ export function EvenCut({
           onPointerMove={beiZiehen}
           onPointerUp={beiZiehEnde}
           onPointerCancel={() => setZug(null)}
+          // Anfassbar mit der Tastatur: Ohne `tabIndex` war das Brett nicht
+          // einmal erreichbar, und die Ansage darin nirgends zu hören.
+          tabIndex={0}
           role="img"
           aria-label={
             schnitt
               ? `${bewertung(schnitt.genau)} — ${schnitt.punkte} Punkte.`
-              : `Form ${z.index + 1}. Wische quer darüber, um sie zu halbieren.`
+              : `Form ${z.index + 1} von ${FORMEN_PRO_LEVEL}. Wische quer darüber, um sie zu halbieren. Mit der Tastatur: Pfeiltasten drehen und verschieben die Schnittlinie, Umschalt dazu für feine Schritte, Leertaste schneidet.`
           }
         >
           <defs>
@@ -264,13 +387,25 @@ export function EvenCut({
           {zug && (
             <ZiehLinie von={zug.von} bis={zug.bis} />
           )}
+
+          {/* Dieselbe Gerade, nur mit den Pfeiltasten gelegt. Kein Punkt am
+              Ende: Bei der Tastatur gibt es keine Fingerspitze, die man
+              markieren könnte. */}
+          {!zug && tastenGerade && (
+            <ZiehLinie von={tastenGerade.a} bis={tastenGerade.b} mitPunkt={false} />
+          )}
         </svg>
       </div>
 
       {/* Fester Platz, auch wenn nichts drinsteht — sonst hüpft das Brett
-          bei jeder Rückmeldung eine Zeile hoch und runter. */}
+          bei jeder Rückmeldung eine Zeile hoch und runter.
+
+          Vor dem ersten Schnitt steht hier die Anleitung: Auf einem kurzen
+          Handy-Bildschirm ist der Hilfetext unten ausgeblendet und der
+          Startbildschirm nach „Nochmal" übersprungen — ohne diese Zeile
+          stünde dort dann gar keine Erklärung mehr im Bild. */}
       <div className="flex h-12 flex-col items-center justify-center">
-        {schnitt && (
+        {schnitt ? (
           <>
             <p
               className="antwort-richtig text-lg font-black"
@@ -282,13 +417,22 @@ export function EvenCut({
               {schnitt.genau.toFixed(1)} % gleich geteilt
             </p>
           </>
+        ) : hinweis ? (
+          <p className="text-center text-xs font-semibold text-amber-300">{hinweis}</p>
+        ) : (
+          <p className="text-center text-xs text-gedaempft">
+            {tastenlinie
+              ? 'Pfeiltasten drehen und schieben · Leertaste schneidet'
+              : 'Wische quer über die Form.'}
+          </p>
         )}
       </div>
 
       <p className="nur-bei-platz max-w-md text-center text-xs text-gedaempft">
         Wische quer über die Form. Geschnitten wird entlang der ganzen Linie — je gleicher die
-        beiden Hälften werden, desto mehr Punkte. Nach fünf Formen ist die Runde vorbei;
-        „Nochmal" startet das nächste Level.
+        beiden Hälften werden, desto mehr Punkte. Mit der Tastatur geht es auch: Pfeiltasten legen
+        die Linie, Umschalt macht die Schritte fein, Leertaste schneidet. Nach fünf Formen ist die
+        Runde vorbei; „Nochmal" startet das nächste Level.
       </p>
 
     </div>
@@ -296,7 +440,7 @@ export function EvenCut({
 }
 
 /** Die gestrichelte Schnittgerade, über das ganze Feld verlängert. */
-function ZiehLinie({ von, bis }: { von: Punkt; bis: Punkt }) {
+function ZiehLinie({ von, bis, mitPunkt = true }: { von: Punkt; bis: Punkt; mitPunkt?: boolean }) {
   const dx = bis.x - von.x;
   const dy = bis.y - von.y;
   const laenge = Math.hypot(dx, dy);
@@ -315,7 +459,7 @@ function ZiehLinie({ von, bis }: { von: Punkt; bis: Punkt }) {
         strokeDasharray="4 3"
         opacity={0.9}
       />
-      <circle cx={bis.x} cy={bis.y} r={2.2} fill="#ffffff" opacity={0.9} />
+      {mitPunkt && <circle cx={bis.x} cy={bis.y} r={2.2} fill="#ffffff" opacity={0.9} />}
     </g>
   );
 }

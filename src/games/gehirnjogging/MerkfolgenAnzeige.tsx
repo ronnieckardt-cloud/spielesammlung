@@ -69,7 +69,12 @@ export function MerkfolgenAnzeige({
     const { eingabe: neueEingabe, ergebnis } = merkfolgeTippen(aufgabe, eingabe, kachelIndex);
     setEingabe(neueEingabe);
     setLetzterTipp({ index: kachelIndex, richtig: ergebnis !== 'falsch' });
-    sfx(ergebnis === 'falsch' ? 'schlecht' : 'klick');
+    // Nur der Zwischenton gehört hierher. Den Schlusston — 'gut' oder
+    // 'schlecht' — spielt `onFertig` in Gehirnjogging.tsx. Vorher taten es
+    // bei einem falschen Tipp beide im selben Moment, und zwei gleiche Wellen
+    // übereinander sind doppelt so laut (`sfx` entprellt nicht, es legt bei
+    // jedem Aufruf neue Oszillatoren an).
+    if (ergebnis === 'lauft') sfx('klick');
     if (ergebnis !== 'lauft' && !fertigGemeldet.current) {
       fertigGemeldet.current = true;
       setPhase('fertig');
@@ -96,7 +101,11 @@ export function MerkfolgenAnzeige({
               onClick={() => beiTipp(i)}
               disabled={phase !== 'eingabe'}
               aria-label={k.name}
-              className="h-20 w-20 rounded-xl border-4 transition-all duration-150 disabled:cursor-default"
+              // `enabled:`, damit das Zusammendrücken nur in der
+              // Eingabe-Phase greift — während der Vorführung sind die
+              // Kacheln abgeschaltet, und dort gehört die Größe der
+              // leuchtenden Kachel (`scale(1.12)` weiter unten).
+              className="h-20 w-20 rounded-xl border-4 transition-all duration-150 enabled:active:scale-95 disabled:cursor-default"
               style={{
                 backgroundColor: k.farbe,
                 borderColor: istLetzterTipp ? (letzterTipp?.richtig ? '#22c55e' : '#ef4444') : 'transparent',

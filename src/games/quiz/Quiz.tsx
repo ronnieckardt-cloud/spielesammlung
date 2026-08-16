@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { sfx } from '../../core/sfx';
+import { haptik } from '../../core/haptik';
+import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import type { GameProps } from '../../core/types';
 import { antwortWaehlen, naechsteFrage, neuesLevel } from './logik';
 import type { Zustand } from './logik';
@@ -8,6 +10,25 @@ import { QuizIcon } from './Icon';
 
 const RICHTIG_FARBE = '#22c55e';
 const FALSCH_FARBE = '#ef4444';
+
+/** Ab hier ist es eine Serie — eine einzelne richtige Antwort noch nicht. */
+const SERIE_AB = 2;
+
+/**
+ * Feste Kennung je Antwortplatz — dieselben vier Farben wie im App-Symbol
+ * (`Icon.tsx`), damit das Spielfeld hält, was die Kachel verspricht: vier
+ * bunte Antwortfelder statt vier gleicher grauer Karten.
+ *
+ * Die Information trägt immer der **Buchstabe**, nicht die Farbe. Wer die
+ * Farben nicht unterscheiden kann, verliert dadurch nichts (Projektregel
+ * „Farbe nie als einziges Unterscheidungsmerkmal").
+ */
+const ANTWORT_KENNUNG: readonly { buchstabe: string; farbe: string }[] = [
+  { buchstabe: 'A', farbe: '#f87171' },
+  { buchstabe: 'B', farbe: '#60a5fa' },
+  { buchstabe: 'C', farbe: '#facc15' },
+  { buchstabe: 'D', farbe: '#4ade80' },
+];
 
 /**
  * Welches Level als Nächstes drankommt — wie beim Farbsortierer eine
@@ -97,6 +118,38 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
   );
 }
 
+/**
+ * Die laufende Serie als kleines Abzeichen oben rechts in der Frage-Karte.
+ *
+ * Der Serien-Bonus ist die einzige Punktmechanik des Spiels und war bisher
+ * nirgends zu sehen. Bewusst **nicht** das `Komboherz` aus `core/`: Das ist
+ * 86 Pixel hoch und lebt davon, sich über eine freie Brettecke zu hängen —
+ * hier trägt jede Fläche unter der Kopfzeile Text, den man lesen muss, und
+ * genau darüber läge das Herz. Die Zeile mit der Kategorie ist dagegen rechts
+ * leer, das Abzeichen kostet dort keine einzige Zeile Höhe.
+ *
+ * Immer im Baum, nur unsichtbar — sonst springt die Frage jedes Mal um ein
+ * paar Pixel, wenn eine Serie anfängt oder abreißt.
+ */
+function Serienanzeige({ serie }: { serie: number }) {
+  const sichtbar = serie >= SERIE_AB;
+  return (
+    <span
+      aria-hidden={!sichtbar}
+      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-black whitespace-nowrap transition-opacity duration-200 ${
+        sichtbar ? 'opacity-100' : 'opacity-0'
+      }`}
+      style={{ backgroundColor: `${RICHTIG_FARBE}26`, color: RICHTIG_FARBE }}
+    >
+      {/* Der Schlüssel lässt die Zahl bei jeder Stufe kurz aufploppen — wie
+          die Kombo-Zahl in Block Burst. */}
+      <span key={serie} className="punkte-bumsen inline-block">
+        <span aria-hidden="true">🔥 </span>Serie ×{Math.max(SERIE_AB, serie)}
+      </span>
+    </span>
+  );
+}
+
 export function Quiz({
   onScore,
   onGameOver,
@@ -110,13 +163,20 @@ export function Quiz({
   const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechsteLevelNummer));
 
+  // Der Serien-Bonus war die einzige Punktmechanik des Spiels und blieb
+  // komplett unsichtbar. Schwelle 1, weil hier jede richtige Antwort zählt —
+  // anders als in Ghost Chase gibt es keinen Kleinkram, der wegzufiltern wäre.
+  const gewinn = usePunktegewinn(z.punkte, 1);
+
   useEffect(() => {
     onScore(z.punkte);
   }, [z.punkte, onScore]);
 
   useEffect(() => {
     if (z.vorbei) {
-      sfx(z.richtigeAnzahl === z.fragen.length ? 'stufe' : 'ende');
+      const perfekt = z.richtigeAnzahl === z.fragen.length;
+      sfx(perfekt ? 'stufe' : 'ende');
+      haptik(perfekt ? 'jubel' : 'ende');
       if (festesLevel === undefined) naechsteLevelNummer = z.level + 1;
       onGameOver(z.punkte);
     }
@@ -127,7 +187,13 @@ export function Quiz({
     setZ((alt) => {
       const frage = alt.fragen[alt.index];
       const nach = antwortWaehlen(alt, index);
-      if (nach !== alt && frage) sfx(index === frage.richtig ? 'gut' : 'schlecht');
+      if (nach !== alt && frage) {
+        // Der Ton steigt mit der Serie — dieselbe Idee wie die
+        // Halbton-Hebung in Block Burst: Man hört, dass gerade etwas läuft,
+        // noch bevor man die Zahl gelesen hat. `sfx` deckelt selbst bei 12.
+        if (index === frage.richtig) sfx('gut', (nach.serie - 1) * 2);
+        else sfx('schlecht');
+      }
       return nach;
     });
   }, []);
@@ -201,13 +267,20 @@ export function Quiz({
           Weiter-Knopf darunter bleibt dadurch immer erreichbar. */}
       <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto">
       <div className="w-full max-w-md rounded-karte border border-rand bg-flaeche p-5">
-        <span className="text-xs font-medium tracking-wide text-gedaempft uppercase">
-          {frage.kategorie}
-        </span>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium tracking-wide text-gedaempft uppercase">
+            {frage.kategorie}
+          </span>
+          <Serienanzeige serie={z.serie} />
+        </div>
         <p className="mt-2 text-lg font-semibold">{frage.frage}</p>
       </div>
 
-      <div className="grid w-full max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
+      {/* Der Behälter mit `relative` ist Absicht: Das „+N" liegt als Aufsatz
+          über den Antworten und kostet dadurch keine Höhe — auf einem kleinen
+          Handy scrollt hier ohnehin schon alles knapp. */}
+      <div className="relative grid w-full max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
+        <Punktegewinn gewinn={gewinn} />
         {frage.antworten.map((antwort, i) => {
           const istAusgewaehlt = z.ausgewaehlt === i;
           const istRichtigeAntwort = i === frage.richtig;
@@ -231,23 +304,43 @@ export function Quiz({
             deckkraft = 0.5;
           }
 
+          const kennung = ANTWORT_KENNUNG[i]!;
+
           return (
             <button
               key={i}
               type="button"
               onClick={() => beiAntwort(i as 0 | 1 | 2 | 3)}
               disabled={beantwortet}
-              className={`rounded-xl border border-rand bg-flaeche p-4 text-left transition-colors disabled:cursor-default ${bewegung}`}
+              // Antipp-Reaktion wie bei `.spielknopf`: 5 % kleiner, 100 ms.
+              // Die Klasse selbst passt hier nicht (eigene Ecken,
+              // Innenabstände, `inline-flex`), ihr Verhalten schon — genau
+              // wie in `gehirnjogging/ZahlAntworten.tsx`. Die Übergänge
+              // stehen einzeln statt als `transition-colors
+              // transition-transform`, weil beide Kurzformen dieselbe
+              // CSS-Eigenschaft setzen und dann nur eine von beiden gälte.
+              // `enabled:` hört nach der Antwort auf und kommt so
+              // `antwort-richtig` nicht in die Quere, das `scale` bewegt.
+              className={`flex items-center gap-3 rounded-xl border border-rand bg-flaeche p-4 text-left transition-[background-color,border-color,opacity,scale] duration-100 enabled:active:scale-95 disabled:cursor-default ${bewegung}`}
               style={{ borderColor: rahmenfarbe, backgroundColor: hintergrund, opacity: deckkraft }}
             >
-              {antwort}
+              {/* Nur fürs Auge: Der Screenreader liest die Antwort selbst
+                  vor, ein vorgelesenes „A" davor wäre reiner Ballast. */}
+              <span
+                aria-hidden="true"
+                className="grid size-7 shrink-0 place-items-center rounded-full text-sm font-black text-grund"
+                style={{ backgroundColor: kennung.farbe }}
+              >
+                {kennung.buchstabe}
+              </span>
+              <span className="min-w-0 flex-1">{antwort}</span>
               {beantwortet && istRichtigeAntwort && (
-                <span aria-hidden="true" className="ml-2">
+                <span aria-hidden="true" className="shrink-0">
                   ✓
                 </span>
               )}
               {beantwortet && istAusgewaehlt && !istRichtigeAntwort && (
-                <span aria-hidden="true" className="ml-2">
+                <span aria-hidden="true" className="shrink-0">
                   ✗
                 </span>
               )}

@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { saatAus } from '../../core/rng';
 import {
+  FALL_GRENZE,
   FARB_ANZAHL,
+  KUGEL_R,
   RING_ABSTAND,
+  SCHWERKRAFT,
+  SICHT_HOCH,
+  SICHT_RUNTER,
   SPRUNG,
   farbeAnStelle,
   halbmesserFuerRing,
@@ -60,6 +65,44 @@ describe('Schwierigkeit', () => {
   it('macht die Ringe enger — aber nie enger als die Kugel braucht', () => {
     expect(halbmesserFuerRing(10)).toBeLessThan(halbmesserFuerRing(0));
     expect(halbmesserFuerRing(500)).toBeGreaterThan(10);
+  });
+});
+
+describe('Sichtfenster und Fallgrenze', () => {
+  /**
+   * Der Ring um die Kugel ist ihr äußerster sichtbarer Teil (`figuren.tsx`,
+   * `KUGEL_R + 2.6`). Hier steht die Zahl noch einmal, damit der Test die
+   * Anzeige nicht importieren muss — er prüft ja nur, dass die Logik ihr
+   * genug Platz lässt.
+   */
+  const KUGEL_AUSSEN = KUGEL_R + 2.6;
+
+  it('lässt die Kugel bis zum Spielende sichtbar', () => {
+    // Vorher endete die Runde erst 75 Einheiten, nachdem die Kugel unten aus
+    // dem Bild gefallen war — die letzten 0,35 Sekunden tippte man blind.
+    expect(FALL_GRENZE + KUGEL_AUSSEN).toBeLessThanOrEqual(SICHT_RUNTER);
+  });
+
+  it('lässt Raum für mehrere Sprünge, um sich wieder zu fangen', () => {
+    // Ein Sprung aus dem Stillstand trägt SPRUNG²/(2·SCHWERKRAFT) Einheiten.
+    // Wer abrutscht, soll sich mit zwei, drei Tippern zurückholen können.
+    const einSprung = (SPRUNG * SPRUNG) / (2 * SCHWERKRAFT);
+    expect(FALL_GRENZE).toBeGreaterThan(2 * einSprung);
+  });
+
+  it('zeigt den nächsten Ring, bevor man ihn erreicht', () => {
+    // Sonst taucht ein Tor auf, dessen Drehung man nicht mehr abpassen kann.
+    expect(SICHT_HOCH).toBeGreaterThan(RING_ABSTAND);
+  });
+
+  it('beendet die Runde, solange die Kugel noch im Bild ist', () => {
+    // Nicht nur die Konstanten, sondern der echte Ablauf: fallen lassen und
+    // im Moment des Spielendes nachsehen, wo die Kugel steht.
+    let z = neuesSpiel(SAAT);
+    const dt = 1 / 60;
+    while (!z.vorbei) z = takt(z, dt);
+    const tiefe = z.hoehe - z.kugelY;
+    expect(tiefe + KUGEL_AUSSEN).toBeLessThanOrEqual(SICHT_RUNTER);
   });
 });
 

@@ -23,9 +23,15 @@ import type { CSSProperties } from 'react';
 
 /**
  * Beimischung in Prozent. Bei 8 % ändert sich fast nur der Farbton, die
- * Helligkeit bleibt. Ab etwa 15 % kippt der Kontrast — bei Line Fall
- * (Akzent ist ein kräftiges Rot) würde ein rötlicher Grund den roten
- * Vierling schlucken.
+ * Helligkeit bleibt. Ab etwa 15 % kippt der Kontrast: Ein Grund in der
+ * Spielfarbe schluckt dann die Spielsteine, die dieselbe Farbe tragen —
+ * bei Block Burst unterscheiden sich vier Zellzustände fast nur über die
+ * Helligkeit, dort fällt es zuerst auf.
+ *
+ * (Hier stand früher Line Fall als Beispiel, „Akzent ist ein kräftiges
+ * Rot". Das stimmt seit dem Symbol-Umbau nicht mehr, sein `accent` ist
+ * jetzt Indigo — die Regel gilt unverändert, nur das Beispiel war
+ * veraltet.)
  */
 const ANTEIL = 8;
 
