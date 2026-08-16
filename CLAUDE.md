@@ -3025,8 +3025,8 @@ standen; siehe die ausführliche Herleitung direkt im Bot-Code in
 `lehnen = -unterschied · 2 + drehen · 1,2` (echter PD-Regler, richtiges
 Vorzeichen). Beide Fairness-Tests grün, dazu ein neuer dritter Test
 (`kommt mit reinem Gasgeben nicht zuverlässig ins Ziel`), der Ronnis
-Anforderung direkt in Code fasst: höchstens 2 von 10 Strecken dürfen mit
-purem Gas ohne jede Lenkung geschafft werden.
+Anforderung direkt in Code fasst — die genaue Schwelle wurde in der
+nächsten Runde noch einmal angepasst, siehe unten.
 
 Der Bildraten-Test (`läuft bei jeder Bildrate praktisch gleich weit`)
 läuft seitdem **mit dem aktiven Bot**, nicht mehr mit purem Gas — reines
@@ -3036,6 +3036,73 @@ zwischen 30 und 60 fps leicht schwankt. Das ist kein Fehler, sondern die
 gewollte Folge der neuen Schwierigkeit — es sagt nur nichts mehr über die
 eigentliche Physik-Integration aus. Der zuverlässig durchkommende Bot
 bleibt dagegen aussagekräftig, siehe Kommentar direkt im Test.
+
+### „Leider nicht spielbar" — als die Theorie auf ein echtes Gerät traf
+
+Direkt nach dem Deploy der obigen Änderung, live auf einem Touchscreen
+getestet: „Leider nicht spielbar." Zwei **unabhängige** Ursachen, beide
+gefunden und behoben, nicht nur eine:
+
+**1) Ein echter Multitouch-Bug.** Rückmeldung: „Ich kann nur eine Taste
+drücken um zu fahren, dann funktioniert die Taste für Vorne/Hinten
+nicht mehr." Der Bühnenbereich (`buehneRef`) hatte `touch-action: none`,
+aber die einzelnen Steuerknöpfe selbst nicht — nur vom Elternbereich
+„geerbt". Auf iOS Safari reicht das nicht zuverlässig: Setzt ein zweiter
+Finger auf einem anderen Element auf, während der erste noch hält, wertet
+der Browser das mitunter als Beginn einer Mehrfinger-Geste statt als
+zwei unabhängige Tastendrücke — „Gas" bleibt gedrückt, „Vorne"/„Hinten"
+reagiert nicht mehr. **Fix:** `touch-action: none` zusätzlich direkt an
+jedem einzelnen Knopf (`Knopf`-Komponente in `FlowMtb.tsx`), nicht nur am
+Elternbereich.
+
+**2) Die Physik war nur gegen einen unrealistischen Bot geprüft.** Der
+Fairness-Bot in `logik.test.ts` steuert **analog** (`lehnen` ist ein
+Fließkommawert zwischen −1 und 1, kontinuierlich neu berechnet). Ein
+echter Spieler kann das nicht — `lehnen` ist im ganzen Spiel immer binär
+(−1, 0 oder 1, siehe `FlowMtb.tsx`, Tastatur wie Bildschirmknöpfe), dazu
+kommt echte menschliche Reaktionszeit. Ein Debug-Bot, der genau das
+nachbildet (binäre Entscheidung, nur alle paar Bilder neu bewertet, ~100
+ms Reaktionszeit), schaffte bei der scharfen Abstimmung von oben nur 3–7
+von 10 Strecken — nicht „Steuern nötig", sondern „mit echter Eingabe
+kaum zu schaffen". Der Multitouch-Bug oben hat das vermutlich zusätzlich
+verschärft: Solange nur „Gas" ankam, WAR die Eingabe praktisch der reine
+Passiv-Fall, der jetzt fast überall crasht.
+
+**Zwei Physik-Anpassungen beheben das, ohne die Kernanforderung
+aufzugeben:**
+
+- **`NATUR_NICKEN_GRENZE`** deckelt, wie weit die passive Drift den
+  Absprungwinkel höchstens verschlechtert (`0,55` Radiant), statt endlos
+  weiterzubeschleunigen. Ohne Deckel wächst die nötige Korrektur bei
+  langen Sprüngen (Mega-Kicker, ~1,6 s) schneller, als ein Mensch mit
+  Reaktionszeit sie einholen kann — nicht mehr fordernd, sondern
+  unmöglich. Mit Deckel pendelt sich das Rad (durch die Dämpfung) auf der
+  Schräglage ein, statt sich weiterzudrehen — ein realistischer,
+  verzögert reagierender Spieler-Bot kommt damit wieder auf 9–10 von 10
+  Strecken.
+- **`NATUR_NICKEN_VERZOEGERUNG`** (eine Gnadenfrist nach dem Abheben, bevor
+  die Drift überhaupt einsetzt) wurde dabei probiert und wieder auf `0`
+  zurückgesetzt: Sie nahm ausgerechnet den **kurzen** Kicker-Hüpfern (oft
+  nur 0,3–0,5 s Flugzeit) einen Großteil ihrer ohnehin schon kurzen
+  Drift-Zeit weg, wodurch reines Gasgeben auf genau diesen Sprüngen wieder
+  fast immer gewann (10/10 statt der angestrebten Minderheit). Der Deckel
+  allein trifft den Kompromiss besser: Er wirkt sofort (kurze Sprünge
+  bleiben ein Risiko), aber nie unbegrenzt (lange Sprünge werden nicht
+  unmöglich).
+- Die Test-Schwelle in `kommt mit reinem Gasgeben nicht zuverlässig ins
+  Ziel` wurde von „< 3 von 10" auf „< 6 von 10" gelockert — ehrlich
+  benannt als der Punkt, an dem beide echten Anforderungen gleichzeitig
+  gelten: reines Gasgeben verliert verlässlich seinen Status als
+  Gewinnstrategie (Mehrheit scheitert), aber ein realistischer Spieler
+  mit binärer, verzögerter Eingabe bekommt weiterhin eine faire Chance.
+  Die vollständige Herleitung („< 3" verlangte eine Präzision, die nur
+  ein Bot mit Analogsteuerung und Null-Latenz aufbringen kann) steht
+  direkt im Testkommentar.
+
+**Lehrstück:** Ein Fairness-Bot ist nur so aussagekräftig wie sein
+Eingabemodell. Ein Bot mit Fähigkeiten, die der echte Spieler strukturell
+nicht hat (hier: Analogsteuerung statt Tastendruck, Reaktion ohne
+Verzögerung), beweist Spielbarkeit für einen Spieler, den es nicht gibt.
 
 ## Befehle
 

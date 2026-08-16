@@ -481,7 +481,22 @@ export function FlowMtb({
     );
   }
 
-  /** Ein Steuerknopf. Er hält, solange der Finger liegt. */
+  /**
+   * Ein Steuerknopf. Er hält, solange der Finger liegt.
+   *
+   * **`touch-none` steht hier zusätzlich zum übergeordneten Bereich noch
+   * einmal direkt am Knopf.** Rückmeldung: „Ich kann nur eine Taste
+   * drücken, dann geht Vorne/Hinten nicht mehr." Auf `buehneRef` (dem
+   * ganzen Spielbereich) stand `touch-action: none` schon, aber manche
+   * mobilen Browser — vor allem iOS Safari — werten das nicht zuverlässig
+   * als vererbt: Setzt ein zweiter Finger auf einem ANDEREN Element auf,
+   * während der erste noch hält, kann der Browser das als Beginn einer
+   * Mehrfinger-Geste statt als eigenen, unabhängigen Tastendruck
+   * einstufen — genau dann bleibt „Gas" gedrückt, aber „Vorne"/„Hinten"
+   * reagiert nicht mehr. Jeder Knopf braucht `touch-action: none` **an
+   * sich selbst**, nicht nur am Elternbereich, damit zwei Finger auf zwei
+   * Knöpfen unabhängig voneinander erkannt werden.
+   */
   const Knopf = ({
     kind,
     label,
@@ -496,7 +511,7 @@ export function FlowMtb({
     <button
       type="button"
       aria-label={label}
-      className={`pointer-events-auto flex size-16 select-none flex-col items-center justify-center rounded-2xl border border-white/25 bg-black/35 backdrop-blur-sm active:bg-white/25 ${kind}`}
+      className={`pointer-events-auto touch-none flex size-16 select-none flex-col items-center justify-center rounded-2xl border border-white/25 bg-black/35 backdrop-blur-sm active:bg-white/25 ${kind}`}
       onPointerDown={(ev) => {
         ev.preventDefault();
         ev.currentTarget.setPointerCapture(ev.pointerId);

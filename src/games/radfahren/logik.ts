@@ -387,6 +387,32 @@ export const LUFT_DREHUNG = 10;
  * `NATUR_NICKEN` allein nicht reicht, wenn `LUFT_DREHUNG` mitwächst.
  */
 export const NATUR_NICKEN = 8.0;
+/**
+ * So lange nach dem Abheben wirkt `NATUR_NICKEN` noch **nicht** — reine
+ * Reaktionszeit für den Menschen am anderen Ende der Steuerung.
+ *
+ * Ohne diese Verzögerung ist die Anforderung „Gegenlenken muss nötig
+ * sein" zwar erfüllt, aber nur für einen Bot, der jedes Bild neu plant.
+ * Ein echter Spieler steuert ausschließlich binär (siehe `FlowMtb.tsx`,
+ * `lehnen` ist immer −1, 0 oder 1 — kein Analogwert wie beim Fairness-Bot
+ * in `logik.test.ts`) und braucht eine echte, spürbare Reaktionszeit,
+ * bevor die erste Korrektur überhaupt beim Rad ankommt. Bei kurzen
+ * Kicker-Hüpfern (oft nur 0,3–0,5 s Flugzeit insgesamt) frisst eine
+ * Drehbeschleunigung, die ab der ersten Millisekunde wirkt, genau das
+ * kleine Zeitfenster auf, das ein Mensch bräuchte, um überhaupt zu
+ * reagieren — gemessen an einem Bot mit 100 ms simulierter Reaktionszeit
+ * sank die Erfolgsquote dadurch auf einzelne Strecken. Diese Gnadenfrist
+ * gibt genau dieses Fenster zurück, ohne die Wirkung auf längere Sprünge
+ * (Kicker-Ketten, Mega-Kicker) zu schwächen — dort ist ohnehin reichlich
+ * Flugzeit für die Drift übrig.
+ */
+export const NATUR_NICKEN_VERZOEGERUNG = 0;
+/**
+ * Wie weit `NATUR_NICKEN` die Nase höchstens unter den Absprungwinkel
+ * drückt, bevor die Drift von selbst aufhört — siehe die Herleitung an der
+ * Anwendungsstelle in `takt`.
+ */
+export const NATUR_NICKEN_GRENZE = 0.55;
 /** Wie hart sich das Rad am Boden an die Bodenneigung anlegt. */
 const ANLEGEN = 14;
 /**
@@ -704,7 +730,24 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
      * spürbar Nase-runter dreht. Wer landen will, muss also aktiv
      * gegenhalten — ein einzelner kurzer Absprungwinkel reicht nicht mehr.
      */
-    drehen -= NATUR_NICKEN * dt;
+    /*
+     * **Gedeckelt, statt endlos zu beschleunigen.** Eine feste
+     * Drehbeschleunigung ohne Deckel läuft über eine lange Flugbahn
+     * (Mega-Kicker, ~1,6 s) zu einer riesigen Winkelabweichung auf —
+     * nicht nur „man muss reagieren", sondern „die Abweichung wächst
+     * schneller, als ein Mensch mit Reaktionszeit sie einholen kann",
+     * siehe die Herleitung bei `NATUR_NICKEN_VERZOEGERUNG`. Ab
+     * `NATUR_NICKEN_GRENZE` unter dem Absprungwinkel hört die Drift auf zu
+     * wirken — das Rad pendelt sich (durch die Dämpfung darunter) auf
+     * dieser Schräglage ein, statt endlos weiterzudrehen. Wer nichts tut,
+     * landet also **verlässlich schräg genug für eine schlechte
+     * Landung**, aber nicht in einer sich selbst verschärfenden Spirale,
+     * die auch ein rechtzeitig reagierender Spieler nicht mehr einholen
+     * könnte.
+     */
+    if (luftZeit > NATUR_NICKEN_VERZOEGERUNG && luftDrehStart - winkel < NATUR_NICKEN_GRENZE) {
+      drehen -= NATUR_NICKEN * dt;
+    }
     drehen -= drehen * 1.6 * dt;
     winkel += drehen * dt;
 

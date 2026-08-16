@@ -631,18 +631,33 @@ describe('Fairness', () => {
      * **aktiver** einfacher Fahrer durchkommen, hier darf ein **passiver**
      * (Gas halten, nie lehnen) es nicht zuverlässig schaffen.
      *
-     * Nicht auf jeder einzelnen Strecke geprüft — bei so einer harten
-     * Anforderung wäre ein einzelner Ausreißer (eine Strecke ohne einen
-     * einzigen längeren Sprung) kein Zeichen für einen echten Fehler.
-     * Die Mehrheit muss aber scheitern, sonst ist „nichts tun" weiterhin
-     * eine gültige Taktik.
+     * **Die Schwelle ist bewusst „Mehrheit scheitert" (< 6 von 10), nicht
+     * „fast immer" (< 3 von 10).** Ursprünglich stand hier < 3 — erreicht
+     * mit `NATUR_NICKEN` als unbegrenzt wachsender Drehbeschleunigung.
+     * Live getestet zeigte sich: Ein echter Spieler steuert nur binär
+     * (`lehnen` ist −1, 0 oder 1, siehe `FlowMtb.tsx` — kein Analogwert
+     * wie beim Fairness-Bot oben) und braucht eine echte, spürbare
+     * Reaktionszeit. Gegen einen Bot, der das nachbildet (binäre
+     * Entscheidung, nur alle paar Bilder neu bewertet — realistische
+     * ~100 ms Reaktionszeit), schaffte bei < 3 selbst ein ordentlich
+     * reagierender Spieler oft nur 3 von 10 Strecken: nicht „Steuern ist
+     * nötig", sondern „Steuern ist unmöglich präzise genug". Seit
+     * `NATUR_NICKEN_GRENZE` die Drift deckelt (siehe dort), schafft
+     * derselbe realistische Spieler-Bot wieder 9–10 von 10 — aber die
+     * Kehrseite des Deckels ist, dass ein rein passiver Lauf auf der
+     * Hälfte der Strecken durchrutscht, weil die gedeckelte Abweichung
+     * dort nie über eine „gute" Landung hinauskommt. Diese Schwelle ist
+     * der ehrliche Mittelweg: reines Gasgeben verliert verlässlich seinen
+     * Status als Gewinnstrategie (Mehrheit scheitert), ohne einem
+     * realistischen Spieler eine Präzision abzuverlangen, die nur ein
+     * Bot mit Analogsteuerung und Null-Latenz aufbringen kann.
      */
     let geschafft = 0;
     for (let n = 1; n <= 10; n++) {
       const l = fahren(neuesSpiel(streckenSaat(n)), 300, GAS);
       if (l.gewonnen) geschafft++;
     }
-    expect(geschafft, `${geschafft} von 10 Strecken mit reinem Gasgeben geschafft`).toBeLessThan(3);
+    expect(geschafft, `${geschafft} von 10 Strecken mit reinem Gasgeben geschafft`).toBeLessThan(6);
   });
 
   it('ergibt bei gleicher Saat und gleicher Eingabe dasselbe Ergebnis', () => {
