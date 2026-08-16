@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { saatAus } from '../../core/rng';
 import {
   ABSCHNITT_LAENGE,
+  DOPPEL_DAUER,
   HOEHE_RUTSCHEND,
   SERIE_ABSTAND,
   SPRUNGSCHUB_DAUER,
@@ -369,6 +370,14 @@ describe('Schübe', () => {
     expect(sprung.turboRest).toBe(0);
   });
 
+  it('sammelt den Punkte-Doppler ein und schaltet nur ihn frei', () => {
+    const doppel = takt(bereit('doppel'), 1 / 60);
+    expect(doppel.schubZahl).toBe(1);
+    expect(doppel.doppelRest).toBeCloseTo(DOPPEL_DAUER, 6);
+    expect(doppel.turboRest).toBe(0);
+    expect(doppel.sprungRest).toBe(0);
+  });
+
   it('lässt die Wirkung über die Zeit abklingen, nie unter null', () => {
     let l = takt(bereit('turbo'), 1 / 60);
     l = laufen(l, TURBO_DAUER + 1);
@@ -378,6 +387,57 @@ describe('Schübe', () => {
   it('zählt fünfundzwanzig Punkte je Schub, egal welche Art', () => {
     const l = takt(bereit('turbo'), 1 / 60);
     expect(punkte(l)).toBe(Math.floor(l.strecke) + l.schubZahl * 25);
+  });
+
+  it('springt mit Sprungschub spürbar höher als ohne', () => {
+    /*
+     * Der Grund für den Kraft-Bonus: Die Kollisionsregel allein reichte
+     * nicht — Rückmeldung „das Symbol bringt ja nichts, man kommt trotzdem
+     * nicht über die Absperrung." Ein Sprung muss auch **aussehen** wie
+     * einer, der darüber trägt.
+     */
+    const hoehepunkt = (start: Lauf) => {
+      let l = springen(start);
+      let max = 0;
+      for (let i = 0; i < 120; i++) {
+        l = takt(l, 1 / 60);
+        max = Math.max(max, l.y);
+      }
+      return max;
+    };
+    const ohne = hoehepunkt(teststrecke(0));
+    const mit = hoehepunkt(teststrecke(0, { sprungRest: SPRUNGSCHUB_DAUER }));
+    // Die Scheitelhöhe wächst mit dem Quadrat der Anfangsgeschwindigkeit,
+    // 1,35² ist rund 1,8 — deutlich mehr als jedes Messrauschen.
+    expect(mit).toBeGreaterThan(ohne * 1.5);
+  });
+
+  it('verdoppelt mit Doppler den Punktwert einer Münze, nicht ihre Zahl', () => {
+    const muenze: Muenze = { spur: 1, z: 0, y: 1 };
+    const mit = takt(teststrecke(0, { muenzen: [muenze], doppelRest: DOPPEL_DAUER }), 1 / 60);
+    // Die Münze zählt weiterhin **einfach** — sonst spränge auch die Serie
+    // in Zweierschritten, und der Münzton käme aus dem Takt.
+    expect(mit.muenzenZahl).toBe(1);
+    expect(mit.muenzSerie).toBe(1);
+    // Aber sie ist doppelt so viel wert: 10 regulär + 10 Bonus.
+    expect(mit.doppelPunkte).toBe(10);
+    expect(punkte(mit)).toBe(Math.floor(mit.strecke) + 20);
+
+    // Ohne Doppler bleibt es bei zehn.
+    const ohne = takt(teststrecke(0, { muenzen: [muenze] }), 1 / 60);
+    expect(ohne.doppelPunkte).toBe(0);
+    expect(punkte(ohne)).toBe(Math.floor(ohne.strecke) + 10);
+  });
+
+  it('behält verdiente Doppler-Punkte, auch wenn die Wirkung ausläuft', () => {
+    // Was man sich verdient hat, darf nicht wieder verschwinden — sonst
+    // fiele der Punktestand mitten im Lauf sichtbar zurück.
+    const muenze: Muenze = { spur: 1, z: 0, y: 1 };
+    let l = takt(teststrecke(0, { muenzen: [muenze], doppelRest: 0.2 }), 1 / 60);
+    expect(l.doppelPunkte).toBe(10);
+    l = laufen(l, 2);
+    expect(l.doppelRest).toBe(0);
+    expect(l.doppelPunkte).toBe(10);
   });
 
   it('läuft mit Turbo spürbar schneller als ohne', () => {

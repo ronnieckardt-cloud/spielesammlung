@@ -1014,6 +1014,31 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   pfeilForm.closePath();
   const schubSprungGeo = new THREE.ExtrudeGeometry(pfeilForm, { depth: 0.1, bevelEnabled: false });
   schubSprungGeo.translate(0, 0, -0.05);
+
+  /*
+   * Der Punkte-Doppler kam später dazu — Ronnis eigene Idee, kein
+   * Icon-Vorbild diesmal. Ein vierzackiger Funke (abwechselnd äußerer und
+   * innerer Radius, derselbe Bauplan wie Blitz und Pfeil) statt einer
+   * „×2"-Beschriftung: Zahlen als extrudierte Form würden bei 44 Pixeln
+   * Bildgröße zu Matsch, ein Funke liest sich dagegen aus jeder Entfernung
+   * sofort als „Bonus", genau das Vokabular, das aus Sternen und Blitzen
+   * in jedem Handyspiel schon bekannt ist.
+   */
+  const funkeForm = new THREE.Shape();
+  const funkeAussen = 0.26;
+  const funkeInnen = 0.1;
+  for (let i = 0; i < 8; i++) {
+    const winkel = (i / 8) * Math.PI * 2;
+    const radius = i % 2 === 0 ? funkeAussen : funkeInnen;
+    const x = Math.cos(winkel) * radius;
+    const y = Math.sin(winkel) * radius;
+    if (i === 0) funkeForm.moveTo(x, y);
+    else funkeForm.lineTo(x, y);
+  }
+  funkeForm.closePath();
+  const schubDoppelGeo = new THREE.ExtrudeGeometry(funkeForm, { depth: 0.1, bevelEnabled: false });
+  schubDoppelGeo.translate(0, 0, -0.05);
+
   const schubTurboStoff = new THREE.MeshPhongMaterial({
     color: 0xfbbf24,
     emissive: 0x7c4a03,
@@ -1026,17 +1051,29 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     shininess: 70,
     specular: 0xd1fef7,
   });
+  // Pink/Magenta — die dritte Farbe im Bild, die weder mit dem Amber der
+  // Münzen/Turbo noch mit dem Türkis des Sprungschubs verwechselt werden
+  // kann, und bewusst nicht das Violett des eigenen Shirts (Akzentfarbe
+  // des Spiels), sonst verschmilzt der Doppler optisch mit der Figur.
+  const schubDoppelStoff = new THREE.MeshPhongMaterial({
+    color: 0xf472b6,
+    emissive: 0x7a1f4f,
+    shininess: 70,
+    specular: 0xfce7f3,
+  });
   const schuebe = Array.from({ length: VORRAT_SCHUEBE }, () => {
     const gruppe = new THREE.Group();
-    // Beide Formen liegen flach in der x/y-Ebene (wie eine Münze) und
+    // Alle drei Formen liegen flach in der x/y-Ebene (wie eine Münze) und
     // stehen deshalb ohne zusätzliche Drehung schon aufrecht zur Kamera.
     const turbo = new THREE.Mesh(schubTurboGeo, schubTurboStoff);
     gruppe.add(turbo);
     const sprung = new THREE.Mesh(schubSprungGeo, schubSprungStoff);
     gruppe.add(sprung);
+    const doppel = new THREE.Mesh(schubDoppelGeo, schubDoppelStoff);
+    gruppe.add(doppel);
     gruppe.visible = false;
     szene.add(gruppe);
-    return { gruppe, turbo, sprung };
+    return { gruppe, turbo, sprung, doppel };
   });
 
   // ---------------------------------------------------------------
@@ -1077,6 +1114,16 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   sprungRing.rotation.x = -Math.PI / 2;
   sprungRing.visible = false;
   szene.add(sprungRing);
+  // Der dritte, noch größere Ring — Doppler kann mit beiden anderen
+  // gleichzeitig laufen, alle drei müssen dann sichtbar ineinander
+  // verschachtelt bleiben statt sich zu überdecken.
+  const doppelRing = new THREE.Mesh(
+    wirkungsRingGeo,
+    new THREE.MeshBasicMaterial({ color: 0xf472b6, transparent: true, opacity: 0.85 }),
+  );
+  doppelRing.rotation.x = -Math.PI / 2;
+  doppelRing.visible = false;
+  szene.add(doppelRing);
 
   let laufzeit = 0;
   /**
@@ -1241,6 +1288,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       koerper.gruppe.rotation.y = laufzeit * 2.4;
       koerper.turbo.visible = sch.art === 'turbo';
       koerper.sprung.visible = sch.art === 'sprung';
+      koerper.doppel.visible = sch.art === 'doppel';
     }
     for (let i = schubNummer; i < schuebe.length; i++) schuebe[i]!.gruppe.visible = false;
 
@@ -1440,6 +1488,12 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       const puls = 1.35 + Math.sin(laufzeit * 8 + 1) * 0.08;
       sprungRing.position.set(fx, 0.05, figurZ);
       sprungRing.scale.set(puls, puls, 1);
+    }
+    doppelRing.visible = lauf.doppelRest > 0 && !lauf.vorbei;
+    if (doppelRing.visible) {
+      const puls = 1.7 + Math.sin(laufzeit * 6 + 2) * 0.08;
+      doppelRing.position.set(fx, 0.05, figurZ);
+      doppelRing.scale.set(puls, puls, 1);
     }
 
     // --- Kamera ---

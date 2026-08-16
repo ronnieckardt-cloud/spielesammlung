@@ -6,6 +6,7 @@ import { haptik } from '../../core/haptik';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
 import {
+  DOPPEL_DAUER,
   SPRUNGSCHUB_DAUER,
   TURBO_DAUER,
   neuesSpiel,
@@ -147,6 +148,8 @@ export function DashCity({
   const turboBalkenRef = useRef<HTMLDivElement>(null);
   const sprungBadgeRef = useRef<HTMLDivElement>(null);
   const sprungBalkenRef = useRef<HTMLDivElement>(null);
+  const doppelBadgeRef = useRef<HTMLDivElement>(null);
+  const doppelBalkenRef = useRef<HTMLDivElement>(null);
 
   const eingabe = useCallback((was: 'links' | 'rechts' | 'hoch' | 'runter') => {
     const l = holeLauf();
@@ -358,6 +361,12 @@ export function DashCity({
           if (sprungBalkenRef.current) {
             sprungBalkenRef.current.style.width = `${Math.max(0, (neu.sprungRest / SPRUNGSCHUB_DAUER) * 100).toFixed(0)}%`;
           }
+          if (doppelBadgeRef.current) {
+            doppelBadgeRef.current.style.opacity = neu.doppelRest > 0 ? '1' : '0';
+          }
+          if (doppelBalkenRef.current) {
+            doppelBalkenRef.current.style.width = `${Math.max(0, (neu.doppelRest / DOPPEL_DAUER) * 100).toFixed(0)}%`;
+          }
 
           // Die Kopfzeile der Hülle braucht den Punktestand auch während des
           // Laufens — sonst steht sie die ganze Runde auf null und springt
@@ -525,9 +534,19 @@ export function DashCity({
           className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
           style={{ opacity: 0 }}
         >
-          <span className="text-xs font-black text-teal-300">🔷 Sprung</span>
+          <span className="text-xs font-black text-teal-300">⬆️ Sprung</span>
           <div className="h-1 w-16 overflow-hidden rounded-full bg-black/50">
             <div ref={sprungBalkenRef} className="h-full rounded-full bg-teal-400" style={{ width: '0%' }} />
+          </div>
+        </div>
+        <div
+          ref={doppelBadgeRef}
+          className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
+          style={{ opacity: 0 }}
+        >
+          <span className="text-xs font-black text-pink-300">✳️ Punkte ×2</span>
+          <div className="h-1 w-16 overflow-hidden rounded-full bg-black/50">
+            <div ref={doppelBalkenRef} className="h-full rounded-full bg-pink-400" style={{ width: '0%' }} />
           </div>
         </div>
       </div>
@@ -565,8 +584,14 @@ export function DashCity({
               <li>
                 <span aria-hidden="true">⚡</span> Einsammeln — schneller
               </li>
+              {/* Der Pfeil, nicht die blaue Raute: Er zeigt dasselbe
+                  Zeichen wie der Gegenstand auf der Strecke. Rückmeldung:
+                  „ersetz das blaue Zeichen zu dem blauen Pfeil." */}
               <li>
-                <span aria-hidden="true">🔷</span> Einsammeln — höher springen
+                <span aria-hidden="true">⬆️</span> Einsammeln — höher springen
+              </li>
+              <li>
+                <span aria-hidden="true">✳️</span> Einsammeln — doppelte Punkte
               </li>
             </ul>
             <p className="mt-2 text-xs text-white/60">(Pfeiltasten gehen auch)</p>

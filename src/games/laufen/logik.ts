@@ -91,21 +91,46 @@ export type Muenze = { spur: number; z: number; /** Höhe über dem Boden. */ y:
  * Beispiel, dass man dann schneller ist, wo man höher springt oder so was,
  * irgendwas Besonderes."
  *
- * Zwei Arten, keine mehr: Mehr Power-ups wollten schnell nach „Feature-
- * Liste" statt nach Spiel aussehen. Beide sind zeitlich befristet und
- * lösen sich gegenseitig nicht ab — wer beide einsammelt, hat beide
+ * Drei Arten. `doppel` kam später dazu — Ronnis eigener Vorschlag: „so
+ * 'n Mal-zwei-Zeichen, das macht dann den Score für ein paar Sekunden
+ * doppelt so schnell hoch." Alle drei sind zeitlich befristet und lösen
+ * sich gegenseitig nicht ab — wer alle drei einsammelt, hat alle drei
  * gleichzeitig aktiv.
  */
-export type Schubart = 'turbo' | 'sprung';
+export type Schubart = 'turbo' | 'sprung' | 'doppel';
 export type Schub = { art: Schubart; spur: number; z: number };
 
 /** Wie viel schneller man mit Turbo unterwegs ist. */
 export const TURBO_FAKTOR = 1.55;
-/** Wie lange Turbo bzw. Sprungschub nach dem Einsammeln wirken, in Sekunden. */
+/** Wie lange ein Schub nach dem Einsammeln wirkt, in Sekunden. */
 export const TURBO_DAUER = 4;
 export const SPRUNGSCHUB_DAUER = 6;
+export const DOPPEL_DAUER = 5;
+/**
+ * Wie viel eine Münze mit aktivem Doppler wert ist, statt der zehn aus
+ * `punkte()`. Nicht die Münzenzahl selbst verdoppeln — die zählt auch in
+ * `muenzSerie` mit, und aus „eine Münze" dürfen dort nie zwei werden.
+ * Stattdessen ein eigener Punktetopf (`doppelPunkte`), der nur bei
+ * `punkte()` obendrauf kommt.
+ */
+const DOPPEL_MUENZ_BONUS = 10;
 /** Wie oft ein Abschnitt mit freier Spur zusätzlich einen Schub bekommt. */
 const SCHUB_CHANCE = 0.22;
+/**
+ * Wie viel kräftiger ein Sprung mit Sprungschub ausfällt.
+ *
+ * Rückmeldung: „Das Sprung-Symbol ist mega, aber es bringt nichts — man
+ * kommt ja trotzdem nicht über die Absperrung, wo man drunter durch muss."
+ * Die Kollisionsregel für den Balken erlaubte das schon (siehe `kollision`
+ * unten) — jeder normale Sprung reicht dafür längst aus, `lauf.y` liegt
+ * dabei fast die ganze Flugzeit über 0,55. Das Problem war also nicht die
+ * Regel, sondern das **Gefühl**: Ein normal hoher Sprung sieht neben dem
+ * hüfthoch hängenden Schild nicht nach „darüber geflogen" aus, sondern
+ * nach Zufall. Jetzt springt man mit Sprungschub wirklich spürbar höher
+ * (v₀ × 1,35, also fast 70 % mehr Scheitelhöhe) — ein Sprung, der so
+ * aussieht, wie er sich anfühlen soll.
+ */
+const SPRUNGSCHUB_KRAFT_FAKTOR = 1.35;
 
 export type Lauf = {
   /** Zurückgelegte Strecke in Metern. */
@@ -139,6 +164,10 @@ export type Lauf = {
   turboRest: number;
   /** Restliche Sekunden Sprungschub; 0 = aus. */
   sprungRest: number;
+  /** Restliche Sekunden Punkte-Doppler; 0 = aus. */
+  doppelRest: number;
+  /** Bonuspunkte aus Münzen, die mit aktivem Doppler eingesammelt wurden. */
+  doppelPunkte: number;
   /** Bis zu welchem Abschnitt schon erzeugt wurde. */
   erzeugtBis: number;
   vorbei: boolean;
@@ -261,7 +290,7 @@ export function abschnittErzeugen(
       const spur = freieSpuren[Math.floor(p.wert * freieSpuren.length)]!;
       const a = schritt(s);
       s = a.saat;
-      const art: Schubart = a.wert < 0.5 ? 'turbo' : 'sprung';
+      const art: Schubart = a.wert < 1 / 3 ? 'turbo' : a.wert < 2 / 3 ? 'sprung' : 'doppel';
       schuebe.push({ art, spur, z: z + 10 });
     }
   }
@@ -291,6 +320,8 @@ export function neuesSpiel(saat: number): Lauf {
     schubZahl: 0,
     turboRest: 0,
     sprungRest: 0,
+    doppelRest: 0,
+    doppelPunkte: 0,
     erzeugtBis: 0,
     vorbei: false,
     saat,
@@ -322,7 +353,8 @@ export function spurWechseln(lauf: Lauf, richtung: -1 | 1): Lauf {
 /** Springen — nur vom Boden aus, kein zweiter Sprung in der Luft. */
 export function springen(lauf: Lauf): Lauf {
   if (lauf.vorbei || lauf.y > 0.01) return lauf;
-  return { ...lauf, steigen: SPRUNG_KRAFT, rutschRest: 0 };
+  const kraft = lauf.sprungRest > 0 ? SPRUNG_KRAFT * SPRUNGSCHUB_KRAFT_FAKTOR : SPRUNG_KRAFT;
+  return { ...lauf, steigen: kraft, rutschRest: 0 };
 }
 
 /**
@@ -422,6 +454,7 @@ export function takt(lauf: Lauf, dt: number): Lauf {
   const rutschRest = Math.max(0, lauf.rutschRest - dt);
   const turboRest = Math.max(0, lauf.turboRest - dt);
   const sprungRest = Math.max(0, lauf.sprungRest - dt);
+  const doppelRest = Math.max(0, lauf.doppelRest - dt);
 
   let zwischen: Lauf = {
     ...lauf,
@@ -433,10 +466,12 @@ export function takt(lauf: Lauf, dt: number): Lauf {
     rutschRest,
     turboRest,
     sprungRest,
+    doppelRest,
   };
 
   // Münzen einsammeln.
   let muenzenZahl = lauf.muenzenZahl;
+  let doppelPunkte = lauf.doppelPunkte;
   const muenzen = lauf.muenzen.filter((m) => {
     const dz = m.z - strecke;
     if (dz < -1) return false; // hinter uns, weg damit
@@ -450,6 +485,10 @@ export function takt(lauf: Lauf, dt: number): Lauf {
     const hoehe = Math.abs(m.y - (y + 0.6)) < 0.9;
     if (nah && hoehe) {
       muenzenZahl += 1;
+      // Doppler: dieselbe Münze bleibt eine Münze (zählt einfach in
+      // `muenzenZahl` und `muenzSerie`), bringt mit aktivem Doppler aber
+      // zusätzliche Punkte — siehe `DOPPEL_MUENZ_BONUS`.
+      if (doppelRest > 0) doppelPunkte += DOPPEL_MUENZ_BONUS;
       return false;
     }
     return true;
@@ -481,7 +520,8 @@ export function takt(lauf: Lauf, dt: number): Lauf {
     if (nah) {
       schubZahl += 1;
       if (sch.art === 'turbo') zwischen = { ...zwischen, turboRest: TURBO_DAUER };
-      else zwischen = { ...zwischen, sprungRest: SPRUNGSCHUB_DAUER };
+      else if (sch.art === 'sprung') zwischen = { ...zwischen, sprungRest: SPRUNGSCHUB_DAUER };
+      else zwischen = { ...zwischen, doppelRest: DOPPEL_DAUER };
       return false;
     }
     return true;
@@ -500,6 +540,7 @@ export function takt(lauf: Lauf, dt: number): Lauf {
     muenzenZahl,
     muenzSerie,
     seitMuenze,
+    doppelPunkte,
     schuebe,
     schubZahl,
     hindernisse,
@@ -515,7 +556,9 @@ export function takt(lauf: Lauf, dt: number): Lauf {
 }
 
 /**
- * Die Punktzahl: ein Punkt je Meter, zehn je Münze, fünfundzwanzig je Schub.
+ * Die Punktzahl: ein Punkt je Meter, zehn je Münze, fünfundzwanzig je
+ * Schub, dazu `doppelPunkte` — der Bonus aus Münzen, die mit aktivem
+ * Punkte-Doppler eingesammelt wurden (siehe `DOPPEL_MUENZ_BONUS`).
  *
  * Münzen und Schübe sollen sich lohnen, aber nicht das Rennen ersetzen —
  * wer nur sammelt und langsam ist, kommt trotzdem nicht weit. Ein Schub
@@ -523,5 +566,7 @@ export function takt(lauf: Lauf, dt: number): Lauf {
  * und man ihn nicht einmal benutzen muss, um die Punkte zu behalten.
  */
 export function punkte(lauf: Lauf): number {
-  return Math.floor(lauf.strecke) + lauf.muenzenZahl * 10 + lauf.schubZahl * 25;
+  return (
+    Math.floor(lauf.strecke) + lauf.muenzenZahl * 10 + lauf.schubZahl * 25 + lauf.doppelPunkte
+  );
 }

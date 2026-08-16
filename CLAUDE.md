@@ -1507,6 +1507,28 @@ gleichzeitig aktiv sein.
   ausreichend hoher Sprung trägt darüber. Rückmeldung, wörtlich: „dass man
   dann auch über die Hürden, wo man drunter durchkriegen muss, drüber
   springen kann, wenn man dann irgendwas einsammelt."
+- **Die Regel allein reichte nicht — es fehlte das Gefühl.** Rückmeldung
+  danach: „Das Symbol ist mega, aber es bringt ja überhaupt nichts, man
+  kommt trotzdem nicht über die großen Absperrungen." Die Regel *stimmte*
+  bereits, jeder normale Sprung kam durch. Aber ein normal hoher Sprung
+  sieht neben dem hüfthoch hängenden Schild nicht nach „darüber geflogen"
+  aus, sondern nach Zufall. `springen()` gibt mit aktivem Sprungschub
+  deshalb echten Kraft-Bonus (v₀ × 1,35, also fast 70 % mehr
+  Scheitelhöhe). *Merksatz:* Wenn eine Regel bereits erlaubt, was der
+  Spieler will, er es aber trotzdem nicht glaubt, ist nicht die Regel
+  falsch, sondern ihre sichtbare Auswirkung zu klein.
+- **Punkte-Doppler (`doppel`) — Ronnis eigene Idee**, wörtlich: „so 'n
+  Mal-zwei-Zeichen, das macht dann den Score für ein paar Sekunden doppelt
+  so schnell hoch." Wichtig dabei: Er verdoppelt den **Punktwert** der
+  Münzen, nicht ihre **Zahl**. Eine mit Doppler eingesammelte Münze zählt
+  weiterhin einfach in `muenzenZahl` und `muenzSerie` (sonst spränge die
+  Serie in Zweierschritten und der Münzton käme aus dem Takt) und legt
+  ihren Bonus in einen eigenen Topf `doppelPunkte`, der nur in `punkte()`
+  obendrauf kommt. Der Topf wird nie geleert: Was man sich verdient hat,
+  darf nicht wieder verschwinden, sonst fiele der Punktestand mitten im
+  Lauf sichtbar zurück. Als Form ein vierzackiger Funke (kein Icon-Vorbild
+  wie bei Blitz/Pfeil) in Pink — eine „×2"-Beschriftung wäre bei 44 Pixeln
+  Bildgröße zu Matsch geworden.
 - **Der Schub wirkt noch im selben Bild, in dem er eingesammelt wird.**
   Die Einsammel-Prüfung steht in `takt()` bewusst **vor** der
   Hindernisprüfung und schreibt in dieselbe `zwischen`-Variable — ein
