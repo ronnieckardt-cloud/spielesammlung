@@ -81,14 +81,28 @@ const DOPPEL_LUECKE = 8;
  * vom ersten Buckel über die Lücke **und über den zweiten hinweg** springt,
  * statt weich von einer Kuppe in die nächste zu rollen. Ronni, wörtlich:
  * „kleinere Hubbel, wo du versuchen musst, den anderen kleinen Hubbel zu
- * überspringen." Macht zusammen vier **Abschnittsarten**, reihum gewürfelt:
- * `ruhig` (kein Kicker, nur die vorhandene Bodenwelle — Erholung und neuer
- * Schwung), `doppel` (die beiden kleinen Buckel), `kicker` (eine kurze
- * Kette von zwei bis vier normalen Sprüngen, „damit man in andere Sprünge
- * springt") und `mega` (ein einzelner, deutlich höherer und steilerer
- * Sprung mit großzügiger Landezone) — Ronni: „ein paar Sprünge, die dich
- * mega hoch kicken … aber nicht immer." Genau dieses „nicht immer" ist der
- * Grund für den Würfel statt einer festen Abfolge.
+ * überspringen." Macht zusammen vier **Abschnittsarten**: `ruhig` (kein
+ * Kicker, nur die vorhandene Bodenwelle — Erholung und neuer Schwung),
+ * `doppel` (die beiden kleinen Buckel), `kicker` (eine kurze Kette von
+ * zwei bis vier normalen Sprüngen, „damit man in andere Sprünge springt")
+ * und `mega` (ein einzelner, deutlich höherer und steilerer Sprung mit
+ * großzügiger Landezone) — Ronni: „ein paar Sprünge, die dich mega hoch
+ * kicken … aber nicht immer."
+ *
+ * **Fünfte Fassung: Rhythmus statt reinem Würfel.** Die vierte Fassung
+ * würfelte die Abschnittsart bei **jedem einzelnen** Abschnitt neu, ohne
+ * Gedächtnis — auf Strecken-Ebene wirkte das trotz der vier Arten
+ * gleichförmig: mal ein ruhiger, mal ein knackiger Abschnitt, aber nie
+ * eine klare Passage aus mehreren. Jetzt gibt es zwei **Zonen**, die sich
+ * über mehrere Abschnitte hinweg abwechseln: `flow` (überwiegend `ruhig`
+ * und `doppel`, großzügigere Abstände — Tempo aufbauen, durchrollen) und
+ * `skill` (überwiegend `kicker`-Ketten und `mega` — Können gefragt, dicht
+ * getaktet). Innerhalb einer Zone bleiben die einzelnen
+ * Sprung-Formeln (Breite, Höhe, `MAX_KICKER_STEIGUNG`-Deckel) exakt
+ * dieselben wie vorher; nur **welche Art wie oft hintereinander**
+ * vorkommt, ist jetzt kein Zufall mehr Bild für Bild, sondern strukturiert.
+ * Die Zonenlänge selbst kommt wie alles andere aus der Saat — dieselbe
+ * Strecke bleibt bei gleicher Saat exakt gleich.
  */
 export function gelaendeBauen(saat: number, laenge = STRECKE_LAENGE): Gelaende {
   let s = saat;
@@ -106,25 +120,62 @@ export function gelaendeBauen(saat: number, laenge = STRECKE_LAENGE): Gelaende {
   // Der erste Sprung kommt sofort nach dem Anlauf — er ist das, was das
   // Spiel ausmacht, und darf nicht erst nach einer halben Minute Rollen
   // auftauchen. Deshalb ist die erste Runde immer eine Kicker-Reihe, erst
-  // danach würfelt die Abschnittsart.
+  // danach beginnt der Zonen-Rhythmus.
   let x = ANLAUF + 10;
   let ersteRunde = true;
+
+  /*
+   * Die Zone wechselt nicht bei jedem Abschnitt, sondern nach 2 bis 4
+   * Abschnitten — kurz genug, dass beide Zonen mehrfach auf einer Strecke
+   * vorkommen, lang genug, dass eine Zone als eigene Passage spürbar ist,
+   * nicht nur als einzelner Ausreißer.
+   */
+  let zone: 'flow' | 'skill' = 'flow';
+  let zoneRest = 2 + Math.floor(naechste() * 3);
 
   while (x < laenge - 30) {
     // Der Anteil der zurückgelegten Strecke steuert die Größe: vorne
     // zahm, hinten fordernd — gilt für alle vier Abschnittsarten gleich.
     const anteil = (x - ANLAUF) / Math.max(1, laenge - ANLAUF);
 
+    if (!ersteRunde) {
+      if (zoneRest <= 0) {
+        zone = zone === 'flow' ? 'skill' : 'flow';
+        zoneRest = 2 + Math.floor(naechste() * 3);
+      }
+      zoneRest--;
+    }
+
+    /*
+     * **Der Höhepunkt:** im letzten Fünftel der Strecke erzwingt die
+     * nächste fällige Zone `skill` statt sie dem Zufall zu überlassen —
+     * sonst könnte eine Strecke ausgerechnet vor der Ziellinie in eine
+     * ruhige Rollphase auslaufen, statt auf einen letzten, deutlich
+     * anspruchsvollen Abschnitt zuzulaufen. Die Sprünge selbst werden
+     * dadurch nicht größer als das Übliche am Streckenende (das steuert
+     * weiterhin `anteil` in den einzelnen Formeln) — nur die Art wird
+     * sicher `skill` statt zufällig `flow`.
+     */
     const wuerfel = naechste();
+    const effektiveZone: 'flow' | 'skill' = anteil > 0.8 ? 'skill' : zone;
     const art: 'ruhig' | 'doppel' | 'kicker' | 'mega' = ersteRunde
       ? 'kicker'
-      : wuerfel < 0.2
-        ? 'ruhig'
-        : wuerfel < 0.4
-          ? 'doppel'
-          : wuerfel < 0.52
-            ? 'mega'
-            : 'kicker';
+      : effektiveZone === 'flow'
+        ? // Flow-Zone: viel Rollen und höchstens ein sanfter Doppel-Hubbel,
+          // kaum Kicker-Ketten und nie ein Mega — Tempo halten, nicht fordern.
+          wuerfel < 0.55
+          ? 'ruhig'
+          : wuerfel < 0.85
+            ? 'doppel'
+            : 'kicker'
+        : // Skill-Zone: dicht getaktete Sprünge, Ruhepausen sind selten.
+          wuerfel < 0.08
+          ? 'ruhig'
+          : wuerfel < 0.3
+            ? 'doppel'
+            : wuerfel < 0.55
+              ? 'mega'
+              : 'kicker';
     ersteRunde = false;
 
     if (art === 'ruhig') {
@@ -132,7 +183,11 @@ export function gelaendeBauen(saat: number, laenge = STRECKE_LAENGE): Gelaende {
       // harten Landung wieder Tempo auf — ohne dieses Gegenstück bräche
       // eine Kette unperfekter Landungen das Tempo immer weiter herunter,
       // ohne je eine Gelegenheit, es zurückzuholen.
-      x += 20 + naechste() * 16;
+      //
+      // In einer Flow-Zone etwas großzügiger als vorher (20–36 m → 24–46 m)
+      // — „längere, flachere Wellen, größere Abstände", genau das, was die
+      // Zone von einer knapp getakteten Skill-Zone unterscheiden soll.
+      x += (effektiveZone === 'flow' ? 24 : 20) + naechste() * (effektiveZone === 'flow' ? 22 : 16);
     } else if (art === 'doppel') {
       // Zwei kleine, eigenständige Buckel — kein glattes Ineinanderrollen
       // wie bei einer Kicker-Kette, sondern eine klare Lücke, die man

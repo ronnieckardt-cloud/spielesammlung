@@ -3104,6 +3104,33 @@ Eingabemodell. Ein Bot mit Fähigkeiten, die der echte Spieler strukturell
 nicht hat (hier: Analogsteuerung statt Tastendruck, Reaktion ohne
 Verzögerung), beweist Spielbarkeit für einen Spieler, den es nicht gibt.
 
+### Fünfte Fassung des Geländes: Flow- und Skill-Zonen
+
+`gelaendeBauen` würfelte die vier Abschnittsarten (`ruhig`/`doppel`/
+`kicker`/`mega`) bislang bei **jedem** Abschnitt unabhängig neu — auf
+Strecken-Ebene wirkte das trotzdem gleichförmig, weil nie mehrere
+ähnliche Abschnitte hintereinander standen. Jetzt gibt es eine
+**Zonen-Ebene** darüber: `flow` (2–4 Abschnitte lang, überwiegend `ruhig`/
+`doppel`, großzügigere Rollstrecken) wechselt sich mit `skill` (dieselbe
+Länge, überwiegend `kicker`-Ketten/`mega`, dicht getaktet) ab — beide
+Zonenlängen kommen aus der Saat, bleiben also deterministisch. Im letzten
+Fünftel der Strecke erzwingt `anteil > 0,8` immer `skill`, damit keine
+Strecke ausgerechnet vor der Ziellinie in eine ruhige Rollphase ausläuft.
+
+**Bewusst nicht angefasst:** die einzelnen Sprung-Formeln (Breite, Höhe,
+`MAX_KICKER_STEIGUNG`-Deckel, die „physikalisch erreichbare Lücke" bei
+Kicker-Ketten) — die Zonen bestimmen nur, welche Art wie oft
+hintereinander vorkommt, nicht wie ein einzelner Sprung berechnet wird.
+Einzige Ausnahme: der `ruhig`-Abstand ist in einer Flow-Zone etwas
+großzügiger (24–46 m statt 20–36 m), passend zu „größere Abstände".
+
+**Mit demselben realistischen Bot wie oben re-validiert** (nicht nur
+gegen die bestehenden Tests): passiv fällt jetzt auf 2 von 10 Strecken
+(vorher 5/10 — die Zonen verschärfen den Unterschied zwischen „nichts
+tun" und „aktiv steuern" zusätzlich), der aktive realistische Bot bleibt
+im selben Bereich wie vor der Terrain-Änderung (7–8/10). Alle 974 Tests
+grün, keine Anpassung an Physik-Parametern nötig.
+
 ## Befehle
 
 ```bash
