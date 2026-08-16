@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import type { GameApi } from '../core/types';
 import { spiele } from '../core/registry';
 import { Seite } from './Seite';
+import { Avatar } from './AvatarBild';
 import {
+  avatarLesen,
   bestenlisteLesen,
   fortschrittLesen,
   serverlisteLesen,
   serverlisteSchreiben,
 } from './speicher';
+import { stufeAus } from './fortschritt';
 import { bestenlistenHolen } from './konto';
 import type { Bestenlisten, Konto } from './konto';
 
@@ -80,6 +83,19 @@ const PODESTHOEHEN = ['4.75rem', '3.25rem', '2.5rem'] as const;
 /** Höchstbreite einer Podeststufe — ebenfalls in Anzeige und Gerüst gebraucht. */
 const PODESTBREITE = '7.5rem';
 
+/**
+ * Der eigene Avatar in der Größe des Anfangsbuchstaben-Kreises daneben.
+ *
+ * Eigene kleine Komponente statt eines Inline-Aufrufs, weil sie ihre Daten
+ * selbst liest (Stufe + gespeicherte Wahl) — das Podest bekommt nur Name
+ * und Punkte gereicht, es soll nichts vom Speicher wissen müssen.
+ */
+function EigenerAvatar() {
+  const stufe = stufeAus(fortschrittLesen().xp).stufe;
+  const avatar = avatarLesen(stufe);
+  return <Avatar konfig={avatar} className="mt-1 size-11 drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" />;
+}
+
 function Podest({ oben }: { oben: readonly { name: string; punkte: number; ich?: boolean }[] }) {
   // Anzeigereihenfolge: Silber, Gold, Bronze. Fehlt jemand, rückt nichts nach —
   // ein Podest mit zwei Stufen ist ehrlicher als eines mit einer Lücke in der Mitte.
@@ -110,19 +126,24 @@ function Podest({ oben }: { oben: readonly { name: string; punkte: number; ich?:
               {MEDAILLEN[platzIndex]}
             </span>
 
-            {/* Der Kreis mit dem Anfangsbuchstaben. Bis es Avatare gibt, ist
-                das die schnellste Art, einen Namen wiederzuerkennen — und er
-                gibt dem Podest oben eine Form statt nur Text. */}
-            <span
-              aria-hidden="true"
-              className="mt-1 grid size-11 place-items-center rounded-full text-base font-black text-black/75"
-              style={{
-                background: `radial-gradient(circle at 34% 28%, color-mix(in oklab, ${farbe} 55%, white), ${farbe})`,
-                boxShadow: `inset 0 -2px 5px rgb(0 0 0 / 0.28), 0 0 16px -4px ${farbe}`,
-              }}
-            >
-              {eintrag.name.slice(0, 1).toUpperCase()}
-            </span>
+            {/* Der eigene Platz zeigt den echten Avatar — er liegt nur auf
+                diesem Gerät, andere Spieler haben (noch) keinen synchronisiert
+                (siehe `avatar.ts`). Für sie bleibt der Anfangsbuchstabe die
+                schnellste Art, einen Namen wiederzuerkennen. */}
+            {eintrag.ich ? (
+              <EigenerAvatar />
+            ) : (
+              <span
+                aria-hidden="true"
+                className="mt-1 grid size-11 place-items-center rounded-full text-base font-black text-black/75"
+                style={{
+                  background: `radial-gradient(circle at 34% 28%, color-mix(in oklab, ${farbe} 55%, white), ${farbe})`,
+                  boxShadow: `inset 0 -2px 5px rgb(0 0 0 / 0.28), 0 0 16px -4px ${farbe}`,
+                }}
+              >
+                {eintrag.name.slice(0, 1).toUpperCase()}
+              </span>
+            )}
 
             <span className="mt-1 w-full truncate text-center text-xs font-bold text-white">
               {eintrag.name}

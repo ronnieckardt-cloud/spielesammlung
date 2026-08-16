@@ -1,5 +1,6 @@
 import type { Einstellungen } from '../core/types';
 import { fortschrittBereinigen, type Fortschritt } from './fortschritt';
+import { avatarBereinigen, type AvatarKonfig } from './avatar';
 
 /**
  * Der einzige Ort im Projekt, der localStorage anfassen darf.
@@ -215,6 +216,10 @@ export function bestenlisteLoeschen(spielId?: string): void {
     // sind, wäre ein Widerspruch — die Stufe ist ja aus genau diesen Runden
     // entstanden.
     localStorage.removeItem(`${PRAEFIX}${FORTSCHRITT}`);
+    // Und der Avatar: Ohne Fortschritt keine Stufe, ohne Stufe keine
+    // freigeschalteten Teile — ein „Gold"-Körper ohne die Stufe, die ihn
+    // freigeschaltet hat, wäre unverdient stehengeblieben.
+    localStorage.removeItem(`${PRAEFIX}${AVATAR}`);
     // Die Sitzung bleibt ausdrücklich stehen: „Bestenliste löschen" darf
     // nicht heimlich abmelden. Abmelden ist eine eigene Handlung.
   } catch {
@@ -239,6 +244,28 @@ const FORTSCHRITT = 'fortschritt';
  */
 export function fortschrittLesen(): Fortschritt {
   return fortschrittBereinigen(lesen<unknown>(FORTSCHRITT, null));
+}
+
+// ---------------------------------------------------------------------
+// Avatar
+// ---------------------------------------------------------------------
+
+const AVATAR = 'avatar';
+
+/**
+ * Der gespeicherte Avatar — geht **immer** durch `avatarBereinigen`.
+ *
+ * `stufe` kommt vom Aufrufer statt hier selbst gelesen zu werden: Dieser
+ * Speicher-Baustein soll nichts über `fortschritt.ts` wissen müssen, um
+ * unabhängig testbar zu bleiben (dieselbe Trennung wie überall sonst in
+ * dieser Datei — sie speichert, sie rechnet nicht).
+ */
+export function avatarLesen(stufe: number): AvatarKonfig {
+  return avatarBereinigen(lesen<unknown>(AVATAR, null), stufe);
+}
+
+export function avatarSchreiben(konfig: AvatarKonfig): void {
+  schreiben(AVATAR, konfig);
 }
 
 export function fortschrittSchreiben(stand: Fortschritt): void {

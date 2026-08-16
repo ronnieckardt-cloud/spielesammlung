@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { Seite } from './Seite';
+import { Avatar } from './AvatarBild';
 import { abmelden, anmelden, passwortNeuSetzen, registrieren } from './konto';
 import type { Konto } from './konto';
+import { avatarLesen, fortschrittLesen } from './speicher';
+import { stufeAus } from './fortschritt';
 
 /**
  * Der Einladungscode. Steht auch im Klartext in der Datenbank
@@ -86,7 +89,15 @@ function Einladen() {
   );
 }
 
-export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZurueck: () => void }) {
+export function KontoSeite({
+  konto,
+  onZurueck,
+  onAvatar,
+}: {
+  konto: Konto | null;
+  onZurueck: () => void;
+  onAvatar: () => void;
+}) {
   const [modus, setModus] = useState<Modus>('anmelden');
   const [name, setName] = useState('');
   const [passwort, setPasswort] = useState('');
@@ -96,12 +107,31 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
   const [laeuft, setLaeuft] = useState(false);
 
   if (konto) {
+    // Nur zur Anzeige — der Avatar selbst hängt nicht am Konto, er
+    // funktioniert genauso ohne Anmeldung (siehe `avatar.ts`).
+    const stufe = stufeAus(fortschrittLesen().xp).stufe;
+    const avatar = avatarLesen(stufe);
     return (
       <Seite titel="Dein Konto" onZurueck={onZurueck}>
         <div className="mx-auto flex max-w-sm flex-col gap-5 text-center">
           <div className="rounded-karte border border-rand bg-flaeche p-6">
-            <p className="text-sm text-gedaempft">Angemeldet als</p>
+            <button
+              type="button"
+              onClick={onAvatar}
+              aria-label="Avatar anpassen"
+              className="druckbar mx-auto block"
+            >
+              <Avatar konfig={avatar} className="size-20" />
+            </button>
+            <p className="mt-3 text-sm text-gedaempft">Angemeldet als</p>
             <p className="mt-1 text-2xl font-black">{konto.name}</p>
+            <button
+              type="button"
+              onClick={onAvatar}
+              className="mt-2 inline-flex min-h-11 items-center text-sm text-fokus underline underline-offset-4"
+            >
+              Avatar anpassen
+            </button>
           </div>
           <p className="text-sm text-gedaempft">
             Deine Ergebnisse landen jetzt auf allen deinen Geräten und in der

@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
 import { BunterGrund } from './BunterGrund';
+import { Avatar } from './AvatarBild';
+import { avatarLesen, fortschrittLesen } from './speicher';
+import { stufeAus } from './fortschritt';
 import type { Konto } from './konto';
 
 /**
@@ -46,14 +49,22 @@ function Zeile({
 export function MehrSeite({
   konto,
   onKonto,
+  onAvatar,
   onDuelle,
   onEinstellungen,
 }: {
   konto: Konto | null;
   onKonto: () => void;
+  onAvatar: () => void;
   onDuelle: () => void;
   onEinstellungen: () => void;
 }) {
+  // Bewusst nicht hinter das Konto gestellt: Der Avatar ist lokale Kür wie
+  // der Fortschritt, keine Kontoeinstellung — er funktioniert genauso ohne
+  // Anmeldung, das soll die Reihenfolge hier auch zeigen.
+  const stufe = stufeAus(fortschrittLesen().xp).stufe;
+  const avatar = avatarLesen(stufe);
+
   return (
     <BunterGrund>
       <header className="rein-von-oben mb-4">
@@ -72,6 +83,12 @@ export function MehrSeite({
               : 'Damit deine Punkte auf jedem Gerät zählen'
           }
           onKlick={onKonto}
+        />
+        <Zeile
+          symbol={<Avatar konfig={avatar} className="size-9" />}
+          titel="Avatar"
+          hinweis="Farbe, Form, Augen und Extra"
+          onKlick={onAvatar}
         />
         <Zeile
           symbol="⚔️"

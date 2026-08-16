@@ -2176,6 +2176,35 @@ Fehlerzustand.
 an den bestehenden Fortschritt, Speichern des Weltzustands, Fahrzeug,
 Minispiel, Gegner, Boss, Arcade-Modus, Story, weitere Zonen.
 
+## Der Avatar
+
+Eine kleine Figur aus vier Teilen — Farbe, Form, Augen, Extra —, die mit der
+Stufe wächst. `shell/avatar.ts` (reine Logik, welche Optionen ab welcher
+Stufe offen sind), `shell/AvatarBild.tsx` (das SVG), `shell/AvatarSeite.tsx`
+(der Baukasten), erreichbar über „Mehr" und von der Kontoseite aus.
+
+**Datei heißt `AvatarBild.tsx`, nicht `Avatar.tsx`.** macOS' Dateisystem ist
+serienmäßig nicht zwischen Groß-/Kleinschreibung unterscheidend — `Avatar.tsx`
+und `avatar.ts` wären auf der Platte **dieselbe Datei** gewesen. Das fiel
+nicht beim Schreiben auf (beide Editoren zeigten anstandslos ihren eigenen
+Inhalt), sondern erst beim Typprüfen, mit einer Fehlermeldung, die die
+Ursache nicht beim Namen nennt. Merksatz: Ein Dateiname darf sich in diesem
+Projekt in nichts als der Groß-/Kleinschreibung von einem anderen unterscheiden.
+
+**Bewusst lokal, nicht über den Server.** Der Avatar ist Kür, kein
+Spielstand — er speichert wie der Fortschritt in `speicher.ts`, offline
+verfügbar, ohne einen weiteren Baustein, der scheitern kann. Dadurch ist er
+nur auf dem eigenen Gerät sichtbar, auch für andere Spieler in der
+Bestenliste (dort zeigt nur die **eigene** Zeile den echten Avatar, alle
+anderen weiterhin den Anfangsbuchstaben) — eine bewusste Einschränkung der
+ersten Fassung, kein Versehen.
+
+**Gesperrte Teile stehen blass da, mit der Stufe, ab der sie zu haben
+sind** — dieselbe Regel wie bei den Erfolgen auf der Fortschrittsseite.
+`avatarBereinigen` sorgt dafür, dass ein gespeicherter Wert nie eine Option
+zurückgibt, die bei der aktuellen Stufe eigentlich gesperrt ist — dieselbe
+Vorsicht wie bei `fortschrittBereinigen`.
+
 ## Ausliefern
 
 Läuft auf **Netlify** unter `florian-spielesammlung.netlify.app`. Das ist

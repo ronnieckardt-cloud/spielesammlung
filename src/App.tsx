@@ -10,6 +10,7 @@ import { Spielrahmen } from './shell/Spielrahmen';
 import { EinstellungenSeite } from './shell/EinstellungenSeite';
 import { BestenlisteSeite } from './shell/BestenlisteSeite';
 import { KontoSeite } from './shell/KontoSeite';
+import { AvatarSeite } from './shell/AvatarSeite';
 import { DuellSeite } from './shell/DuellSeite';
 import { Unternavigation, type NavZiel } from './shell/Unternavigation';
 import { AbenteuerSeite } from './abenteuer/AbenteuerSeite';
@@ -33,6 +34,7 @@ export type Ansicht =
   | { art: 'einstellungen' }
   | { art: 'bestenliste' }
   | { art: 'konto' }
+  | { art: 'avatar' }
   | { art: 'duelle' }
   | { art: 'duell'; id: string };
 
@@ -48,6 +50,7 @@ function ansichtAusAdresse(): Ansicht {
   if (teile[0] === 'einstellungen') return { art: 'einstellungen' };
   if (teile[0] === 'bestenliste') return { art: 'bestenliste' };
   if (teile[0] === 'konto') return { art: 'konto' };
+  if (teile[0] === 'avatar') return { art: 'avatar' };
   if (teile[0] === 'duelle') return { art: 'duelle' };
   if (teile[0] === 'duell' && teile[1]) return { art: 'duell', id: teile[1] };
   return { art: 'menue' };
@@ -71,6 +74,8 @@ function adresseFuer(ansicht: Ansicht): string {
       return '#/bestenliste';
     case 'konto':
       return '#/konto';
+    case 'avatar':
+      return '#/avatar';
     case 'duelle':
       return '#/duelle';
     case 'duell':
@@ -98,6 +103,7 @@ function navZielFuer(ansicht: Ansicht): NavZiel {
       return 'fortschritt';
     case 'mehr':
     case 'konto':
+    case 'avatar':
     case 'einstellungen':
     case 'duelle':
       return 'mehr';
@@ -159,6 +165,7 @@ export default function App() {
 
   const zumMenue = useCallback(() => zeige({ art: 'menue' }), [zeige]);
   const zumKonto = useCallback(() => zeige({ art: 'konto' }), [zeige]);
+  const zumAvatar = useCallback(() => zeige({ art: 'avatar' }), [zeige]);
   const zuMehr = useCallback(() => zeige({ art: 'mehr' }), [zeige]);
   const spielen = useCallback((id: string) => zeige({ art: 'spiel', id }), [zeige]);
 
@@ -217,6 +224,7 @@ export default function App() {
           <MehrSeite
             konto={konto}
             onKonto={zumKonto}
+            onAvatar={zumAvatar}
             onDuelle={() => zeige({ art: 'duelle' })}
             onEinstellungen={() => zeige({ art: 'einstellungen' })}
           />
@@ -232,7 +240,9 @@ export default function App() {
       case 'bestenliste':
         return <BestenlisteSeite konto={konto} onZurueck={zumMenue} onKonto={zumKonto} />;
       case 'konto':
-        return <KontoSeite konto={konto} onZurueck={zuMehr} />;
+        return <KontoSeite konto={konto} onZurueck={zuMehr} onAvatar={zumAvatar} />;
+      case 'avatar':
+        return <AvatarSeite onZurueck={zumKonto} />;
       case 'duelle':
         return (
           <DuellSeite
