@@ -740,7 +740,14 @@ function radFahrerZeichnen(
    * dünnere Standrohr, das beim Einfedern darin verschwindet. Der
    * sichtbare Rest des Standrohrs **ist** der Federweg.
    */
-  const gabelOffen = 0.34 * m - wegVorn;
+  /*
+   * Der sichtbare Federweg. Deutlich länger als beim ersten Versuch
+   * (0,34 m) — Rückmeldung: „Das Fahrrad soll eine viel größere
+   * Federgabel vorne haben." Eine echte Downhill-Gabel hat rund 200 mm
+   * Federweg und entsprechend lange Rohre; das ist das Bauteil, an dem
+   * man ein Downhill-Rad überhaupt erkennt.
+   */
+  const gabelOffen = 0.52 * m - wegVorn;
   /** Wo das Standrohr aus dem Tauchrohr kommt. */
   const tauchOben = {
     x: vornX + (gabelOben.x - vornX) * 0.46,
@@ -755,8 +762,8 @@ function radFahrerZeichnen(
     nabeVorn,
     tauchOben.x,
     tauchOben.y,
-    0.062 * m,
-    0.066 * m,
+    0.075 * m,
+    0.08 * m,
     FARBEN.federDunkel,
   );
   // Standrohr (oben, dünner, glänzend hell) — läuft bis über den Steuerkopf.
@@ -765,8 +772,8 @@ function radFahrerZeichnen(
     tauchOben.y,
     standOben.x,
     standOben.y,
-    0.046 * m,
-    0.046 * m,
+    0.056 * m,
+    0.056 * m,
     FARBEN.federHell,
   );
   // Untere Brücke, direkt unter dem Steuerrohr.
@@ -1015,62 +1022,171 @@ function radFahrerZeichnen(
    * Landung geht der Fahrer tief, sonst steht er über dem Sattel. `hocke`
    * ist das eine Maß dafür.
    */
+  /*
+   * **Der Fahrer ist aus Körperformen gebaut, nicht aus Rohren.**
+   *
+   * Rückmeldung: „Ich will, dass der Mensch deutlich menschlicher
+   * aussieht." Vorher liefen Rumpf, Arme und Beine durch dieselbe
+   * `rohr()`-Funktion wie der Rahmen — mit demselben Metallglanz und
+   * derselben harten Kontur. Ein Körper hat aber keine Rohre: Der Rumpf
+   * ist an den Schultern breit und an der Taille schmal, Gliedmaßen sind
+   * am Ansatz dicker als am Gelenk, und alle Übergänge sind rund.
+   *
+   * Deshalb bekommt der Fahrer eine eigene `glied()`-Funktion mit runden
+   * Enden und einen Rumpf als geschlossenen Umriss.
+   */
   const hocke = Math.min(1, (federVorn + federHinten) * 0.5 + (lauf.amBoden ? 0 : 0.4));
-  const huefte = { x: sattel.x + 0.08 * m, y: sattel.y - 0.1 * m + hocke * 0.12 * m };
-  const schulter = { x: huefte.x + 0.34 * m, y: huefte.y - 0.44 * m + hocke * 0.16 * m };
-  const kopf = { x: schulter.x + 0.13 * m, y: schulter.y - 0.22 * m };
+  const huefte = { x: sattel.x + 0.1 * m, y: sattel.y - 0.14 * m + hocke * 0.13 * m };
+  const schulter = { x: huefte.x + 0.36 * m, y: huefte.y - 0.5 * m + hocke * 0.17 * m };
+  const kopf = { x: schulter.x + 0.15 * m, y: schulter.y - 0.25 * m };
 
-  // Bein: Hüfte → Knie → Pedal, als gefüllte Glieder.
-  const knie = { x: huefte.x + 0.22 * m, y: huefte.y + 0.28 * m + hocke * 0.04 * m };
-  rohr(huefte.x, huefte.y, knie.x, knie.y, 0.075 * m, 0.06 * m, FARBEN.hose);
-  rohr(knie.x, knie.y, pedalX, pedalY, 0.055 * m, 0.04 * m, FARBEN.hose);
-  // Schuh.
-  ctx.fillStyle = '#0e0e12';
+  /** Ein Körperglied: weiche Kapsel mit runden Enden, kein Metallrohr. */
+  const glied = (
+    ax: number,
+    ay: number,
+    bx2: number,
+    by2: number,
+    dickeA: number,
+    dickeB: number,
+    farbe: string,
+  ) => {
+    const dx = bx2 - ax;
+    const dy = by2 - ay;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const winkel = Math.atan2(dy, dx);
+    ctx.beginPath();
+    // Halbkreis am Ansatz, gerade Seiten, Halbkreis am Gelenk — das ist
+    // der Unterschied zwischen Arm und Rohr.
+    ctx.arc(ax, ay, dickeA, winkel + Math.PI / 2, winkel - Math.PI / 2);
+    ctx.lineTo(bx2 + nx * -dickeB, by2 + ny * -dickeB);
+    ctx.arc(bx2, by2, dickeB, winkel - Math.PI / 2, winkel + Math.PI / 2);
+    ctx.closePath();
+    ctx.strokeStyle = '#12141a';
+    ctx.lineWidth = Math.max(1.2, dickeA * 0.3);
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    // Weicher Verlauf quer zum Glied — heller oben, dunkler unten.
+    const gg = ctx.createLinearGradient(
+      (ax + bx2) / 2 + nx * dickeA,
+      (ay + by2) / 2 + ny * dickeA,
+      (ax + bx2) / 2 - nx * dickeA,
+      (ay + by2) / 2 - ny * dickeA,
+    );
+    gg.addColorStop(0, mischen(farbe, '#ffffff', 0.28));
+    gg.addColorStop(0.55, farbe);
+    gg.addColorStop(1, mischen(farbe, '#000000', 0.35));
+    ctx.fillStyle = gg;
+    ctx.fill();
+  };
+
+  // --- Bein: Hüfte → Knie → Pedal ---
+  const knie = { x: huefte.x + 0.24 * m, y: huefte.y + 0.3 * m + hocke * 0.04 * m };
+  glied(huefte.x, huefte.y, knie.x, knie.y, 0.085 * m, 0.062 * m, FARBEN.hose);
+  glied(knie.x, knie.y, pedalX, pedalY - 0.04 * m, 0.06 * m, 0.045 * m, FARBEN.hose);
+  // Schuh: Sohle und Spann getrennt, damit er nicht wie ein Klumpen wirkt.
+  ctx.fillStyle = '#15161b';
   ctx.beginPath();
-  ctx.ellipse(pedalX + 0.01 * m, pedalY - 0.03 * m, 0.075 * m, 0.045 * m, 0.1, 0, Math.PI * 2);
+  ctx.ellipse(pedalX + 0.02 * m, pedalY - 0.045 * m, 0.085 * m, 0.05 * m, 0.08, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle = '#0a0b0e';
+  ctx.fillRect(pedalX - 0.06 * m, pedalY - 0.015 * m, 0.16 * m, 0.028 * m);
 
-  // Rumpf.
-  rohr(
-    huefte.x,
-    huefte.y,
+  /*
+   * --- Der Rumpf als geschlossener Umriss ---
+   *
+   * Vier Punkte, mit Kurven verbunden: breite Schulter, eingezogene
+   * Taille auf der Bauchseite, gewölbter Rücken. Eine gerade Kapsel von
+   * Hüfte zu Schulter — wie vorher — liest sich als Rohr; erst die
+   * unterschiedliche Wölbung von Vorder- und Rückseite macht daraus
+   * einen Oberkörper.
+   */
+  const rDx = schulter.x - huefte.x;
+  const rDy = schulter.y - huefte.y;
+  const rLen = Math.hypot(rDx, rDy) || 1;
+  const rNx = -rDy / rLen;
+  const rNy = rDx / rLen;
+  const breitSchulter = 0.15 * m;
+  const breitHuefte = 0.115 * m;
+  ctx.beginPath();
+  ctx.moveTo(huefte.x + rNx * breitHuefte, huefte.y + rNy * breitHuefte);
+  // Rückenseite: nach außen gewölbt.
+  ctx.quadraticCurveTo(
+    (huefte.x + schulter.x) / 2 + rNx * breitSchulter * 1.35,
+    (huefte.y + schulter.y) / 2 + rNy * breitSchulter * 1.35,
+    schulter.x + rNx * breitSchulter,
+    schulter.y + rNy * breitSchulter,
+  );
+  ctx.arc(
     schulter.x,
     schulter.y,
-    0.105 * m,
-    0.095 * m,
-    FARBEN.kleidung,
+    breitSchulter,
+    Math.atan2(rNy, rNx),
+    Math.atan2(-rNy, -rNx),
+    false,
   );
-  // Rückenprotektor als Wölbung.
-  ctx.fillStyle = '#2a2a33';
+  // Bauchseite: leicht eingezogen.
+  ctx.quadraticCurveTo(
+    (huefte.x + schulter.x) / 2 - rNx * breitHuefte * 0.75,
+    (huefte.y + schulter.y) / 2 - rNy * breitHuefte * 0.75,
+    huefte.x - rNx * breitHuefte,
+    huefte.y - rNy * breitHuefte,
+  );
+  ctx.closePath();
+  ctx.strokeStyle = '#12141a';
+  ctx.lineWidth = Math.max(1.5, 0.032 * m);
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  const rumpfG = ctx.createLinearGradient(
+    (huefte.x + schulter.x) / 2 + rNx * breitSchulter,
+    (huefte.y + schulter.y) / 2 + rNy * breitSchulter,
+    (huefte.x + schulter.x) / 2 - rNx * breitSchulter,
+    (huefte.y + schulter.y) / 2 - rNy * breitSchulter,
+  );
+  rumpfG.addColorStop(0, mischen(FARBEN.kleidung, '#ffffff', 0.3));
+  rumpfG.addColorStop(0.5, FARBEN.kleidung);
+  rumpfG.addColorStop(1, mischen(FARBEN.kleidung, '#000000', 0.4));
+  ctx.fillStyle = rumpfG;
+  ctx.fill();
+
+  // Rückenprotektor, als aufgesetzte Platte auf dem Rücken.
+  ctx.fillStyle = 'rgba(20,22,28,0.55)';
   ctx.beginPath();
   ctx.ellipse(
-    (huefte.x + schulter.x) / 2 - 0.07 * m,
-    (huefte.y + schulter.y) / 2 - 0.03 * m,
-    0.15 * m,
-    0.11 * m,
-    -0.5,
+    (huefte.x + schulter.x) / 2 + rNx * 0.06 * m,
+    (huefte.y + schulter.y) / 2 + rNy * 0.06 * m,
+    0.17 * m,
+    0.085 * m,
+    Math.atan2(rDy, rDx),
     0,
     Math.PI * 2,
   );
   ctx.fill();
 
-  // Arm: Schulter → Ellbogen → Lenker. Er federt bei der Landung mit.
-  const ellbogen = { x: schulter.x + 0.15 * m, y: schulter.y + 0.2 * m + hocke * 0.1 * m };
-  rohr(
-    schulter.x,
-    schulter.y,
-    ellbogen.x,
-    ellbogen.y,
-    0.06 * m,
-    0.05 * m,
-    FARBEN.kleidung,
-  );
-  rohr(ellbogen.x, ellbogen.y, lenker.x, lenker.y, 0.05 * m, 0.042 * m, FARBEN.kleidung);
+  // --- Arm: Schulter → Ellbogen → Lenker ---
+  const ellbogen = { x: schulter.x + 0.16 * m, y: schulter.y + 0.22 * m + hocke * 0.1 * m };
+  glied(schulter.x, schulter.y, ellbogen.x, ellbogen.y, 0.07 * m, 0.052 * m, FARBEN.kleidung);
+  glied(ellbogen.x, ellbogen.y, lenker.x, lenker.y, 0.05 * m, 0.04 * m, FARBEN.kleidung);
   // Handschuh am Lenker.
-  ctx.fillStyle = '#2a2a33';
+  ctx.fillStyle = '#2a2d36';
+  ctx.strokeStyle = '#12141a';
+  ctx.lineWidth = Math.max(1, 0.02 * m);
   ctx.beginPath();
-  ctx.arc(lenker.x, lenker.y, 0.05 * m, 0, Math.PI * 2);
+  ctx.arc(lenker.x, lenker.y, 0.055 * m, 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
+
+  // Hals — ohne ihn sitzt der Helm direkt auf den Schultern.
+  glied(
+    schulter.x + 0.03 * m,
+    schulter.y - 0.02 * m,
+    kopf.x - 0.03 * m,
+    kopf.y + 0.1 * m,
+    0.055 * m,
+    0.05 * m,
+    FARBEN.haut,
+  );
 
   /*
    * --- Der Fullface-Helm ---
