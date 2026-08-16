@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Seite } from './Seite';
-import { abmelden, anmelden, registrieren } from './konto';
+import { abmelden, anmelden, passwortNeuSetzen, registrieren } from './konto';
 import type { Konto } from './konto';
 
 /**
@@ -27,7 +27,7 @@ const EINLADUNGSCODE = 'FLORIAN2026';
  * Abmelden steht klein unten.
  */
 
-type Modus = 'anmelden' | 'neu';
+type Modus = 'anmelden' | 'neu' | 'vergessen';
 
 /**
  * Der Einladungscode zum Weitergeben.
@@ -129,6 +129,7 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
     setLaeuft(true);
     try {
       if (modus === 'neu') await registrieren(name.trim(), passwort, code.trim());
+      else if (modus === 'vergessen') await passwortNeuSetzen(name.trim(), code.trim(), passwort);
       else await anmelden(name.trim(), passwort);
       // Kein Sprung zurück ins Menü: Die Seite zeigt jetzt von selbst
       // „Angemeldet als …" — für ein Kind die klarere Bestätigung als ein
@@ -145,12 +146,19 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
   };
 
   return (
-    <Seite titel={modus === 'neu' ? 'Neues Konto' : 'Anmelden'} onZurueck={onZurueck}>
+    <Seite
+      titel={
+        modus === 'neu' ? 'Neues Konto' : modus === 'vergessen' ? 'Neues Passwort' : 'Anmelden'
+      }
+      onZurueck={onZurueck}
+    >
       <form onSubmit={absenden} className="mx-auto flex max-w-sm flex-col gap-4">
         <p className="text-sm text-gedaempft">
           {modus === 'neu'
             ? 'Such dir einen Spielnamen aus — nicht deinen echten Namen.'
-            : 'Melde dich mit deinem Spielnamen an.'}
+            : modus === 'vergessen'
+              ? 'Kein Problem — dein Konto und alle Punkte bleiben. Deine Eltern brauchen dafür nur den Einladungscode.'
+              : 'Melde dich mit deinem Spielnamen an.'}
         </p>
 
         <label className="flex flex-col gap-1 text-sm font-medium">
@@ -166,13 +174,13 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
         </label>
 
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Passwort
+          {modus === 'vergessen' ? 'Neues Passwort' : 'Passwort'}
           <span className="flex gap-2">
             <input
               value={passwort}
               onChange={(e) => setPasswort(e.target.value)}
               type={zeigePasswort ? 'text' : 'password'}
-              autoComplete={modus === 'neu' ? 'new-password' : 'current-password'}
+              autoComplete={modus === 'anmelden' ? 'current-password' : 'new-password'}
               required
               className="min-w-0 flex-1 rounded-xl border border-rand bg-flaeche px-4 py-3 text-base"
             />
@@ -189,7 +197,7 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
           </span>
         </label>
 
-        {modus === 'neu' && (
+        {modus !== 'anmelden' && (
           <label className="flex flex-col gap-1 text-sm font-medium">
             Einladungscode
             <input
@@ -200,7 +208,14 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
               className="rounded-xl border border-rand bg-flaeche px-4 py-3 text-base"
             />
             <span className="text-xs font-normal text-gedaempft">
-              Den bekommst du von Ronni oder von jemandem, der schon dabei ist.
+              {modus === 'vergessen'
+                ? /* Der Code ist hier der Ersatz für die „Passwort
+                     vergessen"-Mail, die es ohne echte Adresse nicht geben
+                     kann. Weil ihn nur die Eltern kennen, ist ein neues
+                     Passwort bewusst eine Erwachsenen-Handlung — sonst
+                     könnte jedes Kind das Konto jedes anderen übernehmen. */
+                  'Den kennen deine Eltern. Ohne ihn geht es nicht — so kann niemand fremdes dein Konto übernehmen.'
+                : 'Den bekommst du von Ronni oder von jemandem, der schon dabei ist.'}
             </span>
           </label>
         )}
@@ -220,19 +235,41 @@ export function KontoSeite({ konto, onZurueck }: { konto: Konto | null; onZuruec
           style={{ backgroundColor: 'var(--color-fokus)' }}
           className="spielknopf spielknopf-gross text-grund"
         >
-          {laeuft ? 'Einen Moment …' : modus === 'neu' ? 'Konto anlegen' : 'Anmelden'}
+          {laeuft
+            ? 'Einen Moment …'
+            : modus === 'neu'
+              ? 'Konto anlegen'
+              : modus === 'vergessen'
+                ? 'Neues Passwort setzen'
+                : 'Anmelden'}
         </button>
 
         <button
           type="button"
           onClick={() => {
-            setModus(modus === 'neu' ? 'anmelden' : 'neu');
+            setModus(modus === 'anmelden' ? 'neu' : 'anmelden');
             setFehler(null);
           }}
           className="inline-flex min-h-11 items-center text-sm text-gedaempft underline underline-offset-4"
         >
-          {modus === 'neu' ? 'Ich habe schon ein Konto' : 'Ich brauche ein neues Konto'}
+          {modus === 'anmelden' ? 'Ich brauche ein neues Konto' : 'Ich habe schon ein Konto'}
         </button>
+
+        {/* Nur beim Anmelden — beim Anlegen ergibt „vergessen" keinen Sinn,
+            und im Vergessen-Modus führt der Knopf darüber schon zurück. */}
+        {modus === 'anmelden' && (
+          <button
+            type="button"
+            onClick={() => {
+              setModus('vergessen');
+              setPasswort('');
+              setFehler(null);
+            }}
+            className="inline-flex min-h-11 items-center text-sm text-gedaempft underline underline-offset-4"
+          >
+            Passwort vergessen?
+          </button>
+        )}
       </form>
     </Seite>
   );

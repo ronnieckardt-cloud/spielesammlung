@@ -69,6 +69,32 @@ async function gueltigeSitzung(): Promise<GespeicherteSitzung | null> {
   return erneuert;
 }
 
+/**
+ * Ein neues Passwort setzen und sich damit gleich anmelden.
+ *
+ * Der zweite Schritt ist wichtig: Wer sein Passwort vergessen hat, will
+ * spielen, nicht Formulare ausfüllen. Nach dem Setzen ist er drin.
+ *
+ * Schlägt ausgerechnet die Anmeldung danach fehl, gilt dieselbe Regel wie
+ * beim Registrieren — es braucht einen eigenen Satz, sonst rätselt man,
+ * warum das neue Passwort angeblich nicht stimmt.
+ */
+export async function passwortNeuSetzen(
+  name: string,
+  code: string,
+  passwort: string,
+): Promise<void> {
+  await server.passwortNeuSetzen(name, code, passwort);
+  try {
+    await anmelden(name, passwort);
+  } catch {
+    throw new Error(
+      `Das neue Passwort steht, ${name}! Die Anmeldung hat nur gerade nicht geklappt. ` +
+        'Tipp unten auf „Ich habe schon ein Konto" und melde dich damit an.',
+    );
+  }
+}
+
 export async function registrieren(name: string, passwort: string, code: string): Promise<void> {
   await server.registrieren(name, passwort, code);
   try {

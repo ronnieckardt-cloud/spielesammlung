@@ -154,6 +154,40 @@ export async function registrieren(name: string, passwort: string, code: string)
   }
 }
 
+/**
+ * Ein neues Passwort setzen, wenn das alte vergessen wurde.
+ *
+ * **Es gibt hier kein „Passwort vergessen" per Mail** — die Adresse
+ * (`name@spieler.klarvorteil.de`) ist erfunden, niemand bekäme je eine
+ * Nachricht. Genau darauf weist der Abschnitt „Anmeldung und Bestenliste"
+ * in CLAUDE.md seit jeher hin: „Wer sich abmeldet und das Passwort nicht
+ * mehr weiß, kommt nicht zurück." Der Fall ist eingetreten.
+ *
+ * An die Stelle der Mail tritt der **Einladungscode**: Ihn kennen nur die
+ * Eltern, ein neues Passwort ist damit bewusst eine Erwachsenen-Handlung.
+ * Ein Kind kann sich weder selbst noch einem anderen Kind ein Passwort
+ * setzen.
+ *
+ * Läuft wie die Registrierung über eine Funktion auf dem Server — der
+ * Dienstschlüssel, der so etwas darf, gehört niemals ins ausgelieferte
+ * JavaScript.
+ */
+export async function passwortNeuSetzen(
+  name: string,
+  code: string,
+  passwort: string,
+): Promise<void> {
+  const antwort = await fetch(`${URL_BASIS}/functions/v1/spiel-passwort-neu`, {
+    method: 'POST',
+    headers: { apikey: OEFFENTLICHER_SCHLUESSEL, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, code, passwort }),
+  });
+  const inhalt = (await antwort.json().catch(() => ({}))) as { fehler?: string };
+  if (!antwort.ok) {
+    throw new ServerFehler(inhalt.fehler ?? 'Das hat gerade nicht geklappt.');
+  }
+}
+
 export async function anmelden(name: string, passwort: string): Promise<Sitzung> {
   const roh = (await anfragen('/auth/v1/token?grant_type=password', {
     method: 'POST',
