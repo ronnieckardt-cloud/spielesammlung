@@ -808,6 +808,52 @@ html.eigenstaendig .spielseite {
     0 6px 24px -12px rgba(0, 0, 0, 0.8);
 }
 
+/* ══ Der schwarze Rand unten in der installierten App ══
+
+   **`100dvh` ist in der installierten App nicht der Bildschirm, sondern
+   die sichere Fläche.** Das ist die Ursache, zweimal gemeldet und zweimal
+   an der falschen Stelle gesucht.
+
+   Nachgerechnet auf einem iPhone 17 (402 × 874 Punkte), gegen das
+   Bildschirmfoto der wirklich installierten App geprüft:
+
+   | | Punkte |
+   |---|---|
+   | Bildschirm | 874 |
+   | Statusleiste / Dynamic Island oben | 59 |
+   | Home-Indikator unten | 34 |
+   | **`100dvh` liefert** | **781** |
+   | Gemessen: Unterkante der Leiste bei | 785 |
+
+   Der Körper endet also 93 Punkte über dem unteren Bildschirmrand,
+   während er oben bei 0 anfängt (`black-translucent` lässt den Inhalt
+   unter die Statusleiste laufen). Darunter bleibt der Körper-Hintergrund
+   stehen, und der ist fast schwarz — der gemeldete Rand. Ronnis
+   Beschreibung trifft es genau: „als wenn die denkt, dass da unten die
+   Browserleiste ist."
+
+   Im **Browser** muss `100dvh` bleiben: Dort schrumpft die sichtbare
+   Fläche wirklich, wenn Safaris Leiste einfährt, und `100vh` (die große
+   Ansicht) würde die Navigationsleiste darunter schieben.
+
+   In der installierten App gibt es diese Leiste nicht. `100vh` ist dort
+   der ganze Bildschirm, und genau den soll die App füllen; die
+   Aussparungen deckt weiterhin das jeweils unterste Element mit
+   `env(safe-area-inset-bottom)` ab.
+
+   Zwei Wege zur selben Erkennung, wie schon bei `.spielseite`: die
+   Medienabfrage als Standard und `html.eigenstaendig` aus Apples eigenem
+   `navigator.standalone` für ältere iOS-Fassungen. */
+@media (display-mode: standalone) {
+  body {
+    height: 100vh;
+  }
+}
+
+html.eigenstaendig body {
+  height: 100vh;
+}
+
 /* Hilfetext ist auf kurzen Bildschirmen der erste Kandidat zum Weglassen —
    die Regeln liest man einmal, die Steuerung braucht man immer. */
 @media (max-height: 720px) {

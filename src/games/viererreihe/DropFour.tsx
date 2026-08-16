@@ -119,11 +119,49 @@ export function DropFour({ onScore, onGameOver, settings, bestScore, istErsteRun
   );
   const [z, setZ] = useState<Zustand>(() => neuesSpiel(zuletztGewaehlteStufe));
 
-  const beiSpalte = useCallback((x: number) => {
-    // Nur wenn der Mensch am Zug ist — sonst könnte man dem Computer
-    // dazwischenfunken, solange er „nachdenkt".
-    setZ((alt) => (alt.amZug === 0 ? einwerfen(alt, x) : alt));
-  }, []);
+  /**
+   * Welche Spalte gerade **vorgemerkt** ist — noch nicht eingeworfen.
+   *
+   * Rückmeldung von Ronni: „Manchmal ist's schon aus, obwohl ich's da gar
+   * nicht hinsetzen wollte. Es müsste erst vorher eine Bestätigung geben."
+   * Genau das war der Fehler: Ein Antippen warf sofort ein. Auf einem Handy
+   * trifft ein Daumen leicht die Nachbarspalte, und in einem Spiel, in dem
+   * **ein** Fehlzug die Partie entscheidet, ist ein Vertipper das Ende —
+   * ohne dass man je die Absicht hatte, dorthin zu setzen.
+   *
+   * Jetzt in zwei Schritten: Der erste Tipp merkt die Spalte vor und zeigt
+   * den Stein als Schatten im Zielloch, der zweite auf **dieselbe** Spalte
+   * wirft ein. Ein Tipp auf eine andere Spalte verschiebt nur die Vormerkung
+   * — man kann also beliebig oft danebentippen, ohne etwas zu verlieren.
+   *
+   * Bewusst kein eigener „Einwerfen"-Knopf: Der läge weit weg von der
+   * Spalte, und man müsste zwischen Brett und Knopf hin und her schauen.
+   */
+  const [gewaehlt, setGewaehlt] = useState<number | null>(null);
+
+  const beiSpalte = useCallback(
+    (x: number) => {
+      // Nur wenn der Mensch am Zug ist — sonst könnte man dem Computer
+      // dazwischenfunken, solange er „nachdenkt".
+      setZ((alt) => {
+        if (alt.amZug !== 0) return alt;
+        if (gewaehlt !== x) return alt; // nur vormerken, siehe unten
+        return einwerfen(alt, x);
+      });
+      setGewaehlt((vorher) => (vorher === x ? null : x));
+      // Zwei verschiedene Töne: Vormerken klingt leiser als Einwerfen.
+      sfx('klick', gewaehlt === x ? 5 : 0);
+    },
+    [gewaehlt],
+  );
+
+  // Die Vormerkung gilt immer nur für den eigenen Zug. Sobald der Computer
+  // dran ist oder die Partie vorbei ist, ist sie hinfällig — sonst stünde
+  // nach seinem Zug noch ein Schatten in einer Spalte, die man vor zwei
+  // Zügen einmal angetippt hat.
+  useEffect(() => {
+    if (z.amZug !== 0 || z.vorbei) setGewaehlt(null);
+  }, [z.amZug, z.vorbei]);
 
   // Der Computer zieht nach einer kurzen Bedenkzeit. Ohne die käme sein
   // Stein im selben Augenblick wie der eigene an, und man sähe gar nicht,
@@ -266,9 +304,11 @@ export function DropFour({ onScore, onGameOver, settings, bestScore, istErsteRun
                     ? `Spalte ${x + 1} ist voll`
                     : `Spalte ${x + 1}, ${
                         belegung.length === 0 ? 'leer' : `von unten: ${belegung.join(', ')}`
-                      }`
+                      }. ${gewaehlt === x ? 'Ausgewählt — nochmal antippen zum Einwerfen.' : 'Antippen zum Auswählen.'}`
                 }
-                className="group flex flex-col gap-1.5 rounded-2xl p-[3px] transition-colors disabled:cursor-default enabled:active:bg-white/10"
+                className={`group flex flex-col gap-1.5 rounded-2xl p-[3px] transition-colors disabled:cursor-default enabled:active:bg-white/10 ${
+                  gewaehlt === x ? 'bg-white/10 ring-2 ring-fokus' : ''
+                }`}
               >
                 {Array.from({ length: ZEILEN }, (_, y) => {
                   const wer = z.feld[y]![x];
@@ -296,7 +336,16 @@ export function DropFour({ onScore, onGameOver, settings, bestScore, istErsteRun
                         y === landung && (
                           <span
                             aria-hidden="true"
-                            className="pointer-events-none block size-full rounded-full opacity-0 transition-opacity group-hover:opacity-40 group-focus-visible:opacity-40 group-active:opacity-70"
+                            /* Vorgemerkt = deutlich sichtbar und pulsierend;
+                               sonst nur der alte Schwebe-Schatten für Maus
+                               und Tastatur. Auf dem Handy gibt es kein
+                               Schweben, dort ist die Vormerkung die einzige
+                               Vorschau — deshalb muss sie kräftig sein. */
+                            className={
+                              gewaehlt === x
+                                ? 'pointer-events-none block size-full animate-pulse rounded-full opacity-75'
+                                : 'pointer-events-none block size-full rounded-full opacity-0 transition-opacity group-hover:opacity-40 group-focus-visible:opacity-40 group-active:opacity-70'
+                            }
                             style={{
                               background: `radial-gradient(circle at 34% 28%, ${FARBE[0]}, ${FARBE_DUNKEL[0]})`,
                             }}
@@ -313,8 +362,9 @@ export function DropFour({ onScore, onGameOver, settings, bestScore, istErsteRun
       </div>
 
       <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
-        Tippe eine Spalte an, dein Stein fällt nach unten. Wer zuerst vier in
-        einer Reihe hat — waagerecht, senkrecht oder schräg — gewinnt.
+        Tippe eine Spalte an — der Stein zeigt sich erst als Schatten. Noch
+        einmal antippen wirft ihn ein. Wer zuerst vier in einer Reihe hat —
+        waagerecht, senkrecht oder schräg — gewinnt.
       </p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}
