@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useGameLoop } from '../../core/useGameLoop';
+import { levelstand } from '../../core/levelstand';
 import { haptik } from '../../core/haptik';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
@@ -56,14 +57,14 @@ const SCHICHTHOEHE = schichthoehe(KAPAZITAET);
 const VOLLE_KIPPUNG_GRAD = 128;
 
 /**
- * Welches Level als Nächstes drankommt — als Modul-Variable, nicht als
- * React-State: „Nochmal" nach einer Lösung lässt die Hülle das Spiel per
- * neuem `key` komplett neu mounten (siehe Spielrahmen.tsx), ein useState
- * würde also jedes Mal wieder bei seinem Anfangswert landen. Die Variable
- * bleibt für die Dauer der Sitzung im Speicher — kein Browser-Speicher,
- * kein Zugriff nach außen, verschwindet beim echten Neuladen der Seite.
+ * Welche Levelnummer als Nächstes drankommt.
+ *
+ * Der Baustein hält den Stand für die Sitzung (damit „Nochmal" weiterzählt)
+ * **und** überträgt ihn beim ersten Betreten aus dem Speicher der Hülle.
+ * Vorher war das eine nackte Modul-Variable — die überlebte kein Schließen
+ * der App, und man fing jedes Mal bei Level 1 an.
  */
-let naechsteLevelNummer = 1;
+const levelStand = levelstand();
 
 type Guss = {
   von: number;
@@ -173,11 +174,26 @@ export function Farbsortierer({
   bestScore,
   istErsteRunde,
   level: festesLevel,
+  startLevel,
+  onLevel,
 }: GameProps) {
+  /*
+   * Setzt den Sitzungsstand **und** meldet ihn der Hülle, die ihn ablegt.
+   * Vorher stand hier nur die Zuweisung an eine Modul-Variable — die war
+   * beim Schließen der App weg, und Florian fing jedes Mal bei Level 1 an.
+   *
+   * Im Duell (`festesLevel` gesetzt) ruft die Hülle nichts auf: Ein
+   * vorgegebenes Level ist kein Fortschritt und darf den echten Stand
+   * nicht überschreiben.
+   */
+  const meldeLevel = (n: number) => {
+    levelStand.setzen(n);
+    onLevel?.(n);
+  };
   // Nach „Nochmal" (= nächstes Level) direkt weiterspielen statt wieder
   // über den Startbildschirm zu gehen — der gehört nur ans Betreten.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechsteLevelNummer));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? levelStand.anfang(startLevel)));
   const [guss, setGuss] = useState<Guss | null>(null);
   /** Läuft, wenn ein Antippen ins Leere ging — das Röhrchen wackelt kurz. */
   const [fehlanzeige, setFehlanzeige] = useState<{ index: number; t: number } | null>(null);
@@ -303,7 +319,7 @@ export function Farbsortierer({
       sfx('ende');
       // "Nochmal" im Vorbei-Bildschirm der Hülle startet damit automatisch
       // das nächste Level, nicht wieder dasselbe.
-      if (festesLevel === undefined) naechsteLevelNummer = z.level + 1;
+      if (festesLevel === undefined) meldeLevel(z.level + 1);
       onGameOver(punkteFuerLoesung(z.zuege, z.farbenAnzahl));
     }
     // Absichtlich nur an geloest/guss gebunden — onGameOver darf nur einmal kommen.
@@ -360,7 +376,7 @@ export function Farbsortierer({
     if (festesLevel !== undefined) return;
       if (guss) return;
       const geklemmt = Math.max(1, neu);
-      naechsteLevelNummer = geklemmt;
+      meldeLevel(geklemmt);
       setZ(neuesLevel(geklemmt));
     },
     [guss],

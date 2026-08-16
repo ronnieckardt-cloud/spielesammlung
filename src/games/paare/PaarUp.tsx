@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { haptik } from '../../core/haptik';
+import { levelstand } from '../../core/levelstand';
 import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
@@ -13,15 +14,14 @@ import { PaarUpIcon } from './Icon';
 const ZUDECKEN_MS = 900;
 
 /**
- * Welches Level als Nächstes drankommt — wie beim Quiz und beim
- * Farbsortierer eine Modul-Variable, weil „Nochmal" die Komponente
- * komplett neu mountet und ein `useState` dabei zurückgesetzt würde.
+ * Welche Levelnummer als Nächstes drankommt.
  *
- * Anders als beim Farbsortierer geht es hier nach einem Sieg ins **nächste**
- * Level, nicht noch einmal ins selbe: Dasselbe Feld ein zweites Mal zu
- * spielen ist bei einem Merkspiel sinnlos, man weiß ja noch, wo alles liegt.
+ * Der Baustein hält den Stand für die Sitzung (damit „Nochmal" weiterzählt)
+ * **und** überträgt ihn beim ersten Betreten aus dem Speicher der Hülle.
+ * Vorher war das eine nackte Modul-Variable — die überlebte kein Schließen
+ * der App, und man fing jedes Mal bei Level 1 an.
  */
-let naechsteLevelNummer = 1;
+const levelStand = levelstand();
 
 /** Schwebende Karten im Hintergrund des Startbildschirms, feste Liste. */
 const DEKO_KARTEN: readonly {
@@ -115,9 +115,24 @@ export function PaarUp({
   bestScore,
   istErsteRunde,
   level: festesLevel,
+  startLevel,
+  onLevel,
 }: GameProps) {
+  /*
+   * Setzt den Sitzungsstand **und** meldet ihn der Hülle, die ihn ablegt.
+   * Vorher stand hier nur die Zuweisung an eine Modul-Variable — die war
+   * beim Schließen der App weg, und Florian fing jedes Mal bei Level 1 an.
+   *
+   * Im Duell (`festesLevel` gesetzt) ruft die Hülle nichts auf: Ein
+   * vorgegebenes Level ist kein Fortschritt und darf den echten Stand
+   * nicht überschreiben.
+   */
+  const meldeLevel = (n: number) => {
+    levelStand.setzen(n);
+    onLevel?.(n);
+  };
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesSpiel(festesLevel ?? naechsteLevelNummer));
+  const [z, setZ] = useState<Zustand>(() => neuesSpiel(festesLevel ?? levelStand.anfang(startLevel)));
 
   const beiKarte = useCallback((position: number) => {
     setZ((alt) => aufdecken(alt, position));
@@ -134,7 +149,7 @@ export function PaarUp({
       // leichteste aussuchen und der Vergleich wäre wertlos.
       if (festesLevel !== undefined) return;
       const ziel = Math.max(1, level);
-      naechsteLevelNummer = ziel;
+      meldeLevel(ziel);
       // Beide Merker müssen mit auf null: Das neue Feld fängt bei null Zügen
       // und null Paaren an. Ohne das sah der Ton-Effekt einen veränderten
       // Zugzähler und kein neues Paar — und spielte den Fehlerton, als hätte
@@ -184,7 +199,7 @@ export function PaarUp({
     // wo alles liegt. Nach einer aufgebrauchten Zuggrenze bleibt es beim
     // selben Level: Da ist das Wissen aus der verlorenen Runde genau das,
     // womit man den zweiten Versuch schafft.
-    if (festesLevel === undefined && z.gewonnen) naechsteLevelNummer = z.level + 1;
+    if (festesLevel === undefined && z.gewonnen) meldeLevel(z.level + 1);
     onGameOver(z.punkte, z.gewonnen);
     // onGameOver darf nur einmal kommen — deshalb hängt das nur an "vorbei".
     // eslint-disable-next-line react-hooks/exhaustive-deps

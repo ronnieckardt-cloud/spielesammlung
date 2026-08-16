@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { Startbildschirm } from '../../core/Startbildschirm';
+import { levelstand } from '../../core/levelstand';
 import type { DekoTeil } from '../../core/Startbildschirm';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
@@ -46,18 +47,14 @@ const SCHAU_MS = 1250;
 const HINWEIS_MS = 2600;
 
 /**
- * Welches Level als Nächstes drankommt — als Modul-Variable, nicht als
- * React-State.
+ * Welche Levelnummer als Nächstes drankommt.
  *
- * „Nochmal" lässt die Hülle das Spiel per neuem `key` komplett neu mounten
- * (siehe `Spielrahmen.tsx`); ein `useState` landete also jedes Mal wieder
- * bei seinem Anfangswert und man spielte ewig Level 1. Genauso macht es
- * Color Pour.
- *
- * Zurück ins Menü und neu hinein setzt bewusst nicht zurück — wer bei
- * Level 9 aufgehört hat, will dort weitermachen.
+ * Der Baustein hält den Stand für die Sitzung (damit „Nochmal" weiterzählt)
+ * **und** überträgt ihn beim ersten Betreten aus dem Speicher der Hülle.
+ * Vorher war das eine nackte Modul-Variable — die überlebte kein Schließen
+ * der App, und man fing jedes Mal bei Level 1 an.
  */
-let naechstesLevel = 1;
+const levelStand = levelstand();
 
 const DEKO: readonly DekoTeil[] = [
   { x: 8, y: 15, winkel: -12, verzoegerung: 0, inhalt: <DekoForm ecken={3} /> },
@@ -108,9 +105,24 @@ export function EvenCut({
   bestScore,
   istErsteRunde,
   level: festesLevel,
+  startLevel,
+  onLevel,
 }: GameProps) {
+  /*
+   * Setzt den Sitzungsstand **und** meldet ihn der Hülle, die ihn ablegt.
+   * Vorher stand hier nur die Zuweisung an eine Modul-Variable — die war
+   * beim Schließen der App weg, und Florian fing jedes Mal bei Level 1 an.
+   *
+   * Im Duell (`festesLevel` gesetzt) ruft die Hülle nichts auf: Ein
+   * vorgegebenes Level ist kein Fortschritt und darf den echten Stand
+   * nicht überschreiben.
+   */
+  const meldeLevel = (n: number) => {
+    levelStand.setzen(n);
+    onLevel?.(n);
+  };
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechstesLevel));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? levelStand.anfang(startLevel)));
   /** Der Wisch, während er noch läuft. */
   const [zug, setZug] = useState<{ von: Punkt; bis: Punkt } | null>(null);
   /** Eine Bildfolge später auf true — erst dann rutschen die Stücke weg. */
@@ -282,7 +294,7 @@ export function EvenCut({
     gemeldet.current = true;
     // „Nochmal" spielt das nächste Level, nicht dasselbe noch einmal —
     // dieselben fünf Formen ein zweites Mal zu schneiden wäre langweilig.
-    if (festesLevel === undefined) naechstesLevel = z.level + 1;
+    if (festesLevel === undefined) meldeLevel(z.level + 1);
     sfx('ende');
     onGameOver(z.punkte);
   }, [z.vorbei, z.punkte, z.level, onGameOver]);

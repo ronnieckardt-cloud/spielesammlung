@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { sfx } from '../../core/sfx';
+import { levelstand } from '../../core/levelstand';
 import { haptik } from '../../core/haptik';
 import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import type { GameProps } from '../../core/types';
@@ -31,10 +32,14 @@ const ANTWORT_KENNUNG: readonly { buchstabe: string; farbe: string }[] = [
 ];
 
 /**
- * Welches Level als Nächstes drankommt — wie beim Farbsortierer eine
- * Modul-Variable, weil "Nochmal" die Komponente komplett neu mountet.
+ * Welche Levelnummer als Nächstes drankommt.
+ *
+ * Der Baustein hält den Stand für die Sitzung (damit „Nochmal" weiterzählt)
+ * **und** überträgt ihn beim ersten Betreten aus dem Speicher der Hülle.
+ * Vorher war das eine nackte Modul-Variable — die überlebte kein Schließen
+ * der App, und man fing jedes Mal bei Level 1 an.
  */
-let naechsteLevelNummer = 1;
+const levelStand = levelstand();
 
 /**
  * Schwebende geometrische Formen im Hintergrund des Startbildschirms —
@@ -157,11 +162,26 @@ export function Quiz({
   bestScore,
   istErsteRunde,
   level: festesLevel,
+  startLevel,
+  onLevel,
 }: GameProps) {
+  /*
+   * Setzt den Sitzungsstand **und** meldet ihn der Hülle, die ihn ablegt.
+   * Vorher stand hier nur die Zuweisung an eine Modul-Variable — die war
+   * beim Schließen der App weg, und Florian fing jedes Mal bei Level 1 an.
+   *
+   * Im Duell (`festesLevel` gesetzt) ruft die Hülle nichts auf: Ein
+   * vorgegebenes Level ist kein Fortschritt und darf den echten Stand
+   * nicht überschreiben.
+   */
+  const meldeLevel = (n: number) => {
+    levelStand.setzen(n);
+    onLevel?.(n);
+  };
   // Nach „Nochmal" (= nächstes Level) direkt weiterspielen statt wieder
   // über den Startbildschirm zu gehen — der gehört nur ans Betreten.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechsteLevelNummer));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? levelStand.anfang(startLevel)));
 
   // Der Serien-Bonus war die einzige Punktmechanik des Spiels und blieb
   // komplett unsichtbar. Schwelle 1, weil hier jede richtige Antwort zählt —
@@ -177,7 +197,7 @@ export function Quiz({
       const perfekt = z.richtigeAnzahl === z.fragen.length;
       sfx(perfekt ? 'stufe' : 'ende');
       haptik(perfekt ? 'jubel' : 'ende');
-      if (festesLevel === undefined) naechsteLevelNummer = z.level + 1;
+      if (festesLevel === undefined) meldeLevel(z.level + 1);
       onGameOver(z.punkte);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -205,7 +225,7 @@ export function Quiz({
     // leichteste aussuchen und der Vergleich wäre wertlos.
     if (festesLevel !== undefined) return;
     const geklemmt = Math.max(1, neu);
-    naechsteLevelNummer = geklemmt;
+    meldeLevel(geklemmt);
     setZ(neuesLevel(geklemmt));
   }, []);
 
@@ -321,7 +341,7 @@ export function Quiz({
               // CSS-Eigenschaft setzen und dann nur eine von beiden gälte.
               // `enabled:` hört nach der Antwort auf und kommt so
               // `antwort-richtig` nicht in die Quere, das `scale` bewegt.
-              className={`flex items-center gap-3 rounded-xl border border-rand bg-flaeche p-4 text-left transition-[background-color,border-color,opacity,scale] duration-100 enabled:active:scale-95 disabled:cursor-default ${bewegung}`}
+              className={`flex items-center gap-3 rounded-xl border border-rand bg-flaeche p-4 text-left transition-[background-color,border-color,opacity] duration-100 enabled:active:scale-95 disabled:cursor-default ${bewegung}`}
               style={{ borderColor: rahmenfarbe, backgroundColor: hintergrund, opacity: deckkraft }}
             >
               {/* Nur fürs Auge: Der Screenreader liest die Antwort selbst

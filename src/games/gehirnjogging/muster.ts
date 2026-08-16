@@ -16,9 +16,24 @@ const SICHTBARE_LAENGE = 4;
 
 export type Regel = 'arithmetisch' | 'wechselnd' | 'geometrisch';
 
-/** Sechs Stufen, alle 15 Level eine höher — dieselbe Formel wie beim Kopfrechnen. */
+/**
+ * Sechs Stufen, alle 15 Level eine höher — dieselbe Formel wie beim
+ * Kopfrechnen.
+ *
+ * **Nach unten auf 0 geklemmt.** Ohne das liefert `stufeFuerLevel(0)` den
+ * Wert −1, und seit die Stellschrauben in einer Tabelle stehen statt in
+ * einer if-Kette, ist `STUFEN[-1]` schlicht `undefined` — der nächste
+ * Zugriff wirft dann `Cannot read properties of undefined`. Die alte
+ * if-Kette war für Level 0 und negative Level total und lieferte einfach
+ * Stufe 0; die Tabelle hat diese Robustheit stillschweigend verloren.
+ *
+ * Über die Oberfläche ist Level 0 nicht erreichbar (die Levelwahl klemmt
+ * mit `Math.max(1, …)`). Im **Duell** kommt die Levelnummer aber vom
+ * Server, und eine Null von dort hätte das Spiel zum Absturz gebracht
+ * statt zu einer leichten Runde.
+ */
 export function stufeFuerLevel(level: number): number {
-  return Math.min(5, Math.floor((level - 1) / 15));
+  return Math.max(0, Math.min(5, Math.floor((level - 1) / 15)));
 }
 
 /** Die Stellschrauben einer Stufe. */

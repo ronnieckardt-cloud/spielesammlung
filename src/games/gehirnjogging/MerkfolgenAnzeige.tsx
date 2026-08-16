@@ -105,7 +105,15 @@ export function MerkfolgenAnzeige({
               // Eingabe-Phase greift — während der Vorführung sind die
               // Kacheln abgeschaltet, und dort gehört die Größe der
               // leuchtenden Kachel (`scale(1.12)` weiter unten).
-              className="h-20 w-20 rounded-xl border-4 transition-all duration-150 enabled:active:scale-95 disabled:cursor-default"
+              /* **Nicht `transition-all`, und 100 statt 150 ms.** `all` schließt
+                 `scale` mit ein, die Antipp-Stauchung federte dadurch
+                 150 ms hin und 150 ms zurück — auf einem Handy ist das
+                 laut `.spielknopf` in `index.css` der Unterschied
+                 zwischen „reagiert" und „hängt". Aufgezählt statt `all`
+                 aus demselben Grund wie bei den Antwortknöpfen: Ein
+                 Übergang auf `scale` überschreibt die Keyframes, die
+                 dieselbe Eigenschaft bewegen. */
+              className="h-20 w-20 rounded-xl border-4 transition-[background-color,border-color,opacity] duration-100 enabled:active:scale-95 disabled:cursor-default"
               style={{
                 backgroundColor: k.farbe,
                 borderColor: istLetzterTipp ? (letzterTipp?.richtig ? '#22c55e' : '#ef4444') : 'transparent',

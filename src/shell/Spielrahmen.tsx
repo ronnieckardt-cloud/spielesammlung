@@ -9,6 +9,8 @@ import {
   ergebnisEintragen,
   fortschrittLesen,
   fortschrittSchreiben,
+  levelLesen,
+  levelMerken,
   zuletztGespieltMerken,
 } from './speicher';
 import { spiele } from '../core/registry';
@@ -259,6 +261,32 @@ export function Spielrahmen({
   // Zählt jede beendete Runde. Eine spät eintreffende Antwort aus einer
   // früheren Runde darf nicht am Dialog der aktuellen kleben.
   const endeMarke = useRef(0);
+
+  /**
+   * Der gespeicherte Levelstand — **einmal beim Betreten gelesen**, nicht
+   * bei jedem Rendern.
+   *
+   * `useMemo` und nicht `useState`: Der Wert ändert sich während einer
+   * Sitzung nur durch das Spiel selbst, und das führt seinen eigenen Stand.
+   * Würde er neu gelesen, sobald die Hülle rendert, käme er beim „Nochmal"
+   * mit dem gerade gemeldeten neuen Level ins Gehege.
+   *
+   * Im Duell bleibt er weg: Dort gibt der Server das Level vor.
+   */
+  const levelStart = useMemo(
+    () => (duell ? undefined : levelLesen(spiel.id)),
+    [spiel.id, duell],
+  );
+
+  const beiLevel = useCallback(
+    (level: number) => {
+      // Im Duell wird nichts gemerkt — ein vorgegebenes Level ist kein
+      // Fortschritt, und es würde den echten Stand überschreiben.
+      if (duell) return;
+      levelMerken(spiel.id, level);
+    },
+    [spiel.id, duell],
+  );
 
   const beiPunkten = useCallback((wert: number) => setPunkte(wert), []);
 
@@ -527,6 +555,8 @@ export function Spielrahmen({
           bestScore={beste}
           istErsteRunde={runde === 0}
           level={duell?.level}
+          startLevel={levelStart}
+          onLevel={beiLevel}
         />
 
         {ende && (

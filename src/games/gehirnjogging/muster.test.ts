@@ -128,3 +128,22 @@ describe('Antwortknöpfe', () => {
     }
   });
 });
+
+describe('unsinnige Levelnummern', () => {
+  /*
+   * Im **Duell** kommt die Levelnummer vom Server, nicht aus der
+   * Oberfläche — die klemmt zwar mit `Math.max(1, …)`, aber darauf darf
+   * sich die Rechnung nicht verlassen. Seit die Stellschrauben in einer
+   * Tabelle stehen, war `STUFEN[-1]` schlicht `undefined` und der nächste
+   * Zugriff warf; die frühere if-Kette hatte das nie gekonnt.
+   */
+  for (const level of [0, -1, -100]) {
+    it(`Level ${level} stürzt nicht ab, sondern gibt die leichteste Stufe`, () => {
+      expect(stufeFuerLevel(level)).toBe(0);
+      expect(() => musterAufgabe(saatAus('gehirnjogging', level, 0), level)).not.toThrow();
+      const a = musterAufgabe(saatAus('gehirnjogging', level, 0), level);
+      expect(a.folge).toHaveLength(4);
+      expect(a.antworten).toHaveLength(4);
+    });
+  }
+});

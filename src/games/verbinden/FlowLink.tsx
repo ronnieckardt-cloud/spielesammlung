@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { Startbildschirm } from '../../core/Startbildschirm';
+import { levelstand } from '../../core/levelstand';
 import type { DekoTeil } from '../../core/Startbildschirm';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
@@ -40,11 +41,14 @@ const FELD = 10;
 const FEIER_MS = 900;
 
 /**
- * Welches Level als Nächstes drankommt — Modul-Variable, kein State:
- * „Nochmal" mountet das Spiel per neuem `key` komplett neu (siehe
- * `Spielrahmen.tsx`). Gleiche Begründung wie bei Color Pour und Even Cut.
+ * Welche Levelnummer als Nächstes drankommt.
+ *
+ * Der Baustein hält den Stand für die Sitzung (damit „Nochmal" weiterzählt)
+ * **und** überträgt ihn beim ersten Betreten aus dem Speicher der Hülle.
+ * Vorher war das eine nackte Modul-Variable — die überlebte kein Schließen
+ * der App, und man fing jedes Mal bei Level 1 an.
  */
-let naechstesLevel = 1;
+const levelStand = levelstand();
 
 const DEKO: readonly DekoTeil[] = FARBEN.slice(0, 4).map((f, i) => ({
   x: [7, 87, 89, 6][i]!,
@@ -65,9 +69,24 @@ export function FlowLink({
   bestScore,
   istErsteRunde,
   level: festesLevel,
+  startLevel,
+  onLevel,
 }: GameProps) {
+  /*
+   * Setzt den Sitzungsstand **und** meldet ihn der Hülle, die ihn ablegt.
+   * Vorher stand hier nur die Zuweisung an eine Modul-Variable — die war
+   * beim Schließen der App weg, und Florian fing jedes Mal bei Level 1 an.
+   *
+   * Im Duell (`festesLevel` gesetzt) ruft die Hülle nichts auf: Ein
+   * vorgegebenes Level ist kein Fortschritt und darf den echten Stand
+   * nicht überschreiben.
+   */
+  const meldeLevel = (n: number) => {
+    levelStand.setzen(n);
+    onLevel?.(n);
+  };
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechstesLevel));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? levelStand.anfang(startLevel)));
   const brettRef = useRef<SVGSVGElement>(null);
   const gemeldet = useRef(false);
   const { breite, hoehe } = z.raetsel;
@@ -136,7 +155,7 @@ export function FlowLink({
       // aussuchen und der Vergleich wäre wertlos.
       if (festesLevel !== undefined) return;
       const geklemmt = Math.max(1, neu);
-      naechstesLevel = geklemmt;
+      meldeLevel(geklemmt);
       setZ(neuesLevel(geklemmt));
       sfx('klick');
     },
@@ -153,7 +172,7 @@ export function FlowLink({
     sfx('stufe');
     // „Nochmal" spielt das nächste Level — dasselbe Rätsel ein zweites Mal
     // zu lösen wäre sinnlos, man weiß ja noch, wie es geht.
-    if (festesLevel === undefined) naechstesLevel = z.level + 1;
+    if (festesLevel === undefined) meldeLevel(z.level + 1);
     const uhr = window.setTimeout(
       () => onGameOver(punkteFuerZuege(z.level, z.raetsel.paare.length, z.zuege), true),
       FEIER_MS,

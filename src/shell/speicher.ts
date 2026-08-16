@@ -203,6 +203,9 @@ export function bestenlisteLoeschen(spielId?: string): void {
     // sonst bietet die Startseite nach dem „alles löschen" weiter ein
     // Spiel an, zu dem es gar keine Daten mehr gibt.
     localStorage.removeItem(`${PRAEFIX}${ZULETZT}`);
+    // Auch der Levelstand: Level 12 zu behalten, während alle Punkte
+    // gelöscht sind, wäre derselbe Widerspruch wie beim Fortschritt.
+    localStorage.removeItem(`${PRAEFIX}${LEVELSTAND}`);
     // Ebenso die noch nicht abgeschickten Runden und alles, was vom Server
     // kam — sonst tauchen die gelöschten Werte gleich wieder auf.
     localStorage.removeItem(`${PRAEFIX}${AUSGANG}`);
@@ -262,6 +265,42 @@ export function abenteuerLesen(): unknown {
 
 export function abenteuerSchreiben(stand: unknown): void {
   schreiben(ABENTEUER, stand);
+}
+
+const LEVELSTAND = 'levelstand';
+
+/**
+ * Wie weit ein Kind in einem Level-Spiel gekommen ist.
+ *
+ * **Der Grund, warum es das gibt**, ist eine Rückmeldung von Ronni: „Bei
+ * Flow Link geht es nicht ins nächste Level. Nach dem ersten Level ist
+ * Schluss." Nachgestellt: Innerhalb einer Sitzung ging es sehr wohl weiter
+ * — die nächste Levelnummer stand aber in einer **Modul-Variablen** im
+ * jeweiligen Spiel. Die ist beim Schließen der App weg, und beim nächsten
+ * Öffnen fing man wieder bei Level 1 an. Das betraf acht Spiele: Color
+ * Pour, Quiz Time, Brain Blitz, Word Play, Pair Up, Even Cut, Flow Link
+ * und Box Push.
+ *
+ * Absichtlich **nicht** aus der Bestenliste abgeleitet: Dort überleben nur
+ * die fünf besten Ergebnisse, ein schwaches Level fällt wieder heraus —
+ * derselbe Grund, aus dem `zuletztGespielt` einen eigenen Schlüssel hat.
+ */
+export function levelMerken(spielId: string, level: number): void {
+  if (!Number.isFinite(level) || level < 1) return;
+  const alle = lesen<Record<string, number>>(LEVELSTAND, {});
+  schreiben(LEVELSTAND, { ...alle, [spielId]: Math.floor(level) });
+}
+
+/** Das zuletzt erreichte Level, oder 1 beim ersten Mal. */
+export function levelLesen(spielId: string): number {
+  const alle = lesen<Record<string, number>>(LEVELSTAND, {});
+  if (typeof alle !== 'object' || alle === null) return 1;
+  const wert = alle[spielId];
+  // Der Speicher ist nicht vertrauenswürdig — ältere Fassung, halb
+  // geschrieben, von Hand verändert. Ein kaputter Wert darf kein Spiel
+  // in eine unsinnige Levelnummer schicken (Brain Blitz stürzte bei 0
+  // sogar ab).
+  return typeof wert === 'number' && Number.isFinite(wert) && wert >= 1 ? Math.floor(wert) : 1;
 }
 
 const ZULETZT = 'zuletzt';

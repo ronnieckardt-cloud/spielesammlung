@@ -14,7 +14,9 @@ export type KopfrechnenAufgabe = {
 
 /** Sechs Schwierigkeitsstufen, alle 15 Level eine Stufe höher, gedeckelt bei 5. */
 export function stufeFuerLevel(level: number): number {
-  return Math.min(5, Math.floor((level - 1) / 15));
+  // Nach unten geklemmt, gleiche Begründung wie in `muster.ts`:
+  // Im Duell kommt die Levelnummer vom Server.
+  return Math.max(0, Math.min(5, Math.floor((level - 1) / 15)));
 }
 
 function plusMinus(a: number, b: number, minus: boolean): { text: string; wert: number } {

@@ -36,6 +36,26 @@ export type GameProps = {
    * und erneut hinein ergibt wieder `true`. */
   istErsteRunde: boolean;
   /**
+   * Das zuletzt erreichte Level dieses Spiels, aus dem Speicher der Hülle.
+   * `undefined` bei Spielen ohne Levelnummer.
+   *
+   * **Die dritte Erweiterung dieser Schnittstelle überhaupt** (nach
+   * `gewonnen` und `level`/`duellFaehig`), und sie war nötig: Die acht
+   * Level-Spiele führten ihre nächste Levelnummer in einer Modul-Variablen,
+   * die beim Schließen der App verschwand — Florian fing bei jedem Öffnen
+   * wieder bei Level 1 an. Ein Spiel darf nicht selbst speichern (Regel
+   * oben), also muss die Hülle den Stand hereinreichen.
+   */
+  startLevel?: number;
+  /**
+   * Meldet der Hülle, welches Level als Nächstes drankommt — sie legt es ab.
+   *
+   * Wird beim Lösen aufgerufen und bei jedem Sprung über die Levelpfeile.
+   * Im Duell (`level` gesetzt) rufen die Spiele es nicht auf: Ein
+   * vorgegebenes Level ist kein Fortschritt.
+   */
+  onLevel?: (level: number) => void;
+  /**
    * Ein **festgelegtes** Level. Nur im Duell gesetzt; sonst `undefined`.
    *
    * Spiele, bei denen gleiche Levelnummer schon immer dasselbe Rätsel

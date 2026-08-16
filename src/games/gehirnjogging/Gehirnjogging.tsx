@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
+import { levelstand } from '../../core/levelstand';
 import { sfx } from '../../core/sfx';
 import { Startbildschirm } from '../../core/Startbildschirm';
 import type { DekoTeil } from '../../core/Startbildschirm';
@@ -12,11 +13,14 @@ import { MerkfolgenAnzeige } from './MerkfolgenAnzeige';
 import { MusterAnzeige } from './MusterAnzeige';
 
 /**
- * Welches Level als Nächstes drankommt — wie beim Farbsortierer und beim
- * Wissensquiz eine Modul-Variable, weil "Nochmal" die Komponente komplett
- * neu mountet.
+ * Welche Levelnummer als Nächstes drankommt.
+ *
+ * Der Baustein hält den Stand für die Sitzung (damit „Nochmal" weiterzählt)
+ * **und** überträgt ihn beim ersten Betreten aus dem Speicher der Hülle.
+ * Vorher war das eine nackte Modul-Variable — die überlebte kein Schließen
+ * der App, und man fing jedes Mal bei Level 1 an.
  */
-let naechsteLevelNummer = 1;
+const levelStand = levelstand();
 
 const VARIANTEN_NAMEN: Record<Zustand['variante'], string> = {
   kopfrechnen: 'Kopfrechnen',
@@ -53,11 +57,26 @@ export function Gehirnjogging({
   bestScore,
   istErsteRunde,
   level: festesLevel,
+  startLevel,
+  onLevel,
 }: GameProps) {
+  /*
+   * Setzt den Sitzungsstand **und** meldet ihn der Hülle, die ihn ablegt.
+   * Vorher stand hier nur die Zuweisung an eine Modul-Variable — die war
+   * beim Schließen der App weg, und Florian fing jedes Mal bei Level 1 an.
+   *
+   * Im Duell (`festesLevel` gesetzt) ruft die Hülle nichts auf: Ein
+   * vorgegebenes Level ist kein Fortschritt und darf den echten Stand
+   * nicht überschreiben.
+   */
+  const meldeLevel = (n: number) => {
+    levelStand.setzen(n);
+    onLevel?.(n);
+  };
   // Nach „Nochmal" (= nächstes Level) direkt weiterspielen — der
   // Startbildschirm gehört nur ans Betreten des Spiels.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? naechsteLevelNummer));
+  const [z, setZ] = useState<Zustand>(() => neuesLevel(festesLevel ?? levelStand.anfang(startLevel)));
   // Nur für Kopfrechnen/Muster: welche der vier Zahlen wurde angeklickt.
   // Merk-Folgen führt seine Eingabe selbst, siehe MerkfolgenAnzeige.
   const [ausgewaehlt, setAusgewaehlt] = useState<number | null>(null);
@@ -72,7 +91,7 @@ export function Gehirnjogging({
   useEffect(() => {
     if (z.vorbei) {
       sfx(z.richtigeAnzahl === z.aufgaben.length ? 'stufe' : 'ende');
-      if (festesLevel === undefined) naechsteLevelNummer = z.level + 1;
+      if (festesLevel === undefined) meldeLevel(z.level + 1);
       onGameOver(z.punkte);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,7 +136,7 @@ export function Gehirnjogging({
     // leichteste aussuchen und der Vergleich wäre wertlos.
     if (festesLevel !== undefined) return;
     const geklemmt = Math.max(1, neu);
-    naechsteLevelNummer = geklemmt;
+    meldeLevel(geklemmt);
     setZ(neuesLevel(geklemmt));
   }, []);
 
