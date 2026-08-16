@@ -19,6 +19,7 @@ import { verbinden } from '../games/verbinden';
 import { tempo } from '../games/tempo';
 import { kistenschieben } from '../games/kistenschieben';
 import { laufen } from '../games/laufen';
+import { radfahren } from '../games/radfahren';
 
 /**
  * Die einzige Liste aller Spiele. Ein neues Spiel wird hier eingetragen —
@@ -45,6 +46,7 @@ export const spiele: readonly GameApi[] = [
   tempo,
   kistenschieben,
   laufen,
+  radfahren,
 ];
 
 export function spielFinden(id: string): GameApi | undefined {
