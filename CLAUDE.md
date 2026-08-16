@@ -2890,11 +2890,40 @@ nachgezogen, beide ohne neue Zeichentechnik:
   zu jeder Kickermitte; der Grasstrich wird dafür in Teilstücke zerlegt
   (`grasOffen`-Muster, dieselbe Technik wie bei der Feder-Wendel weiter
   oben) statt als ein durchgehender Pfad.
+- **Kleine Steine direkt in der Grasnarbe verankert**, deterministisch aus
+  einer reinen Hash-Funktion der Weltposition (`streuWert(x)`, Sinus-Rausch-
+  Trick, kein `Math.random()`) — ohne dass dafür ein eigenes Feld in
+  `Gelaende` nötig wäre. Bei derselben Weltposition liegt also immer
+  derselbe Stein, unabhängig vom Bildaufbau. Bewusst **keine** eigene
+  Saat aus `core/rng.ts`: Die Position eines Steins ist reine Deko ohne
+  Einfluss auf Spielregeln oder die Strecken-Wiederholbarkeit über
+  Levelnummern, die feste Projekt-Regel „nie `Math.random`" gilt für
+  genau diesen Fall (Gelände, Aufgaben, alles Regelhafte) — nicht für
+  jede Zeile Zeichencode.
 - **Noch offen aus derselben Recherche:** eine echte Körnungs-Textur
-  (Canvas-Pattern, Vorbild `laufen/texturen.ts`), deterministisch
-  platzierte Steine/Streckenschilder. Beides Fleißarbeit, keine
+  (Canvas-Pattern, Vorbild `laufen/texturen.ts`). Fleißarbeit, keine
   schwierige Entscheidung — nachziehbar, wenn noch mehr Bodendetail
   gewünscht ist.
+
+### Kamera-Wackeln bei harten Landungen
+
+Rückmeldung nach der ersten Bewertungsrunde: Es fehlte „echte
+Kamera-Dramatik". Dieselbe Stoß-Erkennung, die schon die Federung
+antreibt (`vyVorher − vy`, siehe oben), löst jetzt zusätzlich ein kurzes
+Wackeln aus — ein Sturz braucht dafür **keinen eigenen Sonderfall**: `vy`
+springt beim Aufsetzen in beiden Fällen (harte Landung wie Sturz)
+gleichermaßen auf null, der Stoß sieht also identisch aus.
+
+- Nur ab einer echt harten Landung (`kraft > 0,35`), nicht bei jedem
+  normalen Aufsetzen — sonst zittert das Bild dauernd mit und die
+  Landungsqualität hätte kein sichtbares Gefälle mehr.
+- **Vor dem Gelände-Umriss berechnet, nicht erst beim Rad** — damit
+  wackelt bei einem harten Einschlag das ganze Bild (Boden und Rad
+  zusammen) synchron, nicht das Rad einen Bildschritt später als der
+  Hintergrund.
+- `Math.random()` für den Zitter-Ausschlag ist hier absichtlich in
+  Ordnung: reine Bildschirm-Deko ohne jede Auswirkung auf Spielregeln,
+  anders als beim Gelände selbst.
 
 ### Die Fairness-Tests
 

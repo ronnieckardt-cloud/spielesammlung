@@ -1,4 +1,4 @@
-import { bodenHoehe, bodenSteigung } from './logik';
+import { ANLAUF, bodenHoehe, bodenSteigung } from './logik';
 import type { Lauf } from './logik';
 
 /**
@@ -127,6 +127,19 @@ function mischen(a: string, b: string, anteil: number): string {
 }
 
 /**
+ * Ein rein deterministischer Wert zwischen 0 und 1 aus einer Weltposition
+ * — für Steine (siehe unten), ohne `Math.random()` und ohne ein eigenes
+ * Feld in `Gelaende` zu brauchen. Bei derselben Weltposition kommt immer
+ * derselbe Wert heraus, unabhängig vom Bildaufbau oder der Kamera — genau
+ * die Eigenschaft, die aus einem zufällig wirkenden Muster ein Stück der
+ * Strecke selbst macht statt eines bei jedem Bild neu gewürfelten.
+ */
+function streuWert(meter: number): number {
+  const n = Math.sin(meter * 127.1) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+/**
  * Maße des Rades in Metern.
  *
  * **Bewusst keine echten Maße.** Ein 29-Zoll-Laufrad hat 0,37 m Radius bei
@@ -167,6 +180,14 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   /** Einfederung 0 bis 1, vorne und hinten getrennt. */
   let federVorn = 0;
   let federHinten = 0;
+  /**
+   * Kamera-Wackeln 0 bis 1 — dieselbe Stoß-Erkennung wie die Federung,
+   * nur als kurzer Bildschirm-Ruck statt einer Rad-Bewegung. Ronni wollte
+   * mehr „Kamera-Dramatik" bei harten Landungen; ein Sturz löst denselben
+   * Stoß aus wie eine harte Landung (`vy` springt beim Aufsetzen in
+   * beiden Fällen auf null), braucht also keinen eigenen Sonderfall.
+   */
+  let schuettelStaerke = 0;
   /** Gesamtdrehung der Laufräder in Radiant. */
   let radDrehung = 0;
   /** Für die Federung: die senkrechte Geschwindigkeit des letzten Bildes. */
@@ -215,6 +236,35 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       kameraY += (zielY - kameraY) * folgen;
     }
 
+    /*
+     * Federung und Kamera-Wackeln reagieren auf den **Wechsel** der
+     * senkrechten Geschwindigkeit, nicht auf ihren Wert — ein sanftes
+     * Abbremsen federt nicht, ein plötzlicher Stopp (Landung, Sturz)
+     * schon. Absichtlich schon hier berechnet, vor dem Gelände-Umriss:
+     * Damit wackelt bei einem harten Einschlag das **ganze** Bild
+     * (Boden und Rad zusammen), nicht nur das Rad einen Bildschritt
+     * später als der Boden.
+     */
+    const stoss = Math.max(0, vyVorher - lauf.vy);
+    vyVorher = lauf.vy;
+    if (lauf.amBoden && stoss > 1) {
+      const kraft = Math.min(1, stoss / 14);
+      federVorn = Math.min(1, federVorn + kraft);
+      federHinten = Math.min(1, federHinten + kraft * 1.15);
+      // Erst ab einer echt harten Landung wackeln, nicht bei jedem
+      // normalen Aufsetzen — sonst zittert das Bild ständig mit.
+      if (kraft > 0.35) schuettelStaerke = Math.min(1, schuettelStaerke + kraft);
+    }
+    // Zurückfedern bzw. Ausklingen.
+    federVorn = Math.max(0, federVorn - dt * 3.4);
+    federHinten = Math.max(0, federHinten - dt * 3.1);
+    schuettelStaerke = Math.max(0, schuettelStaerke - dt * 5);
+    // Zufällig statt gerichtet — reines Bildschirm-Zittern, keine
+    // Spielregel, deshalb ist `Math.random()` hier genau richtig
+    // (anders als im Gelände, das aus der Saat kommen muss).
+    const schuettelX = schuettelStaerke > 0 ? (Math.random() - 0.5) * schuettelStaerke * 14 : 0;
+    const schuettelY = schuettelStaerke > 0 ? (Math.random() - 0.5) * schuettelStaerke * 10 : 0;
+
     /**
      * Weltkoordinaten → Bildpunkte. `y` wird dabei umgedreht.
      *
@@ -223,8 +273,8 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
      * wirkt — darüber dagegen die ganze Flugbahn. Bei 62 % blieb im
      * Hochformat ein Viertel des Bildes leere grüne Fläche.
      */
-    const bx = (x: number) => (x - kameraX) * proMeter + breite * 0.5;
-    const by = (y: number) => hoehe * 0.74 - (y - kameraY) * proMeter;
+    const bx = (x: number) => (x - kameraX) * proMeter + breite * 0.5 + schuettelX;
+    const by = (y: number) => hoehe * 0.74 - (y - kameraY) * proMeter + schuettelY;
 
     ctx.setTransform(pixelDichte, 0, 0, pixelDichte, 0, 0);
     ctx.clearRect(0, 0, breite, hoehe);
@@ -403,6 +453,29 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
     }
     if (grasOffen) ctx.stroke();
 
+    /*
+     * Kleine Steine, direkt in der Grasnarbe verankert — Recherche zu
+     * anderen 2D-Bike-Spielen: Deko, die zur Strecke selbst gehört, nicht
+     * zu einem zweiten, separat scrollenden Hintergrund. Weltposition
+     * kommt aus einer reinen Hash-Funktion von `x` (`streuWert`), nicht
+     * aus `Math.random()` — bei gleicher Weltposition liegt also immer
+     * derselbe Stein da, unabhängig vom Bildaufbau, ohne dass dafür ein
+     * eigenes Feld in `Gelaende` nötig wäre.
+     */
+    const STEIN_ABSTAND = 2.6;
+    const ersterStein = Math.floor((kameraX - sicht * 0.5) / STEIN_ABSTAND) * STEIN_ABSTAND;
+    for (let wx = ersterStein; wx < kameraX + sicht * 0.5 + STEIN_ABSTAND; wx += STEIN_ABSTAND) {
+      if (wx <= ANLAUF || aufKicker(wx)) continue; // nicht auf der Startgeraden, nicht auf Kickern
+      const wuerfel = streuWert(wx);
+      if (wuerfel > 0.4) continue; // nicht an jeder Stelle einer
+      const groesse = (0.05 + streuWert(wx + 0.5) * 0.07) * proMeter;
+      const boden = by(bodenHoehe(g, wx + streuWert(wx + 1) * 1.4 - 0.7));
+      ctx.fillStyle = mischen(FARBEN.bodenTief, '#000000', 0.15);
+      ctx.beginPath();
+      ctx.ellipse(bx(wx), boden - groesse * 0.3, groesse, groesse * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // --- Ziellinie -------------------------------------------------
     if (kameraX + sicht > g.laenge - 4) {
       const zx = bx(g.laenge);
@@ -420,34 +493,11 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       }
     }
 
-    // --- Federung, Räder, Staub ------------------------------------
-    /*
-     * Die Federung reagiert auf den **Wechsel** der senkrechten
-     * Geschwindigkeit, nicht auf ihren Wert: Wer mit −8 m/s aufschlägt und
-     * sofort steht, hat einen harten Schlag — genau diese Differenz ist es,
-     * die eine Federung einfedern lässt.
-     */
-    /*
-     * Die Federung reagiert auf den **Wechsel** der senkrechten
-     * Geschwindigkeit, nicht auf ihren Wert — siehe Kommentar oben an
-     * `vyVorher`. Staub/Rauch beim Aufschlagen gab es hier testweise,
-     * Rückmeldung: „mach das mal so, dass kein Rauch oder Staub kommt,
-     * das sieht komisch aus." Wieder raus, ohne Ersatz — die Federung
-     * selbst zeigt den Einschlag schon deutlich genug.
-     */
-    const stoss = Math.max(0, vyVorher - lauf.vy);
-    vyVorher = lauf.vy;
-    if (lauf.amBoden && stoss > 1) {
-      const kraft = Math.min(1, stoss / 14);
-      federVorn = Math.min(1, federVorn + kraft);
-      federHinten = Math.min(1, federHinten + kraft * 1.15);
-    }
-    // Zurückfedern.
-    federVorn = Math.max(0, federVorn - dt * 3.4);
-    federHinten = Math.max(0, federHinten - dt * 3.1);
-
-    // Räder drehen sich mit dem Tempo — Umfang 2πr. Bei Rückwärtsrollen
-    // (negatives `vx`, siehe `logik.ts`) läuft das von selbst rückwärts.
+    // --- Räder --------------------------------------------------------
+    // Federung und Kamera-Wackeln sind schon berechnet (siehe oben, vor
+    // dem Gelände-Umriss). Räder drehen sich mit dem Tempo — Umfang 2πr.
+    // Bei Rückwärtsrollen (negatives `vx`, siehe `logik.ts`) läuft das
+    // von selbst rückwärts.
     radDrehung += (lauf.vx / RAD_R) * dt;
 
     // --- Fahrrad und Fahrer ----------------------------------------
