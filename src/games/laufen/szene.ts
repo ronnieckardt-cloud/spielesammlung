@@ -1300,10 +1300,18 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
         figur.knieR.rotation.x = knieTakt(Math.PI - 0.55);
         figur.armL.rotation.x = -schwung * 0.85;
         figur.armR.rotation.x = schwung * 0.85;
-        // Dauerhaft angewinkelt, mit leichtem Pumpen im Takt — kein
-        // Läufer streckt beim Laufen die Arme durch.
-        figur.ellbogenL.rotation.x = -1.2 + schwung * 0.18;
-        figur.ellbogenR.rotation.x = -1.2 - schwung * 0.18;
+        /*
+         * Der Ellbogen schwingt spürbar mit, statt fast starr zu bleiben.
+         * Rückmeldung: „nicht die ganze Zeit mit eingewinkelten [Armen] —
+         * ein bisschen realistischer." Vorher war der Ausschlag nur 0,18
+         * (rund 10°) um eine feste Grundbeugung — bei jeder Bildrate praktisch
+         * ein eingefrorener Winkel, keine Bewegung, die man sieht. Jetzt
+         * öffnet sich der Arm im Rückschwung sichtbar und schließt sich
+         * wieder, wenn die Hand nach vorn kommt — derselbe Rhythmus wie das
+         * Bein auf derselben Seite, nur am Ellbogen statt am Knie.
+         */
+        figur.ellbogenL.rotation.x = -1.15 + schwung * 0.6;
+        figur.ellbogenR.rotation.x = -1.15 - schwung * 0.6;
       }
 
       // Das zuletzt gezeichnete Laufbild merken — der Sturz oben mischt von
