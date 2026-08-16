@@ -2205,6 +2205,26 @@ sind** — dieselbe Regel wie bei den Erfolgen auf der Fortschrittsseite.
 zurückgibt, die bei der aktuellen Stufe eigentlich gesperrt ist — dieselbe
 Vorsicht wie bei `fortschrittBereinigen`.
 
+## Die Statistik-Seite
+
+Eine Zeile je Spiel — Runden, Siege, Sterne, Bestwert, zuletzt gespielt —,
+erreichbar über einen Knopf auf der Fortschrittsseite. Erhebt **keine
+einzige neue Zahl**: Die vier Werte stehen längst in `fortschritt.jeSpiel`,
+das Datum ist das jüngste aus der ohnehin gespeicherten Bestenliste. Die
+Rechnung dafür steht in `statistik.ts`, unabhängig vom Bildschirm testbar.
+
+**„Gespielt" heißt nicht nur `partien > 0`.** Runden zählt der Fortschritt,
+das Datum kommt aus der Bestenliste — zwei verschiedene Speicherorte. Bei
+Color Pour lief das schon einmal auseinander: ein echter Bestenlisten-
+Eintrag von vor der Fortschritt-Funktion, aber `partien` stand noch auf 0.
+Die Karte zeigte ein Datum und behauptete im selben Atemzug „noch nicht
+gespielt". Jetzt entscheiden beide Werte zusammen, ob eine Karte als
+gespielt gilt.
+
+Bewusst **keine Rangliste zwischen den Spielen**: Die Skalen sind
+unvergleichbar (Quiz Time 0 bis 10, Block Burst in den Tausenden) — genau
+der Grund, aus dem die Fortschrittsseite selbst keine Gesamtpunktzahl zeigt.
+
 ## Ausliefern
 
 Läuft auf **Netlify** unter `florian-spielesammlung.netlify.app`. Das ist

@@ -40,7 +40,7 @@ function Zahlenkachel({
   );
 }
 
-export function FortschrittSeite() {
+export function FortschrittSeite({ onStatistik }: { onStatistik: () => void }) {
   const f = fortschrittLesen();
   const stand = stufeAus(f.xp);
   const sterne = spiele.reduce((s, sp) => s + (f.jeSpiel[sp.id]?.besteSterne ?? 0), 0);
@@ -79,6 +79,29 @@ export function FortschrittSeite() {
           symbol="🔥"
         />
       </ul>
+
+      {/* Die vier Zahlen oben sind die Summe — wer wissen will, wie es bei
+          einem einzelnen Spiel steht, braucht die Aufschlüsselung. Eigene
+          Seite statt eines eingeklappten Bereichs hier: Mit zwanzig Zeilen
+          wäre diese Seite sonst so lang wie die Erfolge und die Statistik
+          zugleich. */}
+      <button
+        type="button"
+        onClick={onStatistik}
+        className="druckbar rein-von-unten mb-4 flex min-h-14 w-full items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-left backdrop-blur-sm"
+        style={{ animationDelay: '150ms' }}
+      >
+        <span aria-hidden="true" className="text-xl">
+          📊
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold text-white">Statistik je Spiel</span>
+          <span className="block text-xs text-white/70">Runden, Siege, Sterne, Bestwert</span>
+        </span>
+        <span aria-hidden="true" className="shrink-0 text-lg text-white/55">
+          ›
+        </span>
+      </button>
 
       <section className="rein-von-unten" style={{ animationDelay: '180ms' }} aria-labelledby="erfolge-titel">
         <div className="mb-2 flex items-baseline justify-between px-1">

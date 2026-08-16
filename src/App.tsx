@@ -11,6 +11,7 @@ import { EinstellungenSeite } from './shell/EinstellungenSeite';
 import { BestenlisteSeite } from './shell/BestenlisteSeite';
 import { KontoSeite } from './shell/KontoSeite';
 import { AvatarSeite } from './shell/AvatarSeite';
+import { StatistikSeite } from './shell/StatistikSeite';
 import { DuellSeite } from './shell/DuellSeite';
 import { Unternavigation, type NavZiel } from './shell/Unternavigation';
 import { AbenteuerSeite } from './abenteuer/AbenteuerSeite';
@@ -35,6 +36,7 @@ export type Ansicht =
   | { art: 'bestenliste' }
   | { art: 'konto' }
   | { art: 'avatar' }
+  | { art: 'statistik' }
   | { art: 'duelle' }
   | { art: 'duell'; id: string };
 
@@ -51,6 +53,7 @@ function ansichtAusAdresse(): Ansicht {
   if (teile[0] === 'bestenliste') return { art: 'bestenliste' };
   if (teile[0] === 'konto') return { art: 'konto' };
   if (teile[0] === 'avatar') return { art: 'avatar' };
+  if (teile[0] === 'statistik') return { art: 'statistik' };
   if (teile[0] === 'duelle') return { art: 'duelle' };
   if (teile[0] === 'duell' && teile[1]) return { art: 'duell', id: teile[1] };
   return { art: 'menue' };
@@ -76,6 +79,8 @@ function adresseFuer(ansicht: Ansicht): string {
       return '#/konto';
     case 'avatar':
       return '#/avatar';
+    case 'statistik':
+      return '#/statistik';
     case 'duelle':
       return '#/duelle';
     case 'duell':
@@ -104,6 +109,7 @@ function navZielFuer(ansicht: Ansicht): NavZiel {
     case 'mehr':
     case 'konto':
     case 'avatar':
+    case 'statistik':
     case 'einstellungen':
     case 'duelle':
       return 'mehr';
@@ -166,6 +172,7 @@ export default function App() {
   const zumMenue = useCallback(() => zeige({ art: 'menue' }), [zeige]);
   const zumKonto = useCallback(() => zeige({ art: 'konto' }), [zeige]);
   const zumAvatar = useCallback(() => zeige({ art: 'avatar' }), [zeige]);
+  const zurStatistik = useCallback(() => zeige({ art: 'statistik' }), [zeige]);
   const zuMehr = useCallback(() => zeige({ art: 'mehr' }), [zeige]);
   const spielen = useCallback((id: string) => zeige({ art: 'spiel', id }), [zeige]);
 
@@ -218,7 +225,7 @@ export default function App() {
       case 'spiele':
         return <SpieleSeite onSpielen={spielen} />;
       case 'fortschritt':
-        return <FortschrittSeite />;
+        return <FortschrittSeite onStatistik={zurStatistik} />;
       case 'mehr':
         return (
           <MehrSeite
@@ -243,6 +250,8 @@ export default function App() {
         return <KontoSeite konto={konto} onZurueck={zuMehr} onAvatar={zumAvatar} />;
       case 'avatar':
         return <AvatarSeite onZurueck={zumKonto} />;
+      case 'statistik':
+        return <StatistikSeite onZurueck={() => zeige({ art: 'fortschritt' })} />;
       case 'duelle':
         return (
           <DuellSeite
