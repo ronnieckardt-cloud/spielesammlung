@@ -908,8 +908,18 @@ function radFahrerZeichnen(
   ctx.lineTo(hintenX, nabeHinten + 0.065 * m);
   ctx.stroke();
 
-  // Die Kurbel dreht sich mit dem Tempo.
-  const pedalWinkel = radDrehung * 0.55;
+  /*
+   * Die Kurbel dreht sich mit dem Tempo — mit deutlich kleinerem Faktor
+   * als die Laufräder selbst (0,55 → 0,22). Rückmeldung: „Die
+   * Beinbewegung kann langsamer sein, das sieht sehr komisch aus, wenn
+   * es so megaschnell ist." Bei voller Fahrt drehte die Kurbel vorher
+   * über drei Umdrehungen je Sekunde — nach dem Umbau auf die jetzt viel
+   * kräftigere, sichtbarere Beinform (siehe unten) las sich das nicht
+   * mehr als Treten, sondern als Zittern. Real tritt niemand deutlich
+   * über zwei Umdrehungen je Sekunde; 0,22 bleibt selbst bei Höchsttempo
+   * knapp darunter.
+   */
+  const pedalWinkel = radDrehung * 0.22;
   const pedalX = tretlager.x + Math.cos(pedalWinkel) * 0.17 * m;
   const pedalY = tretlager.y + Math.sin(pedalWinkel) * 0.17 * m;
   rohr(
@@ -991,23 +1001,81 @@ function radFahrerZeichnen(
     ctx.fill();
   };
 
-  // --- Bein: Hüfte → Knie → Pedal ---
-  const knie = { x: huefte.x + 0.24 * m, y: huefte.y + 0.3 * m + hocke * 0.04 * m };
-  glied(huefte.x, huefte.y, knie.x, knie.y, 0.085 * m, 0.062 * m, FARBEN.hose);
-  glied(knie.x, knie.y, pedalX, pedalY - 0.04 * m, 0.06 * m, 0.045 * m, FARBEN.hose);
+  /*
+   * **Zwei-Knochen-IK für Arm und Bein.**
+   *
+   * Vorher stand das Gelenk (Ellbogen/Knie) an einem festen Versatz von
+   * der Basis (Schulter/Hüfte) — das zweite Segment musste dann in der
+   * Länge „atmen", um trotzdem am beweglichen Ziel (Lenker, Pedal)
+   * anzukommen, das sich mit Federung und Kurbelumlauf unabhängig bewegt.
+   * Bei genauem Hinsehen sieht das wie ein Gummiglied aus, nicht wie ein
+   * Gelenk. Diese Funktion hält beide Segmentlängen fest und berechnet
+   * die Gelenkposition über den Kosinussatz — dieselbe Formel, die auch
+   * im echten Kosinussatz-Dreieck aus Ober- und Untersegment plus
+   * Ziel-Abstand steckt. `biegung` legt fest, auf welcher Seite der
+   * direkten Basis-Ziel-Linie das Gelenk liegt, damit es nicht bei jedem
+   * Bild zufällig auf die andere Seite springen kann.
+   */
+  const zweiKnochenIK = (
+    basisX: number,
+    basisY: number,
+    zielX: number,
+    zielY: number,
+    laenge1: number,
+    laenge2: number,
+    biegung: 1 | -1,
+  ) => {
+    const dx = zielX - basisX;
+    const dy = zielY - basisY;
+    const dRoh = Math.hypot(dx, dy) || 0.0001;
+    // Nie weiter strecken oder stauchen, als die beiden Segmente hergeben.
+    const d = Math.min(laenge1 + laenge2 - 0.001, Math.max(Math.abs(laenge1 - laenge2) + 0.001, dRoh));
+    const zielWinkel = Math.atan2(dy, dx);
+    const cosInnen = (laenge1 * laenge1 + d * d - laenge2 * laenge2) / (2 * laenge1 * d);
+    const innenWinkel = Math.acos(Math.min(1, Math.max(-1, cosInnen)));
+    const gelenkWinkel = zielWinkel + biegung * innenWinkel;
+    return { x: basisX + Math.cos(gelenkWinkel) * laenge1, y: basisY + Math.sin(gelenkWinkel) * laenge1 };
+  };
+
+  /*
+   * --- Bein: Hüfte → Knie → Pedal ---
+   *
+   * **Reine Zwei-Knochen-IK mit fester Biegerichtung reicht hier nicht.**
+   * Anders als der Lenker (der ungefähr an einem Fleck bleibt) läuft das
+   * Pedal einmal ganz im Kreis um das Tretlager herum — eine feste
+   * Biegeseite relativ zur (mitdrehenden) Hüfte-Pedal-Linie heißt dann,
+   * dass das Knie einmal je Kurbelumdrehung auf die andere Seite
+   * umklappt. Rückmeldung: „Die Bewegung vom Bein ist unnatürlich … das
+   * soll nicht die ganze Zeit umknicken." Ein echtes Knie beugt sich
+   * dagegen immer zur selben Seite (nach oben/vorn, nie nach unten
+   * durch). Deshalb werden **beide** Lösungen des Kosinussatzes
+   * berechnet und die mit dem kleineren `y` (in Bildschirmkoordinaten:
+   * die höher liegende) genommen — das ist genau die Seite, zu der ein
+   * Knie beim Treten tatsächlich ausweicht, ganz gleich wo das Pedal
+   * gerade steht. Am Punkt völliger Streckung fallen beide Lösungen
+   * ohnehin zusammen, der Wechsel ist dort unsichtbar.
+   */
+  const OBERSCHENKEL = 0.4 * m;
+  const UNTERSCHENKEL = 0.36 * m;
+  const pedalZielY = pedalY - 0.04 * m;
+  const knieA = zweiKnochenIK(huefte.x, huefte.y, pedalX, pedalZielY, OBERSCHENKEL, UNTERSCHENKEL, 1);
+  const knieB = zweiKnochenIK(huefte.x, huefte.y, pedalX, pedalZielY, OBERSCHENKEL, UNTERSCHENKEL, -1);
+  const knie = knieA.y <= knieB.y ? knieA : knieB;
+  glied(huefte.x, huefte.y, knie.x, knie.y, 0.115 * m, 0.086 * m, FARBEN.hose);
+  glied(knie.x, knie.y, pedalX, pedalZielY, 0.084 * m, 0.064 * m, FARBEN.hose);
   // Kleine Gelenkscheibe am Knie — ohne sie liest sich der Übergang
   // zwischen den beiden Bein-Kapseln als Knick, nicht als Gelenk.
   ctx.beginPath();
-  ctx.arc(knie.x, knie.y, 0.066 * m, 0, Math.PI * 2);
+  ctx.arc(knie.x, knie.y, 0.09 * m, 0, Math.PI * 2);
   ctx.fillStyle = mischen(FARBEN.hose, '#000000', 0.1);
   ctx.fill();
   // Schuh: Sohle und Spann getrennt, damit er nicht wie ein Klumpen wirkt.
   ctx.fillStyle = '#15161b';
   ctx.beginPath();
-  ctx.ellipse(pedalX + 0.02 * m, pedalY - 0.045 * m, 0.085 * m, 0.05 * m, 0.08, 0, Math.PI * 2);
+  ctx.ellipse(pedalX + 0.024 * m, pedalY - 0.05 * m, 0.1 * m, 0.058 * m, 0.08, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#0a0b0e';
-  ctx.fillRect(pedalX - 0.06 * m, pedalY - 0.015 * m, 0.16 * m, 0.028 * m);
+  ctx.fillRect(pedalX - 0.07 * m, pedalY - 0.017 * m, 0.19 * m, 0.032 * m);
 
   /*
    * --- Der Rumpf als geschlossener Umriss ---
@@ -1017,14 +1085,22 @@ function radFahrerZeichnen(
    * Hüfte zu Schulter — wie vorher — liest sich als Rohr; erst die
    * unterschiedliche Wölbung von Vorder- und Rückseite macht daraus
    * einen Oberkörper.
+   *
+   * **Rumpftiefe deutlich größer als vorher** (`breitSchulter` 0,15 m →
+   * 0,24 m, `breitHuefte` 0,115 m → 0,17 m) — Rückmeldung: „Der Fahrer
+   * muss echt besser aussehen … das ist noch so ein kleines
+   * Strichmännchen, viel breiter mit Schultern." In der Seitenansicht
+   * dieses Spiels ist „breite Schultern" keine Links-Rechts-Breite (die
+   * sieht man von der Seite nie), sondern die Tiefe des Rumpfs an dieser
+   * Stelle — genau der Wert, der hier wächst.
    */
   const rDx = schulter.x - huefte.x;
   const rDy = schulter.y - huefte.y;
   const rLen = Math.hypot(rDx, rDy) || 1;
   const rNx = -rDy / rLen;
   const rNy = rDx / rLen;
-  const breitSchulter = 0.15 * m;
-  const breitHuefte = 0.115 * m;
+  const breitSchulter = 0.24 * m;
+  const breitHuefte = 0.17 * m;
   ctx.beginPath();
   ctx.moveTo(huefte.x + rNx * breitHuefte, huefte.y + rNy * breitHuefte);
   // Rückenseite: nach außen gewölbt.
@@ -1067,6 +1143,43 @@ function radFahrerZeichnen(
   ctx.fill();
 
   /*
+   * Hals — ohne ihn sitzt der Helm direkt auf den Schultern.
+   *
+   * **Muss vor Schulterscheibe und Arm gezeichnet werden, nicht danach.**
+   * Rückmeldung zum ersten Versuch: „Der Hals guckt raus, er sitzt jetzt
+   * vor der Schulter." Genau das passiert, wenn der Hals **nach** dem Arm
+   * gezeichnet wird — seine helle Hautfarbe malt sich dann über den
+   * Schulteransatz des Arms und wirkt wie ein Fremdkörper davor. Jetzt
+   * kommt der Hals gleich nach dem Rumpf; Schulterscheibe, Rückenprotektor
+   * und Arm werden alle **danach** gezeichnet und übermalen seinen Ansatz
+   * wieder — sichtbar bleibt nur das kurze Stück zwischen Kragen und Helm.
+   */
+  glied(
+    schulter.x + 0.01 * m,
+    schulter.y + 0.05 * m,
+    kopf.x - 0.02 * m,
+    kopf.y + 0.03 * m,
+    0.08 * m,
+    0.075 * m,
+    FARBEN.haut,
+  );
+  // Kragen: ein Streifen Trikotfarbe, der am Halsansatz hochsteht — auch
+  // er liegt unter der Schulterscheibe und dem Arm, deckt also nur noch
+  // den Übergang zwischen Rumpf und dem sichtbaren Halsstück ab.
+  ctx.beginPath();
+  ctx.ellipse(
+    schulter.x + 0.02 * m,
+    schulter.y + 0.02 * m,
+    0.11 * m,
+    0.06 * m,
+    Math.atan2(rDy, rDx),
+    0,
+    Math.PI * 2,
+  );
+  ctx.fillStyle = mischen(FARBEN.kleidung, '#000000', 0.08);
+  ctx.fill();
+
+  /*
    * **Gelenkscheiben an Hüfte und Schulter.**
    *
    * Rückmeldung: „Bei dem Fahrer gibt's einen Fehler, an der Schulter ist
@@ -1088,8 +1201,12 @@ function radFahrerZeichnen(
     ctx.fillStyle = mischen(FARBEN.kleidung, '#000000', 0.12);
     ctx.fill();
   };
-  gelenkscheibe(huefte.x, huefte.y, 0.09 * m);
-  gelenkscheibe(schulter.x, schulter.y, 0.075 * m);
+  // Radius jeweils etwas größer als der Kapsel-Ansatz an dieser Stelle
+  // (Bein 0,115 m, Arm 0,10 m) — sonst reicht die Scheibe selbst nicht
+  // bis zum sichtbaren Rand der jetzt dickeren Gliedmaßen und die Lücke
+  // wird größer statt kleiner.
+  gelenkscheibe(huefte.x, huefte.y, 0.135 * m);
+  gelenkscheibe(schulter.x, schulter.y, 0.115 * m);
 
   // Rückenprotektor, als aufgesetzte Platte auf dem Rücken.
   ctx.fillStyle = 'rgba(20,22,28,0.55)';
@@ -1105,42 +1222,25 @@ function radFahrerZeichnen(
   );
   ctx.fill();
 
-  // --- Arm: Schulter → Ellbogen → Lenker ---
-  const ellbogen = { x: schulter.x + 0.16 * m, y: schulter.y + 0.22 * m + hocke * 0.1 * m };
-  glied(schulter.x, schulter.y, ellbogen.x, ellbogen.y, 0.07 * m, 0.052 * m, FARBEN.kleidung);
-  glied(ellbogen.x, ellbogen.y, lenker.x, lenker.y, 0.05 * m, 0.04 * m, FARBEN.kleidung);
+  // --- Arm: Schulter → Ellbogen → Lenker, dieselbe Zwei-Knochen-IK ---
+  const OBERARM = 0.3 * m;
+  const UNTERARM = 0.27 * m;
+  const ellbogen = zweiKnochenIK(schulter.x, schulter.y, lenker.x, lenker.y, OBERARM, UNTERARM, 1);
+  glied(schulter.x, schulter.y, ellbogen.x, ellbogen.y, 0.1 * m, 0.076 * m, FARBEN.kleidung);
+  glied(ellbogen.x, ellbogen.y, lenker.x, lenker.y, 0.074 * m, 0.06 * m, FARBEN.kleidung);
   // Kleine Gelenkscheibe am Ellbogen — dieselbe Überlegung wie am Knie.
   ctx.beginPath();
-  ctx.arc(ellbogen.x, ellbogen.y, 0.058 * m, 0, Math.PI * 2);
+  ctx.arc(ellbogen.x, ellbogen.y, 0.082 * m, 0, Math.PI * 2);
   ctx.fillStyle = mischen(FARBEN.kleidung, '#000000', 0.1);
   ctx.fill();
   // Handschuh am Lenker.
   ctx.fillStyle = '#2a2d36';
   ctx.strokeStyle = '#12141a';
-  ctx.lineWidth = Math.max(1, 0.02 * m);
+  ctx.lineWidth = Math.max(1, 0.022 * m);
   ctx.beginPath();
-  ctx.arc(lenker.x, lenker.y, 0.055 * m, 0, Math.PI * 2);
+  ctx.arc(lenker.x, lenker.y, 0.075 * m, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-
-  /*
-   * Hals — ohne ihn sitzt der Helm direkt auf den Schultern. Bewusst
-   * kräftig statt als dünner Steg: Ein schmaler, weit sichtbarer Hals ist
-   * einer der zuverlässigsten Gründe, warum eine Figur aus Grundformen
-   * nach Strichmännchen aussieht statt nach Körper — Recherche zu
-   * anderen 2D-Bike-Spielen bestätigt das durchgehend. Der Helm
-   * überlappt das obere Ende ohnehin (siehe unten), hier zählt vor allem
-   * die Dicke.
-   */
-  glied(
-    schulter.x + 0.03 * m,
-    schulter.y - 0.02 * m,
-    kopf.x - 0.03 * m,
-    kopf.y + 0.1 * m,
-    0.065 * m,
-    0.06 * m,
-    FARBEN.haut,
-  );
 
   /*
    * --- Der Fullface-Helm ---

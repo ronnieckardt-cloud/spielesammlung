@@ -2746,16 +2746,99 @@ nur unauffälliger.
 Recherche zu Fahrerfiguren in anderen 2D-Bike-Spielen (Trials, Bike Mayhem,
 Mad Skills BMX 2, Happy Wheels) bestätigt: **Ein sichtbar dünner Hals ist
 einer der zuverlässigsten Gründe, warum eine Figur aus Grundformen nach
-Strichmännchen statt nach Körper aussieht.** Der Hals ist deshalb kräftiger
-gezeichnet als vorher (0,055/0,05 m → 0,065/0,06 m) — nicht als schmaler
-sichtbarer Steg, sondern so, dass Helm und Schulter ihn größtenteils
-überlappen.
+Strichmännchen statt nach Körper aussieht.**
 
-**Bewusst nicht umgesetzt aus derselben Recherche:** Zwei-Knochen-IK für
-Arm/Bein (Hand und Fuß exakt auf Lenker/Pedal einrasten, unabhängig vom
-Winkel) — ein echter Realismus-Hebel, aber ein struktureller Umbau, kein
-Fehler. Vorerst zurückgestellt, falls die Figur später noch einmal
-angefasst wird.
+### Der Fahrer, zweite Runde: breiter, mit echter Gelenk-IK
+
+Trotz der Gelenkscheiben blieb die Rückmeldung: „Sieht immer noch aus wie
+ein kleines Strichmännchen — viel breiter mit Schultern und so weiter."
+Diesmal ein größerer Umbau statt einzelner Korrekturen:
+
+- **Rumpftiefe deutlich größer** (`breitSchulter` 0,15 m → 0,24 m,
+  `breitHuefte` 0,115 m → 0,17 m) und alle Gliedmaßen-Kapseln um rund
+  40 % dicker. Wichtig für das Verständnis: In der Seitenansicht dieses
+  Spiels ist „breite Schultern" keine Links-Rechts-Breite (die sieht man
+  von der Seite nie), sondern die Tiefe des Rumpfs an der Schulterstelle
+  — genau der Wert, der hier wächst.
+- **Zwei-Knochen-IK für Arm und Bein doch noch gebaut**, obwohl zuerst als
+  „struktureller Umbau, kein Fehler" zurückgestellt: Mit den jetzt viel
+  dickeren Gliedmaßen fiel eine feste Ellbogen-/Knie-Position (das zweite
+  Segment „atmete" in der Länge, um trotzdem Lenker/Pedal zu erreichen)
+  deutlich mehr auf als vorher. `zweiKnochenIK()` hält beide
+  Segmentlängen fest und berechnet das Gelenk über den Kosinussatz.
+- **Reine IK reicht beim Bein nicht.** Anders als der Lenker (bleibt
+  ungefähr an einem Fleck) läuft das Pedal einmal ganz im Kreis um das
+  Tretlager. Eine feste Biegeseite relativ zur mitdrehenden Hüfte-Pedal-
+  Linie heißt dann: Das Knie klappt einmal je Kurbelumdrehung auf die
+  andere Seite um. Rückmeldung: „Die Bewegung vom Bein ist unnatürlich …
+  das soll nicht die ganze Zeit umknicken." Behoben, indem **beide**
+  Lösungen des Kosinussatzes berechnet und die mit dem kleineren `y`
+  (bildschirmoben) genommen wird — die Seite, zu der ein echtes Knie beim
+  Treten tatsächlich ausweicht, unabhängig von der Pedalstellung. An der
+  Stelle völliger Streckung fallen beide Lösungen ohnehin zusammen, der
+  Wechsel ist dort unsichtbar.
+- **Die Kurbel drehte sich viel zu schnell** (Faktor 0,55 auf die
+  Rad-Umdrehung, über drei Umdrehungen je Sekunde bei Höchsttempo) —
+  bei den jetzt kräftigeren, sichtbareren Beinen las sich das nicht mehr
+  als Treten, sondern als Zittern. Auf 0,22 gesenkt (Rückmeldung: „die
+  Beinbewegung kann langsamer sein").
+- **Der Hals wanderte zweimal.** Erste Korrektur: kräftiger, aber gleich
+  lang — blieb als eigenständiger Stab zwischen Helm und Rumpf sichtbar.
+  Der eigentliche Fehler war die **Länge**, nicht die Dicke: Beide
+  Ansatzpunkte lagen weit draußen vor Helm- und Rumpfkontur. Jetzt beginnt
+  der Hals innerhalb der Schulterkontur und endet innerhalb der
+  Helmschale, dazu ein Kragen in Trikotfarbe am Ansatz. Zweite Korrektur,
+  nachdem das den Hals zwar kürzte, ihn aber „vor die Schulter" schob:
+  **Zeichenreihenfolge.** Der Hals wurde nach dem Arm gezeichnet und
+  malte sich dadurch über dessen Schulteransatz. Jetzt kommt der Hals
+  gleich nach dem Rumpf; Schulterscheibe, Rückenprotektor und Arm werden
+  **danach** gezeichnet und übermalen seinen Ansatz wieder — sichtbar
+  bleibt nur das kurze Stück zwischen Kragen und Helm. *Merksatz:* Bei
+  gestapelten Canvas-Formen entscheidet die Zeichenreihenfolge genauso
+  über das Ergebnis wie die Geometrie selbst — eine an sich richtige Form
+  kann trotzdem falsch aussehen, wenn sie zur falschen Zeit gezeichnet wird.
+
+### Schwerer, weil Steuern jetzt wirklich nötig ist
+
+Rückmeldung: „Das kann viel schwerer werden — ich muss überhaupt nicht
+Gewicht nach vorne oder hinten legen, wenn ich einfach die ganze Zeit auf
+Gas drücke, kriege ich meine Punkte." Der Grund: `drehen` (die Drehrate)
+stand beim Abheben immer exakt bei null. Ein Sprung ganz ohne Eingabe
+behielt dadurch einfach den Absprungwinkel bis zur Landung bei — und der
+liegt bei vielen Kickern zufällig schon nahe am Landewinkel.
+
+**Erster Versuch, gescheitert:** die tatsächliche Drehrate der Kuppe beim
+Abheben mit in die Luft nehmen — ob als diskrete Differenz aus der
+Anlege-Dämpfung oder als exakte analytische Formel aus Krümmung und Tempo,
+beide Fassungen rissen den Bildraten-Fairness-Test auf 70 bis 80 %
+Abweichung. Der Grund lag nicht an der Formel, sondern **wann** genau
+abgehoben wird: eine Schwellwert-Prüfung, die einmal je Bild läuft, und der
+erkannte Absprungpunkt liegt bei 30 und 60 Bildern je Sekunde immer ein
+kleines Stück auseinander. Eine Winkel*position* verzeiht das (der Fehler
+bleibt über den ganzen Flug konstant); eine Winkel*geschwindigkeit*, die
+sich über eine mehrsekündige Flugbahn aufsummiert, verstärkt genau diesen
+kleinen Unterschied — und weil Landequalität eine Schwelle ist
+(gut/hart/Sturz), kippt daraus schon mal ein Sturz bei der einen Bildrate,
+der bei der anderen keiner ist.
+
+**Die tatsächliche Lösung stand an einer ganz anderen Stelle:** eine
+**feste** Drehbeschleunigung nach unten (`NATUR_NICKEN`), die während der
+ganzen Flugzeit wirkt — genau derselbe Aufbau wie der `lehnen`-Steuerterm
+selbst, der diesen Test nie gestört hat, statt eines einmaligen Werts beim
+Absprung. Zusammen mit der vorhandenen Dämpfung pendelt sich die Drehrate
+ohne Gegensteuern auf eine feste Sink-Rate ein — über eine mehrsekündige
+Flugbahn dreht die Nase spürbar nach unten. Wer landen will, muss aktiv
+gegenhalten. Ein eigener Test (`hält den Absprungwinkel ohne Eingabe nicht
+von selbst`) sichert genau das ab: Nach einer Sekunde Flug ohne jede
+Eingabe muss `winkel` um mehr als 0,15 Radiant gedriftet sein.
+
+*Merksatz, zweimal in dieser Session bestätigt:* Wenn ein Fairness-Test bei
+einer Physik-Änderung ausschlägt, die um Größenordnungen über der üblichen
+Rundungstoleranz liegt, ist meist nicht die Formel falsch, sondern **wo**
+im Ablauf sie ansetzt — an einer diskreten Schwellwert-Prüfung oder an
+einem einmaligen Übergabepunkt hängt Bildraten-Sensitivität, die an einem
+kontinuierlich wirkenden Term (wie der bestehenden `lehnen`-Steuerung)
+nicht entsteht.
 
 ### Sounds
 

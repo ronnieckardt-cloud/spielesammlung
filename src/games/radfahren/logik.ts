@@ -353,6 +353,13 @@ export const LUFT = 0.06;
  * ein kurzer Antipp sich sofort deutlich auswirken soll.
  */
 export const LUFT_DREHUNG = 8.5;
+/**
+ * Feste Drehbeschleunigung nach unten (Nase runter), die in der Luft immer
+ * wirkt — unabhängig von `lehnen`. Siehe die Herleitung in `takt`: Ohne
+ * sie hielt „nichts tun" den Absprungwinkel exakt bis zur Landung, was
+ * Steuern zur Nebensache machte.
+ */
+export const NATUR_NICKEN = 2.0;
 /** Wie hart sich das Rad am Boden an die Bodenneigung anlegt. */
 const ANLEGEN = 14;
 /**
@@ -617,6 +624,26 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
      * statt nach oben.
      */
     drehen -= e.lehnen * LUFT_DREHUNG * dt;
+    /*
+     * **Ohne Eingabe treibt die Nase langsam nach unten** — kein
+     * Gleichgewicht, das sich von selbst hält. Rückmeldung: „Ich muss
+     * überhaupt gar nicht Gewicht nach vorne oder hinten legen — wenn ich
+     * einfach die ganze Zeit auf Gas drücke, kriege ich meine Punkte. Das
+     * ist nicht so cool." Vorher blieb `winkel` in der Luft ohne Eingabe
+     * exakt beim Absprungwinkel stehen (`drehen` startete dort bei null
+     * und wurde nur durch `lehnen` bewegt) — und der liegt bei vielen
+     * Kickern zufällig schon nahe am Landewinkel, sodass „nichts tun"
+     * fast wie „richtig gemacht" wirkte.
+     *
+     * `NATUR_NICKEN` ist eine **feste** Drehbeschleunigung, genau wie der
+     * `lehnen`-Term darüber — kein Sonderfall, der Bildrate anders
+     * behandeln könnte. Zusammen mit der Dämpfung direkt darunter pendelt
+     * sich `drehen` ohne Gegensteuern auf eine feste Sink-Rate ein
+     * (`-NATUR_NICKEN / 1.6`), die über eine mehrsekündige Flugbahn
+     * spürbar Nase-runter dreht. Wer landen will, muss also aktiv
+     * gegenhalten — ein einzelner kurzer Absprungwinkel reicht nicht mehr.
+     */
+    drehen -= NATUR_NICKEN * dt;
     drehen -= drehen * 1.6 * dt;
     winkel += drehen * dt;
 
