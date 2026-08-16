@@ -9,40 +9,76 @@ import { stufeAus } from './fortschritt';
 /**
  * Der Avatar-Baukasten.
  *
- * Vier Reihen — Farbe, Form, Augen, Extra —, in jeder die Vorschau jeder
- * Option. Gesperrte Optionen stehen **blass, aber sichtbar** da, mit der
- * Stufe, ab der sie zu haben sind — dieselbe Regel wie bei den Erfolgen auf
- * der Fortschrittsseite: „Neu" beschreibt eine Abwesenheit und verschwindet,
- * ein gesperrtes Teil beschreibt ein Ziel und bleibt stehen. Ein Kind muss
- * sehen können, was als Nächstes kommt, sonst ist der Anreiz weg.
+ * Sechs Reihen — Hautfarbe, Frisur, Haarfarbe, Oberteil, Hose, Extra —, in
+ * jeder die Vorschau jeder Option. Gesperrte Optionen stehen **blass, aber
+ * sichtbar** da, mit der Stufe, ab der sie zu haben sind — dieselbe Regel
+ * wie bei den Erfolgen auf der Fortschrittsseite: „Neu" beschreibt eine
+ * Abwesenheit und verschwindet, ein gesperrtes Teil beschreibt ein Ziel und
+ * bleibt stehen. Ein Kind muss sehen können, was als Nächstes kommt, sonst
+ * ist der Anreiz weg.
+ *
+ * Bei der Hautfarbe ist **jede** Option von Anfang an offen — siehe die
+ * Begründung in `avatar.ts`. Diese Seite weiß davon nichts Besonderes,
+ * `freigeschaltet('hautfarbe', 1)` liefert einfach schon alle.
  */
 
 const TEIL_NAME: Record<AvatarTeil, string> = {
-  koerperfarbe: 'Farbe',
-  form: 'Form',
-  augen: 'Augen',
+  hautfarbe: 'Hautfarbe',
+  frisur: 'Frisur',
+  haarfarbe: 'Haarfarbe',
+  oberteilSchnitt: 'Oberteil — Schnitt',
+  oberteil: 'Oberteil — Farbe',
+  hosenSchnitt: 'Hose — Schnitt',
+  hose: 'Hose — Farbe',
   accessoire: 'Extra',
 };
 
 const OPTION_NAME: Record<string, string> = {
+  hell: 'Hell',
+  mittel: 'Mittel',
+  oliv: 'Oliv',
+  braun: 'Braun',
+  dunkel: 'Dunkel',
+  kahl: 'Kahl',
+  kurz: 'Kurz',
+  zopf: 'Zopf',
+  'zwei-zoepfe': 'Zwei Zöpfe',
+  lang: 'Lang',
+  lockig: 'Lockig',
+  irokese: 'Irokese',
+  schwarz: 'Schwarz',
+  blond: 'Blond',
+  rot: 'Rot',
   blau: 'Blau',
+  pink: 'Pink',
   gruen: 'Grün',
   orange: 'Orange',
-  pink: 'Pink',
   violett: 'Violett',
   gold: 'Gold',
-  rund: 'Rund',
-  eckig: 'Eckig',
-  spitz: 'Spitz',
-  wellig: 'Wellig',
-  stern: 'Stern',
-  schlaefrig: 'Schläfrig',
-  herz: 'Herz',
-  zwinker: 'Zwinker',
+  grau: 'Grau',
+  weiss: 'Weiß',
+  tuerkis: 'Türkis',
+  gelb: 'Gelb',
+  beige: 'Beige',
+  kurzarm: 'Kurzarm',
+  langarm: 'Langarm',
+  pulli: 'Pulli',
+  'kurz-eng': 'Kurz, schmal',
+  'kurz-weit': 'Kurz, weit',
+  'lang-eng': 'Lang, schmal',
+  'lang-weit': 'Lang, weit',
+  rock: 'Rock',
   keins: 'Keins',
   brille: 'Brille',
-  schleife: 'Schleife',
-  hut: 'Hut',
+  fliege: 'Fliege',
+  schal: 'Schal',
+  kopfhoerer: 'Kopfhörer',
+  'cap-schwarz': 'Cap, schwarz',
+  'cap-weiss': 'Cap, weiß',
+  'cap-gruen': 'Cap, grün',
+  'cap-schwarz-hinten': 'Cap, schwarz, andersrum',
+  'cap-weiss-hinten': 'Cap, weiß, andersrum',
+  'cap-gruen-hinten': 'Cap, grün, andersrum',
   krone: 'Krone',
 };
 

@@ -8,13 +8,27 @@ import {
 } from './avatar';
 import type { AvatarTeil } from './avatar';
 
-const TEILE: readonly AvatarTeil[] = ['koerperfarbe', 'form', 'augen', 'accessoire'];
+const TEILE: readonly AvatarTeil[] = [
+  'hautfarbe',
+  'frisur',
+  'haarfarbe',
+  'oberteilSchnitt',
+  'oberteil',
+  'hosenSchnitt',
+  'hose',
+  'accessoire',
+];
 
 describe('freigeschaltet', () => {
   it('bei Stufe 1 ist für jedes Teil mindestens eine Option offen', () => {
     for (const teil of TEILE) {
       expect(freigeschaltet(teil, 1).length).toBeGreaterThan(0);
     }
+  });
+
+  it('bei Hautfarbe sind bei Stufe 1 bereits ALLE Optionen offen', () => {
+    // Keine Belohnung, sondern eine Wahl — siehe avatar.ts.
+    expect(freigeschaltet('hautfarbe', 1)).toEqual(OPTIONEN.hautfarbe.map((o) => o.id));
   });
 
   it('schaltet nichts frei, was noch nicht dran ist', () => {
@@ -60,23 +74,23 @@ describe('avatarBereinigen', () => {
   });
 
   it('übernimmt einen gültigen, freigeschalteten Wert', () => {
-    const ergebnis = avatarBereinigen({ koerperfarbe: 'orange' }, 3);
-    expect(ergebnis.koerperfarbe).toBe('orange');
+    const ergebnis = avatarBereinigen({ oberteil: 'orange' }, 3);
+    expect(ergebnis.oberteil).toBe('orange');
   });
 
   it('fällt auf die Voreinstellung zurück, wenn die Stufe zu niedrig ist', () => {
-    // 'gold' braucht Stufe 12 — bei Stufe 3 gesperrt.
-    const ergebnis = avatarBereinigen({ koerperfarbe: 'gold' }, 3);
-    expect(ergebnis.koerperfarbe).toBe(voreingestellterAvatar().koerperfarbe);
+    // 'gold' braucht bei oberteil Stufe 12 — bei Stufe 3 gesperrt.
+    const ergebnis = avatarBereinigen({ oberteil: 'gold' }, 3);
+    expect(ergebnis.oberteil).toBe(voreingestellterAvatar().oberteil);
   });
 
   it('ignoriert erfundene Teile-Werte', () => {
-    const ergebnis = avatarBereinigen({ koerperfarbe: 'unsichtbar-lila-kariert' }, 50);
-    expect(ergebnis.koerperfarbe).toBe(voreingestellterAvatar().koerperfarbe);
+    const ergebnis = avatarBereinigen({ oberteil: 'unsichtbar-lila-kariert' }, 50);
+    expect(ergebnis.oberteil).toBe(voreingestellterAvatar().oberteil);
   });
 
   it('übersteht kaputte oder fremde Eingaben, ohne zu werfen', () => {
-    for (const kaputt of [null, undefined, 42, 'text', [], true, { koerperfarbe: 123 }]) {
+    for (const kaputt of [null, undefined, 42, 'text', [], true, { oberteil: 123 }]) {
       expect(() => avatarBereinigen(kaputt, 5)).not.toThrow();
     }
   });
@@ -84,20 +98,37 @@ describe('avatarBereinigen', () => {
   it('lässt einen einmal freigeschalteten Wert bei fallender Stufe nicht verschwinden', () => {
     // Die Stufe fällt in der App nie — aber die Funktion soll trotzdem nie
     // einen Wert liefern, der bei der ÜBERGEBENEN Stufe gesperrt ist.
-    const hoch = avatarBereinigen({ koerperfarbe: 'gold' }, 12);
-    expect(hoch.koerperfarbe).toBe('gold');
-    const wiederNiedrig = avatarBereinigen({ koerperfarbe: 'gold' }, 5);
-    expect(wiederNiedrig.koerperfarbe).not.toBe('gold');
+    const hoch = avatarBereinigen({ oberteil: 'gold' }, 12);
+    expect(hoch.oberteil).toBe('gold');
+    const wiederNiedrig = avatarBereinigen({ oberteil: 'gold' }, 5);
+    expect(wiederNiedrig.oberteil).not.toBe('gold');
   });
 
-  it('räumt alle vier Teile unabhängig voneinander auf', () => {
+  it('räumt alle acht Teile unabhängig voneinander auf', () => {
     const ergebnis = avatarBereinigen(
-      { koerperfarbe: 'gold', form: 'stern', augen: 'zwinker', accessoire: 'krone' },
+      {
+        hautfarbe: 'dunkel', // immer erlaubt, bleibt stehen
+        frisur: 'irokese', // Stufe 12, bei Stufe 1 gesperrt
+        haarfarbe: 'pink', // Stufe 9, gesperrt
+        oberteilSchnitt: 'pulli', // Stufe 10, gesperrt
+        oberteil: 'gold', // Stufe 12, gesperrt
+        hosenSchnitt: 'rock', // Stufe 7, gesperrt
+        hose: 'gold', // Stufe 13, gesperrt
+        accessoire: 'krone', // Stufe 15, gesperrt
+      },
       1,
     );
-    // Bei Stufe 1 ist von den vieren nichts freigeschaltet — alles fällt
-    // auf die Voreinstellung zurück.
-    expect(ergebnis).toEqual(voreingestellterAvatar());
+    const voreinstellung = voreingestellterAvatar();
+    // Hautfarbe bleibt erhalten — sie ist nie gesperrt.
+    expect(ergebnis.hautfarbe).toBe('dunkel');
+    // Alles andere fällt zurück, weil bei Stufe 1 gesperrt.
+    expect(ergebnis.frisur).toBe(voreinstellung.frisur);
+    expect(ergebnis.haarfarbe).toBe(voreinstellung.haarfarbe);
+    expect(ergebnis.oberteilSchnitt).toBe(voreinstellung.oberteilSchnitt);
+    expect(ergebnis.oberteil).toBe(voreinstellung.oberteil);
+    expect(ergebnis.hosenSchnitt).toBe(voreinstellung.hosenSchnitt);
+    expect(ergebnis.hose).toBe(voreinstellung.hose);
+    expect(ergebnis.accessoire).toBe(voreinstellung.accessoire);
   });
 });
 
@@ -118,5 +149,9 @@ describe('OPTIONEN', () => {
   it('accessoire kennt „keins" als wählbare, keine Verlegenheits-Option', () => {
     expect(OPTIONEN.accessoire[0]!.id).toBe('keins');
     expect(OPTIONEN.accessoire[0]!.abStufe).toBe(1);
+  });
+
+  it('frisur kennt „kahl" als wählbare Option, nicht nur als Leerzustand', () => {
+    expect(OPTIONEN.frisur.some((o) => o.id === 'kahl' && o.abStufe === 1)).toBe(true);
   });
 });

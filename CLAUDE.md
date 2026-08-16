@@ -2178,10 +2178,23 @@ Minispiel, Gegner, Boss, Arcade-Modus, Story, weitere Zonen.
 
 ## Der Avatar
 
-Eine kleine Figur aus vier Teilen — Farbe, Form, Augen, Extra —, die mit der
-Stufe wächst. `shell/avatar.ts` (reine Logik, welche Optionen ab welcher
+Eine menschliche Figur aus acht Teilen — Hautfarbe, Frisur, Haarfarbe,
+Oberteil-Schnitt, Oberteil-Farbe, Hosen-Schnitt, Hosen-Farbe, Extra —, die mit
+der Stufe wächst. `shell/avatar.ts` (reine Logik, welche Optionen ab welcher
 Stufe offen sind), `shell/AvatarBild.tsx` (das SVG), `shell/AvatarSeite.tsx`
 (der Baukasten), erreichbar über „Mehr" und von der Kontoseite aus.
+
+**War ursprünglich ein runder Blob mit Augen.** Rückmeldung: „Sieht das
+nicht nur aus wie ein Wassertropfen? Ich will, dass die Avatare richtig
+Menschen sind, die man anziehen kann." Seither eine echte Figur mit Kopf,
+Rumpf, Armen, Beinen, Schuhen statt eines Fantasiewesens.
+
+**Schnitt und Farbe stehen bei Kleidung bewusst getrennt.** Rückmeldung:
+„nicht nur ein T-Shirt, sondern langärmlig, kurzärmlig … kurze, lange,
+breite, dünne Hosen." Ein Unterhemd gab es zwischenzeitlich auch als
+Oberteil-Schnitt, ist aber auf Ronnis Wunsch wieder raus („das brauchen wir
+nicht") — seitdem reicht ein einziger, vollständig ausgeschriebener
+Rumpf-Pfad für alle verbliebenen Schnitte.
 
 **Datei heißt `AvatarBild.tsx`, nicht `Avatar.tsx`.** macOS' Dateisystem ist
 serienmäßig nicht zwischen Groß-/Kleinschreibung unterscheidend — `Avatar.tsx`
@@ -2190,6 +2203,23 @@ nicht beim Schreiben auf (beide Editoren zeigten anstandslos ihren eigenen
 Inhalt), sondern erst beim Typprüfen, mit einer Fehlermeldung, die die
 Ursache nicht beim Namen nennt. Merksatz: Ein Dateiname darf sich in diesem
 Projekt in nichts als der Groß-/Kleinschreibung von einem anderen unterscheiden.
+
+**Nie dynamisch zusammengesetzte SVG-Pfade.** Ein früher Versuch, den
+Rumpf-Umriss aus zwei Teil-Strings zusammenzukleben, ergab eine
+selbstüberschneidende Form (eine blaue Fahne quer aus der Seite der Figur) —
+nur durch Screenshot entdeckt, nicht durch einen Test. Seither ist jeder
+Pfad vollständig von Hand ausgeschrieben, nie komponiert.
+
+**Die Cap statt einer Mütze.** Rückmeldung: „Könnten wir schwarze Cappy
+machen? Auch eine weiße und eine grüne." Drei Farben als drei eigene
+`accessoire`-Optionen statt eines neunten Teils. Dieselben drei noch einmal
+mit `-hinten` — Rückmeldung: „dass man die Kappe andersrum anziehen kann" —
+dieselbe Kuppel, nur ohne den Schirm vorn (er zeigt von der Kamera weg),
+mit zwei kleinen Riemen-Tabs seitlich statt des Schirms.
+
+**Schuhe übernehmen den dunklen Hosenton statt einer festen Farbe** —
+Rückmeldung: „verschiedene Schuhe". Kein eigenes neuntes Teil dafür, nur
+`hose.dunkel` als Füllung.
 
 **Bewusst lokal, nicht über den Server.** Der Avatar ist Kür, kein
 Spielstand — er speichert wie der Fortschritt in `speicher.ts`, offline
@@ -2204,6 +2234,10 @@ sind** — dieselbe Regel wie bei den Erfolgen auf der Fortschrittsseite.
 `avatarBereinigen` sorgt dafür, dass ein gespeicherter Wert nie eine Option
 zurückgibt, die bei der aktuellen Stufe eigentlich gesperrt ist — dieselbe
 Vorsicht wie bei `fortschrittBereinigen`.
+
+**Die Hautfarbe ist als einziges Teil nie gesperrt** — alle Optionen ab
+Stufe 1. Sie ist keine Belohnung, sondern eine Wahl, wer man sein möchte,
+und muss deshalb von Anfang an vollständig offenstehen.
 
 ## Die Statistik-Seite
 
