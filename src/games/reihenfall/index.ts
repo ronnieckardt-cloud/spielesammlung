@@ -23,7 +23,7 @@ import { ReihenfallIcon } from './Icon';
 export const reihenfall: GameApi = {
   id: 'reihenfall',
   title: 'Line Fall',
-  accent: '#818cf8',
+  accent: '#ea663e',
   Icon: ReihenfallIcon,
   iconVollflaechig: true,
   Component: Reihenfall,

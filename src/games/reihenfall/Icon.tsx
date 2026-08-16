@@ -39,7 +39,14 @@ export function ReihenfallIcon({ className }: { className?: string }) {
   return (
     <AppSymbol
       id="linefall"
-      verlauf={['#4338ca', '#4c1d95', '#1e1b4b']}
+            /*
+       * **Warmes Rot-Orange statt Indigo/Violett.** War eines von sieben
+       * Symbolen im selben Farbfeld — bei 64 Pixeln kaum von Ghost Chase
+       * oder Ring Rise zu unterscheiden. Die Spielsteine selbst behalten
+       * ihre eigene Zuordnung aus `farben.ts`, nur der Kachel-Hintergrund
+       * ändert sich.
+       */
+      verlauf={['#ea663e', '#ac3915', '#371910']}
       schriftzug="LINE FALL"
       className={className}
     >

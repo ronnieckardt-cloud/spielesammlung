@@ -68,7 +68,14 @@ export function VerbindenIcon({ className }: { className?: string }) {
   return (
     <AppSymbol
       id="flowlink"
-      verlauf={['#4c1d95', '#312e81', '#0f172a']}
+      /*
+       * **Dunkles Blau statt Indigo/Violett.** War eines von sieben
+       * Symbolen im selben Farbfeld. Drop Four ist ebenfalls blau
+       * (`#2563eb`) und Star Dash hellblau (`#7dd3fc`) — Flow Link liegt
+       * farblich zwischen beiden, unterscheidet sich von Drop Four aber vor
+       * allem über die Dunkelheit, nicht nur den Farbton.
+       */
+      verlauf={['#3e94ea', '#1561ac', '#102437']}
       schriftzug="FLOW LINK"
       className={className}
     >

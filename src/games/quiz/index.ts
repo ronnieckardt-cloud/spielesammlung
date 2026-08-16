@@ -6,7 +6,7 @@ import { QuizIcon } from './Icon';
 export const quiz: GameApi = {
   id: 'quiz',
   title: 'Quiz Time',
-  accent: '#22c55e',
+  accent: '#3eea94',
   Icon: QuizIcon,
   iconVollflaechig: true,
   // Gleiche Levelnummer ergibt dasselbe Rätsel — damit duellfähig.

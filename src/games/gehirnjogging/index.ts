@@ -11,7 +11,7 @@ export const gehirnjogging: GameApi = {
   // Schatten unter der Kachel, den Rand in der Bestenliste und die Tönung
   // der Spieloberfläche — ein bernsteinfarbener Schein unter einem
   // violetten Symbol sah nach Versehen aus.
-  accent: '#7c3aed',
+  accent: '#e7ea3e',
   Icon: GehirnjoggingIcon,
   iconVollflaechig: true,
   // Gleiche Levelnummer ergibt dasselbe Rätsel — damit duellfähig.

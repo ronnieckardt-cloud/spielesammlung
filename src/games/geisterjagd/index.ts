@@ -6,7 +6,7 @@ import { GeisterjagdIcon } from './Icon';
 export const geisterjagd: GameApi = {
   id: 'geisterjagd',
   title: 'Ghost Chase',
-  accent: '#a78bfa',
+  accent: '#52ea3e',
   Icon: GeisterjagdIcon,
   iconVollflaechig: true,
   Component: Geisterjagd,

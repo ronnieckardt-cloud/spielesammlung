@@ -6,7 +6,7 @@ import { FarbringeIcon } from './Icon';
 export const farbringe: GameApi = {
   id: 'farbringe',
   title: 'Ring Rise',
-  accent: '#818cf8',
+  accent: '#74ea3e',
   Icon: FarbringeIcon,
   iconVollflaechig: true,
   Component: RingRise,

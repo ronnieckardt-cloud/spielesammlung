@@ -17,7 +17,17 @@ export function QuizIcon({ className }: { className?: string }) {
   return (
     <AppSymbol
       id="quiztime"
-      verlauf={['#6366f1', '#7c3aed', '#4338ca']}
+            /*
+       * **Grün, nicht Indigo.** Der Akzent dieses Spiels ist seit jeher
+       * `#22c55e` (Grün — Quiz Time gehört zu den drei Spielen, die den
+       * indigofarbenen Kachelverlauf nicht bekommen, siehe `spielfarbe.ts`),
+       * das Symbol lief bis hierher aber im selben Indigo/Violett wie sechs
+       * andere Symbole. Der Grüntyp hier ist bewusst ein anderes Grün als
+       * Snake Rush (`#22c55e`) — beide grün zu nennen ist gewollt (beides
+       * sind „richtige Antwort/richtiger Weg"-Spiele), identisch sollen sie
+       * trotzdem nicht wirken.
+       */
+      verlauf={['#3eea94', '#15ac61', '#103724']}
       schriftzug="QUIZ TIME"
       className={className}
     >

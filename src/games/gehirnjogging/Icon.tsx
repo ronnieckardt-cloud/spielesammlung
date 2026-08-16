@@ -47,7 +47,12 @@ export function GehirnjoggingIcon({ className }: { className?: string }) {
   return (
     <AppSymbol
       id="brainblitz"
-      verlauf={['#4f46e5', '#4c1d95', '#2e1065']}
+            /*
+       * **Gold statt Indigo/Violett.** War eines von sieben Symbolen im
+       * selben Farbfeld — passend zur Idee „aufleuchtender Gedanke" statt
+       * eines weiteren dunkelblauen Symbols.
+       */
+      verlauf={['#e7ea3e', '#aaac15', '#373710']}
       schriftzug="BRAIN BLITZ"
       className={className}
     >

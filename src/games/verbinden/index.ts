@@ -6,7 +6,7 @@ import { VerbindenIcon } from './Icon';
 export const verbinden: GameApi = {
   id: 'verbinden',
   title: 'Flow Link',
-  accent: '#818cf8',
+  accent: '#3e94ea',
   Icon: VerbindenIcon,
   iconVollflaechig: true,
   // Gleiche Levelnummer ergibt dasselbe Rätsel — damit duellfähig.

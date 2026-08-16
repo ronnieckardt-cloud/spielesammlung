@@ -64,7 +64,18 @@ export function GeisterjagdIcon({ className }: { className?: string }) {
   return (
     <AppSymbol
       id="ghostchase"
-      verlauf={['#4338ca', '#3730a3', '#1e1b4b']}
+      /*
+       * **Grün statt Indigo/Violett.** War eines von sieben Symbolen im
+       * selben Farbfeld. Betrifft nur den Kachel-Hintergrund — der Geist
+       * selbst trägt weiterhin seine eigene Farbe aus `GEIST_FARBEN`, das
+       * Spielfeld bleibt „Blau gegen Rot" (siehe CLAUDE.md).
+       *
+       * Der genaue Grünton ist bewusst knapp unter 118°: Snake Rush steht
+       * in `registry.ts` direkt unter Ghost Chase, im Kachelraster also als
+       * unterer Nachbar — dieselbe Falle wie bei Ring Rise/Even Cut, hier
+       * rechtzeitig über den Test gefunden statt erst im Bild.
+       */
+      verlauf={['#52ea3e', '#27ac15', '#153710']}
       schriftzug="GHOST CHASE"
       className={className}
     >

@@ -41,7 +41,14 @@ export function PaarUpIcon({ className }: { className?: string }) {
   return (
     <AppSymbol
       id="pairup"
-      verlauf={['#22d3ee', '#6366f1', '#4c1d95']}
+            /*
+       * **Blauviolett statt Cyan-zu-Indigo.** Der alte Verlauf begann zwar
+       * hell in Cyan, endete aber im selben Indigo/Violett wie sechs
+       * andere Symbole — genau in dem Bereich lagen alle Karten des Sets.
+       * Jetzt ein eigener, durchgehender Farbton statt eines Verlaufs, der
+       * am unteren Ende wieder in der Menge untergeht.
+       */
+      verlauf={['#553eea', '#2915ac', '#151037']}
       schriftzug="PAIR UP"
       className={className}
     >

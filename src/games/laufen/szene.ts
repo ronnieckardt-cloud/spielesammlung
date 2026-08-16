@@ -834,6 +834,15 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   /** Sekunden seit dem Zusammenstoß. Läuft erst, wenn `lauf.vorbei` gilt. */
   let aufprall = 0;
   /**
+   * Die zuletzt gezeichnete Laufhaltung.
+   *
+   * Der Sturz mischt von hier aus in die Sturzhaltung. Ohne diesen Merker
+   * begänne er bei null, und die Figur stünde ein Bild lang stramm, bevor
+   * sie kippt — am deutlichsten beim Rutschen, wo sie von −1,15 auf 0
+   * hochschnellte und erst dann fiel.
+   */
+  const letzte = { drehX: 0, drehZ: 0, groesse: 1, armL: 0, armR: 0, beinL: 0, beinR: 0 };
+  /**
    * Die seitliche Kameraposition **ohne** den Aufprallstoß.
    *
    * Der Stoß darf nicht in `kamera.position.x` hineingerechnet werden: Dort
@@ -949,6 +958,8 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     const huepfer = inDerLuft || rutscht ? 0 : Math.abs(Math.sin(laufzeit * 13)) * 0.06;
     /** Tiefe der Figur — beim Sturz rutscht sie zur Kamera hin. */
     let figurZ = 0;
+    /** Höhe der Figur. Beim Sturz sinkt sie auf den Boden, siehe unten. */
+    let figurY = lauf.y;
 
     if (lauf.vorbei) {
       /*
@@ -969,28 +980,47 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       // eine Tür, die zufällt.
       const weich = 1 - (1 - p) * (1 - p);
       figurZ = -0.65 * weich;
+
+      /**
+       * Mischt vom **letzten Laufbild** zum Sturzbild.
+       *
+       * Ohne das sprang die Figur im ersten Bild des Aufpralls in die
+       * Neutralhaltung: Dort ist `weich` noch 0, und alles wurde mit 0
+       * multipliziert. Wer im Laufschritt starb, dessen Beine schnellten
+       * von ±0,95 auf 0; wer im Rutschen in eine Hürde fiel, dessen Figur
+       * schnellte von −1,15 auf 0 und von Maßstab 0,92 auf 1 — und **dann**
+       * erst begann der Sturz. Ein Bild lang stand die Figur stramm.
+       */
+      const von = (anfang: number, ziel: number) => anfang + (ziel - anfang) * weich;
       /*
        * Der Aufsatz von 0,22 m ist kein Geschmack: Gedreht wird um die Füße,
        * und wenn die Figur waagerecht liegt, liegt damit ihre **Achse** auf
        * der Fahrbahn — der halbe Rumpf steckte im Asphalt. Angehoben liegt
        * sie auf der Straße statt darin.
        */
-      figur.gruppe.position.set(
-        fx,
-        lauf.y + Math.sin(Math.PI * p) * 0.3 + 0.22 * weich,
-        figurZ,
-      );
-      figur.gruppe.rotation.x = -1.5 * weich;
-      figur.gruppe.rotation.z = 0.55 * weich;
-      figur.gruppe.scale.setScalar(1);
+      /*
+       * **Die Figur kommt herunter.** `takt` friert bei `vorbei` den ganzen
+       * Lauf ein, also auch `lauf.y`. Wer im Sprung erwischt wurde — eine
+       * Mauer trifft immer, ein Balken, solange der Kopf über 1,1 m ist —,
+       * kippte deshalb **in der Luft** nach hinten und schwebte dort die
+       * vollen 700 ms, während der Bodenschatten klein und blass darunter
+       * stehen blieb. Genau das Bild, gegen das der Sturz angetreten ist,
+       * nur eine Etage höher. Über `weich` sinkt sie jetzt auf den Boden.
+       */
+      figurY = von(lauf.y, 0) + Math.sin(Math.PI * p) * 0.3 + 0.22 * weich;
+      figur.gruppe.position.set(fx, figurY, figurZ);
+      figur.gruppe.rotation.x = von(letzte.drehX, -1.5);
+      figur.gruppe.rotation.z = von(letzte.drehZ, 0.55);
+      figur.gruppe.scale.setScalar(von(letzte.groesse, 1));
       // Arme und Beine fahren aus dem Laufschritt in eine Sturzhaltung —
       // stehen bleiben mitten im Schritt sähe nach eingefrorenem Bild aus.
-      figur.armL.rotation.x = -2.4 * weich;
-      figur.armR.rotation.x = -1.9 * weich;
-      figur.beinL.rotation.x = 0.95 * weich;
-      figur.beinR.rotation.x = 0.4 * weich;
+      figur.armL.rotation.x = von(letzte.armL, -2.4);
+      figur.armR.rotation.x = von(letzte.armR, -1.9);
+      figur.beinL.rotation.x = von(letzte.beinL, 0.95);
+      figur.beinR.rotation.x = von(letzte.beinR, 0.4);
     } else {
-      figur.gruppe.position.set(fx, lauf.y + huepfer, figurZ);
+      figurY = lauf.y + huepfer;
+      figur.gruppe.position.set(fx, figurY, figurZ);
       figur.gruppe.rotation.x = rutscht ? -1.15 : 0;
       // Leichte Neigung in die Bewegungsrichtung beim Spurwechsel.
       figur.gruppe.rotation.z = rutscht ? 0 : (bildX(spurX(lauf.zielSpur)) - fx) * 0.18;
@@ -1002,12 +1032,25 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       figur.beinR.rotation.x = inDerLuft ? 0.3 : -schwung;
       figur.armL.rotation.x = inDerLuft ? -2.2 : -schwung * 0.85;
       figur.armR.rotation.x = inDerLuft ? -2.2 : schwung * 0.85;
+
+      // Das zuletzt gezeichnete Laufbild merken — der Sturz oben mischt von
+      // hier aus los, statt aus dem Nichts.
+      letzte.drehX = figur.gruppe.rotation.x;
+      letzte.drehZ = figur.gruppe.rotation.z;
+      letzte.groesse = figur.gruppe.scale.x;
+      letzte.armL = figur.armL.rotation.x;
+      letzte.armR = figur.armR.rotation.x;
+      letzte.beinL = figur.beinL.rotation.x;
+      letzte.beinR = figur.beinR.rotation.x;
     }
 
     // Der Fleck bleibt unter der Figur, auch wenn sie beim Sturz nach hinten
     // rutscht — ein Schatten, der stehen bleibt, verrät sich sofort.
     schatten.position.set(fx, 0.03, figurZ);
-    const hoch = Math.min(1, lauf.y / 2.2);
+    // `figurY` statt `lauf.y`: Beim Sturz sinkt die Figur, und der Schatten
+    // muss mitwachsen. An der eingefrorenen Sprunghöhe wäre er klein und
+    // blass geblieben, während die Figur längst am Boden liegt.
+    const hoch = Math.min(1, figurY / 2.2);
     const sk = 1 - hoch * 0.5;
     schatten.scale.set(sk, sk * 1.3, 1);
     schattenStoff.opacity = 1 - hoch * 0.65;

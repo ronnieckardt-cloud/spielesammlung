@@ -28,10 +28,10 @@ import type { CSSProperties } from 'react';
  * bei Block Burst unterscheiden sich vier Zellzustände fast nur über die
  * Helligkeit, dort fällt es zuerst auf.
  *
- * (Hier stand früher Line Fall als Beispiel, „Akzent ist ein kräftiges
- * Rot". Das stimmt seit dem Symbol-Umbau nicht mehr, sein `accent` ist
- * jetzt Indigo — die Regel gilt unverändert, nur das Beispiel war
- * veraltet.)
+ * (Hier stand früher ein einzelnes Spiel als Beispiel, benannt nach seinem
+ * `accent`-Wert. Das ist zweimal veraltet, weil sich die Akzentfarben bei
+ * der Entzerrung der Kacheln geändert haben — ein Name in einem Kommentar
+ * überlebt keine Farbänderung. Die Regel selbst gilt unverändert.)
  */
 const ANTEIL = 8;
 
@@ -39,20 +39,22 @@ const ANTEIL = 8;
  * Spiele, deren `accent` als Tönung schiefgeht, mit einer Ersatzfarbe.
  *
  * Das ist kein Schönheitsproblem, sondern ein handfestes: Die Akzentfarbe
- * ist an drei Stellen schon anderweitig belegt.
+ * ist an zwei Stellen schon anderweitig belegt.
  */
 const ERSATZFARBE: Record<string, string> = {
-  // Akzent ist exakt das Grün, das im Quiz „richtige Antwort" bedeutet.
-  // Ein grüner Grund würde dieses Signal verwässern.
+  // Akzent ist Grün, und Grün bedeutet im Quiz „richtige Antwort". Ein
+  // grüner Grund würde dieses Signal verwässern — unabhängig vom genauen
+  // Farbton, den `accent` gerade trägt.
   quiz: '#6366f1',
   // Akzent ist exakt die Farbe des Tastaturfokus (`--color-fokus`). Eine
   // Tönung daraus macht den Fokusrahmen schlechter erkennbar.
   platzhalter: '#818cf8',
-  // Weder Blau (Spielerfarbe) noch Rot (Geister) sind frei — Violett ist
-  // die einzige unbelegte Richtung.
-  geisterjagd: '#a78bfa',
-  // Teilt sich sein Grün mit Quiz Time; hier bleibt es beim Grün, weil im
-  // Spiel selbst kein Grün eine Bedeutung trägt.
+  // Ghost Chase brauchte früher eine Ersatzfarbe, weil sein Akzent Violett
+  // war und weder Blau (Spielerfarbe) noch Rot (Geister) frei waren. Sein
+  // neuer Akzent ist Grün — und Grün kommt im Spielfeld nirgends vor
+  // (`farben.ts`: Spieler blau, Geister rot/rosa/pink/fuchsia, Punkte gelb,
+  // Kraftpillen orange). Der Akzent geht also direkt durch, kein Eintrag
+  // mehr nötig.
 };
 
 /** Die Farbe, mit der ein Spiel seine Oberfläche einfärbt. */

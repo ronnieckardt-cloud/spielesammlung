@@ -13,7 +13,7 @@ import { LaufenIcon } from './Icon';
 export const laufen: GameApi = {
   id: 'laufen',
   title: 'Dash City',
-  accent: '#6366f1',
+  accent: '#ea3eca',
   Icon: LaufenIcon,
   iconVollflaechig: true,
   Component: DashCity,

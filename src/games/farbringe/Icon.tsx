@@ -72,7 +72,21 @@ export function FarbringeIcon({ className }: { className?: string }) {
   return (
     <AppSymbol
       id="ringrise"
-      verlauf={['#312e81', '#1e1b4b', '#020617']}
+      /*
+       * **Grasgrün, nicht Petrol.** Der erste Versuch war Smaragd/Türkis
+       * (11° von Even Cuts `#14b8a6` entfernt) — auf dem Farbkreis genug
+       * Abstand, im Kachelraster aber nicht: `registry.ts` listet Ring
+       * Rise direkt vor Even Cut, die beiden Kacheln stehen also
+       * **nebeneinander**, und bei fast gleicher Helligkeit sahen sie im
+       * Bild praktisch identisch aus — genau der Fehler, den diese ganze
+       * Änderung beheben soll, nur eine Position weiter.
+       *
+       * Jetzt 72° von Even Cut entfernt, dafür näher an anderen grünen
+       * Spielen (Ghost Chase, Quiz Time, Snake Rush, Blade Toss) — die
+       * stehen aber an ganz anderen Stellen im Raster und werden nie
+       * direkt verglichen.
+       */
+      verlauf={['#74ea3e', '#45ac15', '#1d3710']}
       schriftzug="RING RISE"
       className={className}
     >

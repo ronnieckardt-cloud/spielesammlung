@@ -46,7 +46,12 @@ export function LaufenIcon({ className }: { className?: string }) {
   return (
     <AppSymbol
       id="dashcity"
-      verlauf={['#4338ca', '#1e1b4b', '#020617']}
+            /*
+       * **Magenta statt Indigo/Navy.** War eines von sieben Symbolen im
+       * selben Farbfeld — dabei passt ein Neon-Ton besser zu einem
+       * nächtlichen 3-D-Läufer als noch mehr gedecktes Blau.
+       */
+      verlauf={['#ea3eca', '#ac1591', '#371030']}
       schriftzug="DASH CITY"
       className={className}
     >
