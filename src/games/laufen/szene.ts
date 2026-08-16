@@ -144,6 +144,8 @@ export type Szene = {
 
 type Figur = {
   gruppe: THREE.Group;
+  /** Rumpf, Kopf und Arme — dreht sich beim Laufen gegen die Hüfte. */
+  oberkoerper: THREE.Object3D;
   /** Drehpunkte an Schulter und Hüfte — schwingen den ganzen Arm/das Bein. */
   armL: THREE.Object3D;
   armR: THREE.Object3D;
@@ -199,9 +201,22 @@ type Figur = {
  * hinten, und ein Rücken ohne alles ist die langweiligste Ansicht, die es
  * gibt. Der Rucksack ist das, was die Silhouette überhaupt erst lesbar
  * macht.
+ *
+ * **Der Oberkörper ist eine eigene Gruppe, gegen die Hüfte verdrehbar.**
+ * Rückmeldung: „das Laufen noch realistischer machen." Bis hierhin liefen
+ * nur die Gliedmaßen — Rumpf und Kopf standen kerzengerade fest, während
+ * Arme und Beine pendelten. Genau das fehlende Stück macht einen echten
+ * Laufstil aus: Schultern und Becken verdrehen sich gegenläufig
+ * zueinander (Rumpfrotation), und der Körper lehnt sich leicht in die
+ * Laufrichtung. Rumpf, Kopf, Rucksack und beide Arme hängen deshalb an
+ * `oberkoerper`, einer eigenen Gruppe **innerhalb** von `gruppe` — nur die
+ * Hüfte (der schmale Ring, an dem die Beine sitzen) bleibt außerhalb, sie
+ * ist der ruhende Bezugspunkt, gegen den der Oberkörper sich dreht.
  */
 function figurBauen(): Figur {
   const gruppe = new THREE.Group();
+  const oberkoerper = new THREE.Group();
+  gruppe.add(oberkoerper);
 
   // Phong statt Lambert: Ein leichter Glanz macht aus einer flachen Fläche
   // eine gewölbte. Bei einer Figur aus lauter Grundkörpern ist das der
@@ -242,13 +257,17 @@ function figurBauen(): Figur {
    */
   const rumpf = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.2, 0.52, 20), mShirt);
   rumpf.position.y = 1.0;
-  gruppe.add(rumpf);
+  oberkoerper.add(rumpf);
 
   const brust = new THREE.Mesh(new THREE.SphereGeometry(0.235, 18, 12), mShirt);
   brust.position.y = 1.26;
   brust.scale.y = 0.75;
-  gruppe.add(brust);
+  oberkoerper.add(brust);
 
+  // Die Hüfte bleibt **außerhalb** von `oberkoerper` — sie ist der ruhende
+  // Bezugspunkt, an dem die Beine hängen. Würde sie mitdrehen, entstünde
+  // beim Rumpf-Twist ein sichtbarer Spalt zur Hose der Beine, die selbst
+  // nicht mitdrehen.
   const huefte = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.19, 0.24, 18), mHose);
   huefte.position.y = 0.73;
   gruppe.add(huefte);
@@ -260,7 +279,7 @@ function figurBauen(): Figur {
   const schulterbalken = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.35, 5, 14), mShirt);
   schulterbalken.rotation.z = Math.PI / 2;
   schulterbalken.position.y = SCHULTER_Y;
-  gruppe.add(schulterbalken);
+  oberkoerper.add(schulterbalken);
 
   /*
    * --- Rucksack ---
@@ -277,34 +296,34 @@ function figurBauen(): Figur {
   // wieder zum Fass, das gerade abgeschafft wurde.
   const rucksack = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.36, 0.18), mTasche);
   rucksack.position.set(0, 0.99, -0.27);
-  gruppe.add(rucksack);
+  oberkoerper.add(rucksack);
   // Gewölbter Deckel — die eine Rundung, die den Kasten zum Rucksack macht.
   const deckel = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 12), mTasche);
   deckel.position.set(0, 1.16, -0.27);
   deckel.scale.set(0.92, 0.62, 0.56);
-  gruppe.add(deckel);
+  oberkoerper.add(deckel);
   const spanner = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.055, 0.195), mRucksack);
   spanner.position.set(0, 1.03, -0.27);
-  gruppe.add(spanner);
+  oberkoerper.add(spanner);
   const schnalle = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.075, 0.03), mRucksack);
   schnalle.position.set(0, 0.89, -0.37);
-  gruppe.add(schnalle);
+  oberkoerper.add(schnalle);
   for (const seite of [-1, 1]) {
     const gurt = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.36, 0.05), mTasche);
     gurt.position.set(seite * 0.11, 1.06, -0.22);
-    gruppe.add(gurt);
+    oberkoerper.add(gurt);
   }
 
   // --- Hals und Kopf ---
   const hals = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.115, 0.14, 14), mHaut);
   hals.position.y = 1.3;
-  gruppe.add(hals);
+  oberkoerper.add(hals);
 
   // Etwas größer als anatomisch richtig (0,26 statt 0,24) — der leicht
   // vergrößerte Kopf ist der halbe Comic-Eindruck der Vorlage.
   const kopf = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), mHaut);
   kopf.position.y = 1.5;
-  gruppe.add(kopf);
+  oberkoerper.add(kopf);
 
   /*
    * Das Haar am Hinterkopf — von hinten sieht man sonst nur eine nackte
@@ -331,7 +350,7 @@ function figurBauen(): Figur {
   );
   haar.position.y = 1.5;
   haar.rotation.x = -1.85;
-  gruppe.add(haar);
+  oberkoerper.add(haar);
 
   /*
    * Die Mütze reicht **unter** den größten Kopfumfang (Winkel über 90°) und
@@ -354,12 +373,12 @@ function figurBauen(): Figur {
     }),
   );
   muetze.position.y = 1.5;
-  gruppe.add(muetze);
+  oberkoerper.add(muetze);
   // Der Schirm zeigt nach **vorn** (+z). Vorher stand er auf −z, also im
   // Nacken — eine Mütze verkehrt herum.
   const schirm = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.18), mShirtDunkel);
   schirm.position.set(0, 1.483, 0.215);
-  gruppe.add(schirm);
+  oberkoerper.add(schirm);
 
   /*
    * --- Gliedmaßen, zweiteilig ---
@@ -450,7 +469,7 @@ function figurBauen(): Figur {
     const daumen = new THREE.Mesh(daumenGeo, mHaut);
     daumen.position.set(-seite * 0.075, -0.185, 0.025);
     ellbogen.add(daumen);
-    gruppe.add(schulter);
+    oberkoerper.add(schulter);
     return { schulter, ellbogen };
   };
 
@@ -492,6 +511,7 @@ function figurBauen(): Figur {
 
   return {
     gruppe,
+    oberkoerper,
     armL: armLinks.schulter,
     armR: armRechts.schulter,
     ellbogenL: armLinks.ellbogen,
@@ -1273,7 +1293,11 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     } else {
       figurY = lauf.y + huepfer;
       figur.gruppe.position.set(fx, figurY, figurZ);
-      figur.gruppe.rotation.x = rutscht ? -1.15 : 0;
+      // Leichte Vorlehnung beim Laufen und Springen — kein Läufer steht
+      // beim Rennen kerzengerade. Positive Drehung um x kippt den Kopf
+      // nach **+z**, also in die Laufrichtung (siehe Sturz weiter oben,
+      // wo die entgegengesetzte, negative Drehung genau umgekehrt wirkt).
+      figur.gruppe.rotation.x = rutscht ? -1.15 : 0.07;
       // Leichte Neigung in die Bewegungsrichtung beim Spurwechsel.
       figur.gruppe.rotation.z = rutscht ? 0 : (bildX(spurX(lauf.zielSpur)) - fx) * 0.18;
       figur.gruppe.scale.setScalar(rutscht ? 0.92 : 1);
@@ -1301,6 +1325,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
         figur.armR.rotation.x = -1.2;
         figur.ellbogenL.rotation.x = -0.35;
         figur.ellbogenR.rotation.x = -0.5;
+        figur.oberkoerper.rotation.y = 0;
       } else if (inDerLuft) {
         // Sprung: das vordere Bein angezogen, das hintere fast gestreckt,
         // Arme hoch — die Silhouette eines Hürdenläufers.
@@ -1312,6 +1337,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
         figur.armR.rotation.x = -2.2;
         figur.ellbogenL.rotation.x = -0.3;
         figur.ellbogenR.rotation.x = -0.3;
+        figur.oberkoerper.rotation.y = 0;
       } else {
         figur.beinL.rotation.x = schwung;
         figur.beinR.rotation.x = -schwung;
@@ -1331,6 +1357,18 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
          */
         figur.ellbogenL.rotation.x = -1.15 + schwung * 0.6;
         figur.ellbogenR.rotation.x = -1.15 - schwung * 0.6;
+        /*
+         * **Der Rumpf verdreht sich gegen die Hüfte.** Rückmeldung: „das
+         * Laufen noch realistischer machen." Bis hierhin liefen nur die
+         * Gliedmaßen — Rumpf und Kopf standen fest, obwohl sich Arme und
+         * Beine drehten. Ein echter Läufer dreht Schultern und Becken
+         * gegenläufig zueinander (Rumpfrotation); die Hüfte selbst bleibt
+         * in dieser Figur unbewegt (siehe `figurBauen`), also dreht sich
+         * der Oberkörper im selben Takt wie der Armschwung — bewusst
+         * knapp bemessen (0,1 rad ≈ 6°), eine übertriebene Drehung sähe
+         * nach Tanzschritt aus, nicht nach Laufen.
+         */
+        figur.oberkoerper.rotation.y = schwung * 0.1;
       }
 
       // Das zuletzt gezeichnete Laufbild merken — der Sturz oben mischt von

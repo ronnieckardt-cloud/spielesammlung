@@ -1460,6 +1460,32 @@ jede aus einer konkreten Beobachtung:
 - *Merksatz, wieder bestätigt:* Jede dieser Korrekturen war eine
   **einzelne Zahl** (ein Radius, ein Ansatzpunkt), keine neue Geometrie —
   Proportionen sind bei einer Figur aus Grundkörpern die ganze Arbeit.
+- **Der Ellbogen schwingt jetzt spürbar mit.** Rückmeldung: „nicht die
+  ganze Zeit mit eingewinkelten [Armen] — ein bisschen realistischer."
+  Der Ausschlag war nur 0,18 rad (rund 10°) um eine feste Grundbeugung —
+  bei jeder Bildrate praktisch ein eingefrorener Winkel. Jetzt 0,6 rad im
+  selben Rhythmus wie das Bein derselben Seite.
+- **Ordentliche Hände statt Kugeln.** Rückmeldung: „kannst Du auch
+  ordentliche Hände dranmachen?" Eine reine Kugel liest sich als Murmel.
+  Jetzt eine gestauchte Faustform (0,88/0,8/1,05 statt gleichmäßig rund)
+  plus ein kleiner Daumen — derselbe Kniff wie bei den Schuhen, nur eine
+  Nummer kleiner. Der Daumen sitzt **auf der Dreh-Achse des Ellbogens**,
+  sonst würde er bei jedem Armschwung durch die Hand hindurchwandern statt
+  an ihr zu kleben.
+- **Rumpf und Kopf standen fest, während die Gliedmaßen liefen.**
+  Rückmeldung: „das Laufen noch realistischer machen." Genau das fehlte:
+  Arme und Beine hatten Gelenke, aber der Oberkörper drehte sich nie mit —
+  ein echter Läufer verdreht Schultern und Becken gegenläufig zueinander.
+  `figurBauen` bekam dafür eine eigene Zwischen-Gruppe `oberkoerper`
+  (Rumpf, Kopf, Rucksack, beide Arme), **innerhalb** von `gruppe`, aber
+  **außerhalb** bleibt die Hüfte — sie ist der ruhende Bezugspunkt, an dem
+  die Beine hängen, sonst entstünde beim Twist ein Spalt zwischen Hüfte
+  und Hose. Der Oberkörper dreht sich jetzt im Lauftakt (0,1 rad, knapp
+  bemessen — mehr sähe nach Tanzschritt aus), dazu eine leichte
+  Vorlehnung beim Laufen und Springen, die es vorher gar nicht gab (die
+  Figur stand kerzengerade). *Merksatz:* Bei einer Figur aus starren
+  Grundkörpern sitzt Lebendigkeit nicht nur in den Gliedmaßen — der Rumpf
+  braucht seine eigene, wenn auch kleinere, Bewegung.
 
 ### Schübe — Turbo und Sprungschub
 
