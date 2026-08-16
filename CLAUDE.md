@@ -2847,6 +2847,55 @@ Ausdrücklich keine Toneffekte — Rückmeldung: „Macht die Sounds weg."
 Geräten ohnehin stumm, siehe „Feiern, Spielstart, Haptik" weiter oben),
 gemeldet wird nur noch der Sturz und ein gewonnener Lauf.
 
+### Tricks — der Punktetopf, den es schon in der ersten Spielbeschreibung gab
+
+Ronnis eigene Vorgabe für die Punkte nannte von Anfang an „Score entsteht
+aus … Distanz, **Tricks**, perfekte Landungen, Flow" — nur gab es dafür nie
+eine Zählung. Ein Salto brachte nicht mehr Punkte als derselbe Sprung ohne.
+
+- **Volle Drehungen zählen exakt, ohne eigene Zählschleife**, weil
+  `winkel` in der Luft unbeschränkt ist (siehe `winkelKuerzen`s Kommentar
+  zu Saltos): Die reine Differenz zwischen Absprungwinkel
+  (`luftDrehStart`, beim Abheben gemerkt) und Landewinkel, geteilt durch
+  2π, ist die Zahl der vollen Umdrehungen — abgerundet, ganz gleich wie
+  „krumm" die Landung war.
+- **Nur wer die Landung steht, bekommt den Trick.** Ein Sturz zählt nicht
+  — dieselbe Regel wie beim Skaten oder Snowboarden: Der Trick ist erst
+  „geschafft", wenn man ihn auch fährt. `hart` zählt dagegen mit (der
+  Tempoverlust bestraft die unsaubere Landung schon selbst).
+- **Eigener Punktetopf** (`trickPunkte`), nie geleert — dieselbe Regel wie
+  `doppelPunkte` bei Dash City: Was man sich verdient hat, darf nicht
+  wieder verschwinden.
+- Anzeige als eigenes Badge unter dem Flow-Zähler (Pink statt Teal, klare
+  Unterscheidung), Grad-Angabe wie im echten Sprachgebrauch der Szene
+  (`360°`, `720°`) statt „×1 Drehung".
+
+### Boden-Textur: Gefälle-Tönung und kahle Kicker
+
+Zwei Punkte aus der Umgebungs-Recherche zu anderen 2D-Bike-Spielen
+nachgezogen, beide ohne neue Zeichentechnik:
+
+- **`bodenOben` wird segmentweise statt in einer Fläche gefüllt**, mit dem
+  Ton aus der tatsächlichen Steigung an der Stelle (`bodenSteigung`, exakt
+  vorhanden, nicht geschätzt) — steile Anstiege liegen dunkler, als läge
+  dort ein eigener Schatten. Bewusst nur diese eine Schicht segmentiert,
+  nicht alle fünf Erdschichten: Sie macht den größten Teil des sichtbaren
+  Bodens aus, der Zusatzaufwand für die übrigen vier stünde in keinem
+  Verhältnis zum zusätzlichen Bild.
+- **Der Grasstrich setzt an Kickern aus.** Trials, Bike Mayhem und Mad
+  Skills BMX 2 zeigen an Sprungschanzen durchgehend kahle, festgefahrene
+  Erde statt Gras. Ohne den Unterschied liest sich ein Kicker wie ein
+  normaler Hügel und wird erst in der eigenen Flugbahn als Sprung
+  erkennbar, nicht schon vorher im Bild. `aufKicker(wx)` prüft den Abstand
+  zu jeder Kickermitte; der Grasstrich wird dafür in Teilstücke zerlegt
+  (`grasOffen`-Muster, dieselbe Technik wie bei der Feder-Wendel weiter
+  oben) statt als ein durchgehender Pfad.
+- **Noch offen aus derselben Recherche:** eine echte Körnungs-Textur
+  (Canvas-Pattern, Vorbild `laufen/texturen.ts`), deterministisch
+  platzierte Steine/Streckenschilder. Beides Fleißarbeit, keine
+  schwierige Entscheidung — nachziehbar, wenn noch mehr Bodendetail
+  gewünscht ist.
+
 ### Die Fairness-Tests
 
 `läuft bei jeder Bildrate praktisch gleich weit` und

@@ -1,4 +1,4 @@
-import { bodenHoehe } from './logik';
+import { bodenHoehe, bodenSteigung } from './logik';
 import type { Lauf } from './logik';
 
 /**
@@ -289,10 +289,10 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
      * und die Zahl der Punkte hängt an der Bildbreite statt an der
      * Sichtweite.
      */
-    const umriss: [number, number][] = [];
+    const umriss: [number, number, number][] = [];
     for (let px = -12; px <= breite + 12; px += 4) {
       const wx = kameraX + (px - breite * 0.5) / proMeter;
-      umriss.push([px, by(bodenHoehe(g, wx))]);
+      umriss.push([px, by(bodenHoehe(g, wx)), wx]);
     }
 
     /** Füllt die Fläche unter dem Geländeumriss, um `versatz` nach unten
@@ -307,6 +307,15 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       ctx.closePath();
       ctx.fill();
     };
+
+    /*
+     * Nah an einem Kicker? Steuert zwei Dinge weiter unten: den Grasstrich
+     * (setzt an einem Kicker aus, kahle Erde statt Wiese) und die spätere
+     * Landemarkierung. `1.3×` Breite deckt sowohl die Anfahrt als auch die
+     * Landeseite der Glocke ab, nicht nur den Gipfel selbst.
+     */
+    const aufKicker = (wx: number) => g.kicker.some((k) => Math.abs(wx - k.x) < k.breite * 1.3);
+
 
     /*
      * Erdschichten. Ursprünglich zwei Flächen (dunkler Grund, heller
@@ -329,20 +338,70 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
      */
     bodenFlaeche(FARBEN.bodenTief, 0); // Sicherheitsgrund, wird komplett überdeckt
     bodenFlaeche(mischen(FARBEN.bodenOben, '#ffffff', 0.3), -0.08 * proMeter); // heller Saum
-    bodenFlaeche(FARBEN.bodenOben, -0.05 * proMeter);
+
+    /*
+     * `bodenOben` segmentweise statt in einer Fläche — die einzige Schicht,
+     * die das lohnt, weil sie den größten Teil des sichtbaren Bodens
+     * ausmacht. Jedes Segment bekommt seinen Ton aus der tatsächlichen
+     * Steigung an dieser Stelle (`bodenSteigung`, exakt, nicht geschätzt):
+     * flache Abschnitte bleiben hell, steile Anstiege — vor allem die
+     * Kicker-Kuppen selbst — liegen dunkler, wie im eigenen Schatten.
+     * Recherche zu anderen 2D-Bike-Spielen nannte das den billigsten Griff
+     * für mehr Relief, weil `bodenSteigung` ohnehin schon berechnet wird.
+     */
+    {
+      const versatz = -0.05 * proMeter;
+      for (let i = 0; i < umriss.length - 1; i++) {
+        const [px1, py1, wx1] = umriss[i]!;
+        const [px2, py2, wx2] = umriss[i + 1]!;
+        const steigung = bodenSteigung(g, (wx1 + wx2) / 2);
+        const ton = Math.min(0.35, Math.abs(steigung) * 0.18);
+        ctx.fillStyle = mischen(FARBEN.bodenOben, '#000000', ton);
+        ctx.beginPath();
+        ctx.moveTo(px1, py1 + versatz);
+        ctx.lineTo(px2, py2 + versatz);
+        ctx.lineTo(px2, hoehe);
+        ctx.lineTo(px1, hoehe);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
     bodenFlaeche(mischen(FARBEN.bodenOben, FARBEN.bodenTief, 0.45), 0.6 * proMeter); // Rostband
     const erdVersatz = 1.3 * proMeter;
     bodenFlaeche(FARBEN.bodenTief, erdVersatz);
 
-    // Der grüne Grasstrich obendrauf — ohne ihn sieht der Boden aus wie
-    // bloße Erde, nicht wie eine Wiese.
+    /*
+     * Der grüne Grasstrich obendrauf — ohne ihn sieht der Boden aus wie
+     * bloße Erde, nicht wie eine Wiese. **Setzt an Kickern aus**: Trials,
+     * Bike Mayhem und Mad Skills BMX 2 zeigen an Sprungschanzen
+     * durchgehend kahle, festgefahrene Erde statt Gras — in der Fiktion
+     * fährt dort ständig jemand drüber. Ohne diesen Unterschied sieht ein
+     * Kicker aus wie ein normaler Hügel und ist erst an der eigenen
+     * Flugbahn als Sprung zu erkennen, nicht schon vorher am Bild.
+     */
     ctx.strokeStyle = FARBEN.bodenKante;
     ctx.lineWidth = Math.max(4, 0.12 * proMeter);
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.moveTo(umriss[0]![0], umriss[0]![1]);
-    for (const [px, py] of umriss) ctx.lineTo(px, py);
-    ctx.stroke();
+    let grasOffen = false;
+    for (const [px, py, wx] of umriss) {
+      if (aufKicker(wx)) {
+        if (grasOffen) {
+          ctx.stroke();
+          ctx.beginPath();
+          grasOffen = false;
+        }
+        continue;
+      }
+      if (!grasOffen) {
+        ctx.moveTo(px, py);
+        grasOffen = true;
+      } else {
+        ctx.lineTo(px, py);
+      }
+    }
+    if (grasOffen) ctx.stroke();
 
     // --- Ziellinie -------------------------------------------------
     if (kameraX + sicht > g.laenge - 4) {

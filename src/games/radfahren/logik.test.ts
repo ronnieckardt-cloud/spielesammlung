@@ -6,6 +6,7 @@ import {
   LANDUNG_HART,
   LANDUNG_PERFEKT,
   TEMPO_MAX,
+  TRICK_PUNKTE_JE_DREHUNG,
   bodenHoehe,
   bodenKruemmung,
   bodenSteigung,
@@ -381,6 +382,25 @@ describe('Landung und Flow', () => {
     let l = { ...kurzVorLandung(0), flow: 9 };
     l = takt(l, 1 / 60);
     expect(l.flow).toBe(9);
+  });
+
+  it('zählt volle Drehungen als Trick, wenn die Landung steht', () => {
+    // Zwei volle Umdrehungen plus ein sauberer Landewinkel — `winkel` ist
+    // in der Luft unbeschränkt, `kurzVorLandung(offset)` addiert `offset`
+    // direkt auf den Boden-Winkel drauf, zwei volle Kreise ändern den
+    // tatsächlichen Landewinkel (nach `winkelKuerzen`) also nicht.
+    const l = takt(kurzVorLandung(Math.PI * 2 * 2), 1 / 60);
+    expect(l.letzteLandung).not.toBe('sturz');
+    expect(l.letzterTrick).toBe(2);
+    expect(l.trickPunkte).toBe(2 * TRICK_PUNKTE_JE_DREHUNG);
+  });
+
+  it('gibt keine Trick-Punkte, wenn die Landung ein Sturz ist', () => {
+    // Dieselben zwei Umdrehungen, aber zusätzlich viel zu schräg gelandet.
+    const l = takt(kurzVorLandung(Math.PI * 2 * 2 + 1.6), 1 / 60);
+    expect(l.letzteLandung).toBe('sturz');
+    expect(l.letzterTrick).toBe(0);
+    expect(l.trickPunkte).toBe(0);
   });
 });
 

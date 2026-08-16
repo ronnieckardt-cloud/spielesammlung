@@ -4,7 +4,15 @@ import type { DekoTeil } from '../../core/Startbildschirm';
 import { useGameLoop } from '../../core/useGameLoop';
 import { haptik } from '../../core/haptik';
 import type { GameProps } from '../../core/types';
-import { STRECKE_LAENGE, neuesSpiel, punkte, streckenSaat, takt, tempoKmh } from './logik';
+import {
+  STRECKE_LAENGE,
+  TRICK_PUNKTE_JE_DREHUNG,
+  neuesSpiel,
+  punkte,
+  streckenSaat,
+  takt,
+  tempoKmh,
+} from './logik';
 import type { Eingabe, Lauf } from './logik';
 import type { Zeichner } from './zeichnen';
 import { zeichnerBauen } from './zeichnen';
@@ -291,6 +299,9 @@ export function FlowMtb({
   const zeitRef = useRef<HTMLSpanElement>(null);
   const balkenRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<HTMLDivElement>(null);
+  const trickRef = useRef<HTMLDivElement>(null);
+  /** Bis zu welcher Laufzeit die Trick-Anzeige noch sichtbar bleibt. */
+  const trickBisZeitRef = useRef(0);
 
   // --- Leinwand aufsetzen -----------------------------------------
   useEffect(() => {
@@ -394,6 +405,28 @@ export function FlowMtb({
       if (flowRef.current) {
         flowRef.current.style.opacity = neu.flow > 1 ? '1' : '0';
         flowRef.current.textContent = `FLOW ×${neu.flow}`;
+      }
+      /*
+       * Trick-Anzeige: nur beim Wechsel auf eine gestandene Landung mit
+       * mindestens einer vollen Drehung neu einblenden, dann `zeit`-
+       * gesteuert wieder ausblenden — dieselbe Zeitsteuerung wie sonst
+       * über `meldungRest`, hier aber direkt aus der Laufzeit, weil kein
+       * eigenes Feld in `Lauf` für „Sekunden, die diese Anzeige noch
+       * steht" gebraucht wird.
+       */
+      if (
+        neu.letzteLandung !== vorher.letzteLandung &&
+        neu.letzteLandung !== 'sturz' &&
+        neu.letzterTrick > 0
+      ) {
+        trickBisZeitRef.current = neu.zeit + 1.6;
+      }
+      if (trickRef.current) {
+        const sichtbar = neu.zeit < trickBisZeitRef.current;
+        trickRef.current.style.opacity = sichtbar ? '1' : '0';
+        if (sichtbar) {
+          trickRef.current.textContent = `${neu.letzterTrick * 360}° +${neu.letzterTrick * TRICK_PUNKTE_JE_DREHUNG}`;
+        }
       }
       /*
        * Bewusst **keine** Text-Einblendung „PERFEKT!" / „Harte Landung" /
@@ -507,6 +540,15 @@ export function FlowMtb({
             style={{ opacity: 0 }}
           >
             FLOW ×1
+          </div>
+          {/* Trick-Anzeige: eigene Farbe (Pink) statt Teal, damit sie sich
+              von der Flow-Anzeige direkt darüber klar unterscheidet. */}
+          <div
+            ref={trickRef}
+            className="rounded-full bg-pink-400/25 px-2.5 py-1 text-xs font-black text-pink-200 transition-opacity duration-200"
+            style={{ opacity: 0 }}
+          >
+            360° +200
           </div>
         </div>
       </div>

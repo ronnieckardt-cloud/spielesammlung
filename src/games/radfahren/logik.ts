@@ -382,6 +382,18 @@ export const LANDUNG_PERFEKT = 0.25;
 export const LANDUNG_GUT = 0.55;
 export const LANDUNG_HART = 1.0;
 
+/**
+ * Punkte je voller Drehung, die man in der Luft schafft **und steht**.
+ * Ronnis ursprüngliche Vorgabe für die Punkte nannte „Tricks" schon immer
+ * mit („Score entsteht aus … Distanz, Tricks, perfekte Landungen …"), nur
+ * gab es dafür bis jetzt keine Zählung — ein Sprung mit Salto brachte
+ * nicht mehr Punkte als derselbe Sprung ohne. Ein Wert in der
+ * Größenordnung einer perfekten Landung (`perfekte * 60`), aber deutlich
+ * darüber: Ein Salto ist schwerer und seltener als eine einfach saubere
+ * Landung, das muss sich auch im Punktestand zeigen.
+ */
+export const TRICK_PUNKTE_JE_DREHUNG = 200;
+
 /** Was bei der letzten Landung passiert ist — nur fürs Anzeigen und Punkte. */
 export type Landung = 'perfekt' | 'gut' | 'hart' | 'sturz';
 
@@ -422,6 +434,20 @@ export type Lauf = {
   gewonnen: boolean;
   /** Sekunden seit dem Sturz — treibt die Sturzdarstellung. */
   sturzZeit: number;
+  /**
+   * `winkel` im Moment des Abhebens — die Vergleichsbasis, um beim Landen
+   * zu wissen, wie viele volle Drehungen man in der Luft geschafft hat.
+   * Nur während eines Sprungs aussagekräftig, siehe `punkte`.
+   */
+  luftDrehStart: number;
+  /**
+   * Punkte für geschaffte Drehungen in der Luft — ein eigener Topf, wie
+   * `doppelPunkte` bei Dash City: wird nie geleert, was man sich verdient
+   * hat, bleibt. Siehe „Tricks" in `takt`.
+   */
+  trickPunkte: number;
+  /** Volle Drehungen der letzten Landung — nur für die Anzeige. */
+  letzterTrick: number;
 };
 
 /** Die Eingaben eines Bildes. Alles, was der Spieler beeinflussen kann. */
@@ -455,6 +481,9 @@ export function neuesSpiel(saat: number, laenge = STRECKE_LAENGE): Lauf {
     vorbei: false,
     gewonnen: false,
     sturzZeit: 0,
+    luftDrehStart: 0,
+    trickPunkte: 0,
+    letzterTrick: 0,
   };
 }
 
@@ -521,6 +550,9 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
   let luftGesamt = lauf.luftGesamt;
   let letzteLandung = lauf.letzteLandung;
   let perfekte = lauf.perfekte;
+  let trickPunkte = lauf.trickPunkte;
+  let letzterTrick = lauf.letzterTrick;
+  let luftDrehStart = lauf.luftDrehStart;
 
   if (amBoden) {
     const hangWinkel = bodenWinkel(g, x);
@@ -600,6 +632,8 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
       // Beim Abheben zeigt die Geschwindigkeit den Hang entlang.
       vy = Math.sin(winkelJetzt) * vx;
       luftZeit = 0;
+      // Merkpunkt für die Drehzählung — siehe „Tricks" unten bei der Landung.
+      luftDrehStart = winkel;
     }
   } else {
     // --- In der Luft ---
@@ -655,6 +689,25 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
       const bewertung = landungBewerten(winkel - hang);
       letzteLandung = bewertung;
 
+      /*
+       * --- Tricks ---
+       *
+       * Ein eigener Punkte-Topf für volle Drehungen in der Luft, wie
+       * `doppelPunkte` bei Dash City nie geleert. `winkel` ist beim
+       * Fliegen unbeschränkt (siehe `winkelKuerzen`s Kommentar zu
+       * Saltos) — die reine Differenz zum Absprungwinkel `luftDrehStart`
+       * zählt die Umdrehungen deshalb exakt, ganz ohne eigene
+       * Zählschleife während des Flugs. Nur ein Sturz zählt nicht: Wer
+       * die Landung nicht steht, hat den Trick nicht „geschafft" —
+       * dieselbe Regel wie beim Skaten oder Snowboarden.
+       */
+      const drehungGesamt = Math.abs(winkel - luftDrehStart);
+      const flips = Math.floor(drehungGesamt / (Math.PI * 2));
+      letzterTrick = bewertung === 'sturz' ? 0 : flips;
+      if (bewertung !== 'sturz' && flips > 0) {
+        trickPunkte += flips * TRICK_PUNKTE_JE_DREHUNG;
+      }
+
       if (bewertung === 'sturz') {
         return {
           ...lauf,
@@ -673,6 +726,8 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
           meldungRest: 2,
           flow: 1,
           perfekte,
+          trickPunkte,
+          letzterTrick,
           zeit: lauf.zeit + dt,
           vorbei: true,
           gewonnen: false,
@@ -721,6 +776,8 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
         meldungRest: 1.2,
         flow,
         perfekte,
+        trickPunkte,
+        letzterTrick,
         zeit: lauf.zeit + dt,
       };
     }
@@ -743,6 +800,9 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
       meldungRest: 0,
       flow,
       perfekte,
+      trickPunkte,
+      letzterTrick,
+      luftDrehStart,
       zeit: lauf.zeit + dt,
       vorbei: true,
       gewonnen: true,
@@ -765,6 +825,9 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
     meldungRest: Math.max(0, lauf.meldungRest - dt),
     flow,
     perfekte,
+    trickPunkte,
+    letzterTrick,
+    luftDrehStart,
     zeit: lauf.zeit + dt,
   };
 }
@@ -782,18 +845,20 @@ export function fortschritt(lauf: Lauf): number {
 /**
  * Die Punktzahl.
  *
- * Ein Punkt je Meter, dazu Flugzeit und perfekte Landungen — und ein
- * Zeitbonus nur, **wenn** man ins Ziel kommt. Ronni: „Score entsteht aus
- * Geschwindigkeit, Airtime, Distanz, Tricks, perfekte Landungen, Flow."
- * Ohne den Zielbonus wäre langsames, vorsichtiges Fahren die beste
- * Taktik — und das ist das Gegenteil des Spiels.
+ * Ein Punkt je Meter, dazu Flugzeit, perfekte Landungen und Tricks — und
+ * ein Zeitbonus nur, **wenn** man ins Ziel kommt. Ronni: „Score entsteht
+ * aus Geschwindigkeit, Airtime, Distanz, Tricks, perfekte Landungen,
+ * Flow." Ohne den Zielbonus wäre langsames, vorsichtiges Fahren die beste
+ * Taktik — und das ist das Gegenteil des Spiels. `trickPunkte` steht
+ * schon fertig in `lauf` (siehe „Tricks" in `takt`), hier wird nur
+ * addiert.
  */
 export function punkte(lauf: Lauf): number {
   const strecke = Math.floor(lauf.x);
   const luft = Math.floor(lauf.luftGesamt * 40);
   const landungen = lauf.perfekte * 60;
   const zielBonus = lauf.gewonnen ? Math.max(0, Math.floor(1600 - lauf.zeit * 12)) : 0;
-  return strecke + luft + landungen + zielBonus;
+  return strecke + luft + landungen + lauf.trickPunkte + zielBonus;
 }
 
 /** Die Saat einer Strecke. Gleiche Nummer = gleiche Strecke, überall. */
