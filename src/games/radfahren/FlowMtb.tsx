@@ -142,12 +142,12 @@ function DekoHeldenbike() {
           strokeLinecap="round"
         />
         <line
-          x1={KRONE.x - 15}
+          x1={KRONE.x - 17}
           y1={KRONE.y}
-          x2={KRONE.x + 15}
+          x2={KRONE.x + 17}
           y2={KRONE.y + 3}
           stroke="#8c1710"
-          strokeWidth={10}
+          strokeWidth={12}
           strokeLinecap="round"
         />
 
@@ -158,6 +158,17 @@ function DekoHeldenbike() {
           stroke="#8c1710"
           strokeWidth={5}
           strokeLinejoin="round"
+        />
+        {/* Teal-Akzentstreifen aufs Unterrohr — derselbe Farbtupfer wie im
+            Spiel selbst, damit das Heldenbike zum neuen Look passt. */}
+        <line
+          x1={BB.x - 4}
+          y1={BB.y - 6}
+          x2={HT.x - 6}
+          y2={HT.y + 5}
+          stroke="#38d9a9"
+          strokeWidth={3}
+          strokeLinecap="round"
         />
         {/* Kettenstrebe und Sitzstrebe zum Hinterrad. */}
         <line x1={RW.x} y1={RW.y} x2={BB.x} y2={BB.y} stroke="#8c1710" strokeWidth={9} strokeLinecap="round" />
@@ -243,6 +254,9 @@ function Rad({ mitte }: { mitte: { x: number; y: number } }) {
     <g>
       <circle cx={mitte.x} cy={mitte.y} r={32} fill="#16161a" />
       <circle cx={mitte.x} cy={mitte.y} r={32} fill="none" stroke="#26262c" strokeWidth={7} />
+      {/* Seitenwand: ein schmaler, hellerer Ring — passend zum
+          zweizeiligen Stollenprofil im eigentlichen Spiel. */}
+      <circle cx={mitte.x} cy={mitte.y} r={27} fill="none" stroke="#3a3a44" strokeWidth={2} />
       <circle cx={mitte.x} cy={mitte.y} r={22} fill="none" stroke="#8d939e" strokeWidth={4} />
       <g stroke="#dfe3e9" strokeWidth={2} opacity={0.85}>
         {speichen.map((w) => (

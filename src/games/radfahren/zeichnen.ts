@@ -146,11 +146,17 @@ function streuWert(meter: number): number {
  * 1,20 m Radstand — genau das sah aus wie „ein normales Rennrad", so
  * Ronnis Urteil zur ersten Fassung. Spiele wie Hill Climb Racing
  * übertreiben die Räder deutlich; erst dadurch liest sich ein Fahrzeug
- * auf den ersten Blick als geländegängig. Hier: Raddurchmesser 0,92 m bei
- * 1,12 m Radstand, also fast so groß wie der Abstand zwischen ihnen.
+ * auf den ersten Blick als geländegängig.
+ *
+ * **Zweiter Feinschliff, etwas näher an echten Proportionen.** Die erste
+ * Fassung (0,92 m Raddurchmesser bei 1,12 m Radstand) wirkte mit fast
+ * gleich großem Rad und Achsabstand kompakt bis spielzeughaft. Kleinere
+ * Räder (0,84 m) bei größerem Radstand (1,18 m) lassen dasselbe Rad
+ * erwachsener/länger wirken, ohne die geländegängige Übertreibung ganz
+ * aufzugeben.
  */
-const RAD_R = 0.46;
-const RADSTAND = 1.12;
+const RAD_R = 0.42;
+const RADSTAND = 1.18;
 
 export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   const ctx = leinwand.getContext('2d');
@@ -656,31 +662,51 @@ function radFahrerZeichnen(
   // Laufräder
   // ---------------------------------------------------------------
   const laufrad = (rx: number, ry: number) => {
-    // Reifen mit Stollenprofil: kurze Zacken rundherum, die sich
-    // mitdrehen. Sie sind das, was einen MTB-Reifen ausmacht.
+    // Die Reifenbasis zuerst — die Stollen kommen später obendrauf.
+    // Andersherum (Stollen zuerst) verschluckt die breite Lauffläche eine
+    // innere Stollenreihe komplett, weil sie darüber gezeichnet würde.
+    ctx.strokeStyle = FARBEN.reifen;
+    ctx.lineWidth = radR * 0.22;
+    ctx.beginPath();
+    ctx.arc(rx, ry, radR * 0.87, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Seitenwand: ein schmaler, hellerer Ring zwischen Lauffläche und
+    // Felge — ohne ihn ist der Reifen eine reine Silhouette ohne Flanke.
+    ctx.strokeStyle = mischen(FARBEN.reifen, '#ffffff', 0.3);
+    ctx.lineWidth = Math.max(1, radR * 0.03);
+    ctx.beginPath();
+    ctx.arc(rx, ry, radR * 0.81, 0, Math.PI * 2);
+    ctx.stroke();
+
+    /*
+     * Stollenprofil in **zwei** Reihen statt einer: außen größere
+     * Schulterstollen ganz am Rand, innen kleinere, um eine halbe
+     * Teilung versetzte Stollen dazwischen. Ein einzelner Kranz aus
+     * Zacken liest sich eher wie ein Zahnrad als wie ein Reifen — das
+     * Doppelmuster ist, was einen MTB-Reifen von einem glatten Ring
+     * unterscheidet.
+     */
     ctx.save();
     ctx.translate(rx, ry);
     ctx.rotate(radDrehung);
     ctx.fillStyle = FARBEN.profil;
     const stollen = 16;
-    for (let i = 0; i < stollen; i++) {
-      const w = (i / stollen) * Math.PI * 2;
-      const sx = Math.cos(w) * radR;
-      const sy = Math.sin(w) * radR;
-      ctx.save();
-      ctx.translate(sx, sy);
-      ctx.rotate(w);
-      ctx.fillRect(-radR * 0.05, -radR * 0.09, radR * 0.16, radR * 0.18);
-      ctx.restore();
-    }
+    const stollenReihe = (radius: number, versatz: number, laenge: number, breite: number) => {
+      for (let i = 0; i < stollen; i++) {
+        const w = ((i + versatz) / stollen) * Math.PI * 2;
+        ctx.save();
+        ctx.translate(Math.cos(w) * radius, Math.sin(w) * radius);
+        ctx.rotate(w);
+        ctx.fillRect(-laenge * 0.25, -breite / 2, laenge, breite);
+        ctx.restore();
+      }
+    };
+    // Äußere Reihe: große Schulterstollen, deutlich über die Lauffläche hinaus.
+    stollenReihe(radR * 0.96, 0, radR * 0.21, radR * 0.22);
+    // Innere Reihe: kleinere, versetzte Mittelstollen.
+    stollenReihe(radR * 0.9, 0.5, radR * 0.15, radR * 0.17);
     ctx.restore();
-
-    // Der Reifen selbst.
-    ctx.strokeStyle = FARBEN.reifen;
-    ctx.lineWidth = radR * 0.26;
-    ctx.beginPath();
-    ctx.arc(rx, ry, radR * 0.9, 0, Math.PI * 2);
-    ctx.stroke();
 
     // Felge.
     ctx.strokeStyle = FARBEN.felge;
@@ -713,12 +739,35 @@ function radFahrerZeichnen(
       ctx.lineTo(Math.cos(w) * radR * 0.72, Math.sin(w) * radR * 0.72);
     }
     ctx.stroke();
-    // Bremsscheibe.
-    ctx.strokeStyle = '#9aa0aa';
-    ctx.lineWidth = Math.max(1, radR * 0.05);
+    /*
+     * Bremsscheibe: gefüllt statt nur ein Kreis-Strich, mit Schlitzen —
+     * ein reiner Ring liest sich als dünner Reifenaufkleber, keine Scheibe.
+     */
+    ctx.fillStyle = '#8a909a';
     ctx.beginPath();
-    ctx.arc(0, 0, radR * 0.38, 0, Math.PI * 2);
+    ctx.arc(0, 0, radR * 0.36, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#5c6169';
+    ctx.lineWidth = Math.max(0.8, radR * 0.02);
     ctx.stroke();
+
+    const schlitze = 8;
+    ctx.strokeStyle = '#3a3d43';
+    ctx.lineWidth = Math.max(1, radR * 0.035);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i < schlitze; i++) {
+      const w = (i / schlitze) * Math.PI * 2;
+      ctx.moveTo(Math.cos(w) * radR * 0.16, Math.sin(w) * radR * 0.16);
+      ctx.lineTo(Math.cos(w) * radR * 0.32, Math.sin(w) * radR * 0.32);
+    }
+    ctx.stroke();
+
+    // Zentrumsloch, wo die Nabe drübersitzt.
+    ctx.fillStyle = FARBEN.profil;
+    ctx.beginPath();
+    ctx.arc(0, 0, radR * 0.1, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
 
     // Nabe.
@@ -785,6 +834,20 @@ function radFahrerZeichnen(
     0.08 * m,
     FARBEN.federDunkel,
   );
+  // Kleiner Decal-Sticker aufs Tauchrohr — reine Markenzeichen-Anmutung,
+  // sitzt schräg entlang der Rohrachse wie ein echter Federgabel-Aufkleber.
+  {
+    const dx = tauchOben.x - vornX;
+    const dy = tauchOben.y - nabeVorn;
+    ctx.save();
+    ctx.translate(vornX + dx * 0.42, nabeVorn + dy * 0.42);
+    ctx.rotate(Math.atan2(dy, dx));
+    ctx.fillStyle = FARBEN.akzent;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 0.05 * m, 0.017 * m, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   // Standrohr (oben, dünner, glänzend hell) — läuft bis über den Steuerkopf.
   rohr(
     tauchOben.x,
@@ -795,24 +858,27 @@ function radFahrerZeichnen(
     0.056 * m,
     FARBEN.federHell,
   );
-  // Untere Brücke, direkt unter dem Steuerrohr.
+  // Untere Brücke, direkt unter dem Steuerrohr. Etwas massiver als beim
+  // ersten Wurf (0,05 m → 0,062 m dick, ±0,085 m → ±0,095 m breit), damit
+  // sie klar als eigenes Bauteil auffällt statt als bloße Rohrverdickung.
   rohr(
-    gabelOben.x - 0.085 * m,
+    gabelOben.x - 0.095 * m,
     gabelOben.y + 0.02 * m,
-    gabelOben.x + 0.085 * m,
+    gabelOben.x + 0.095 * m,
     gabelOben.y + 0.005 * m,
-    0.05 * m,
-    0.05 * m,
+    0.062 * m,
+    0.062 * m,
     FARBEN.rahmenDunkel,
   );
-  // **Obere Brücke** — das Erkennungsmerkmal der Doppelbrückengabel.
+  // **Obere Brücke** — das Erkennungsmerkmal der Doppelbrückengabel,
+  // ebenfalls etwas kräftiger als zuvor.
   rohr(
-    standOben.x - 0.085 * m,
+    standOben.x - 0.095 * m,
     standOben.y + 0.015 * m,
-    standOben.x + 0.085 * m,
+    standOben.x + 0.095 * m,
     standOben.y,
-    0.045 * m,
-    0.045 * m,
+    0.055 * m,
+    0.055 * m,
     FARBEN.rahmenDunkel,
   );
 
@@ -921,10 +987,14 @@ function radFahrerZeichnen(
     if (offen) ctx.stroke();
   };
 
-  const federDicke = Math.max(1.8, 0.03 * m);
-  federTeil(false, mischen(FARBEN.akzent, '#000000', 0.45), federDicke);
+  // Etwas kräftiger als beim ersten Wurf (Dicke + vorderer Multiplikator
+  // beide angehoben, vorderer Bogen zusätzlich leicht aufgehellt) — die
+  // Akzentfarbe soll auf den ersten Blick als Feder erkennbar sein, nicht
+  // nur bei genauem Hinsehen.
+  const federDicke = Math.max(2, 0.034 * m);
+  federTeil(false, mischen(FARBEN.akzent, '#000000', 0.42), federDicke);
   rohr(daempferA.x, daempferA.y, daempferB.x, daempferB.y, 0.05 * m, 0.05 * m, FARBEN.federDunkel);
-  federTeil(true, FARBEN.akzent, federDicke * 1.15);
+  federTeil(true, mischen(FARBEN.akzent, '#ffffff', 0.08), federDicke * 1.3);
 
   // Federteller oben und unten — ohne sie schwebt die Wendel frei.
   ctx.fillStyle = '#8d939e';
@@ -944,6 +1014,31 @@ function radFahrerZeichnen(
     0.055 * m,
     FARBEN.rahmen,
   );
+  /*
+   * Dünner Teal-Akzentstreifen aufs Unterrohr — sitzt auf derselben
+   * Lichtseite wie `rohr()`s Glanzband, damit er wie aufgeklebt wirkt
+   * statt wie eine zweite Kontur.
+   */
+  {
+    const ax = tretlager.x;
+    const ay = tretlager.y;
+    const bx = steuerkopf.x;
+    const by = steuerkopf.y + 0.14 * m;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const seite = nx * -0.55 + ny * -0.84 >= 0 ? 1 : -1;
+    const off = 0.07 * m * 0.45 * seite;
+    ctx.strokeStyle = FARBEN.akzent;
+    ctx.lineWidth = Math.max(1.2, 0.07 * m * 0.12);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ax + nx * off, ay + ny * off);
+    ctx.lineTo(bx + nx * off, by + ny * off);
+    ctx.stroke();
+  }
   rohr(
     sattel.x,
     sattel.y,
@@ -973,11 +1068,43 @@ function radFahrerZeichnen(
     FARBEN.rahmen,
   );
 
-  // --- Sattel ---
-  ctx.fillStyle = '#1a1a20';
-  ctx.beginPath();
-  ctx.ellipse(sattel.x - 0.02 * m, sattel.y - 0.04 * m, 0.15 * m, 0.045 * m, -0.12, 0, Math.PI * 2);
-  ctx.fill();
+  /*
+   * --- Sattel ---
+   * Eine erkennbare Sattelform statt einer reinen Ellipse: hinten breiter
+   * für die Sitzfläche, mit rundem Heck, vorn spitz zulaufend zur Nase —
+   * die Nase zeigt zum Lenker, wie bei einem echten Sattel.
+   */
+  {
+    const sx = sattel.x - 0.02 * m;
+    const sy = sattel.y - 0.04 * m;
+    const rot = -0.12;
+    const cos = Math.cos(rot);
+    const sin = Math.sin(rot);
+    // Punkt im sattel-eigenen Koordinatensystem: lx nach vorn (zur Nase),
+    // ly quer zur Sitzfläche.
+    const pt = (lx: number, ly: number) => ({
+      x: sx + lx * cos - ly * sin,
+      y: sy + lx * sin + ly * cos,
+    });
+    const heck = pt(-0.15 * m, 0);
+    const hintenO = pt(-0.11 * m, -0.05 * m);
+    const hintenU = pt(-0.11 * m, 0.05 * m);
+    const mitteO = pt(0.04 * m, -0.045 * m);
+    const mitteU = pt(0.04 * m, 0.045 * m);
+    const naseO = pt(0.15 * m, -0.014 * m);
+    const naseU = pt(0.15 * m, 0.014 * m);
+    const naseSpitze = pt(0.19 * m, 0);
+
+    ctx.fillStyle = '#1a1a20';
+    ctx.beginPath();
+    ctx.moveTo(hintenO.x, hintenO.y);
+    ctx.quadraticCurveTo(heck.x, heck.y, hintenU.x, hintenU.y);
+    ctx.quadraticCurveTo(mitteU.x, mitteU.y, naseU.x, naseU.y);
+    ctx.quadraticCurveTo(naseSpitze.x, naseSpitze.y, naseO.x, naseO.y);
+    ctx.quadraticCurveTo(mitteO.x, mitteO.y, hintenO.x, hintenO.y);
+    ctx.closePath();
+    ctx.fill();
+  }
 
   // --- Lenker und Vorbau ---
   // Der Vorbau sitzt auf der **oberen** Brücke, nicht am Steuerkopf —
