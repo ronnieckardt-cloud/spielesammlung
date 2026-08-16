@@ -4,10 +4,13 @@ import {
   ABSCHNITT_LAENGE,
   HOEHE_RUTSCHEND,
   SERIE_ABSTAND,
+  SPRUNGSCHUB_DAUER,
   SPUREN,
   SPUR_BREITE,
   TEMPO_MAX,
   TEMPO_START,
+  TURBO_DAUER,
+  TURBO_FAKTOR,
   abschnittErzeugen,
   istPassierbar,
   kollision,
@@ -22,7 +25,7 @@ import {
   takt,
   tempoBei,
 } from './logik';
-import type { Hindernis, Lauf, Muenze } from './logik';
+import type { Hindernis, Lauf, Muenze, Schub } from './logik';
 
 const SAAT = saatAus('laufen', 1);
 
@@ -346,6 +349,74 @@ describe('Münzserie', () => {
     const dt = 0.05;
     const m: Muenze = { spur: 1, z: start + (tempoBei(start) * dt) / 2, y: 1 };
     expect(takt(teststrecke(start, { muenzen: [m] }), dt).muenzenZahl).toBe(1);
+  });
+});
+
+describe('Schübe', () => {
+  /** Ein Schub direkt vor der Figur, auf ihrer Spur. */
+  const bereit = (art: Schub['art'], spur = 1): Lauf =>
+    teststrecke(0, { x: spurX(spur), zielSpur: spur, vonSpur: spur, schuebe: [{ art, spur, z: 0 }] });
+
+  it('sammelt einen Schub ein und schaltet die passende Wirkung frei', () => {
+    const turbo = takt(bereit('turbo'), 1 / 60);
+    expect(turbo.schubZahl).toBe(1);
+    expect(turbo.turboRest).toBeCloseTo(TURBO_DAUER, 6);
+    expect(turbo.sprungRest).toBe(0);
+
+    const sprung = takt(bereit('sprung'), 1 / 60);
+    expect(sprung.schubZahl).toBe(1);
+    expect(sprung.sprungRest).toBeCloseTo(SPRUNGSCHUB_DAUER, 6);
+    expect(sprung.turboRest).toBe(0);
+  });
+
+  it('lässt die Wirkung über die Zeit abklingen, nie unter null', () => {
+    let l = takt(bereit('turbo'), 1 / 60);
+    l = laufen(l, TURBO_DAUER + 1);
+    expect(l.turboRest).toBe(0);
+  });
+
+  it('zählt fünfundzwanzig Punkte je Schub, egal welche Art', () => {
+    const l = takt(bereit('turbo'), 1 / 60);
+    expect(punkte(l)).toBe(Math.floor(l.strecke) + l.schubZahl * 25);
+  });
+
+  it('läuft mit Turbo spürbar schneller als ohne', () => {
+    const ohne = takt(teststrecke(0), 0.5);
+    const mit = takt({ ...teststrecke(0), turboRest: TURBO_DAUER }, 0.5);
+    expect(mit.strecke).toBeCloseTo(ohne.strecke * TURBO_FAKTOR, 1);
+  });
+
+  it('lässt mit Sprungschub über einen Balken springen statt nur drunter durch', () => {
+    const balken: Hindernis = { art: 'balken', spur: 1, z: 0 };
+    const inDerLuft = { ...neuesSpiel(SAAT), y: 1.0 };
+
+    // Ohne Schub trifft ein Sprung — er macht es nur schlimmer.
+    expect(kollision(inDerLuft, balken)).toBe(true);
+
+    // Mit Sprungschub gilt dieselbe Regel wie bei der Hürde: Ein
+    // ausreichend hoher Sprung trägt darüber.
+    const mitSchub = { ...inDerLuft, sprungRest: SPRUNGSCHUB_DAUER };
+    expect(kollision(mitSchub, balken)).toBe(false);
+
+    // Aber nur, solange die Wirkung noch anhält.
+    const abgelaufen = { ...inDerLuft, sprungRest: 0 };
+    expect(kollision(abgelaufen, balken)).toBe(true);
+  });
+
+  it('setzt einen Schub nie auf dieselbe Spur wie ein Hindernis im selben Abschnitt', () => {
+    for (let grund = 1; grund <= 2; grund++) {
+      for (let i = 0; i < 3000; i++) {
+        const { hindernisse, schuebe } = abschnittErzeugen(saatAus('laufen', grund), i);
+        const belegt = new Set(hindernisse.map((h) => h.spur));
+        for (const sch of schuebe) {
+          expect(belegt.has(sch.spur), `Saat ${grund}, Abschnitt ${i}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('ergibt bei gleicher Nummer immer dasselbe Muster', () => {
+    expect(abschnittErzeugen(SAAT, 42).schuebe).toEqual(abschnittErzeugen(SAAT, 42).schuebe);
   });
 });
 

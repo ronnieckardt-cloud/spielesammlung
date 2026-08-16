@@ -1424,6 +1424,87 @@ Weitere Entscheidungen:
   aus Kunststoff" und „Pappe".
 - **Nicht duellfähig**: keine Levelnummer.
 
+### Die Figur bekam Gelenke
+
+Rückmeldung: „Mach das Männchen realistischer, das soll aussehen wie bei
+Subway Surfers." Danach mehrere Runden Feinschliff an derselben Figur,
+jede aus einer konkreten Beobachtung:
+
+- **Arme und Beine sind zweiteilig.** Vorher ein einziger starrer
+  Drehpunkt an Schulter/Hüfte — eine Steckfigur, egal wie fein die
+  Einzelkörper waren. Jetzt ein zweiter Drehpunkt an Ellbogen/Knie: Die
+  Ellbogen bleiben beim Laufen dauerhaft angewinkelt, die Knie beugen sich
+  im Schritttakt, die Ferse schlägt nach dem Abstoß hinten aus.
+- **Schmal in der Taille, breit an den Schultern, nicht umgekehrt.**
+  Rückmeldung: „Der Oberkörper sieht aus wie ein Bierfass." Die Breite
+  gehört in die Schultern, nicht in den Bauch.
+- **Der Armansatz wanderte zweimal.** Beim breiten Rumpf standen die Arme
+  als Stummel ab, enger gestellt. Nach dem Verschlanken des Rumpfes
+  steckten sie dann *im* Körper — „die Arme sind ja sozusagen im Körper."
+  Der richtige Wert hängt an der Rumpfbreite, nicht an sich selbst:
+  Schulterkugel-Radius plus Brustradius minus gewollte Überlappung.
+- **Schultern und Hüfte waren zu dick.** Der Schulterbalken (verbindet
+  linke und rechte Armkugel) musste lang genug sein, um bis in die Kugeln
+  hineinzureichen, durfte dafür aber nicht dicker werden — Länge und Dicke
+  sind zwei unabhängige Werte, die beim ersten Versuch beide zu groß
+  standen. Ebenso an der Hüfte: Beinansatz plus Schenkelradius muss bündig
+  mit der Hüftbreite liegen, sonst „springen die Hosenbeine seitlich über
+  die Hüfte hinaus".
+- **Schuhe sind eine gestauchte Kugel, kein Kasten.** Zwei Fehlversuche:
+  ein schmaler Kasten (verschwand hinterm Hosenbein, man sah nur Sohlen),
+  dann ein breiter Kasten — „das sind nur Platten, es sollen Schuhe sein."
+  Ein Ellipsoid hat die runde Kappe von selbst.
+- **Das Haar ist eine große Schale, die direkt unterm Mützenrand
+  beginnt.** Vorher ein kleiner Fleck tief im Nacken — zwischen Mütze und
+  Haaransatz blitzte ein Streifen nackter Kopf hervor.
+- *Merksatz, wieder bestätigt:* Jede dieser Korrekturen war eine
+  **einzelne Zahl** (ein Radius, ein Ansatzpunkt), keine neue Geometrie —
+  Proportionen sind bei einer Figur aus Grundkörpern die ganze Arbeit.
+
+### Schübe — Turbo und Sprungschub
+
+Rückmeldung: „ich will 'n paar Sachen einsammeln, zum Beispiel, dass man
+dann schneller ist, wo man höher springt oder so was, irgendwas
+Besonderes." Zwei Arten in `logik.ts` (`Schub`/`Schubart`), seltener als
+Münzen (`SCHUB_CHANCE`, nicht jeder Abschnitt), zeitlich befristet
+(`TURBO_DAUER`/`SPRUNGSCHUB_DAUER`), keine Überschneidung — beide können
+gleichzeitig aktiv sein.
+
+- **Turbo multipliziert das Tempo, ersetzt es nicht.** `tempoBei(strecke)`
+  bleibt die einzige Quelle für den Geschwindigkeitsanstieg über die
+  Strecke; Turbo legt `TURBO_FAKTOR` obendrauf. Sonst hätte sich der
+  Effekt am Anfang des Laufs viel stärker angefühlt als am Ende.
+- **Sprungschub öffnet einen zweiten Weg an einem Hindernis, das sonst nur
+  einen kennt.** Normal gilt bei einem Balken: Springen macht es
+  schlimmer, nur Rutschen hilft. Mit aktivem Sprungschub gilt in
+  `kollision()` stattdessen dieselbe Regel wie bei der Hürde — ein
+  ausreichend hoher Sprung trägt darüber. Rückmeldung, wörtlich: „dass man
+  dann auch über die Hürden, wo man drunter durchkriegen muss, drüber
+  springen kann, wenn man dann irgendwas einsammelt."
+- **Der Schub wirkt noch im selben Bild, in dem er eingesammelt wird.**
+  Die Einsammel-Prüfung steht in `takt()` bewusst **vor** der
+  Hindernisprüfung und schreibt in dieselbe `zwischen`-Variable — ein
+  Sprungschub genau auf Höhe eines Balkens hilft sofort, nicht erst ein
+  Bild später.
+- **Kein Höhenfenster beim Einsammeln**, anders als bei Münzen: Ein Schub
+  soll nicht ausgerechnet dann verpasst werden, wenn man gerade springt
+  oder rutscht, um einem Hindernis auszuweichen.
+- **Zwei Formen statt zweier Farben derselben Form.** Bei Tempo 20 bleibt
+  keine Zeit, eine Beschriftung zu lesen — die Silhouette muss allein
+  sagen, was man einsammelt. Turbo ein Pfeil (spitz, nach vorn — „schneller"),
+  Sprungschub ein Diamant (nach oben gestreckt — „höher"). Dieselbe Farbe
+  taucht als Bodenring unter der Figur und als Badge in der Kopfzeile
+  wieder auf, damit die Verbindung „das habe ich eingesammelt, das wirkt
+  gerade" ohne Text ankommt.
+- **Eine eigene Uhr für den Laufschritt (`schrittZeit`), getrennt von
+  `laufzeit`.** Mit Turbo sollen die Beine sichtbar schneller pumpen —
+  aber ein Sprung im *Faktor* an der Verwendungsstelle risse den Schritt
+  mitten in der Bewegung um. Ein Sprung in der *Geschwindigkeit der Uhr*
+  nicht: Die Phase läuft weiter, sie beschleunigt nur.
+- Ein eigener Ton (`sfx('stufe')` statt `sfx('gut')`) und ein Doppel-Stups
+  (`haptik('jubel')`), damit sich ein Schub von einer Münze auch ohne
+  Hinsehen unterscheidet.
+
 ## Box Push — Besonderheiten
 
 Das erste Spiel, in dem man einen Zug wirklich **verbauen** kann: Kisten

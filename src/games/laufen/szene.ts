@@ -102,6 +102,12 @@ export const AUFPRALL_DAUER = 0.7;
  */
 const VORRAT_HINDERNISSE = 18;
 const VORRAT_MUENZEN = 48;
+/**
+ * Höchstens ein Schub je Abschnitt (siehe `SCHUB_CHANCE` in `logik.ts`),
+ * im selben 114-m-Fenster wie die Hindernisse also höchstens neun
+ * gleichzeitig sichtbare — zehn mit etwas Luft an der Fenstergrenze.
+ */
+const VORRAT_SCHUEBE = 10;
 const VORRAT_HAEUSER = 24;
 const VORRAT_LATERNEN = 12;
 const VORRAT_BAEUME = 12;
@@ -138,10 +144,16 @@ export type Szene = {
 
 type Figur = {
   gruppe: THREE.Group;
+  /** Drehpunkte an Schulter und Hüfte — schwingen den ganzen Arm/das Bein. */
   armL: THREE.Object3D;
   armR: THREE.Object3D;
   beinL: THREE.Object3D;
   beinR: THREE.Object3D;
+  /** Drehpunkte an Ellbogen und Knie — beugen nur den Unterarm/-schenkel. */
+  ellbogenL: THREE.Object3D;
+  ellbogenR: THREE.Object3D;
+  knieL: THREE.Object3D;
+  knieR: THREE.Object3D;
 };
 
 /**
@@ -149,6 +161,20 @@ type Figur = {
  *
  * Bewusst keine geladene Figurdatei: Die App muss offline laufen und ohne
  * fremde Dateien auskommen.
+ *
+ * **Warum die Figur Ellbogen und Knie hat.** Rückmeldung: „Mach das
+ * Männchen realistischer, das soll aussehen wie bei Subway Surfers." Der
+ * Unterschied zwischen deren Läufern und einer Steckfigur liegt kaum in der
+ * Detailmenge, sondern darin, dass die Gliedmaßen **Gelenke** haben: Ein
+ * Läufer mit durchgestreckten Armen und Beinen liest sich als Marionette,
+ * egal wie fein die Einzelkörper sind. Arme und Beine sind deshalb
+ * zweiteilig — ein Drehpunkt an Schulter/Hüfte wie bisher, ein zweiter an
+ * Ellbogen/Knie. Die Ellbogen bleiben beim Laufen dauerhaft angewinkelt
+ * (das tut jeder echte Läufer), die Knie beugen sich im Schritttakt: Die
+ * Ferse schlägt nach dem Abstoß hinten aus. Dazu lange Hosenbeine bis zum
+ * Schuh, klobigere Turnschuhe mit runder Kappe, ein leicht vergrößerter
+ * Kopf und ein Rumpf, der oben breiter ist als unten — die Proportionen
+ * der Vorlage, ohne deren Figuren zu kopieren.
  *
  * **Warum die Figur aussah, als trüge sie eine Windel.** Die alte Fassung
  * hatte an der Hüfte eine *quergelegte Kapsel* in Hosenfarbe — also einen
@@ -194,26 +220,44 @@ function figurBauen(): Figur {
   const mSohle = stoff(0x2b3442, 26);
 
   const SCHULTER_Y = 1.16;
-  // Enger als beim ersten Versuch (0,285). Dort ragten die Arme fast elf
-  // Zentimeter über den Rumpf hinaus und lasen sich als abstehende Stummel.
-  const SCHULTER_X = 0.25;
-  const HUEFT_Y = 0.68;
+  /*
+   * Der Armansatz wanderte zweimal: Beim breiten Rumpf standen die Arme
+   * bei 0,285 als Stummel ab, also enger auf 0,25. Nach dem Verschlanken
+   * des Rumpfes steckten sie bei 0,25 dann **im** Körper — Rückmeldung:
+   * „Die Arme sind ja sozusagen im Körper." Der richtige Wert hängt an
+   * der Rumpfbreite, nicht an sich: Schulterkugel (r 0,125) plus
+   * Brustradius (0,235) minus gewollte Überlappung ergibt 0,29.
+   */
+  const SCHULTER_X = 0.29;
+  const HUEFT_Y = 0.7;
 
-  // --- Rumpf, Hüfte, Schultern ---
-  const rumpf = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.275, 0.5, 20), mShirt);
+  /*
+   * --- Rumpf, Hüfte, Schultern ---
+   *
+   * **Schmal in der Taille, breit an den Schultern.** Die Fassung davor
+   * hatte einen Rumpf von 0,54 m Durchmesser bei 1,9 m Körpergröße —
+   * Rückmeldung: „Der Oberkörper sieht aus wie ein Bierfass." Die Breite
+   * gehört in die Schultern (die Armansätze außen bei ±0,375), nicht in
+   * den Bauch; erst dieses Verhältnis liest sich als sportliche Figur.
+   */
+  const rumpf = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.2, 0.52, 20), mShirt);
   rumpf.position.y = 1.0;
   gruppe.add(rumpf);
 
-  const brust = new THREE.Mesh(new THREE.SphereGeometry(0.26, 18, 12), mShirt);
-  brust.position.y = 1.25;
-  brust.scale.y = 0.72;
+  const brust = new THREE.Mesh(new THREE.SphereGeometry(0.235, 18, 12), mShirt);
+  brust.position.y = 1.26;
+  brust.scale.y = 0.75;
   gruppe.add(brust);
 
-  const huefte = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.232, 0.24, 18), mHose);
-  huefte.position.y = 0.74;
+  const huefte = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.19, 0.24, 18), mHose);
+  huefte.position.y = 0.73;
   gruppe.add(huefte);
 
-  const schulterbalken = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.24, 5, 14), mShirt);
+  // Lang genug, um bis in die Schulterkugeln hineinzureichen (halbe
+  // Spannweite 0,29 = Armansatz), aber **dünn** — er deutet die Schulter-
+  // linie nur an. Ein dicker Balken machte die Schultern wulstig:
+  // Rückmeldung „viel zu dick".
+  const schulterbalken = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.35, 5, 14), mShirt);
   schulterbalken.rotation.z = Math.PI / 2;
   schulterbalken.position.y = SCHULTER_Y;
   gruppe.add(schulterbalken);
@@ -228,23 +272,26 @@ function figurBauen(): Figur {
    * durchlaufender Gurt und ein *dunkler* Korpus, von dem sich die hellen
    * Teile absetzen — nicht umgekehrt.
    */
-  const rucksack = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.36, 0.2), mTasche);
-  rucksack.position.set(0, 0.99, -0.3);
+  // Schmaler als der alte (0,3 statt 0,34) — auf dem verschlankten Rumpf
+  // stünde der breite Kasten seitlich über und machte die Silhouette
+  // wieder zum Fass, das gerade abgeschafft wurde.
+  const rucksack = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.36, 0.18), mTasche);
+  rucksack.position.set(0, 0.99, -0.27);
   gruppe.add(rucksack);
   // Gewölbter Deckel — die eine Rundung, die den Kasten zum Rucksack macht.
-  const deckel = new THREE.Mesh(new THREE.SphereGeometry(0.19, 16, 12), mTasche);
-  deckel.position.set(0, 1.16, -0.3);
+  const deckel = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 12), mTasche);
+  deckel.position.set(0, 1.16, -0.27);
   deckel.scale.set(0.92, 0.62, 0.56);
   gruppe.add(deckel);
-  const spanner = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.055, 0.215), mRucksack);
-  spanner.position.set(0, 1.03, -0.3);
+  const spanner = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.055, 0.195), mRucksack);
+  spanner.position.set(0, 1.03, -0.27);
   gruppe.add(spanner);
   const schnalle = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.075, 0.03), mRucksack);
-  schnalle.position.set(0, 0.89, -0.41);
+  schnalle.position.set(0, 0.89, -0.37);
   gruppe.add(schnalle);
   for (const seite of [-1, 1]) {
     const gurt = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.36, 0.05), mTasche);
-    gurt.position.set(seite * 0.125, 1.06, -0.25);
+    gurt.position.set(seite * 0.11, 1.06, -0.22);
     gruppe.add(gurt);
   }
 
@@ -253,12 +300,15 @@ function figurBauen(): Figur {
   hals.position.y = 1.3;
   gruppe.add(hals);
 
-  const kopf = new THREE.Mesh(new THREE.SphereGeometry(0.24, 20, 16), mHaut);
+  // Etwas größer als anatomisch richtig (0,26 statt 0,24) — der leicht
+  // vergrößerte Kopf ist der halbe Comic-Eindruck der Vorlage.
+  const kopf = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), mHaut);
   kopf.position.y = 1.5;
   gruppe.add(kopf);
 
   /*
-   * Haar im Nacken — von hinten sieht man sonst nur eine nackte Kugel.
+   * Das Haar am Hinterkopf — von hinten sieht man sonst nur eine nackte
+   * Kugel.
    *
    * **Als Schale auf dem Kopf, nicht als Ballen darin.** Der erste Versuch
    * war ein plattgedrücktes Ei knapp unter der Kopfoberfläche. Rechnerisch
@@ -267,16 +317,20 @@ function figurBauen(): Figur {
    * vor der echten Kugelfläche. Also stieß das Haar an zwei Stellen durch
    * den Kopf und sah aus wie aufgemalte Augenbrauen.
    *
-   * Eine Kugelkappe mit sechs Millimetern Abstand kann das nicht passieren:
-   * Sie liegt überall gleich weit außen. Gedreht sitzt sie im Nacken, genau
-   * unter dem Mützenrand.
+   * **Die Schale ist groß und beginnt direkt unterm Mützenrand.** Die
+   * Fassung davor war ein kleiner Fleck tief im Nacken — Rückmeldung: „Die
+   * Haare fangen erst ganz unten an, das sieht nicht realistisch aus."
+   * Zwischen Mütze und Haaransatz blitzte ein breiter Streifen nackter
+   * Kopf hervor. Jetzt deckt die Kappe (Öffnungswinkel 1,05 statt 0,62)
+   * den ganzen Hinterkopf von der Mützenkante bis zum Nacken ab; wo sie
+   * unter die Mütze reicht, verschwindet sie einfach darunter.
    */
   const haar = new THREE.Mesh(
-    new THREE.SphereGeometry(0.246, 18, 12, 0, Math.PI * 2, 0, 0.62),
+    new THREE.SphereGeometry(0.266, 18, 12, 0, Math.PI * 2, 0, 1.05),
     mHaar,
   );
   haar.position.y = 1.5;
-  haar.rotation.x = -2.4;
+  haar.rotation.x = -1.85;
   gruppe.add(haar);
 
   /*
@@ -291,7 +345,7 @@ function figurBauen(): Figur {
    * Augenbrauen.
    */
   const muetze = new THREE.Mesh(
-    new THREE.SphereGeometry(0.252, 20, 14, 0, Math.PI * 2, 0, Math.PI / 1.85),
+    new THREE.SphereGeometry(0.272, 20, 14, 0, Math.PI * 2, 0, Math.PI / 1.85),
     new THREE.MeshPhongMaterial({
       color: FARBEN.shirtDunkel,
       shininess: 22,
@@ -303,66 +357,130 @@ function figurBauen(): Figur {
   gruppe.add(muetze);
   // Der Schirm zeigt nach **vorn** (+z). Vorher stand er auf −z, also im
   // Nacken — eine Mütze verkehrt herum.
-  const schirm = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.045, 0.17), mShirtDunkel);
-  schirm.position.set(0, 1.487, 0.2);
+  const schirm = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.18), mShirtDunkel);
+  schirm.position.set(0, 1.483, 0.215);
   gruppe.add(schirm);
 
-  // --- Gliedmaßen ---
-  const armGeo = new THREE.CapsuleGeometry(0.066, 0.27, 4, 12);
-  const aermelGeo = new THREE.CylinderGeometry(0.095, 0.088, 0.2, 14);
-  const handGeo = new THREE.SphereGeometry(0.075, 12, 10);
-  const beinGeo = new THREE.CapsuleGeometry(0.098, 0.28, 4, 12);
-  const hosenbeinGeo = new THREE.CylinderGeometry(0.135, 0.15, 0.24, 14);
-  const schuhGeo = new THREE.BoxGeometry(0.19, 0.115, 0.3);
-  const sohleGeo = new THREE.BoxGeometry(0.2, 0.045, 0.31);
-  const gelenkGeo = new THREE.SphereGeometry(0.125, 12, 10);
+  /*
+   * --- Gliedmaßen, zweiteilig ---
+   *
+   * Jeder Arm: Schulter-Drehpunkt → Ärmel + Oberarm → Ellbogen-Drehpunkt →
+   * Unterarm + Hand. Jedes Bein: Hüft-Drehpunkt → Oberschenkel → Knie-
+   * Drehpunkt → Unterschenkel + Schuh. Die Gelenkkugeln füllen die Lücke,
+   * die beim Beugen zwischen den beiden Segmenten aufginge — dieselbe
+   * Überlappungsregel wie überall an dieser Figur.
+   *
+   * Die Hose reicht bis zum Schuh (vorher endete sie am Knie und darunter
+   * kam Haut): lange Hosen und klobige weiße Turnschuhe sind die
+   * Silhouette der Vorlage.
+   */
+  /*
+   * **Keine Stockarme.** Rückmeldung auf die erste Gelenk-Fassung: „keine
+   * Stockarme, perfekte Grafik." Die Segmente sind deshalb bewusst dicker
+   * als anatomisch richtig — Oberarm fast so dick wie der Ärmel, Hände und
+   * Schuhe eine Nummer zu groß. Genau diese Übertreibung ist es, die die
+   * Vorlage „gut gezeichnet" aussehen lässt; maßstabsgetreue dünne Arme
+   * lesen sich aus zwei Metern Kameraabstand als Striche.
+   */
+  // Getrennte Gelenkgrößen: Die Schulterkugel war mit 0,125 zu wuchtig
+  // („Schultern viel zu dick") — 0,105 reicht, um die Lücke zum Ärmel zu
+  // schließen, ohne selbst als Wulst aufzufallen.
+  const schulterKugelGeo = new THREE.SphereGeometry(0.105, 12, 10);
+  const hueftKugelGeo = new THREE.SphereGeometry(0.105, 12, 10);
+  const aermelGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.18, 14);
+  const oberarmGeo = new THREE.CapsuleGeometry(0.078, 0.1, 4, 12);
+  const ellbogenGeo = new THREE.SphereGeometry(0.08, 10, 8);
+  const unterarmGeo = new THREE.CapsuleGeometry(0.072, 0.12, 4, 12);
+  const handGeo = new THREE.SphereGeometry(0.092, 12, 10);
+  const oberschenkelGeo = new THREE.CylinderGeometry(0.118, 0.1, 0.28, 14);
+  const knieGeo = new THREE.SphereGeometry(0.1, 12, 10);
+  const unterschenkelGeo = new THREE.CylinderGeometry(0.098, 0.082, 0.16, 14);
+  /*
+   * **Der Schuh ist eine gestauchte Kugel, kein Kasten.** Zwei Anläufe
+   * davor: erst ein schmaler Kasten (verschwand hinterm Hosenbein, man sah
+   * nur Sohlen), dann ein breiter Kasten — Rückmeldung: „Die Schuhe sind
+   * viel zu breit, und das sind nur Platten. Es sollen Schuhe sein."
+   * Kästen lesen sich immer als Platten, egal in welcher Breite. Ein
+   * Ellipsoid hat die runde Kappe und den gewölbten Spann von selbst, und
+   * die Sohle bleibt **schmaler** als der Schuhkörper, damit sie unter ihm
+   * verschwindet, statt als Brett darunter hervorzustehen.
+   */
+  const schuhGeo = new THREE.SphereGeometry(0.11, 16, 12);
+  const sohleGeo = new THREE.BoxGeometry(0.16, 0.045, 0.3);
 
   const arm = (seite: number) => {
-    const drehpunkt = new THREE.Object3D();
-    drehpunkt.position.set(seite * SCHULTER_X, SCHULTER_Y, 0);
-    // Leicht zum Körper geneigt. Senkrecht herabhängende Arme stehen bei
-    // einem so breiten Rumpf sichtbar ab; ein Läufer hält sie eng.
-    drehpunkt.rotation.z = -seite * 0.13;
-    drehpunkt.add(new THREE.Mesh(gelenkGeo, mShirt));
+    const schulter = new THREE.Object3D();
+    schulter.position.set(seite * SCHULTER_X, SCHULTER_Y, 0);
+    // Nur noch leicht zum Körper geneigt — beim schlanken Rumpf sitzt der
+    // Ansatz schon dicht genug, mehr Neigung drückte die Hand in die Hüfte.
+    schulter.rotation.z = -seite * 0.07;
+    schulter.add(new THREE.Mesh(schulterKugelGeo, mShirt));
     const aermel = new THREE.Mesh(aermelGeo, mShirt);
-    aermel.position.y = -0.08;
-    drehpunkt.add(aermel);
-    const glied = new THREE.Mesh(armGeo, mHaut);
-    glied.position.y = -0.31;
-    drehpunkt.add(glied);
+    aermel.position.y = -0.09;
+    schulter.add(aermel);
+    const oberarm = new THREE.Mesh(oberarmGeo, mHaut);
+    oberarm.position.y = -0.2;
+    schulter.add(oberarm);
+    const ellbogen = new THREE.Object3D();
+    ellbogen.position.y = -0.27;
+    schulter.add(ellbogen);
+    ellbogen.add(new THREE.Mesh(ellbogenGeo, mHaut));
+    const unterarm = new THREE.Mesh(unterarmGeo, mHaut);
+    unterarm.position.y = -0.1;
+    ellbogen.add(unterarm);
     const hand = new THREE.Mesh(handGeo, mHaut);
-    hand.position.y = -0.53;
-    drehpunkt.add(hand);
-    gruppe.add(drehpunkt);
-    return drehpunkt;
+    hand.position.y = -0.22;
+    ellbogen.add(hand);
+    gruppe.add(schulter);
+    return { schulter, ellbogen };
   };
 
   const bein = (seite: number) => {
-    const drehpunkt = new THREE.Object3D();
-    drehpunkt.position.set(seite * 0.125, HUEFT_Y, 0);
-    drehpunkt.add(new THREE.Mesh(gelenkGeo, mHose));
-    const hosenbein = new THREE.Mesh(hosenbeinGeo, mHose);
-    hosenbein.position.y = -0.08;
-    drehpunkt.add(hosenbein);
-    const glied = new THREE.Mesh(beinGeo, mHaut);
-    glied.position.y = -0.32;
-    drehpunkt.add(glied);
+    const hueftpunkt = new THREE.Object3D();
+    // ±0,105 statt ±0,125: Bei den alten Werten sprangen die Hosenbeine
+    // seitlich über die Hüfte hinaus — „da ist ein richtiger Absatz,
+    // wenn's zu den Beinen geht". Ansatz plus Schenkelradius (0,105 +
+    // 0,118) liegt jetzt bündig an der Hüftbreite (0,2).
+    hueftpunkt.position.set(seite * 0.105, HUEFT_Y, 0);
+    hueftpunkt.add(new THREE.Mesh(hueftKugelGeo, mHose));
+    const oberschenkel = new THREE.Mesh(oberschenkelGeo, mHose);
+    oberschenkel.position.y = -0.16;
+    hueftpunkt.add(oberschenkel);
+    const knie = new THREE.Object3D();
+    knie.position.y = -0.33;
+    hueftpunkt.add(knie);
+    knie.add(new THREE.Mesh(knieGeo, mHose));
+    const unterschenkel = new THREE.Mesh(unterschenkelGeo, mHose);
+    unterschenkel.position.y = -0.09;
+    knie.add(unterschenkel);
+    // Der Schuhkörper: nach vorn gestreckt, leicht plattgedrückt — die
+    // Rundung von Kappe und Spann kommt aus der Kugelform selbst.
     const schuh = new THREE.Mesh(schuhGeo, mSchuh);
-    schuh.position.set(0, -0.6, 0.02);
-    drehpunkt.add(schuh);
+    schuh.scale.set(0.82, 0.62, 1.5);
+    schuh.position.set(0, -0.26, 0.05);
+    knie.add(schuh);
     const sohle = new THREE.Mesh(sohleGeo, mSohle);
-    sohle.position.set(0, -0.655, 0.02);
-    drehpunkt.add(sohle);
-    gruppe.add(drehpunkt);
-    return drehpunkt;
+    sohle.position.set(0, -0.325, 0.05);
+    knie.add(sohle);
+    gruppe.add(hueftpunkt);
+    return { hueftpunkt, knie };
   };
+
+  const armLinks = arm(-1);
+  const armRechts = arm(1);
+  const beinLinks = bein(-1);
+  const beinRechts = bein(1);
 
   return {
     gruppe,
-    armL: arm(-1),
-    armR: arm(1),
-    beinL: bein(-1),
-    beinR: bein(1),
+    armL: armLinks.schulter,
+    armR: armRechts.schulter,
+    ellbogenL: armLinks.ellbogen,
+    ellbogenR: armRechts.ellbogen,
+    beinL: beinLinks.hueftpunkt,
+    beinR: beinRechts.hueftpunkt,
+    knieL: beinLinks.knie,
+    knieR: beinRechts.knie,
   };
 }
 
@@ -815,6 +933,44 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   });
 
   // ---------------------------------------------------------------
+  // Schübe — Turbo und Sprungschub
+  // ---------------------------------------------------------------
+  /*
+   * Zwei eigene Formen statt zweier Farben derselben Form: Bei Tempo 20
+   * bleibt keine Zeit, eine Beschriftung zu lesen — die Silhouette muss
+   * allein sagen, was man da einsammelt. Turbo ist ein Pfeil (spitz, nach
+   * vorn gerichtet — „schneller"), Sprungschub ein Diamant (nach oben
+   * gestreckt — „höher"). Jeder Vorratsplatz trägt beide Formen und
+   * zeigt per Sichtbarkeit nur die passende, genau wie bei den
+   * Hindernissen mit ihren drei Bauarten.
+   */
+  const schubTurboGeo = new THREE.ConeGeometry(0.22, 0.5, 5);
+  const schubSprungGeo = new THREE.OctahedronGeometry(0.28);
+  const schubTurboStoff = new THREE.MeshPhongMaterial({
+    color: 0xfbbf24,
+    emissive: 0x7c4a03,
+    shininess: 70,
+    specular: 0xfff3c4,
+  });
+  const schubSprungStoff = new THREE.MeshPhongMaterial({
+    color: 0x2dd4bf,
+    emissive: 0x0a4f47,
+    shininess: 70,
+    specular: 0xd1fef7,
+  });
+  const schuebe = Array.from({ length: VORRAT_SCHUEBE }, () => {
+    const gruppe = new THREE.Group();
+    const turbo = new THREE.Mesh(schubTurboGeo, schubTurboStoff);
+    turbo.rotation.x = Math.PI / 2; // Spitze zeigt nach vorn (+z), nicht nach oben.
+    gruppe.add(turbo);
+    const sprung = new THREE.Mesh(schubSprungGeo, schubSprungStoff);
+    gruppe.add(sprung);
+    gruppe.visible = false;
+    szene.add(gruppe);
+    return { gruppe, turbo, sprung };
+  });
+
+  // ---------------------------------------------------------------
   // Figur und Schatten
   // ---------------------------------------------------------------
   const figur = figurBauen();
@@ -830,7 +986,39 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   schatten.position.y = 0.03;
   szene.add(schatten);
 
+  /*
+   * Ein Ring am Boden je Wirkung — dieselbe Farbe wie das eingesammelte
+   * Extra, damit die Verbindung „das habe ich eingesammelt, das wirkt
+   * gerade" ohne Text ankommt. Beide gleichzeitig sichtbar, wenn beide
+   * Wirkungen gleichzeitig laufen; der Sprungring ist größer, damit sie
+   * ineinander verschachtelt stehen statt sich zu überdecken.
+   */
+  const wirkungsRingGeo = new THREE.TorusGeometry(0.55, 0.045, 8, 24);
+  const turboRing = new THREE.Mesh(
+    wirkungsRingGeo,
+    new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.85 }),
+  );
+  turboRing.rotation.x = -Math.PI / 2;
+  turboRing.visible = false;
+  szene.add(turboRing);
+  const sprungRing = new THREE.Mesh(
+    wirkungsRingGeo,
+    new THREE.MeshBasicMaterial({ color: 0x2dd4bf, transparent: true, opacity: 0.85 }),
+  );
+  sprungRing.rotation.x = -Math.PI / 2;
+  sprungRing.visible = false;
+  szene.add(sprungRing);
+
   let laufzeit = 0;
+  /**
+   * Wie `laufzeit`, treibt aber nur den Laufschritt (Hüpfer, Bein- und
+   * Armtakt) — mit Turbo läuft sie schneller als die Uhr, damit die Beine
+   * sichtbar schneller pumpen. Eine eigene Uhr statt `laufzeit * Faktor`
+   * an der Verwendungsstelle: Ein Sprung im *Faktor* risse den Schritt
+   * mitten in der Bewegung um, ein Sprung in der *Geschwindigkeit* nicht —
+   * die Phase läuft weiter, sie beschleunigt nur.
+   */
+  let schrittZeit = 0;
   /** Sekunden seit dem Zusammenstoß. Läuft erst, wenn `lauf.vorbei` gilt. */
   let aufprall = 0;
   /**
@@ -841,7 +1029,19 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
    * sie kippt — am deutlichsten beim Rutschen, wo sie von −1,15 auf 0
    * hochschnellte und erst dann fiel.
    */
-  const letzte = { drehX: 0, drehZ: 0, groesse: 1, armL: 0, armR: 0, beinL: 0, beinR: 0 };
+  const letzte = {
+    drehX: 0,
+    drehZ: 0,
+    groesse: 1,
+    armL: 0,
+    armR: 0,
+    ellbogenL: -1.2,
+    ellbogenR: -1.2,
+    beinL: 0,
+    beinR: 0,
+    knieL: 0.12,
+    knieR: 0.12,
+  };
   /**
    * Die seitliche Kameraposition **ohne** den Aufprallstoß.
    *
@@ -867,7 +1067,13 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
      * ausschließlich den Sturz.
      */
     if (lauf.vorbei) aufprall = Math.min(AUFPRALL_DAUER, aufprall + dt);
-    else laufzeit += dt;
+    else {
+      laufzeit += dt;
+      // Mit Turbo pumpen die Beine sichtbar schneller — nicht so schnell
+      // wie das Tempo selbst wächst (`TURBO_FAKTOR`), das sähe wie
+      // Zeitraffer statt wie Anstrengung aus.
+      schrittZeit += dt * (lauf.turboRest > 0 ? 1.35 : 1);
+    }
     const s = lauf.strecke;
 
     /*
@@ -948,6 +1154,27 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     }
     for (let i = muenzNummer; i < muenzen.length; i++) muenzen[i]!.visible = false;
 
+    let schubNummer = 0;
+    for (const sch of lauf.schuebe) {
+      const dz = sch.z - s;
+      if (dz < -2 || dz > SICHTWEITE * 0.6) continue;
+      const koerper = schuebe[schubNummer];
+      if (!koerper) break;
+      schubNummer += 1;
+      koerper.gruppe.visible = true;
+      // Deutlicheres Schweben als bei Münzen (0,16 statt 0,09 m Amplitude)
+      // — ein Schub ist die Ausnahme auf der Strecke und darf auffallen.
+      koerper.gruppe.position.set(
+        bildX(spurX(sch.spur)),
+        1.05 + Math.sin(laufzeit * 2.6 + sch.z) * 0.16,
+        dz,
+      );
+      koerper.gruppe.rotation.y = laufzeit * 2.4;
+      koerper.turbo.visible = sch.art === 'turbo';
+      koerper.sprung.visible = sch.art === 'sprung';
+    }
+    for (let i = schubNummer; i < schuebe.length; i++) schuebe[i]!.gruppe.visible = false;
+
     // --- Die Figur ---
     const rutscht = lauf.rutschRest > 0;
     const inDerLuft = lauf.y > 0.05;
@@ -955,7 +1182,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
 
     // Ein leichtes Auf und Ab beim Laufen. Ohne das gleitet die Figur, statt
     // zu rennen — der Boden zieht zwar vorbei, aber der Körper bleibt starr.
-    const huepfer = inDerLuft || rutscht ? 0 : Math.abs(Math.sin(laufzeit * 13)) * 0.06;
+    const huepfer = inDerLuft || rutscht ? 0 : Math.abs(Math.sin(schrittZeit * 13)) * 0.06;
     /** Tiefe der Figur — beim Sturz rutscht sie zur Kamera hin. */
     let figurZ = 0;
     /** Höhe der Figur. Beim Sturz sinkt sie auf den Boden, siehe unten. */
@@ -1014,10 +1241,16 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       figur.gruppe.scale.setScalar(von(letzte.groesse, 1));
       // Arme und Beine fahren aus dem Laufschritt in eine Sturzhaltung —
       // stehen bleiben mitten im Schritt sähe nach eingefrorenem Bild aus.
+      // Ellbogen strecken sich dabei fast (ausgeschlagene Arme), die Knie
+      // bleiben ungleich gebeugt — symmetrisch hingefallen sieht gestellt aus.
       figur.armL.rotation.x = von(letzte.armL, -2.4);
       figur.armR.rotation.x = von(letzte.armR, -1.9);
+      figur.ellbogenL.rotation.x = von(letzte.ellbogenL, -0.3);
+      figur.ellbogenR.rotation.x = von(letzte.ellbogenR, -0.5);
       figur.beinL.rotation.x = von(letzte.beinL, 0.95);
       figur.beinR.rotation.x = von(letzte.beinR, 0.4);
+      figur.knieL.rotation.x = von(letzte.knieL, 1.1);
+      figur.knieR.rotation.x = von(letzte.knieR, 0.5);
     } else {
       figurY = lauf.y + huepfer;
       figur.gruppe.position.set(fx, figurY, figurZ);
@@ -1026,12 +1259,52 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       figur.gruppe.rotation.z = rutscht ? 0 : (bildX(spurX(lauf.zielSpur)) - fx) * 0.18;
       figur.gruppe.scale.setScalar(rutscht ? 0.92 : 1);
 
-      const takt = laufzeit * 13;
-      const schwung = inDerLuft ? 0 : Math.sin(takt) * 0.95;
-      figur.beinL.rotation.x = inDerLuft ? -0.5 : schwung;
-      figur.beinR.rotation.x = inDerLuft ? 0.3 : -schwung;
-      figur.armL.rotation.x = inDerLuft ? -2.2 : -schwung * 0.85;
-      figur.armR.rotation.x = inDerLuft ? -2.2 : schwung * 0.85;
+      const takt = schrittZeit * 13;
+      const schwung = inDerLuft || rutscht ? 0 : Math.sin(takt) * 0.95;
+      /*
+       * Die Kniebeugung im Lauftakt. `takt − 0,55` legt die stärkste
+       * Beugung kurz **hinter** den hintersten Punkt des Beinschwungs —
+       * die Ferse schlägt nach dem Abstoß hinten aus, wie bei einem
+       * echten Läufer. `max(0, …)`, weil ein Knie nur in eine Richtung
+       * beugt; die Grundbeugung von 0,12 hält es auch in der Gegenphase
+       * minimal gebeugt, ganz durchgestreckt sähe es überstreckt aus.
+       */
+      const knieTakt = (versatz: number) => 0.12 + Math.max(0, Math.sin(takt + versatz)) * 1.3;
+      if (rutscht) {
+        // Rutschhaltung: Beine voraus, Arme nach hinten abgestützt.
+        // Vorher ruderten die Gliedmaßen im Lauftakt weiter, während der
+        // Körper längst lag.
+        figur.beinL.rotation.x = -0.6;
+        figur.beinR.rotation.x = -0.45;
+        figur.knieL.rotation.x = 0.5;
+        figur.knieR.rotation.x = 0.7;
+        figur.armL.rotation.x = -1.5;
+        figur.armR.rotation.x = -1.2;
+        figur.ellbogenL.rotation.x = -0.35;
+        figur.ellbogenR.rotation.x = -0.5;
+      } else if (inDerLuft) {
+        // Sprung: das vordere Bein angezogen, das hintere fast gestreckt,
+        // Arme hoch — die Silhouette eines Hürdenläufers.
+        figur.beinL.rotation.x = -0.55;
+        figur.beinR.rotation.x = 0.35;
+        figur.knieL.rotation.x = 1.7;
+        figur.knieR.rotation.x = 0.5;
+        figur.armL.rotation.x = -2.2;
+        figur.armR.rotation.x = -2.2;
+        figur.ellbogenL.rotation.x = -0.3;
+        figur.ellbogenR.rotation.x = -0.3;
+      } else {
+        figur.beinL.rotation.x = schwung;
+        figur.beinR.rotation.x = -schwung;
+        figur.knieL.rotation.x = knieTakt(-0.55);
+        figur.knieR.rotation.x = knieTakt(Math.PI - 0.55);
+        figur.armL.rotation.x = -schwung * 0.85;
+        figur.armR.rotation.x = schwung * 0.85;
+        // Dauerhaft angewinkelt, mit leichtem Pumpen im Takt — kein
+        // Läufer streckt beim Laufen die Arme durch.
+        figur.ellbogenL.rotation.x = -1.2 + schwung * 0.18;
+        figur.ellbogenR.rotation.x = -1.2 - schwung * 0.18;
+      }
 
       // Das zuletzt gezeichnete Laufbild merken — der Sturz oben mischt von
       // hier aus los, statt aus dem Nichts.
@@ -1040,8 +1313,12 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       letzte.groesse = figur.gruppe.scale.x;
       letzte.armL = figur.armL.rotation.x;
       letzte.armR = figur.armR.rotation.x;
+      letzte.ellbogenL = figur.ellbogenL.rotation.x;
+      letzte.ellbogenR = figur.ellbogenR.rotation.x;
       letzte.beinL = figur.beinL.rotation.x;
       letzte.beinR = figur.beinR.rotation.x;
+      letzte.knieL = figur.knieL.rotation.x;
+      letzte.knieR = figur.knieR.rotation.x;
     }
 
     // Der Fleck bleibt unter der Figur, auch wenn sie beim Sturz nach hinten
@@ -1054,6 +1331,21 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     const sk = 1 - hoch * 0.5;
     schatten.scale.set(sk, sk * 1.3, 1);
     schattenStoff.opacity = 1 - hoch * 0.65;
+
+    // Die Wirkungsringe — leichtes Pulsieren statt starrer Größe, sonst
+    // wirken sie wie aufgemalt statt wie eine aktive Kraft.
+    turboRing.visible = lauf.turboRest > 0 && !lauf.vorbei;
+    if (turboRing.visible) {
+      const puls = 1 + Math.sin(laufzeit * 11) * 0.08;
+      turboRing.position.set(fx, 0.05, figurZ);
+      turboRing.scale.set(puls, puls, 1);
+    }
+    sprungRing.visible = lauf.sprungRest > 0 && !lauf.vorbei;
+    if (sprungRing.visible) {
+      const puls = 1.35 + Math.sin(laufzeit * 8 + 1) * 0.08;
+      sprungRing.position.set(fx, 0.05, figurZ);
+      sprungRing.scale.set(puls, puls, 1);
+    }
 
     // --- Kamera ---
     // Folgt gedämpft zur Seite; hart mitzuziehen wirkt hektisch, gar nicht

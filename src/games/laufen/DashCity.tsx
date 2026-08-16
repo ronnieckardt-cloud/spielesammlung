@@ -5,7 +5,17 @@ import { sfx } from '../../core/sfx';
 import { haptik } from '../../core/haptik';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
-import { neuesSpiel, punkte, rutschen, spurWechseln, springen, takt, tempoBei } from './logik';
+import {
+  SPRUNGSCHUB_DAUER,
+  TURBO_DAUER,
+  neuesSpiel,
+  punkte,
+  rutschen,
+  spurWechseln,
+  springen,
+  takt,
+  tempoBei,
+} from './logik';
 import type { Lauf } from './logik';
 import type { Szene } from './szene';
 import { LaufenIcon } from './Icon';
@@ -132,6 +142,11 @@ export function DashCity({
   const punkteRef = useRef<HTMLSpanElement>(null);
   const muenzenRef = useRef<HTMLSpanElement>(null);
   const tempoRef = useRef<HTMLDivElement>(null);
+  /** Die zwei Schub-Anzeigen — Sichtbarkeit über `opacity`, Restzeit über die Balkenbreite. */
+  const turboBadgeRef = useRef<HTMLDivElement>(null);
+  const turboBalkenRef = useRef<HTMLDivElement>(null);
+  const sprungBadgeRef = useRef<HTMLDivElement>(null);
+  const sprungBalkenRef = useRef<HTMLDivElement>(null);
 
   const eingabe = useCallback((was: 'links' | 'rechts' | 'hoch' | 'runter') => {
     const l = holeLauf();
@@ -304,6 +319,13 @@ export function DashCity({
           // Deckel liegt bei zwölf Halbtönen — nach drei Reihen war er für
           // den Rest des Laufs am Anschlag und jede Münze klang gleich.
           if (neu.muenzenZahl > vorher.muenzenZahl) sfx('gut', Math.min(12, neu.muenzSerie));
+          // Ein eigener Ton für Schübe — 'stufe' statt 'gut', damit sich ein
+          // Schub sofort anders anhört als eine Münze, so besonders wie er
+          // aussieht.
+          if (neu.schubZahl > vorher.schubZahl) {
+            sfx('stufe');
+            haptik('jubel');
+          }
 
           szene.zeichnen(neu, dt);
 
@@ -319,6 +341,22 @@ export function DashCity({
           }
           if (tempoRef.current) {
             tempoRef.current.style.width = `${Math.min(100, (tempoBei(neu.strecke) / 22) * 100).toFixed(0)}%`;
+          }
+
+          // Die beiden Schub-Badges: Sichtbarkeit über `opacity`, Restzeit
+          // über die Balkenbreite — derselbe direkte Weg wie beim Tempo-
+          // balken oben, aus demselben Grund (kein `setState` je Bild).
+          if (turboBadgeRef.current) {
+            turboBadgeRef.current.style.opacity = neu.turboRest > 0 ? '1' : '0';
+          }
+          if (turboBalkenRef.current) {
+            turboBalkenRef.current.style.width = `${Math.max(0, (neu.turboRest / TURBO_DAUER) * 100).toFixed(0)}%`;
+          }
+          if (sprungBadgeRef.current) {
+            sprungBadgeRef.current.style.opacity = neu.sprungRest > 0 ? '1' : '0';
+          }
+          if (sprungBalkenRef.current) {
+            sprungBalkenRef.current.style.width = `${Math.max(0, (neu.sprungRest / SPRUNGSCHUB_DAUER) * 100).toFixed(0)}%`;
           }
 
           // Die Kopfzeile der Hülle braucht den Punktestand auch während des
@@ -463,6 +501,37 @@ export function DashCity({
         </span>
       </div>
 
+      {/* Die aktiven Schübe. Sie liegen **rechts unter der Münzzahl**, nicht
+          in der Mitte: Dort ist der einzige Fleck, auf den beim Laufen
+          ohnehin niemand schaut, und die Bahn selbst bleibt frei. Farbe und
+          Zeichen sind dieselben wie beim Gegenstand auf der Straße — wer
+          den Pfeil eingesammelt hat, sieht denselben Pfeil hier wieder. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute top-14 right-3 flex flex-col items-end gap-1.5"
+      >
+        <div
+          ref={turboBadgeRef}
+          className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
+          style={{ opacity: 0 }}
+        >
+          <span className="text-xs font-black text-amber-300">⚡ Turbo</span>
+          <div className="h-1 w-16 overflow-hidden rounded-full bg-black/50">
+            <div ref={turboBalkenRef} className="h-full rounded-full bg-amber-400" style={{ width: '0%' }} />
+          </div>
+        </div>
+        <div
+          ref={sprungBadgeRef}
+          className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
+          style={{ opacity: 0 }}
+        >
+          <span className="text-xs font-black text-teal-300">🔷 Sprung</span>
+          <div className="h-1 w-16 overflow-hidden rounded-full bg-black/50">
+            <div ref={sprungBalkenRef} className="h-full rounded-full bg-teal-400" style={{ width: '0%' }} />
+          </div>
+        </div>
+      </div>
+
       {/* Tempoanzeige unten — sie erklärt ohne Worte, warum es schwerer wird.
           Ein Balken statt einer Zahl: Beim Laufen liest niemand. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3">
@@ -492,6 +561,12 @@ export function DashCity({
               </li>
               <li>
                 <span aria-hidden="true">↓</span> Runterwischen — rutschen
+              </li>
+              <li>
+                <span aria-hidden="true">⚡</span> Einsammeln — schneller
+              </li>
+              <li>
+                <span aria-hidden="true">🔷</span> Einsammeln — höher springen
               </li>
             </ul>
             <p className="mt-2 text-xs text-white/60">(Pfeiltasten gehen auch)</p>

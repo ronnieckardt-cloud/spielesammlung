@@ -86,6 +86,27 @@ export type Hindernis = {
 
 export type Muenze = { spur: number; z: number; /** Höhe über dem Boden. */ y: number };
 
+/**
+ * Ein Schub — Rückmeldung: „ich will 'n paar Sachen einsammeln, zum
+ * Beispiel, dass man dann schneller ist, wo man höher springt oder so was,
+ * irgendwas Besonderes."
+ *
+ * Zwei Arten, keine mehr: Mehr Power-ups wollten schnell nach „Feature-
+ * Liste" statt nach Spiel aussehen. Beide sind zeitlich befristet und
+ * lösen sich gegenseitig nicht ab — wer beide einsammelt, hat beide
+ * gleichzeitig aktiv.
+ */
+export type Schubart = 'turbo' | 'sprung';
+export type Schub = { art: Schubart; spur: number; z: number };
+
+/** Wie viel schneller man mit Turbo unterwegs ist. */
+export const TURBO_FAKTOR = 1.55;
+/** Wie lange Turbo bzw. Sprungschub nach dem Einsammeln wirken, in Sekunden. */
+export const TURBO_DAUER = 4;
+export const SPRUNGSCHUB_DAUER = 6;
+/** Wie oft ein Abschnitt mit freier Spur zusätzlich einen Schub bekommt. */
+const SCHUB_CHANCE = 0.22;
+
 export type Lauf = {
   /** Zurückgelegte Strecke in Metern. */
   strecke: number;
@@ -111,6 +132,13 @@ export type Lauf = {
   muenzSerie: number;
   /** Meter seit der letzten Münze — bricht die Serie ab `SERIE_ABSTAND`. */
   seitMuenze: number;
+  schuebe: readonly Schub[];
+  /** Eingesammelte Schübe, gleich welcher Art. */
+  schubZahl: number;
+  /** Restliche Sekunden Turbo; 0 = aus. */
+  turboRest: number;
+  /** Restliche Sekunden Sprungschub; 0 = aus. */
+  sprungRest: number;
   /** Bis zu welchem Abschnitt schon erzeugt wurde. */
   erzeugtBis: number;
   vorbei: boolean;
@@ -176,13 +204,14 @@ export function istPassierbar(hindernisse: readonly Hindernis[]): boolean {
 export function abschnittErzeugen(
   grundsaat: number,
   index: number,
-): { hindernisse: Hindernis[]; muenzen: Muenze[] } {
+): { hindernisse: Hindernis[]; muenzen: Muenze[]; schuebe: Schub[] } {
   const z = index * ABSCHNITT_LAENGE;
   const hindernisse: Hindernis[] = [];
   const muenzen: Muenze[] = [];
+  const schuebe: Schub[] = [];
 
   // Die ersten Abschnitte bleiben frei — man soll erst ankommen.
-  if (index < 3) return { hindernisse, muenzen };
+  if (index < 3) return { hindernisse, muenzen, schuebe };
 
   let s = saatAus('laufen', grundsaat, index);
 
@@ -217,7 +246,27 @@ export function abschnittErzeugen(
     }
   }
 
-  return { hindernisse, muenzen };
+  /*
+   * Ab und zu ein Schub, seltener als Münzen — sonst wäre er keine
+   * Besonderheit mehr, sondern nur eine weitere Münze mit anderer Farbe.
+   * `z + 10` liegt hinter der Münzreihe (die endet spätestens bei `z+7.2`),
+   * damit sich beide nie überlappen, egal ob sie dieselbe Spur treffen.
+   */
+  if (freieSpuren.length > 0) {
+    const w = schritt(s);
+    s = w.saat;
+    if (w.wert < SCHUB_CHANCE) {
+      const p = schritt(s);
+      s = p.saat;
+      const spur = freieSpuren[Math.floor(p.wert * freieSpuren.length)]!;
+      const a = schritt(s);
+      s = a.saat;
+      const art: Schubart = a.wert < 0.5 ? 'turbo' : 'sprung';
+      schuebe.push({ art, spur, z: z + 10 });
+    }
+  }
+
+  return { hindernisse, muenzen, schuebe };
 }
 
 /** Wie viele Abschnitte im Voraus bereitstehen. */
@@ -238,6 +287,10 @@ export function neuesSpiel(saat: number): Lauf {
     muenzenZahl: 0,
     muenzSerie: 0,
     seitMuenze: 0,
+    schuebe: [],
+    schubZahl: 0,
+    turboRest: 0,
+    sprungRest: 0,
     erzeugtBis: 0,
     vorbei: false,
     saat,
@@ -248,11 +301,12 @@ export function neuesSpiel(saat: number): Lauf {
 
 function nachschieben(lauf: Lauf): Lauf {
   const index = lauf.erzeugtBis;
-  const { hindernisse, muenzen } = abschnittErzeugen(lauf.saat, index);
+  const { hindernisse, muenzen, schuebe } = abschnittErzeugen(lauf.saat, index);
   return {
     ...lauf,
     hindernisse: [...lauf.hindernisse, ...hindernisse],
     muenzen: [...lauf.muenzen, ...muenzen],
+    schuebe: [...lauf.schuebe, ...schuebe],
     erzeugtBis: index + 1,
   };
 }
@@ -321,7 +375,18 @@ export function kollision(lauf: Lauf, h: Hindernis, streckeVorher = lauf.strecke
       // Knapp einen halben Meter hoch — der Sprung trägt darüber.
       return lauf.y < 0.55;
     case 'balken':
-      // Hängt in 1,1 m Höhe. Nur Rutschen bringt den Kopf darunter.
+      /*
+       * Hängt in 1,1 m Höhe. Normal bringt nur Rutschen den Kopf darunter
+       * — Springen macht es schlimmer, siehe unten.
+       *
+       * **Mit Sprungschub gilt stattdessen dieselbe Regel wie bei der
+       * Hürde.** Rückmeldung: „dass man dann auch über die Hürden, wo man
+       * drunter durchkriegen muss, drüber springen kann, wenn man dann
+       * irgendwas einsammelt." Der Schub öffnet also einen zweiten Weg an
+       * einem Hindernis, das sonst nur einen kennt — nicht bloß eine
+       * höhere Zahl irgendwo.
+       */
+      if (lauf.sprungRest > 0) return lauf.y < 0.55;
       return kopfhoehe(lauf) + lauf.y > 1.1;
     default:
       // Mauer: hilft nichts außer Ausweichen.
@@ -333,7 +398,11 @@ export function kollision(lauf: Lauf, h: Hindernis, streckeVorher = lauf.strecke
 export function takt(lauf: Lauf, dt: number): Lauf {
   if (lauf.vorbei) return lauf;
 
-  const tempo = tempoBei(lauf.strecke);
+  // Turbo multipliziert das reguläre Tempo, statt es zu ersetzen — dadurch
+  // bleibt der Anstieg über die Strecke (`tempoBei`) unverändert, und der
+  // Effekt fühlt sich am Anfang des Laufs genauso stark an wie am Ende.
+  const tempoGrund = tempoBei(lauf.strecke);
+  const tempo = lauf.turboRest > 0 ? tempoGrund * TURBO_FAKTOR : tempoGrund;
   const strecke = lauf.strecke + tempo * dt;
 
   // Spurwechsel gleitet in fester Zeit, unabhängig vom Tempo.
@@ -351,8 +420,20 @@ export function takt(lauf: Lauf, dt: number): Lauf {
   }
 
   const rutschRest = Math.max(0, lauf.rutschRest - dt);
+  const turboRest = Math.max(0, lauf.turboRest - dt);
+  const sprungRest = Math.max(0, lauf.sprungRest - dt);
 
-  let zwischen: Lauf = { ...lauf, strecke, x, wechsel, y, steigen, rutschRest };
+  let zwischen: Lauf = {
+    ...lauf,
+    strecke,
+    x,
+    wechsel,
+    y,
+    steigen,
+    rutschRest,
+    turboRest,
+    sprungRest,
+  };
 
   // Münzen einsammeln.
   let muenzenZahl = lauf.muenzenZahl;
@@ -380,6 +461,32 @@ export function takt(lauf: Lauf, dt: number): Lauf {
   const muenzSerie =
     geholt > 0 ? lauf.muenzSerie + geholt : seitMuenze >= SERIE_ABSTAND ? 0 : lauf.muenzSerie;
 
+  /*
+   * Schübe einsammeln — dieselbe Fensterlogik wie bei den Münzen (siehe
+   * dort). Anders als Münzen ohne Höhenprüfung: Ein Schub soll nicht
+   * ausgerechnet dann verpasst werden, wenn man gerade springt oder
+   * rutscht, um einem Hindernis auszuweichen.
+   *
+   * Wird **vor** der Hindernisprüfung eingesammelt, in dieselbe `zwischen`
+   * geschrieben: Ein Sprungschub, der genau auf der Höhe eines Balkens
+   * liegt, hilft noch im selben Bild — sonst bräuchte es ein Bild
+   * Verzögerung, in dem man trotz Einsammelns noch getroffen würde.
+   */
+  let schubZahl = lauf.schubZahl;
+  const schuebe = lauf.schuebe.filter((sch) => {
+    const dz = sch.z - strecke;
+    if (dz < -1) return false;
+    if (dz > 0.6 || sch.z - lauf.strecke < -0.6) return true;
+    const nah = Math.abs(spurX(sch.spur) - x) < SPUR_BREITE / 2;
+    if (nah) {
+      schubZahl += 1;
+      if (sch.art === 'turbo') zwischen = { ...zwischen, turboRest: TURBO_DAUER };
+      else zwischen = { ...zwischen, sprungRest: SPRUNGSCHUB_DAUER };
+      return false;
+    }
+    return true;
+  });
+
   // Hindernisse prüfen und Vergangenes wegwerfen.
   let vorbei = false;
   const hindernisse = lauf.hindernisse.filter((h) => {
@@ -387,7 +494,17 @@ export function takt(lauf: Lauf, dt: number): Lauf {
     return h.z - strecke > -3;
   });
 
-  zwischen = { ...zwischen, muenzen, muenzenZahl, muenzSerie, seitMuenze, hindernisse, vorbei };
+  zwischen = {
+    ...zwischen,
+    muenzen,
+    muenzenZahl,
+    muenzSerie,
+    seitMuenze,
+    schuebe,
+    schubZahl,
+    hindernisse,
+    vorbei,
+  };
 
   // Nachschub, solange nicht genug voraus liegt.
   while (zwischen.erzeugtBis * ABSCHNITT_LAENGE < strecke + VORRAT * ABSCHNITT_LAENGE) {
@@ -398,11 +515,13 @@ export function takt(lauf: Lauf, dt: number): Lauf {
 }
 
 /**
- * Die Punktzahl: ein Punkt je Meter, zehn je Münze.
+ * Die Punktzahl: ein Punkt je Meter, zehn je Münze, fünfundzwanzig je Schub.
  *
- * Münzen sollen sich lohnen, aber nicht das Rennen ersetzen — wer nur
- * sammelt und langsam ist, kommt trotzdem nicht weit.
+ * Münzen und Schübe sollen sich lohnen, aber nicht das Rennen ersetzen —
+ * wer nur sammelt und langsam ist, kommt trotzdem nicht weit. Ein Schub
+ * bringt mehr als eine Münze, weil er seltener ist (siehe `SCHUB_CHANCE`)
+ * und man ihn nicht einmal benutzen muss, um die Punkte zu behalten.
  */
 export function punkte(lauf: Lauf): number {
-  return Math.floor(lauf.strecke) + lauf.muenzenZahl * 10;
+  return Math.floor(lauf.strecke) + lauf.muenzenZahl * 10 + lauf.schubZahl * 25;
 }
