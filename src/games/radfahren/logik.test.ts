@@ -5,6 +5,7 @@ import {
   LANDUNG_GUT,
   LANDUNG_HART,
   LANDUNG_PERFEKT,
+  SCHWERKRAFT,
   TEMPO_MAX,
   TRICK_PUNKTE_JE_DREHUNG,
   bodenHoehe,
@@ -511,19 +512,66 @@ describe('Fairness', () => {
        * (Vorderrad höher), muss er nach hinten lehnen (negatives `lehnen`,
        * siehe die Vorzeichen-Korrektur oben bei „Gewichtsverlagerung").
        *
-       * Die Vorausschau wächst mit der bereits verstrichenen Flugzeit
-       * (`luftZeit`) — eine feste Vorausschau von 0,3 s passte zu den
-       * kurzen Standard-Hüpfern, war aber bei einem Mega-Sprung (bis zu
-       * 1,6 s in der Luft) viel zu kurzsichtig: Der Bot zielte auf einen
-       * Punkt weit vor der tatsächlichen Landestelle und stürzte. Auch das
-       * ist keine „Können"-Frage — jeder Fahrer merkt, ob er gerade kurz
-       * hoppelt oder gerade richtig fliegt, und schaut entsprechend weiter
-       * voraus.
+       * **Die Vorausschau kommt jetzt aus der echten Wurfparabel, nicht
+       * mehr aus einer mit der Flugzeit hochskalierten Schätzung.** Die
+       * alte Formel (`0.3 + luftZeit * 0.5`) war eine Krücke — sie wusste
+       * nichts von der tatsächlichen Flughöhe oder -geschwindigkeit und
+       * zielte bei langen Sprüngen (vor allem den seltenen Mega-Kickern)
+       * regelmäßig daneben. `t = (vy + √(vy² + 2·g·y)) / g` ist die
+       * exakte Lösung von „wann erreicht eine Wurfparabel wieder die
+       * Höhe null" (die Herleitung steht in jedem Physik-Schulbuch als
+       * Steig-/Falldauer) — dieselbe Idee wie bei der Abheben-Bedingung
+       * in `takt`: eine echte Formel statt einer geschätzten Konstante.
+       * Landehöhe ≠ 0 in Wahrheit, aber „ungefähr eben" ist für eine
+       * Vorausschau nah genug dran; die Feinkorrektur macht ohnehin die
+       * fortlaufende Neuberechnung jedes Bild.
        */
-      const vorausschau = 0.3 + l.luftZeit * 0.5;
-      const ziel = bodenWinkel(l.gelaende, l.x + l.vx * vorausschau);
+      const restFlugzeit = (l.vy + Math.sqrt(Math.max(0, l.vy * l.vy + 2 * SCHWERKRAFT * Math.max(0, l.y)))) / SCHWERKRAFT;
+      const ziel = bodenWinkel(l.gelaende, l.x + l.vx * restFlugzeit);
       const unterschied = winkelKuerzen(ziel - l.winkel);
-      return { gas: true, bremse: false, lehnen: -Math.sign(unterschied) * 0.9 };
+      /*
+       * **Verhältnisgesteuert statt „immer volles Lehnen".** Mit voller
+       * Auslenkung bei jeder noch so kleinen Abweichung fing der Bot an,
+       * um das Ziel herum zu schwingen — bei einem Bild stand `winkel`
+       * bei 0,43, ein halbes Bild später bei −1,15, weit über das Ziel
+       * hinausgeschossen, und die nächste Landung war ein Sturz. Ein
+       * echter Fahrer lässt bei einer kleinen Abweichung auch nur ein
+       * bisschen nach, nicht den ganzen Lenker. `* 2.5` gibt ab rund
+       * 0,4 Radiant Abweichung volle Auslenkung, darunter proportional
+       * weniger — genug Kraft, um wirklich zu korrigieren, ohne am Ziel
+       * vorbeizuschießen.
+       *
+       * **Zusätzlich gedämpft nach der eigenen Drehrate (`drehen`).** Die
+       * reine Abweichungs-Regelung schoss bei besonders harten
+       * Richtungswechseln (Landung mit hohem Winkel direkt in den
+       * nächsten Sprung) trotzdem massiv übers Ziel hinaus — teils über
+       * 100° daneben. Grund: `winkel` und `drehen` bilden eine Kette aus
+       * zwei Integratoren (`lehnen` verändert `drehen`, `drehen`
+       * verändert `winkel`), und ein reiner Proportionalregler auf
+       * `winkel` allein bremst diese Kette nicht rechtzeitig ab — sie sieht
+       * nur, *wie weit* daneben, nicht *wie schnell* sie sich gerade
+       * dreht, und dreht munter weiter, selbst wenn `winkel` das Ziel
+       * längst erreicht hat.
+       *
+       * **Das Vorzeichen des Dämpfungsterms braucht dabei die
+       * Gegenprobe, nicht die Intuition.** Naheliegend wäre `- drehen *
+       * kd` („bremse in Richtung der Abweichung ab"), aber `lehnen`
+       * wirkt über `drehen -= lehnen * LUFT_DREHUNG * dt` — positives
+       * `lehnen` macht `drehen` *kleiner* (negativer). Ist `drehen`
+       * bereits negativ (die Nase dreht schon abwärts), addiert `-
+       * drehen * kd` einen *positiven* Beitrag zu `lehnen` und
+       * beschleunigt die Drehung damit weiter in dieselbe Richtung —
+       * das Gegenteil von Bremsen. Mit diesem (falschen) Vorzeichen
+       * verschlechterte jeder Versuch, den Dämpfungsanteil zu verstärken,
+       * das Ergebnis messbar, was lange wie „Dämpfung hilft hier einfach
+       * nicht" aussah. Richtig ist `+ drehen * kd`: Ist `drehen` negativ,
+       * wird `lehnen` dadurch kleiner (bis ins Negative), was `drehen`
+       * über denselben Term wieder anhebt — echtes Bremsen. Mit dem
+       * korrigierten Vorzeichen schafft derselbe Bot zuverlässig alle 10
+       * Strecken, wo vorher bei bestem Tuning nur 7 von 10 standen.
+       */
+      const lehnen = Math.max(-1, Math.min(1, -unterschied * 2 + l.drehen * 1.2));
+      return { gas: true, bremse: false, lehnen };
     };
   };
 
@@ -552,32 +600,49 @@ describe('Fairness', () => {
      * Fehler — ein vergessenes `dt`, ein falsches Vorzeichen — läge um
      * Größenordnungen darüber und reißt diese Grenze sofort.
      *
-     * *Lehrstück dazu, hier festgehalten:* Ein Versuch, „nichts tun in der
-     * Luft" schwerer zu machen, ließ den Absprung selbst eine Drehrate mit
-     * in die Luft nehmen (statt bei null zu starten) — ob als diskrete
-     * Differenz der Anlege-Dämpfung oder als exakte analytische Formel aus
-     * Krümmung und Tempo, beide Fassungen rissen diesen Test auf 70 bis
-     * 80 % Abweichung. Der Grund lag nicht an der Formel selbst, sondern
-     * daran, **wann** genau abgehoben wird: Das ist eine
-     * Schwellwert-Prüfung, die einmal je Bild läuft, und der erkannte
-     * Absprungpunkt liegt bei 30 und bei 60 Bildern je Sekunde immer ein
-     * kleines Stück auseinander. Eine Winkel**position** verzeiht das
-     * (der Fehler bleibt konstant über den ganzen Flug); eine
-     * Winkel**geschwindigkeit**, die sich über eine mehrsekündige Flugbahn
-     * aufsummiert, verstärkt genau diesen kleinen Unterschied — und weil
-     * Landequalität eine Schwelle ist (gut/hart/Sturz), kippt daraus schon
-     * mal ein Sturz bei der einen Bildrate, der bei der anderen keiner
-     * ist. Die Lösung stand deshalb an einer ganz anderen Stelle: eine
-     * **feste** Drehbeschleunigung (`NATUR_NICKEN`) während der ganzen
-     * Flugzeit statt eines einmaligen Werts beim Absprung — genau dieselbe
-     * Art Term wie das `lehnen`-Steuern selbst, das diesen Test nie
-     * gestört hat.
+     * **Absichtlich mit dem aktiven Bot geprüft, nicht mehr mit reinem
+     * Gas.** Seit `NATUR_NICKEN` (siehe unten bei „kommt mit reinem
+     * Gasgeben nicht zuverlässig ins Ziel") lässt reines Gasgeben ohne
+     * Gegenlenken die Fahrt irgendwann stürzen — genau das ist gewollt.
+     * Aber ein Sturz ist eine Schwellwert-Entscheidung, die einmal je
+     * Bild geprüft wird, und der erkannte Absprung- wie Sturzpunkt liegt
+     * bei 30 und 60 Bildern je Sekunde immer ein kleines Stück
+     * auseinander. Nach einem Sturz steht `x` (bis auf das kurze
+     * Ausrutschen) still — ein winziger Zeitunterschied *wann* gestürzt
+     * wird, wird danach zu einer großen Distanz-Differenz aufgeblasen,
+     * weil die eine Fahrt schon länger stillsteht als die andere. Das
+     * sagt nichts über die Physik aus, nur über den ohnehin gewollten
+     * Sturz. Mit dem aktiven Bot, der zuverlässig durchkommt, bleibt der
+     * eigentliche Framerate-Test aussagekräftig.
      */
-    const weiten = [1 / 120, 1 / 60, 1 / 30].map((dt) => fahren(neuesSpiel(SAAT), 12, GAS, dt).x);
+    const weiten = [1 / 120, 1 / 60, 1 / 30].map((dt) => fahren(neuesSpiel(SAAT), 12, machBot(), dt).x);
     for (const w of weiten) {
       const abweichung = Math.abs(w - weiten[0]!) / weiten[0]!;
       expect(abweichung, `${w.toFixed(1)} gegen ${weiten[0]!.toFixed(1)}`).toBeLessThan(0.01);
     }
+  });
+
+  it('kommt mit reinem Gasgeben nicht zuverlässig ins Ziel — Gegenlenken muss nötig sein', () => {
+    /*
+     * Rückmeldung: „Man muss nichts machen — wenn ich nur Gas gebe,
+     * komme ich auch ans Ziel, so sollte das nicht sein. Es sollte immer
+     * notwendig sein, sich je nach Sprung richtig zu bewegen." Das ist
+     * die direkte Umkehrung der Fairness-Garantie oben: Dort muss ein
+     * **aktiver** einfacher Fahrer durchkommen, hier darf ein **passiver**
+     * (Gas halten, nie lehnen) es nicht zuverlässig schaffen.
+     *
+     * Nicht auf jeder einzelnen Strecke geprüft — bei so einer harten
+     * Anforderung wäre ein einzelner Ausreißer (eine Strecke ohne einen
+     * einzigen längeren Sprung) kein Zeichen für einen echten Fehler.
+     * Die Mehrheit muss aber scheitern, sonst ist „nichts tun" weiterhin
+     * eine gültige Taktik.
+     */
+    let geschafft = 0;
+    for (let n = 1; n <= 10; n++) {
+      const l = fahren(neuesSpiel(streckenSaat(n)), 300, GAS);
+      if (l.gewonnen) geschafft++;
+    }
+    expect(geschafft, `${geschafft} von 10 Strecken mit reinem Gasgeben geschafft`).toBeLessThan(3);
   });
 
   it('ergibt bei gleicher Saat und gleicher Eingabe dasselbe Ergebnis', () => {

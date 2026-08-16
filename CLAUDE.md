@@ -2938,6 +2938,105 @@ je simulierter Sekunde, `--reporter=verbose` nötig, sonst unterdrückt
 Vitest die Ausgabe) war beide Male der schnellste Weg zur Diagnose —
 schneller als Vermutungen im Code nachzuverfolgen.
 
+### „Nur Gas geben" darf nicht ans Ziel führen — die zweite Fairness-Garantie
+
+Rückmeldung, nachdem die erste 9-von-10-Bewertungsrunde (Tricks,
+Bodentextur, Kamera-Wackeln, Steine — siehe oben) live gespielt wurde,
+wörtlich: „Man muss nichts machen — wenn ich nur Gas gebe, komme ich auch
+ans Ziel, so sollte das nicht sein. Es sollte immer notwendig sein, sich
+je nach Sprung richtig zu bewegen." Bis dahin hielt `winkel` in der Luft
+ohne jede `lehnen`-Eingabe exakt den Absprungwinkel — bei den meisten
+Kickern reicht das zufällig für eine gute Landung, Steuern war reine
+Kür, keine Pflicht.
+
+Das ist die **Umkehrung** der Fairness-Garantie oben: Dort muss ein
+**aktiver** Bot immer durchkommen, hier darf ein **passiver** Bot (Gas
+halten, nie lehnen) es nicht zuverlässig schaffen. Beide Anforderungen
+gleichzeitig zu erfüllen war die aufwendigste Änderung der ganzen
+Session, weil jeder Parameter, der die eine Garantie stärkt, die andere
+schwächt.
+
+**Erster Versuch, verworfen: `drehen` beim Abheben mitnehmen.** Die
+naheliegende Idee — den `drehen`-Wert vom Boden einfach mit in die Luft
+übernehmen, statt ihn beim Abheben auf null zu setzen — brach die
+Bildraten-Unabhängigkeit katastrophal (bis zu 80 % Wegabweichung
+zwischen 30 und 60 fps). Grund: „Abheben" ist eine einmalige,
+Bild-diskrete Schwellenwert-Prüfung (`vy` überschreitet einen Grenzwert),
+und der exakt erkannte Bild-Zeitpunkt verschiebt sich je nach `dt` um
+einen Bruchteil eines Bildes. Eine **Position** an dieser Stelle
+mitzunehmen ist unkritisch (der Fehler ist winzig und bleibt es), aber
+eine **Rate** mitzunehmen (`drehen`, wirkt über die gesamte folgende
+Flugzeit) verstärkt genau diesen winzigen Zeitunterschied über mehrere
+Sekunden Flug hinweg — und ob ein Lauf stürzt oder nicht, ist wieder ein
+harter Schwellenwert, der bei der einen Bildrate kippen kann und bei der
+anderen nicht. **Lehrstück:** Ein Zustand, der an einem einzelnen,
+diskreten Ereignis „eingefroren" wird, darf nie eine Rate sein, nur eine
+Position — sonst multipliziert sich ein Bild-Rundungsfehler über die Zeit
+zu einem Verhaltensunterschied.
+
+**Zweiter, erfolgreicher Ansatz: `NATUR_NICKEN`.** Eine feste
+Drehbeschleunigung nach unten, die während der **gesamten** Flugzeit
+wirkt — strukturell identisch zum längst framerate-stabilen
+`lehnen`-Term, nicht an ein einzelnes Bild gebunden, deshalb kein
+Diskretisierungsproblem. Der Wert brauchte einen langen empirischen
+Sweep über alle 10 Testtracks gleichzeitig gegen zwei Kennzahlen (aktiver
+Bot muss 10/10 schaffen, passives Gas darf höchstens 2/10 schaffen):
+
+| `NATUR_NICKEN` | passives Gas | Beobachtung |
+| --- | --- | --- |
+| 2–5 | 9–10 / 10 | Zu schwach: Kicker-Absprünge drehen ohnehin meist nasenauf, und die zufällige Nicken-Richtung trifft die Landung „aus Versehen" fast immer richtig. |
+| 7–10 | 0–4 / 10 | Ab hier kippt das Verhältnis spürbar. |
+| **8** | **1 / 10** | Gewählter Wert — beide Garantien gleichzeitig grün. |
+
+**Die eigentliche Falle lag aber nicht bei `NATUR_NICKEN`, sondern bei
+`LUFT_DREHUNG`.** Um sicherzustellen, dass aktives Gegenlenken die
+passive Drift klar dominiert, wurde `LUFT_DREHUNG` (wie schnell `lehnen`
+das Rad dreht) zwischenzeitlich von 8,5 auf 16 angehoben. Das brach
+prompt den Fairness-Bot: Bei so hohem Antrieb je `lehnen`-Einheit
+überschoss ein reiner Proportionalregler (`lehnen = -unterschied · Kp`)
+sein Ziel regelmäßig um mehrere zehn Grad — beobachtete Ausschläge von
++0,43 auf −1,15 Radiant innerhalb von 0,5 s, direkt gefolgt von einem
+Sturz. Des Rätsels Lösung stand die ganze Zeit schon in einem anderen
+Test (`hält den Absprungwinkel ohne Eingabe nicht von selbst`): Der prüft
+nur das **Vorzeichen** der Drehung, keinen Betrag — `LUFT_DREHUNG` muss
+`NATUR_NICKEN` bloß übersteigen, nicht um den Faktor Zwei. Zurückgesetzt
+auf `10` (weiterhin klar über `NATUR_NICKEN` = 8) verschwand ein Großteil
+des Überschießens von selbst, weil die Regelstrecke insgesamt weniger
+aggressiv reagiert.
+
+**Der Rest des Überschießens brauchte einen echten PD-Regler — und ein
+falsches Vorzeichen sah lange wie „Dämpfung hilft nicht" aus.** `winkel`
+und `drehen` bilden eine Kette aus zwei Integratoren (`lehnen` verändert
+`drehen`, `drehen` verändert `winkel`); ein reiner P-Regler auf `winkel`
+bremst diese Kette strukturell nicht rechtzeitig ab, bevor sie am Ziel
+vorbeischießt. Der naheliegende Dämpfungsterm `- drehen · Kd` machte es
+in jedem Sweep **schlechter**, nie besser — bis klar wurde, warum: `lehnen`
+wirkt über `drehen -= lehnen · LUFT_DREHUNG · dt`, positives `lehnen`
+macht `drehen` also *kleiner*. Ist `drehen` bereits negativ (Nase dreht
+schon abwärts), addiert `- drehen · Kd` einen *positiven* Beitrag zu
+`lehnen` und beschleunigt damit die ohnehin laufende Drehung weiter,
+statt sie zu bremsen — das exakte Gegenteil des gewünschten Effekts. Mit
+dem korrigierten Vorzeichen (`+ drehen · Kd`) schafft derselbe Bot
+zuverlässig alle 10 Strecken, wo vorher bei bestem Tuning nur 7 von 10
+standen; siehe die ausführliche Herleitung direkt im Bot-Code in
+`logik.test.ts`.
+
+**Endstand:** `LUFT_DREHUNG = 10`, `NATUR_NICKEN = 8`, Fairness-Bot mit
+`lehnen = -unterschied · 2 + drehen · 1,2` (echter PD-Regler, richtiges
+Vorzeichen). Beide Fairness-Tests grün, dazu ein neuer dritter Test
+(`kommt mit reinem Gasgeben nicht zuverlässig ins Ziel`), der Ronnis
+Anforderung direkt in Code fasst: höchstens 2 von 10 Strecken dürfen mit
+purem Gas ohne jede Lenkung geschafft werden.
+
+Der Bildraten-Test (`läuft bei jeder Bildrate praktisch gleich weit`)
+läuft seitdem **mit dem aktiven Bot**, nicht mehr mit purem Gas — reines
+Gas stürzt jetzt (gewollt) irgendwann, und ein Sturz ist ein
+Bild-diskreter Schwellenwert, dessen exakter Zeitpunkt naturgemäß
+zwischen 30 und 60 fps leicht schwankt. Das ist kein Fehler, sondern die
+gewollte Folge der neuen Schwierigkeit — es sagt nur nichts mehr über die
+eigentliche Physik-Integration aus. Der zuverlässig durchkommende Bot
+bleibt dagegen aussagekräftig, siehe Kommentar direkt im Test.
+
 ## Befehle
 
 ```bash

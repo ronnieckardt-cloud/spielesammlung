@@ -351,15 +351,42 @@ export const LUFT = 0.06;
  * kurz drauf tippe, soll sich schon gut was bewegen." Bei 4,2 baute ein
  * 100-ms-Antippen kaum mehr als 15° Drehung auf — spürbar träge, obwohl
  * ein kurzer Antipp sich sofort deutlich auswirken soll.
+ *
+ * **War zwischenzeitlich auf 16**, als `NATUR_NICKEN` dazukam (mehr
+ * Antrieb sollte die aktive Steuerung klar über die passive Drift heben).
+ * Ein zu hoher Wert hier macht aber genau das kaputt, was er schützen
+ * soll: Bei so viel Antrieb je `lehnen`-Einheit reagiert `drehen` auf jeden
+ * Korrekturimpuls überproportional, und ein reiner Proportionalregler (wie
+ * der Fairness-Bot in `logik.test.ts`) überschießt regelmäßig über das
+ * Ziel hinaus, bevor er bremsen kann — mit sichtbaren Ausschlägen von über
+ * 100°. `10` reicht für spürbar schnelles Kippen (siehe oben), ohne die
+ * Regelstrecke unnötig zu verschärfen; siehe `NATUR_NICKEN` für den Rest
+ * der Geschichte.
  */
-export const LUFT_DREHUNG = 8.5;
+export const LUFT_DREHUNG = 10;
 /**
  * Feste Drehbeschleunigung nach unten (Nase runter), die in der Luft immer
  * wirkt — unabhängig von `lehnen`. Siehe die Herleitung in `takt`: Ohne
  * sie hielt „nichts tun" den Absprungwinkel exakt bis zur Landung, was
- * Steuern zur Nebensache machte.
+ * Steuern zur Nebensache machte. Rückmeldung, wörtlich: „Man muss nichts
+ * machen — wenn ich nur Gas gebe, komme ich auch ans Ziel, so sollte das
+ * nicht sein. Es sollte immer notwendig sein, sich je nach Sprung richtig
+ * zu bewegen."
+ *
+ * **Die Zahl ist das Ergebnis einer Gratwanderung, kein Wunschwert.** Zwei
+ * Tests ziehen in entgegengesetzte Richtungen: reines Gasgeben darf auf
+ * höchstens 2 von 10 Strecken ins Ziel kommen (`kommt mit reinem Gasgeben
+ * nicht zuverlässig ins Ziel`), aber ein einfacher **aktiver** Bot muss
+ * weiterhin alle 10 schaffen (Fairness). Kleine Werte (2–5) drehen die
+ * Nase zwar spürbar, aber zufällig fast immer in dieselbe Richtung, in
+ * die ein Kicker-Absprung ohnehin zur Landung hin rotiert — reines Gas
+ * gewann damit trotzdem 9–10 von 10 Strecken. Ab etwa 7 kippt das
+ * Verhältnis um. `8` ist der Wert, bei dem beide Tests zusammen zum
+ * ersten Mal gleichzeitig grün sind (passiv 1/10, aktiv 10/10) — siehe
+ * `LUFT_DREHUNG` für die zweite Hälfte der Geschichte, warum eine hohe
+ * `NATUR_NICKEN` allein nicht reicht, wenn `LUFT_DREHUNG` mitwächst.
  */
-export const NATUR_NICKEN = 2.0;
+export const NATUR_NICKEN = 8.0;
 /** Wie hart sich das Rad am Boden an die Bodenneigung anlegt. */
 const ANLEGEN = 14;
 /**
