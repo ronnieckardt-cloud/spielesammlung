@@ -59,15 +59,36 @@ export const ANLAUF = 16;
 /** Streckenlänge. Rund eine halbe Minute — kurz genug für „nochmal". */
 export const STRECKE_LAENGE = 420;
 
+/** Mindest- und Streubreite der seltenen Mega-Kicker, siehe `gelaendeBauen`. */
+const MEGA_BREITE_MIN = 9;
+const MEGA_BREITE_STREUUNG = 3;
+/** Freie Landezone hinter einem Mega-Kicker, zusätzlich zu seiner Breite. */
+const MEGA_LANDEZONE = 13;
+/** Größe der beiden kleinen Buckel eines Doppel-Abschnitts, siehe unten. */
+const DOPPEL_HOEHE_MIN = 1.8;
+const DOPPEL_BREITE_MIN = 2.4;
+const DOPPEL_BREITE_STREUUNG = 0.8;
+/** Lücke zwischen den beiden Buckeln — großzügig, das ist der ganze Witz. */
+const DOPPEL_LUECKE = 8;
+
 /**
  * Baut das Gelände **allein aus der Saat**.
  *
- * Drei Wellenlängen: eine lange für das große Auf und Ab, eine mittlere
- * für Hügel, eine kurze für Unruhe im Boden. Dazu eine Handvoll
- * Sprungschanzen in wachsendem Abstand — Ronnis Wunsch: „Die
- * Schwierigkeit soll langsam steigen. Level 1: kleine Hügel … später:
- * extreme Sprünge." Innerhalb **einer** Strecke gilt dasselbe: vorne
- * kleine Kicker, hinten große.
+ * **Vierte Fassung.** Die dritte hatte drei Abschnittsarten — Rückmeldung
+ * danach: „Die Strecken sind immer noch zu sehr Zickzack." Dazugekommen
+ * ist `doppel`: zwei kleine, eigenständige Buckel mit einer bewusst
+ * großzügigen Lücke dazwischen — ein „Double" im BMX/MTB-Sinn, bei dem man
+ * vom ersten Buckel über die Lücke **und über den zweiten hinweg** springt,
+ * statt weich von einer Kuppe in die nächste zu rollen. Ronni, wörtlich:
+ * „kleinere Hubbel, wo du versuchen musst, den anderen kleinen Hubbel zu
+ * überspringen." Macht zusammen vier **Abschnittsarten**, reihum gewürfelt:
+ * `ruhig` (kein Kicker, nur die vorhandene Bodenwelle — Erholung und neuer
+ * Schwung), `doppel` (die beiden kleinen Buckel), `kicker` (eine kurze
+ * Kette von zwei bis vier normalen Sprüngen, „damit man in andere Sprünge
+ * springt") und `mega` (ein einzelner, deutlich höherer und steilerer
+ * Sprung mit großzügiger Landezone) — Ronni: „ein paar Sprünge, die dich
+ * mega hoch kicken … aber nicht immer." Genau dieses „nicht immer" ist der
+ * Grund für den Würfel statt einer festen Abfolge.
  */
 export function gelaendeBauen(saat: number, laenge = STRECKE_LAENGE): Gelaende {
   let s = saat;
@@ -78,39 +99,115 @@ export function gelaendeBauen(saat: number, laenge = STRECKE_LAENGE): Gelaende {
   };
 
   const wellen: Welle[] = [
-    { laenge: 120 + naechste() * 60, hoehe: 3.2 + naechste() * 1.6, phase: naechste() * 6.28 },
-    { laenge: 46 + naechste() * 22, hoehe: 1.5 + naechste() * 0.9, phase: naechste() * 6.28 },
-    { laenge: 17 + naechste() * 7, hoehe: 0.35 + naechste() * 0.3, phase: naechste() * 6.28 },
+    { laenge: 16 + naechste() * 8, hoehe: 0.15 + naechste() * 0.15, phase: naechste() * 6.28 },
   ];
 
   const kicker: Kicker[] = [];
   // Der erste Sprung kommt sofort nach dem Anlauf — er ist das, was das
   // Spiel ausmacht, und darf nicht erst nach einer halben Minute Rollen
-  // auftauchen.
-  let x = ANLAUF + 14;
-  while (x < laenge - 24) {
+  // auftauchen. Deshalb ist die erste Runde immer eine Kicker-Reihe, erst
+  // danach würfelt die Abschnittsart.
+  let x = ANLAUF + 10;
+  let ersteRunde = true;
+
+  while (x < laenge - 30) {
     // Der Anteil der zurückgelegten Strecke steuert die Größe: vorne
-    // zahm, hinten fordernd.
+    // zahm, hinten fordernd — gilt für alle vier Abschnittsarten gleich.
     const anteil = (x - ANLAUF) / Math.max(1, laenge - ANLAUF);
-    /*
-     * Der erste Kicker ist bewusst zahm, danach wächst es — Ronni: „im
-     * ersten Level muss man natürlich noch nicht so hoch springen." Der
-     * erste Sprung soll gelingen, ohne dass man etwas gelernt hat; erst
-     * danach muss man die Landung wirklich treffen.
-     */
-    const wuchs = 0.7 + anteil * 1.5;
-    kicker.push({
-      x,
-      hoehe: (1.7 + naechste() * 1.4) * wuchs,
+
+    const wuerfel = naechste();
+    const art: 'ruhig' | 'doppel' | 'kicker' | 'mega' = ersteRunde
+      ? 'kicker'
+      : wuerfel < 0.2
+        ? 'ruhig'
+        : wuerfel < 0.4
+          ? 'doppel'
+          : wuerfel < 0.52
+            ? 'mega'
+            : 'kicker';
+    ersteRunde = false;
+
+    if (art === 'ruhig') {
+      // Erholung: kein einziger Kicker. Genau hier baut man nach einer
+      // harten Landung wieder Tempo auf — ohne dieses Gegenstück bräche
+      // eine Kette unperfekter Landungen das Tempo immer weiter herunter,
+      // ohne je eine Gelegenheit, es zurückzuholen.
+      x += 20 + naechste() * 16;
+    } else if (art === 'doppel') {
+      // Zwei kleine, eigenständige Buckel — kein glattes Ineinanderrollen
+      // wie bei einer Kicker-Kette, sondern eine klare Lücke, die man
+      // gezielt überspringen muss. Steigung gedeckelt wie bei `kicker`,
+      // siehe `MAX_KICKER_STEIGUNG`: zwei benachbarte Buckel sind genau
+      // die Falle, an der ein zu steiler Kicker vorher hängen blieb.
+      for (let i = 0; i < 2; i++) {
+        const breite = DOPPEL_BREITE_MIN + naechste() * DOPPEL_BREITE_STREUUNG;
+        const verhaeltnis = Math.min(MAX_KICKER_STEIGUNG, 0.5 + naechste() * 0.3);
+        const hoehe = Math.max(DOPPEL_HOEHE_MIN, breite * verhaeltnis);
+        kicker.push({ x, hoehe, breite });
+        x += breite * 1.2 + DOPPEL_LUECKE + naechste() * 4;
+      }
+    } else if (art === 'mega') {
       /*
-       * Schmalere Glocke = stärker gekrümmte Kuppe = früheres Abheben
-       * (siehe die Fliehkraft-Bedingung in `takt`). Bewusst nicht unter
-       * 2,2 m: darunter wird der Kicker zur Stufe, das Rad schnellt
-       * unkontrollierbar ab, und die Landung wäre Glückssache.
+       * Ein einzelner, deutlich höherer und steilerer Absprung. Ronni
+       * nannte „fünf Sekunden in der Luft" — physikalisch nicht ganz
+       * erreichbar (bei `TEMPO_MAX` = 18 m/s und `SCHWERKRAFT` = 22 liegt
+       * die maximale Flugzeit rechnerisch bei rund 1,6 s, siehe
+       * `bodenSteigung`-Herleitung), aber deutlich, spürbar länger als ein
+       * normaler Hüpfer — das war der eigentliche Wunsch dahinter.
+       *
+       * **Auch hier gilt `MAX_KICKER_STEIGUNG`.** Der erste Versuch ließ
+       * Mega-Kicker steiler als jeden anderen, in der Annahme, dass sie
+       * ja einzeln mit großzügiger Landezone stehen — die eigentliche
+       * Falle waren aber zwei Mega-Abschnitte kurz hintereinander (der
+       * Würfel verbietet das nicht), zwischen denen genau dieselbe
+       * Pendel-Falle wie bei zwei benachbarten Kickern entstand. Die
+       * Dramatik kommt seitdem aus einer **breiteren** Glocke statt aus
+       * einer steileren — der Absprungwinkel bleibt sicher, aber die
+       * Kuppe ist groß genug, um trotzdem spürbar mehr Flugzeit zu geben.
        */
-      breite: 4.3 - anteil * 1.5 + naechste() * 0.9,
-    });
-    x += 26 + naechste() * 22;
+      const breite = MEGA_BREITE_MIN + naechste() * MEGA_BREITE_STREUUNG + anteil * 5;
+      const verhaeltnis = MAX_KICKER_STEIGUNG * (0.88 + naechste() * 0.12);
+      const hoehe = breite * verhaeltnis;
+      kicker.push({ x, hoehe, breite });
+      // Große Lücke danach — man fliegt weit, der nächste Boden braucht
+      // also entsprechend Abstand, sonst landet man mitten im Anstieg.
+      x += breite * 1.3 + MEGA_LANDEZONE + naechste() * 6;
+    } else {
+      // Eine kurze Kette normaler Kicker.
+      const anzahl = 2 + Math.floor(naechste() * 3);
+      for (let i = 0; i < anzahl && x < laenge - 20; i++) {
+        /*
+         * Schmalere Glocke = stärker gekrümmte Kuppe = früheres, härteres
+         * Abheben (siehe die Fliehkraft-Bedingung in `takt`). Bewusst
+         * nicht unter 2,4 m: darunter wird der Kicker zur Stufe, das Rad
+         * schnellt unkontrollierbar ab, und die Landung wäre Glückssache.
+         * Wächst leicht mit der Strecke, damit spätere Kicker trotz der
+         * gedeckelten Steigung (siehe unten) noch höher sein können.
+         */
+        const breite = Math.max(2.4, 2.7 + naechste() * 1.1 + anteil * 2.0);
+        /*
+         * Höhe **aus der Breite**, nicht mehr unabhängig gewürfelt — mit
+         * `MAX_KICKER_STEIGUNG` gedeckelt. Vorne zahm, hinten bis an die
+         * Decke heran, aber nie darüber: siehe die Herleitung bei
+         * `MAX_KICKER_STEIGUNG` weiter unten.
+         */
+        const verhaeltnis = Math.min(MAX_KICKER_STEIGUNG, (0.22 + naechste() * 0.2) * (1.0 + anteil * 0.9));
+        const hoehe = breite * verhaeltnis;
+        kicker.push({ x, hoehe, breite });
+        /*
+         * **Die Lücke zur nächsten Kuppe ist an das gebunden, was bei
+         * Höchsttempo überhaupt in der Luft zu schaffen ist**, nicht an
+         * eine mit der Sprunghöhe mitwachsende Zahl. Mit `TEMPO_MAX` =
+         * 18 m/s trägt ein Sprung bei realistischem Absprungwinkel
+         * höchstens etwa 9 bis 13 m weit (Wurfweite v² sin 2θ / g). Eine
+         * mit der Höhe mitwachsende Lücke wuchs früher über jede
+         * schaffbare Weite hinaus — der Bot landete permanent mitten in
+         * der Anfahrt des nächsten Kickers. Jetzt bleibt die Lücke in
+         * diesem Rahmen, unabhängig von der Höhe.
+         */
+        x += breite * 1.2 + 5 + naechste() * 4;
+      }
+    }
   }
 
   return { wellen, kicker, laenge };
@@ -208,6 +305,36 @@ export function bodenKruemmung(g: Gelaende, x: number): number {
 export const SCHWERKRAFT = 22;
 /** Antrieb bei voll durchgedrücktem Gas. */
 export const ANTRIEB = 11.5;
+
+/**
+ * Größte Kicker-Steigung, die noch sicher zu befahren ist — benutzt von
+ * `gelaendeBauen` bei den Abschnittsarten `kicker` und `doppel`.
+ *
+ * Eine Gauß-Glocke hat ihre steilste Stelle bei ±0,707 Breiten vom
+ * Gipfel; dort ist die Steigung `0,858 × Höhe / Breite` (Herleitung: Die
+ * Ableitung von `exp(-d²) · (-2d)` nach `d` ist bei `d² = 0,5` null, und
+ * `exp(-0,5) · 2 · 0,707 ≈ 0,858`). **Bleibt die Steigung unter dem
+ * Winkel, den `ANTRIEB` allein aus dem Stand noch hochfährt
+ * (`asin(ANTRIEB / SCHWERKRAFT)`), kann kein Kicker eine Stelle erzeugen,
+ * an der sich Antrieb und Hangabtrieb exakt aufheben.**
+ *
+ * Genau das ist über den Fairness-Test aufgefallen: Ein Bot, der stur Gas
+ * gab, blieb bei genau diesem Winkel für immer hängen — kein
+ * Vorwärtskommen (der Antrieb reicht nicht), aber auch kein Zurückrollen
+ * (der Antrieb hält exakt dagegen). Ein Bot, der stattdessen bewusst
+ * zurückrollt, um neuen Anlauf zu holen, half nur halb: Bei zwei
+ * benachbarten, beide zu steilen Kickern (eine ganz normale
+ * Kicker-Kette) pendelte er endlos zwischen ihnen hin und her, ohne für
+ * einen von beiden je genug Schwung zu holen — der Boden dazwischen war
+ * selbst zu steil, um ihn aufzubauen. Mit Sicherheitsabstand (Faktor
+ * 0,78) bleibt jeder Kicker dieser beiden Arten, gleich wie hoch, mit
+ * Antrieb allein befahrbar — Höhe kommt seitdem aus einer breiteren
+ * Glocke, nicht aus einer steileren. `mega`-Kicker sind bewusst
+ * ausgenommen: Sie stehen einzeln mit großzügiger Landezone, nie direkt
+ * neben einem zweiten steilen Kicker, und genau diese Nachbarschaft war
+ * die eigentliche Falle.
+ */
+const MAX_KICKER_STEIGUNG = Math.tan(Math.asin(ANTRIEB / SCHWERKRAFT)) * 0.78;
 /** Bremskraft. Deutlich stärker als der Antrieb — Bremsen muss wirken. */
 export const BREMSE = 20;
 /** Höchsttempo in Meter je Sekunde (rund 65 km/h). */
@@ -216,10 +343,27 @@ export const TEMPO_MAX = 18;
 export const ROLLEN = 0.22;
 /** Luftwiderstand, Anteil je Sekunde. */
 export const LUFT = 0.06;
-/** Wie schnell sich das Rad in der Luft dreht, wenn man lehnt. */
-export const LUFT_DREHUNG = 4.2;
+/**
+ * Wie schnell sich das Rad in der Luft dreht, wenn man lehnt.
+ *
+ * Deutlich höher als der erste Wert (4,2) — Rückmeldung: „Das Kippen nach
+ * vorne oder hinten muss leichter, heißt schneller gehen. Wenn ich nur
+ * kurz drauf tippe, soll sich schon gut was bewegen." Bei 4,2 baute ein
+ * 100-ms-Antippen kaum mehr als 15° Drehung auf — spürbar träge, obwohl
+ * ein kurzer Antipp sich sofort deutlich auswirken soll.
+ */
+export const LUFT_DREHUNG = 8.5;
 /** Wie hart sich das Rad am Boden an die Bodenneigung anlegt. */
 const ANLEGEN = 14;
+/**
+ * Wie schnell man höchstens rückwärts rollt, wenn ein Hang zu steil zum
+ * Hochfahren ist.
+ *
+ * Deutlich unter `TEMPO_MAX`: Das Rückwärtsrollen ist keine zweite
+ * Fahrtrichtung, die man steuert, sondern nur die Schwerkraft, die einen
+ * dort abholt, wo man stehen geblieben ist.
+ */
+const RUECKROLL_MAX = 6;
 
 /**
  * Landungsschwellen — der Winkelunterschied zwischen Rad und Boden.
@@ -340,8 +484,28 @@ export function landungBewerten(unterschied: number): Landung {
  */
 export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
   if (lauf.vorbei) {
-    // Nach dem Aus läuft nur noch die Sturzuhr weiter, damit die
-    // Darstellung ausschwingen kann.
+    /*
+     * Nach dem Aus läuft die Sturzuhr weiter, damit die Darstellung
+     * ausschwingen kann — bei einem Sieg passiert sonst nichts mehr, bei
+     * einem Sturz aber schon: Das Rad rutscht mit dem Rest seines Schwungs
+     * noch ein Stück aus. Rückmeldung: „Falls man stürzt, soll es nicht im
+     * letzten Moment abbrechen, sondern man soll sehen, wie der Typ
+     * stürzt." Ein hartes Einfrieren genau im Sturzmoment sah dagegen aus
+     * wie ein Fehler, kein Sturz. Der Punktestand ist davon unberührt —
+     * `FlowMtb.tsx` liest ihn genau einmal, im selben Bild, in dem
+     * `vorbei` wahr wird, bevor dieses Ausrutschen überhaupt beginnt.
+     */
+    if (!lauf.gewonnen && lauf.vx !== 0) {
+      const x = lauf.x + lauf.vx * dt;
+      const vx = lauf.vx - lauf.vx * 3.2 * dt;
+      return {
+        ...lauf,
+        x,
+        y: bodenHoehe(lauf.gelaende, x),
+        vx: Math.abs(vx) < 0.05 ? 0 : vx,
+        sturzZeit: lauf.sturzZeit + dt,
+      };
+    }
     return { ...lauf, sturzZeit: lauf.sturzZeit + dt };
   }
 
@@ -366,8 +530,25 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
       vx = Math.max(0, vx - BREMSE * dt);
     }
 
+    // Rollwiderstand wirkt in beide Richtungen gegen die Bewegung — das
+    // Produkt `vx * ROLLEN` kehrt sein eigenes Vorzeichen mit `vx` um,
+    // bremst also Rückwärtsrollen genauso wie Vorwärtsfahren.
     vx -= vx * ROLLEN * dt;
-    vx = Math.min(TEMPO_MAX, Math.max(0, vx));
+
+    /*
+     * **Kein Boden hält für immer.** Bleibt man an einem Hang mit zu
+     * wenig Schwung stehen, muss die Schwerkraft einen wieder herunter-
+     * ziehen können — Rückmeldung: „Wenn man auf 'nem Berg stehen bleiben
+     * sollte, sollte man auch wieder zurückrollen … sieht komisch aus,
+     * wenn man dann einfach stehen bleibt, ohne die Bremse zu ziehen."
+     * Der erste Versuch deckelte `vx` nach unten bei 0 — auf einem Hang
+     * zog der Hangabtrieb `vx` dadurch bis auf 0 und blieb dort für immer
+     * hängen, egal wie steil es weiterging. Jetzt darf `vx` negativ
+     * werden, gedeckelt bei `RUECKROLL_MAX`; Gas oder Bremse holen einen
+     * jederzeit da wieder heraus (beide wirken unten ungebremst in ihre
+     * Richtung).
+     */
+    vx = Math.min(TEMPO_MAX, Math.max(-RUECKROLL_MAX, vx));
 
     x += vx * dt;
     y = bodenHoehe(g, x);
@@ -422,9 +603,20 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
     luftZeit += dt;
     luftGesamt += dt;
 
-    // Gewichtsverlagerung: die eigentliche Können-Mechanik. Lehnen dreht
-    // das Rad, und die Drehung läuft weiter, bis man gegenlenkt.
-    drehen += e.lehnen * LUFT_DREHUNG * dt;
+    /*
+     * Gewichtsverlagerung: die eigentliche Können-Mechanik. Lehnen dreht
+     * das Rad, und die Drehung läuft weiter, bis man gegenlenkt.
+     *
+     * **Das Vorzeichen war umgedreht** — Rückmeldung: „Wenn ich den Pfeil
+     * nach hinten drücke, geht das Körpergewicht nicht nach hinten,
+     * sondern nach vorne." Gewicht nach hinten muss das Vorderrad
+     * **anheben** (`winkel` steigt, siehe `Lauf.winkel`), Gewicht nach
+     * vorne muss es **senken** — dieselbe Konvention wie bei jedem
+     * Trials- oder Hügel-Spiel. `lehnen` ist −1 für „Hinten", +1 für
+     * „Vorne"; ohne das Minuszeichen drehte „Hinten" das Rad nach unten
+     * statt nach oben.
+     */
+    drehen -= e.lehnen * LUFT_DREHUNG * dt;
     drehen -= drehen * 1.6 * dt;
     winkel += drehen * dt;
 
@@ -441,7 +633,9 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
           ...lauf,
           x,
           y,
-          vx: 0,
+          // Nicht hart auf null — ein Rest des Schwungs trägt das
+          // Ausrutschen nach dem Sturz, siehe die Sturzuhr oben in `takt`.
+          vx: vx * 0.35,
           vy: 0,
           winkel,
           drehen,

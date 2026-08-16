@@ -1,4 +1,4 @@
-import { ANLAUF, bodenHoehe } from './logik';
+import { bodenHoehe } from './logik';
 import type { Lauf } from './logik';
 
 /**
@@ -40,15 +40,25 @@ export type Zeichner = {
  * überhaupt als Fahrrad lesbar.
  */
 const FARBEN = {
-  himmelOben: '#1b3a5c',
-  himmelUnten: '#7fb2d4',
-  bergFern: '#2f4a63',
-  bergNah: '#28405a',
-  huegel: '#1f3a2c',
-  bodenOben: '#4a7c3f',
-  bodenTief: '#2a1f16',
+  /*
+   * Rückmeldung: „Ich will gar nicht, dass man den Himmel sieht und dass
+   * da Berge sind und Bäume, das sieht doof aus … nur den Grünstreifen
+   * von der Wiese und darunter eine hellere und eine dunklere Schicht
+   * Erde." `bodenOben`/`bodenTief` sind seitdem Erdtöne, kein Grün mehr —
+   * das steckt allein noch im schmalen Grasstrich `bodenKante` obenauf.
+   *
+   * Der Himmel selbst durfte später wieder etwas werden — Rückmeldung:
+   * „überleg dir beim Hintergrund noch was Cooles, das schön aussieht,
+   * aber sich nicht mitbewegt." `himmelOben`/`himmelUnten` sind deshalb
+   * ein Verlauf statt einer Fläche, dazu ein festes Sonnenlicht (siehe
+   * `zeichnen`) — beides in Bildschirmkoordinaten, ohne `kameraX` in der
+   * Rechnung, bewegt sich also nie mit.
+   */
+  himmelOben: '#3d7bab',
+  himmelUnten: '#bfe3f0',
+  bodenOben: '#8a6a45',
+  bodenTief: '#3b2a1a',
   bodenKante: '#6ea653',
-  baum: '#14301f',
   /** Rahmen in drei Tönen — Grundfläche, Lichtkante, Schattenkante. */
   rahmen: '#d92d20',
   rahmenHell: '#ff6b5e',
@@ -88,25 +98,15 @@ const FARBEN = {
  * Fleck vor viel Landschaft. Bei 9 m Sichtweite nimmt das Rad rund ein
  * Achtel der Bildbreite ein statt einem Zwanzigstel.
  */
-const SICHT_RUHIG = 9;
-const SICHT_SCHNELL = 11.5;
-
-/**
- * Eine feste Streuung von 0 bis 1 zu einer Weltposition — für Bäume und
- * Steine, die immer an derselben Stelle stehen müssen.
- *
- * **Der Rest-Operator allein reicht dafür nicht.** In JavaScript hat
- * `%` das Vorzeichen des linken Werts: `(-7) % 100` ist `-7`, nicht `93`.
- * Am Streckenanfang liegt der linke Bildrand aber bei negativem `x` — die
- * Streuung wurde dort negativ, und aus `0,1 + streu * 0,16` wurde ein
- * **negativer Radius**. Canvas wirft darauf hart (`IndexSizeError`), und
- * das Bild blieb schwarz. Genau deshalb steht die Umrechnung hier einmal
- * an einer Stelle statt zweimal ausgeschrieben.
+/*
+ * Rückmeldung, nachdem die Sprünge größer wurden: „Kameraperspektive ein
+ * bisschen weiter nach hinten, dass ich mehr sehe." Bei großen,
+ * aneinandergereihten Sprüngen ist Weitsicht keine Kosmetik mehr,
+ * sondern Voraussetzung — sonst sieht man die nächste Kuppe nicht mehr
+ * rechtzeitig, um sich in der Luft danach auszurichten.
  */
-function streuung(x: number): number {
-  const r = (x * 6151) % 1000;
-  return ((r + 1000) % 1000) / 1000;
-}
+const SICHT_RUHIG = 12;
+const SICHT_SCHNELL = 16;
 
 /**
  * Mischt zwei Farben — gebraucht für die Verlaufsstopps der Rohre.
@@ -169,16 +169,8 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   let federHinten = 0;
   /** Gesamtdrehung der Laufräder in Radiant. */
   let radDrehung = 0;
-  /** Staubwolken: Weltposition, Alter, Größe. */
-  const staub: { x: number; y: number; alter: number; groesse: number }[] = [];
   /** Für die Federung: die senkrechte Geschwindigkeit des letzten Bildes. */
   let vyVorher = 0;
-  /** Wolken am Himmel, fest gestreut — kein Zufall je Bild. */
-  const wolken = Array.from({ length: 7 }, (_, i) => ({
-    x: i * 47 + (i % 3) * 13,
-    y: 0.12 + ((i * 37) % 100) / 420,
-    groesse: 0.6 + ((i * 53) % 100) / 130,
-  }));
 
   const groesseAendern = (b: number, h: number) => {
     // Bildpunktzahl deckeln — dieselbe Vorsicht wie bei Dash City, ein
@@ -237,87 +229,58 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
     ctx.setTransform(pixelDichte, 0, 0, pixelDichte, 0, 0);
     ctx.clearRect(0, 0, breite, hoehe);
 
-    // --- Himmel ---------------------------------------------------
+    /*
+     * --- Himmel und Boden — bewusst kompakt ---------------------------
+     *
+     * Rückmeldung: „Ich will gar nicht, dass man den Himmel sieht und
+     * dass da irgendwelche Berge sind und dass neben der Strecke
+     * irgendwelche Bäume sind, das sieht doof aus. Man sollte nur den
+     * Grünstreifen von der Wiese sehen und darunter dann die Erde, kurz
+     * so eine hellere Schicht Erde und dann eine dunklere Schicht Erde."
+     *
+     * Weg sind damit: die drei Parallax-Bergketten, die Bäume am Wegrand
+     * und der weiche Verlauf im Boden. Übrig bleiben eine flache
+     * Himmelfläche, zwei flache Erdflächen und der grüne Grasstrich.
+     *
+     * Zwei Wolken durften bleiben — Rückmeldung: „vielleicht noch ein,
+     * zwei Wolken, aber der Hintergrund darf sich am besten nicht
+     * bewegen." Deshalb stehen sie **in Bildschirmkoordinaten**, nicht in
+     * Weltkoordinaten: keine Parallaxe, kein `kameraX` in der Rechnung,
+     * einfach zwei feste Flecken am Himmel.
+     */
     const himmel = ctx.createLinearGradient(0, 0, 0, hoehe);
     himmel.addColorStop(0, FARBEN.himmelOben);
     himmel.addColorStop(1, FARBEN.himmelUnten);
     ctx.fillStyle = himmel;
     ctx.fillRect(0, 0, breite, hoehe);
 
-    // Wolken: die langsamste Ebene, nur ein Zehntel der Kamerabewegung.
-    ctx.fillStyle = 'rgba(255,255,255,0.16)';
-    for (const w of wolken) {
-      const wx = ((w.x - kameraX * 0.1) % 140) * proMeter * 0.5;
-      const px = ((wx % (breite + 200)) + breite + 200) % (breite + 200) - 100;
-      const py = hoehe * w.y;
-      const r = 26 * w.groesse;
+    // Festes Sonnenlicht, oben rechts — ein warmer Lichtfleck, der den
+    // sonst leeren Himmel belebt, ohne eine erkennbare Form (Sonne, Berg)
+    // zu sein, die als „Motiv" mitgezählt hätte werden müssen.
+    const sonneX = breite * 0.78;
+    const sonneY = hoehe * 0.15;
+    const sonneR = breite * 0.34;
+    const sonne = ctx.createRadialGradient(sonneX, sonneY, 0, sonneX, sonneY, sonneR);
+    sonne.addColorStop(0, 'rgba(255,246,220,0.55)');
+    sonne.addColorStop(0.4, 'rgba(255,246,220,0.2)');
+    sonne.addColorStop(1, 'rgba(255,246,220,0)');
+    ctx.fillStyle = sonne;
+    ctx.fillRect(0, 0, breite, hoehe);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    for (const [wx, wy, wr] of [
+      [0.24, 0.12, 1] as const,
+      [0.7, 0.2, 0.78] as const,
+    ]) {
+      const px = breite * wx;
+      const py = hoehe * wy;
+      const r = 24 * wr;
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
-      ctx.arc(px + r * 0.8, py + r * 0.15, r * 0.75, 0, Math.PI * 2);
-      ctx.arc(px - r * 0.8, py + r * 0.2, r * 0.6, 0, Math.PI * 2);
+      ctx.arc(px + r * 0.8, py + r * 0.1, r * 0.72, 0, Math.PI * 2);
+      ctx.arc(px - r * 0.75, py + r * 0.15, r * 0.58, 0, Math.PI * 2);
       ctx.fill();
     }
-
-    /*
-     * --- Parallax-Ebenen ------------------------------------------
-     *
-     * Drei Schichten, die sich unterschiedlich schnell bewegen. Das ist
-     * der billigste Tiefeneindruck, den es gibt, und der Grund, warum eine
-     * flache 2-D-Strecke räumlich wirkt.
-     *
-     * **In Bildschirmanteilen gerechnet, nicht in Weltmetern.** Der erste
-     * Versuch legte die Berge auf eine Welthöhe und rechnete sie über
-     * `by()` um — dabei drückte die Kamerahöhe sie zu flachen Streifen
-     * zusammen, und im Hochformat blieb ein leerer Himmel übrig. Berge
-     * sind aber weit genug weg, dass die Kamerahöhe sie gar nicht
-     * verschieben würde; sie gehören an einen festen Anteil der Bildhöhe.
-     * Nur seitlich wandern sie mit — genau das ist Parallax.
-     */
-    /**
-     * `periode` ist die Breite eines Bergs **in Metern**.
-     *
-     * Der erste Versuch hatte hier einen festen Faktor 0,06 stehen — das
-     * ergab eine Wellenlänge von über hundert Metern. Solange die Kamera
-     * 15 m zeigte, fiel das kaum auf; seit sie nur noch 9 m zeigt, sah man
-     * von jedem „Berg" nur ein Zwölftel, und die Kette wurde zu waagerechten
-     * Streifen. Die Bergbreite muss im Verhältnis zur **Sichtweite**
-     * stehen, nicht zu einer festen Zahl.
-     */
-    const schicht = (
-      tempo: number,
-      grundAnteil: number,
-      hoch: number,
-      periode: number,
-      farbe: string,
-    ) => {
-      ctx.fillStyle = farbe;
-      ctx.beginPath();
-      ctx.moveTo(0, hoehe);
-      const versatz = kameraX * tempo;
-      const grund = hoehe * grundAnteil;
-      const k = (Math.PI * 2) / periode;
-      for (let px = 0; px <= breite; px += 5) {
-        const wx = (versatz + px / proMeter) * k;
-        /*
-         * Drei Wellen mit unpassenden Verhältnissen, damit sich die Kette
-         * über die Strecke praktisch nie wiederholt. Das Ergebnis wird mit
-         * einer Potenz zugespitzt: Reine Sinuskurven ergeben sanfte
-         * Hügel — Berge brauchen erkennbare Gipfel.
-         */
-        const roh =
-          Math.sin(wx) * 0.55 + Math.sin(wx * 0.43 + 1.7) * 0.31 + Math.sin(wx * 2.7 + 0.6) * 0.14;
-        const form = Math.sign(roh) * Math.pow(Math.abs(roh), 0.72);
-        ctx.lineTo(px, grund - form * hoch);
-      }
-      ctx.lineTo(breite, hoehe);
-      ctx.closePath();
-      ctx.fill();
-    };
-    // Ferne Berge sind breit, nahe Hügel schmal — das verstärkt die Tiefe
-    // zusätzlich zur unterschiedlichen Geschwindigkeit.
-    schicht(0.18, 0.6, hoehe * 0.2, sicht * 1.9, FARBEN.bergFern);
-    schicht(0.34, 0.68, hoehe * 0.13, sicht * 1.15, FARBEN.bergNah);
-    schicht(0.55, 0.75, hoehe * 0.085, sicht * 0.75, FARBEN.huegel);
 
     // --- Das Gelände ----------------------------------------------
     /*
@@ -326,93 +289,60 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
      * und die Zahl der Punkte hängt an der Bildbreite statt an der
      * Sichtweite.
      */
-    const bodenGradient = ctx.createLinearGradient(0, by(6), 0, hoehe);
-    bodenGradient.addColorStop(0, FARBEN.bodenOben);
-    bodenGradient.addColorStop(1, FARBEN.bodenTief);
-
     const umriss: [number, number][] = [];
     for (let px = -12; px <= breite + 12; px += 4) {
       const wx = kameraX + (px - breite * 0.5) / proMeter;
       umriss.push([px, by(bodenHoehe(g, wx))]);
     }
 
-    ctx.fillStyle = bodenGradient;
-    ctx.beginPath();
-    ctx.moveTo(umriss[0]![0], umriss[0]![1]);
-    for (const [px, py] of umriss) ctx.lineTo(px, py);
-    ctx.lineTo(breite + 12, hoehe);
-    ctx.lineTo(-12, hoehe);
-    ctx.closePath();
-    ctx.fill();
+    /** Füllt die Fläche unter dem Geländeumriss, um `versatz` nach unten
+        verschoben — dieselbe Abtastung dient allen drei Schichten. */
+    const bodenFlaeche = (farbe: string, versatz: number) => {
+      ctx.fillStyle = farbe;
+      ctx.beginPath();
+      ctx.moveTo(umriss[0]![0], umriss[0]![1] + versatz);
+      for (const [px, py] of umriss) ctx.lineTo(px, py + versatz);
+      ctx.lineTo(breite + 12, hoehe);
+      ctx.lineTo(-12, hoehe);
+      ctx.closePath();
+      ctx.fill();
+    };
 
     /*
-     * Eine dunklere Erdschicht knapp unter der Oberfläche. Ohne sie ist
-     * die untere Bildhälfte im Hochformat eine einzige leere Fläche — mit
-     * ihr liest sie sich als angeschnittener Hang. Sie folgt demselben
-     * Umriss, nur um gut einen Meter versetzt, deshalb kostet sie keine
-     * zweite Abtastung des Geländes.
+     * Erdschichten. Ursprünglich zwei Flächen (dunkler Grund, heller
+     * Streifen obenauf) — Recherche zu anderen 2D-Bike-Spielen (Trials,
+     * Bike Mayhem) zeigt durchgehend **drei bis vier** Farbflächen
+     * übereinander, nie nur zwei: ein geschichteter Fels-Look statt zweier
+     * Aufkleber, dazu ein schmaler heller Saum direkt unter der
+     * Grasnarbe — derselbe „Sonne trifft die Kuppe"-Effekt, den jedes
+     * recherchierte Spiel an der Geländekante zeigt.
+     *
+     * **Die Reihenfolge ist hier kein Zufall.** Jede Schicht füllt von
+     * ihrem eigenen `versatz` bis zum unteren Bildrand — eine später
+     * gezeichnete Schicht übermalt also alles darüber, bis zurück zu
+     * ihrem eigenen `versatz`. Sichtbar bleibt von jeder Schicht deshalb
+     * nur das Band zwischen ihrem `versatz` und dem der **nächsten**
+     * Schicht. Damit das aufgeht, müssen die `versatz`-Werte hier
+     * **aufsteigend** gezeichnet werden — sonst verschluckt eine später
+     * gezeichnete, aber weiter oben ansetzende Schicht alle vorherigen
+     * sofort wieder.
      */
-    const erdVersatz = 1.15 * proMeter;
-    ctx.fillStyle = 'rgba(0,0,0,0.16)';
-    ctx.beginPath();
-    ctx.moveTo(umriss[0]![0], umriss[0]![1] + erdVersatz);
-    for (const [px, py] of umriss) ctx.lineTo(px, py + erdVersatz);
-    ctx.lineTo(breite + 12, hoehe);
-    ctx.lineTo(-12, hoehe);
-    ctx.closePath();
-    ctx.fill();
+    bodenFlaeche(FARBEN.bodenTief, 0); // Sicherheitsgrund, wird komplett überdeckt
+    bodenFlaeche(mischen(FARBEN.bodenOben, '#ffffff', 0.3), -0.08 * proMeter); // heller Saum
+    bodenFlaeche(FARBEN.bodenOben, -0.05 * proMeter);
+    bodenFlaeche(mischen(FARBEN.bodenOben, FARBEN.bodenTief, 0.45), 0.6 * proMeter); // Rostband
+    const erdVersatz = 1.3 * proMeter;
+    bodenFlaeche(FARBEN.bodenTief, erdVersatz);
 
-    // Die helle Grasnarbe obendrauf — ohne sie sieht der Boden aus wie
-    // ein Loch im Bild, nicht wie eine Oberfläche.
+    // Der grüne Grasstrich obendrauf — ohne ihn sieht der Boden aus wie
+    // bloße Erde, nicht wie eine Wiese.
     ctx.strokeStyle = FARBEN.bodenKante;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = Math.max(4, 0.12 * proMeter);
     ctx.lineJoin = 'round';
     ctx.beginPath();
     ctx.moveTo(umriss[0]![0], umriss[0]![1]);
     for (const [px, py] of umriss) ctx.lineTo(px, py);
     ctx.stroke();
-
-    /*
-     * Steine im Hang, an festen Weltpositionen. Sie sind der einzige
-     * Anhaltspunkt dafür, wie schnell man wirklich fährt, sobald das
-     * Gelände flach wird — ohne sie klebt der Blick am gleichförmigen
-     * Grün und das Tempo ist nicht mehr zu spüren.
-     */
-    const ersterStein = Math.floor((kameraX - sicht) / 3.5) * 3.5;
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    for (let sx = ersterStein; sx < kameraX + sicht; sx += 3.5) {
-      const streu = streuung(sx);
-      const wx = sx + streu * 2.4;
-      const tiefe = 0.5 + streu * 2.6;
-      const r = (0.1 + streu * 0.16) * proMeter;
-      ctx.beginPath();
-      ctx.ellipse(bx(wx), by(bodenHoehe(g, wx) - tiefe), r, r * 0.68, streu * 2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // --- Bäume am Wegrand -----------------------------------------
-    /*
-     * Sie stehen an festen Weltpositionen (alle 9 m, versetzt), nicht an
-     * zufälligen: Ein Baum, der bei jedem Bild woanders steht, flackert.
-     * Gezeichnet werden nur die, die gerade im Bild sind.
-     */
-    const ersterBaum = Math.floor((kameraX - sicht) / 9) * 9;
-    for (let bxm = ersterBaum; bxm < kameraX + sicht; bxm += 9) {
-      if (bxm < ANLAUF - 6) continue;
-      const versatz = streuung(bxm + 0.5);
-      const wx = bxm + versatz * 4;
-      const wy = bodenHoehe(g, wx);
-      const groesse = (1.6 + versatz * 1.4) * proMeter;
-      const px = bx(wx);
-      const py = by(wy);
-      ctx.fillStyle = FARBEN.baum;
-      ctx.beginPath();
-      ctx.moveTo(px, py - groesse);
-      ctx.lineTo(px - groesse * 0.34, py + 2);
-      ctx.lineTo(px + groesse * 0.34, py + 2);
-      ctx.closePath();
-      ctx.fill();
-    }
 
     // --- Ziellinie -------------------------------------------------
     if (kameraX + sicht > g.laenge - 4) {
@@ -438,57 +368,28 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
      * sofort steht, hat einen harten Schlag — genau diese Differenz ist es,
      * die eine Federung einfedern lässt.
      */
+    /*
+     * Die Federung reagiert auf den **Wechsel** der senkrechten
+     * Geschwindigkeit, nicht auf ihren Wert — siehe Kommentar oben an
+     * `vyVorher`. Staub/Rauch beim Aufschlagen gab es hier testweise,
+     * Rückmeldung: „mach das mal so, dass kein Rauch oder Staub kommt,
+     * das sieht komisch aus." Wieder raus, ohne Ersatz — die Federung
+     * selbst zeigt den Einschlag schon deutlich genug.
+     */
     const stoss = Math.max(0, vyVorher - lauf.vy);
     vyVorher = lauf.vy;
     if (lauf.amBoden && stoss > 1) {
       const kraft = Math.min(1, stoss / 14);
       federVorn = Math.min(1, federVorn + kraft);
       federHinten = Math.min(1, federHinten + kraft * 1.15);
-      // Bei hartem Aufschlag Staub aufwirbeln.
-      if (kraft > 0.25) {
-        for (let i = 0; i < 5; i++) {
-          staub.push({
-            x: lauf.x - 0.4 + i * 0.2,
-            y: lauf.y + 0.1,
-            alter: 0,
-            groesse: 0.3 + kraft * 0.6,
-          });
-        }
-      }
     }
     // Zurückfedern.
     federVorn = Math.max(0, federVorn - dt * 3.4);
     federHinten = Math.max(0, federHinten - dt * 3.1);
 
-    // Räder drehen sich mit dem Tempo — Umfang 2πr.
+    // Räder drehen sich mit dem Tempo — Umfang 2πr. Bei Rückwärtsrollen
+    // (negatives `vx`, siehe `logik.ts`) läuft das von selbst rückwärts.
     radDrehung += (lauf.vx / RAD_R) * dt;
-
-    // Staub beim Beschleunigen am Boden.
-    if (lauf.amBoden && lauf.vx > 4 && Math.random() < dt * 26) {
-      staub.push({ x: lauf.x - 0.5, y: lauf.y + 0.08, alter: 0, groesse: 0.22 });
-    }
-
-    ctx.save();
-    for (let i = staub.length - 1; i >= 0; i--) {
-      const p = staub[i]!;
-      p.alter += dt;
-      if (p.alter > 0.85) {
-        staub.splice(i, 1);
-        continue;
-      }
-      const rest = 1 - p.alter / 0.85;
-      ctx.fillStyle = `rgba(214,203,180,${(rest * 0.5).toFixed(3)})`;
-      ctx.beginPath();
-      ctx.arc(
-        bx(p.x - p.alter * 1.5),
-        by(p.y + p.alter * 0.7),
-        (p.groesse + p.alter * 0.9) * proMeter,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-    }
-    ctx.restore();
 
     // --- Fahrrad und Fahrer ----------------------------------------
     radFahrerZeichnen(ctx, lauf, {
@@ -539,7 +440,16 @@ function radFahrerZeichnen(
 
   ctx.save();
   ctx.translate(px, py);
-  const sturzDreh = lauf.vorbei && !lauf.gewonnen ? Math.min(1.5, lauf.sturzZeit * 3.4) : 0;
+  /*
+   * Rückmeldung: „Falls man stürzt, soll es nicht im letzten Moment
+   * abbrechen, sondern man soll sehen, wie der Typ stürzt." Der erste
+   * Versuch drehte schnell auf 1,5 Radiant hoch (in 0,44 s) und blieb
+   * dann bis zum Rundenende-Bildschirm bei `FlowMtb.tsx` (1,1 s
+   * Verzögerung) einfach stehen — genau das las sich wie ein Abbruch,
+   * nicht wie ein Sturz. Jetzt dreht es über die **ganze** Verzögerung
+   * weiter, zusammen mit dem Ausrutschen aus `takt`.
+   */
+  const sturzDreh = lauf.vorbei && !lauf.gewonnen ? Math.min(5.6, lauf.sturzZeit * 5.1) : 0;
   // Bildschirm-y zeigt nach unten, Physik-y nach oben — deshalb das Minus.
   ctx.rotate(-lauf.winkel + sturzDreh);
 
@@ -1085,6 +995,12 @@ function radFahrerZeichnen(
   const knie = { x: huefte.x + 0.24 * m, y: huefte.y + 0.3 * m + hocke * 0.04 * m };
   glied(huefte.x, huefte.y, knie.x, knie.y, 0.085 * m, 0.062 * m, FARBEN.hose);
   glied(knie.x, knie.y, pedalX, pedalY - 0.04 * m, 0.06 * m, 0.045 * m, FARBEN.hose);
+  // Kleine Gelenkscheibe am Knie — ohne sie liest sich der Übergang
+  // zwischen den beiden Bein-Kapseln als Knick, nicht als Gelenk.
+  ctx.beginPath();
+  ctx.arc(knie.x, knie.y, 0.066 * m, 0, Math.PI * 2);
+  ctx.fillStyle = mischen(FARBEN.hose, '#000000', 0.1);
+  ctx.fill();
   // Schuh: Sohle und Spann getrennt, damit er nicht wie ein Klumpen wirkt.
   ctx.fillStyle = '#15161b';
   ctx.beginPath();
@@ -1150,6 +1066,31 @@ function radFahrerZeichnen(
   ctx.fillStyle = rumpfG;
   ctx.fill();
 
+  /*
+   * **Gelenkscheiben an Hüfte und Schulter.**
+   *
+   * Rückmeldung: „Bei dem Fahrer gibt's einen Fehler, an der Schulter ist
+   * dann kurz nichts, da ist was raus." Der Grund: Der Rumpf rundet die
+   * Schulter nur über einen Halbkreis ab (die andere Hälfte gehört den
+   * Kurven zur Hüfte), und das Bein hört an der Hüfte mit einer geraden
+   * Kante auf (`closePath()` zieht dort nur eine Sehne, keinen Bogen).
+   * Arm- und Beinansatz decken mit ihrer eigenen Rundung zwar das meiste
+   * davon ab, aber nicht den ganzen Kreis — übrig blieb ein schmaler
+   * Keil, durch den der Himmel durchschien. Eine einfache gefüllte
+   * Scheibe an beiden Gelenken, unter Arm/Hals bzw. schon unter dem Bein
+   * gezeichnet, schließt die Lücke unabhängig vom genauen Winkel — robuster
+   * als die Kurven noch enger aneinander zu ziehen, das nur bei genau
+   * dieser Körperhaltung gepasst hätte.
+   */
+  const gelenkscheibe = (mx: number, my: number, radius: number) => {
+    ctx.beginPath();
+    ctx.arc(mx, my, radius, 0, Math.PI * 2);
+    ctx.fillStyle = mischen(FARBEN.kleidung, '#000000', 0.12);
+    ctx.fill();
+  };
+  gelenkscheibe(huefte.x, huefte.y, 0.09 * m);
+  gelenkscheibe(schulter.x, schulter.y, 0.075 * m);
+
   // Rückenprotektor, als aufgesetzte Platte auf dem Rücken.
   ctx.fillStyle = 'rgba(20,22,28,0.55)';
   ctx.beginPath();
@@ -1168,6 +1109,11 @@ function radFahrerZeichnen(
   const ellbogen = { x: schulter.x + 0.16 * m, y: schulter.y + 0.22 * m + hocke * 0.1 * m };
   glied(schulter.x, schulter.y, ellbogen.x, ellbogen.y, 0.07 * m, 0.052 * m, FARBEN.kleidung);
   glied(ellbogen.x, ellbogen.y, lenker.x, lenker.y, 0.05 * m, 0.04 * m, FARBEN.kleidung);
+  // Kleine Gelenkscheibe am Ellbogen — dieselbe Überlegung wie am Knie.
+  ctx.beginPath();
+  ctx.arc(ellbogen.x, ellbogen.y, 0.058 * m, 0, Math.PI * 2);
+  ctx.fillStyle = mischen(FARBEN.kleidung, '#000000', 0.1);
+  ctx.fill();
   // Handschuh am Lenker.
   ctx.fillStyle = '#2a2d36';
   ctx.strokeStyle = '#12141a';
@@ -1177,14 +1123,22 @@ function radFahrerZeichnen(
   ctx.fill();
   ctx.stroke();
 
-  // Hals — ohne ihn sitzt der Helm direkt auf den Schultern.
+  /*
+   * Hals — ohne ihn sitzt der Helm direkt auf den Schultern. Bewusst
+   * kräftig statt als dünner Steg: Ein schmaler, weit sichtbarer Hals ist
+   * einer der zuverlässigsten Gründe, warum eine Figur aus Grundformen
+   * nach Strichmännchen aussieht statt nach Körper — Recherche zu
+   * anderen 2D-Bike-Spielen bestätigt das durchgehend. Der Helm
+   * überlappt das obere Ende ohnehin (siehe unten), hier zählt vor allem
+   * die Dicke.
+   */
   glied(
     schulter.x + 0.03 * m,
     schulter.y - 0.02 * m,
     kopf.x - 0.03 * m,
     kopf.y + 0.1 * m,
-    0.055 * m,
-    0.05 * m,
+    0.065 * m,
+    0.06 * m,
     FARBEN.haut,
   );
 

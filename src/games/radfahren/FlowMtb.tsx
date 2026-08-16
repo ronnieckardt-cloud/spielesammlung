@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Startbildschirm } from '../../core/Startbildschirm';
 import type { DekoTeil } from '../../core/Startbildschirm';
 import { useGameLoop } from '../../core/useGameLoop';
-import { sfx } from '../../core/sfx';
 import { haptik } from '../../core/haptik';
 import type { GameProps } from '../../core/types';
 import { STRECKE_LAENGE, neuesSpiel, punkte, streckenSaat, takt, tempoKmh } from './logik';
@@ -27,11 +26,30 @@ import { MtbIcon } from './Icon';
  * geschrieben. Dasselbe Vorgehen wie bei Dash City.
  */
 
+/*
+ * **Der Startbildschirm war leer** — Rückmeldung: „Allein schon das
+ * Titelding sieht kacke aus." `Startbildschirm` gibt jedem Spiel nur
+ * Symbol, Titel und ein paar schwebende Deko-Teile vor; bei den anderen
+ * Spielen reichen dafür kleine Formen (Gebäude, Berge), weil das Symbol
+ * oben schon das Spiel zeigt. Hier stand bislang nur eine Handvoll
+ * winziger Berg-Dreiecke — nichts, was nach Fahrrad aussah.
+ *
+ * Jetzt steht ein großes Helden-Bild des Bikes unten im Bild, im selben
+ * Rot wie im Spiel, in einer Sprung-Schräglage: Genau das, um das sich
+ * das ganze Spiel dreht, statt eines austauschbaren Icons. Die Berge
+ * bleiben als Rahmen an den Rändern.
+ */
 const DEKO: readonly DekoTeil[] = [
-  { x: 10, y: 22, winkel: -8, verzoegerung: 0, inhalt: <DekoBerg hoehe={54} /> },
-  { x: 86, y: 16, winkel: 6, verzoegerung: 0.6, inhalt: <DekoBerg hoehe={70} /> },
-  { x: 88, y: 70, winkel: -5, verzoegerung: 1.2, inhalt: <DekoBerg hoehe={44} /> },
-  { x: 7, y: 74, winkel: 7, verzoegerung: 0.35, inhalt: <DekoBerg hoehe={60} /> },
+  { x: 6, y: 14, winkel: -8, verzoegerung: 0, inhalt: <DekoBerg hoehe={50} /> },
+  { x: 90, y: 10, winkel: 6, verzoegerung: 0.6, inhalt: <DekoBerg hoehe={64} /> },
+  { x: 92, y: 32, winkel: -5, verzoegerung: 1.3, inhalt: <DekoBerg hoehe={36} /> },
+  { x: 3, y: 34, winkel: 7, verzoegerung: 0.9, inhalt: <DekoBerg hoehe={40} /> },
+  // Unter dem Knopf verankert, nicht in der Bildmitte: Der Inhaltsblock
+  // (Symbol/Titel/Knopf) sitzt je nach Bildschirmhöhe unterschiedlich —
+  // ein mittig verankertes Bild geriete auf kurzen Bildschirmen in den
+  // Knopf. Die Illustration ist bewusst flach (breiter als hoch), damit
+  // sie auch bei wenig Restplatz noch ganz hineinpasst.
+  { x: 50, y: 78, verzoegerung: 0.4, inhalt: <DekoHeldenbike /> },
 ];
 
 function DekoBerg({ hoehe }: { hoehe: number }) {
@@ -40,6 +58,197 @@ function DekoBerg({ hoehe }: { hoehe: number }) {
       <path d="M20 4 L38 38 L2 38 Z" fill="#1e3a54" opacity={0.85} />
       <path d="M20 4 L27 17 L13 17 Z" fill="#e2f0f7" opacity={0.9} />
     </svg>
+  );
+}
+
+/**
+ * Das Bike, in Sprung-Schräglage — dasselbe Rot, dieselbe Doppelbrücken-
+ * gabel wie im Spiel, hier als flaches Poster-Bild statt als Canvas-
+ * Zeichnung. Eine eigene, einfachere Bauart als `zeichnen.ts` ist hier
+ * richtig: Der Startbildschirm ist ein Standbild, kein bewegtes Rad mit
+ * Federweg — er darf, anders als das Spielbild, ruhig grob vereinfachen.
+ */
+function DekoHeldenbike() {
+  // Feste Punkte statt Freihand-Kurven — jeder einzeln nachvollziehbar,
+  // damit sich keine zweite sich selbst überschneidende Fläche mehr
+  // einschleicht (das Rahmen-Vieleck der ersten Fassung tat genau das
+  // und ergab den unförmigen roten Fleck aus der Rückmeldung).
+  const RW = { x: 66, y: 114 }; // Hinterrad-Achse
+  const FW = { x: 226, y: 114 }; // Vorderrad-Achse
+  const BB = { x: 138, y: 116 }; // Tretlager
+  const ST = { x: 116, y: 54 }; // Sattelrohr oben
+  const HT = { x: 194, y: 60 }; // Steuerrohr oben
+  const KRONE = { x: 192, y: 48 }; // Doppelbrücke unten
+  const LENKER_MITTE = { x: 190, y: 29 }; // Doppelbrücke oben, Vorbau
+  const GRIFF = { x: 221, y: 27 }; // Lenkergriff
+  const HUEFTE = { x: 124, y: 54 };
+  const SCHULTER = { x: 163, y: 17 };
+  const KNIE = { x: 147, y: 74 };
+  const PEDAL = { x: 147, y: 101 };
+  const KOPF = { x: 173, y: 6 };
+
+  return (
+    <svg
+      viewBox="0 0 300 150"
+      className="w-[70vw] max-w-[300px] -translate-x-1/2 drop-shadow-[0_16px_26px_rgba(0,0,0,0.4)]"
+      aria-hidden="true"
+    >
+      {/* Weicher Lichtschein hinter dem Rad — dieselbe Regel wie beim
+          App-Symbol: ein Fleck Licht macht aus einer Silhouette ein Bild. */}
+      <ellipse cx={150} cy={80} rx={140} ry={78} fill="#ffffff" opacity={0.1} />
+
+      {/* Nur eine leichte Schräglage (6°), nicht die dramatische
+          Sprunghaltung der ersten Fassung — die hatte den Kopf so weit
+          nach oben verschoben, dass er den Spielen-Knopf überlappte. */}
+      <g transform={`rotate(-6 ${BB.x} ${BB.y})`}>
+        {/* Schwungspuren hinter dem Rad. */}
+        <g stroke="#ffffff" strokeOpacity={0.3} strokeWidth={4} strokeLinecap="round">
+          <path d="M4 68 L38 65" />
+          <path d="M0 84 L42 82" />
+          <path d="M8 100 L46 99" />
+        </g>
+
+        {/* Hinterrad. */}
+        <Rad mitte={RW} />
+        {/* Vorderrad. */}
+        <Rad mitte={FW} />
+
+        {/* Doppelbrücken-Gabel: Standrohr, Brücke, Fahrwerksbein zum Rad —
+            dasselbe Erkennungsmerkmal wie im Spiel. */}
+        <line
+          x1={HT.x}
+          y1={HT.y}
+          x2={LENKER_MITTE.x}
+          y2={LENKER_MITTE.y}
+          stroke="#c9ced6"
+          strokeWidth={8}
+          strokeLinecap="round"
+        />
+        <line
+          x1={KRONE.x}
+          y1={KRONE.y}
+          x2={FW.x}
+          y2={FW.y}
+          stroke="#3d434d"
+          strokeWidth={12}
+          strokeLinecap="round"
+        />
+        <line
+          x1={KRONE.x - 15}
+          y1={KRONE.y}
+          x2={KRONE.x + 15}
+          y2={KRONE.y + 3}
+          stroke="#8c1710"
+          strokeWidth={10}
+          strokeLinecap="round"
+        />
+
+        {/* Rahmen — ein einziges, garantiert einfaches Dreieck. */}
+        <path
+          d={`M${BB.x},${BB.y} L${ST.x},${ST.y} L${HT.x},${HT.y} Z`}
+          fill="#d92d20"
+          stroke="#8c1710"
+          strokeWidth={5}
+          strokeLinejoin="round"
+        />
+        {/* Kettenstrebe und Sitzstrebe zum Hinterrad. */}
+        <line x1={RW.x} y1={RW.y} x2={BB.x} y2={BB.y} stroke="#8c1710" strokeWidth={9} strokeLinecap="round" />
+        <line x1={RW.x} y1={RW.y} x2={ST.x} y2={ST.y} stroke="#8c1710" strokeWidth={7} strokeLinecap="round" />
+
+        {/* Sattel und Lenker. */}
+        <line
+          x1={ST.x - 14}
+          y1={ST.y - 3}
+          x2={ST.x + 8}
+          y2={ST.y - 5}
+          stroke="#101014"
+          strokeWidth={8}
+          strokeLinecap="round"
+        />
+        <line
+          x1={LENKER_MITTE.x}
+          y1={LENKER_MITTE.y}
+          x2={GRIFF.x}
+          y2={GRIFF.y}
+          stroke="#101014"
+          strokeWidth={7}
+          strokeLinecap="round"
+        />
+
+        {/* Dämpfer mit Spiralfeder — dieselbe Wendel wie im Spiel, hier
+            als vereinfachtes Zickzack, weil sie bei dieser Größe ohnehin
+            nur als Textur wahrgenommen wird. */}
+        <line
+          x1={(BB.x + RW.x) / 2}
+          y1={BB.y - 4}
+          x2={ST.x - 6}
+          y2={ST.y + 16}
+          stroke="#3d434d"
+          strokeWidth={7}
+          strokeLinecap="round"
+        />
+        <path
+          d={`M${(BB.x + RW.x) / 2 + 4},${BB.y - 6} L${(BB.x + RW.x) / 2 - 5},${BB.y - 16} L${(BB.x + RW.x) / 2 + 4},${BB.y - 26} L${ST.x - 10},${ST.y + 20}`}
+          fill="none"
+          stroke="#38d9a9"
+          strokeWidth={3.5}
+          strokeLinecap="round"
+        />
+
+        {/* --- Der Fahrer: Hüfte → Knie → Pedal, Hüfte → Schulter → Griff --- */}
+        <g strokeLinecap="round" fill="none">
+          <path
+            d={`M${HUEFTE.x},${HUEFTE.y} L${KNIE.x},${KNIE.y} L${PEDAL.x},${PEDAL.y}`}
+            stroke="#232830"
+            strokeWidth={15}
+          />
+          <path
+            d={`M${HUEFTE.x},${HUEFTE.y} L${SCHULTER.x},${SCHULTER.y}`}
+            stroke="#4a5566"
+            strokeWidth={20}
+          />
+          <path
+            d={`M${SCHULTER.x},${SCHULTER.y} L${GRIFF.x},${GRIFF.y}`}
+            stroke="#4a5566"
+            strokeWidth={13}
+          />
+        </g>
+        {/* Schuh. */}
+        <ellipse cx={PEDAL.x + 8} cy={PEDAL.y - 2} rx={13} ry={7} fill="#15161b" />
+
+        {/* Fullface-Helm mit rotem Streifen — derselbe Kontrast wie im
+            Spiel: hell gegen die dunkle Kleidung. */}
+        <circle cx={KOPF.x} cy={KOPF.y} r={16} fill="#f4f6f8" />
+        <path
+          d={`M${KOPF.x - 4},${KOPF.y - 15} Q${KOPF.x + 16},${KOPF.y - 17} ${KOPF.x + 20},${KOPF.y - 1} Q${KOPF.x + 8},${KOPF.y - 8} ${KOPF.x - 4},${KOPF.y - 5} Z`}
+          fill="#d92d20"
+        />
+        <ellipse cx={KOPF.x + 8} cy={KOPF.y + 1} rx={8} ry={6} fill="#1e2a33" />
+      </g>
+    </svg>
+  );
+}
+
+function Rad({ mitte }: { mitte: { x: number; y: number } }) {
+  const speichen = [0, 60, 120, 180, 240, 300];
+  return (
+    <g>
+      <circle cx={mitte.x} cy={mitte.y} r={32} fill="#16161a" />
+      <circle cx={mitte.x} cy={mitte.y} r={32} fill="none" stroke="#26262c" strokeWidth={7} />
+      <circle cx={mitte.x} cy={mitte.y} r={22} fill="none" stroke="#8d939e" strokeWidth={4} />
+      <g stroke="#dfe3e9" strokeWidth={2} opacity={0.85}>
+        {speichen.map((w) => (
+          <line
+            key={w}
+            x1={mitte.x + Math.cos((w * Math.PI) / 180) * 6}
+            y1={mitte.y + Math.sin((w * Math.PI) / 180) * 6}
+            x2={mitte.x + Math.cos((w * Math.PI) / 180) * 21}
+            y2={mitte.y + Math.sin((w * Math.PI) / 180) * 21}
+          />
+        ))}
+      </g>
+      <circle cx={mitte.x} cy={mitte.y} r={6.5} fill="#c3c8d0" />
+    </g>
   );
 }
 
@@ -82,7 +291,6 @@ export function FlowMtb({
   const zeitRef = useRef<HTMLSpanElement>(null);
   const balkenRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<HTMLDivElement>(null);
-  const meldungRef = useRef<HTMLDivElement>(null);
 
   // --- Leinwand aufsetzen -----------------------------------------
   useEffect(() => {
@@ -166,13 +374,12 @@ export function FlowMtb({
       const neu = takt(vorher, dt, eingabeRef.current);
       laufRef.current = neu;
 
-      // Ton bei einer Landung — einmal, beim Wechsel.
-      if (neu.letzteLandung !== vorher.letzteLandung && neu.letzteLandung) {
-        if (neu.letzteLandung === 'perfekt') sfx('gut', Math.min(12, neu.flow * 2));
-        else if (neu.letzteLandung === 'sturz') {
-          sfx('ende');
-          haptik('ende');
-        } else if (neu.letzteLandung === 'hart') sfx('klick');
+      // Rückmeldung bei einem Sturz — einmal, beim Wechsel. Ronni wollte
+      // ausdrücklich keine Töne im Spiel („macht die Sounds weg"); Haptik
+      // bleibt, das ist keine Tonausgabe und auf Florians Geräten (iOS)
+      // ohnehin stumm, siehe `core/haptik.ts`.
+      if (neu.letzteLandung !== vorher.letzteLandung && neu.letzteLandung === 'sturz') {
+        haptik('ende');
       }
 
       zeichnerRef.current?.zeichnen(neu, dt);
@@ -188,34 +395,20 @@ export function FlowMtb({
         flowRef.current.style.opacity = neu.flow > 1 ? '1' : '0';
         flowRef.current.textContent = `FLOW ×${neu.flow}`;
       }
-      if (meldungRef.current) {
-        const zeigen = neu.meldungRest > 0 && neu.letzteLandung;
-        meldungRef.current.style.opacity = zeigen ? '1' : '0';
-        if (zeigen) {
-          const text =
-            neu.letzteLandung === 'perfekt'
-              ? 'PERFEKT!'
-              : neu.letzteLandung === 'gut'
-                ? 'Gut gelandet'
-                : neu.letzteLandung === 'hart'
-                  ? 'Harte Landung'
-                  : 'Gestürzt';
-          meldungRef.current.textContent = text;
-          meldungRef.current.style.color =
-            neu.letzteLandung === 'perfekt'
-              ? '#38d9a9'
-              : neu.letzteLandung === 'gut'
-                ? '#e2e8f0'
-                : '#fca5a5';
-        }
-      }
+      /*
+       * Bewusst **keine** Text-Einblendung „PERFEKT!" / „Harte Landung" /
+       * „Gestürzt" mehr. Rückmeldung, wörtlich: „Ich will nicht, dass
+       * dieses perfekt gut und harte Landung oder gestürzt dasteht, das
+       * brauch ich auch nicht, es sieht nur doof aus." Der Flow-Zähler
+       * oben rechts sagt ohnehin, wie sauber man landet — ein Wort quer
+       * über dem Bild ist keine zusätzliche Auskunft, nur Lärm.
+       */
 
       if (neu.vorbei && !beendet.current) {
         beendet.current = true;
         const p = punkte(neu);
         onScore(p);
         if (neu.gewonnen) {
-          sfx('stufe');
           haptik('jubel');
         }
         /*
@@ -317,14 +510,6 @@ export function FlowMtb({
           </div>
         </div>
       </div>
-
-      {/* Landungsmeldung in der Bildmitte, knapp über der Strecke */}
-      <div
-        ref={meldungRef}
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-[22%] text-center text-2xl font-black transition-opacity duration-200"
-        style={{ opacity: 0, textShadow: '0 2px 12px rgba(0,0,0,0.7)' }}
-      />
 
       {/* Streckenfortschritt unten */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 px-3 pb-1">

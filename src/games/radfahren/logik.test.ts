@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ANLAUF,
+  KEINE_EINGABE,
   LANDUNG_GUT,
   LANDUNG_HART,
   LANDUNG_PERFEKT,
@@ -105,8 +106,9 @@ describe('Gelände', () => {
       for (const k of g.kicker) {
         expect(k.x, `Strecke ${n}`).toBeGreaterThan(ANLAUF);
         expect(k.x, `Strecke ${n}`).toBeLessThan(g.laenge);
-        // Zu schmale Glocken wären Stufen statt Rampen.
-        expect(k.breite, `Strecke ${n}`).toBeGreaterThan(3);
+        // Zu schmale Glocken wären Stufen statt Rampen — siehe die 2,4-m-
+        // Untergrenze in `gelaendeBauen`.
+        expect(k.breite, `Strecke ${n}`).toBeGreaterThan(2.4);
       }
     }
   });
@@ -268,10 +270,14 @@ describe('Fahren', () => {
       vy: 2,
       amBoden: false,
     };
-    const zurueck = fahren(inDerLuft, 0.4, { gas: false, bremse: false, lehnen: -1 });
-    const vor = fahren(inDerLuft, 0.4, { gas: false, bremse: false, lehnen: 1 });
-    expect(zurueck.winkel).toBeLessThan(inDerLuft.winkel);
-    expect(vor.winkel).toBeGreaterThan(inDerLuft.winkel);
+    // „Hinten" (lehnen −1) muss das Vorderrad anheben (winkel steigt,
+    // siehe Lauf.winkel), „Vorne" (lehnen +1) muss es senken — Rückmeldung:
+    // „wenn ich den Pfeil nach hinten drücke, geht das Körpergewicht nicht
+    // nach hinten, sondern nach vorne." Das war genau umgekehrt.
+    const hinten = fahren(inDerLuft, 0.4, { gas: false, bremse: false, lehnen: -1 });
+    const vorne = fahren(inDerLuft, 0.4, { gas: false, bremse: false, lehnen: 1 });
+    expect(hinten.winkel).toBeGreaterThan(inDerLuft.winkel);
+    expect(vorne.winkel).toBeLessThan(inDerLuft.winkel);
   });
 });
 
@@ -304,6 +310,29 @@ describe('Landung und Flow', () => {
     expect(l.letzteLandung).toBe('sturz');
     expect(l.vorbei).toBe(true);
     expect(l.gewonnen).toBe(false);
+  });
+
+  it('lässt nach einem Sturz noch ein Stück ausrutschen, statt hart einzufrieren', () => {
+    /*
+     * Rückmeldung: „Falls man stürzt, soll es nicht im letzten Moment
+     * abbrechen, sondern man soll sehen, wie der Typ stürzt." Ein Sturz
+     * darf also nicht dieselbe reglose Stille sein wie ein Sieg.
+     */
+    const sturz = takt(kurzVorLandung(1.6), 1 / 60);
+    expect(sturz.letzteLandung).toBe('sturz');
+    expect(sturz.vx).not.toBe(0);
+
+    const einSchritt = takt(sturz, 1 / 60);
+    expect(einSchritt.x).not.toBe(sturz.x);
+
+    // Nach genug Zeit ist der Rest des Schwungs aufgebraucht und bleibt es.
+    // `fahren()` passt hier nicht — die bricht bei `vorbei` sofort ab,
+    // genau der Zustand, den ein Sturz aber schon mitbringt.
+    let ausgerollt = sturz;
+    for (let t = 0; t < 3; t += 1 / 60) ausgerollt = takt(ausgerollt, 1 / 60, KEINE_EINGABE);
+    expect(ausgerollt.vx).toBe(0);
+    const nochEins = takt(ausgerollt, 1 / 60);
+    expect(nochEins.x).toBe(ausgerollt.x);
   });
 
   it('kostet eine harte Landung spürbar Tempo, eine perfekte nicht', () => {
@@ -394,18 +423,64 @@ describe('Fairness', () => {
    * Wenn dieser Test rot wird, ist eine Fahrwert-Änderung schiefgegangen,
    * nicht der Test.
    */
-  const bot = (l: Lauf): Eingabe => {
-    if (l.amBoden) return GAS;
-    // Zum erwarteten Landewinkel ausrichten: Liegt das Rad zu tief,
-    // nach hinten lehnen, sonst nach vorne.
-    const ziel = bodenWinkel(l.gelaende, l.x + l.vx * 0.3);
-    const unterschied = winkelKuerzen(ziel - l.winkel);
-    return { gas: true, bremse: false, lehnen: Math.sign(unterschied) * 0.9 };
+  /**
+   * Baut einen frischen Bot — mit **eigenem Gedächtnis**, siehe unten.
+   * Muss je Strecke neu erzeugt werden, sonst liefe das Gedächtnis von
+   * Strecke 3 in Strecke 4 weiter.
+   */
+  const machBot = () => {
+    // Ob der Bot gerade bewusst zurückrollt, um neuen Anlauf zu holen.
+    let rueckrollen = false;
+    return (l: Lauf): Eingabe => {
+      if (l.amBoden) {
+        /*
+         * Ein zu steiler Hang lässt sich mit Antrieb allein nicht
+         * hochfahren — Antrieb und Hangabtrieb heben sich dort fast genau
+         * auf (bei `ANTRIEB` = 11,5 und `SCHWERKRAFT` = 22 rund 31,5°).
+         * Ein Bot, der stur weiter Gas gibt, bleibt an genau diesem Winkel
+         * für immer hängen. Jeder wirkliche Fahrer würde hier loslassen
+         * und zurückrollen, um neuen Anlauf zu holen.
+         *
+         * **Mit einer einzigen Schwelle wackelt das Gas bei jedem
+         * Bildschritt um genau diesen Winkel herum** — Gas an, ein Stück
+         * hochgekommen, Schwelle überschritten, Gas aus, ein Stück
+         * zurückgerollt, Schwelle unterschritten, Gas an … ohne je
+         * nennenswert Boden gutzumachen. Deshalb zwei Schwellen mit
+         * Hysterese: Einmal zurückgerollt, bleibt der Bot dabei, bis der
+         * Hang spürbar sanfter ist — erst dann holt er wirklich Anlauf,
+         * statt am Fuß desselben steilen Stücks sofort wieder anzudrücken.
+         */
+        const hang = bodenWinkel(l.gelaende, l.x);
+        if (!rueckrollen && hang > 0.55) rueckrollen = true;
+        else if (rueckrollen && hang < 0.2) rueckrollen = false;
+        if (rueckrollen) return { gas: false, bremse: false, lehnen: 0 };
+        return GAS;
+      }
+      rueckrollen = false;
+      /*
+       * Zum erwarteten Landewinkel ausrichten: Soll `winkel` steigen
+       * (Vorderrad höher), muss er nach hinten lehnen (negatives `lehnen`,
+       * siehe die Vorzeichen-Korrektur oben bei „Gewichtsverlagerung").
+       *
+       * Die Vorausschau wächst mit der bereits verstrichenen Flugzeit
+       * (`luftZeit`) — eine feste Vorausschau von 0,3 s passte zu den
+       * kurzen Standard-Hüpfern, war aber bei einem Mega-Sprung (bis zu
+       * 1,6 s in der Luft) viel zu kurzsichtig: Der Bot zielte auf einen
+       * Punkt weit vor der tatsächlichen Landestelle und stürzte. Auch das
+       * ist keine „Können"-Frage — jeder Fahrer merkt, ob er gerade kurz
+       * hoppelt oder gerade richtig fliegt, und schaut entsprechend weiter
+       * voraus.
+       */
+      const vorausschau = 0.3 + l.luftZeit * 0.5;
+      const ziel = bodenWinkel(l.gelaende, l.x + l.vx * vorausschau);
+      const unterschied = winkelKuerzen(ziel - l.winkel);
+      return { gas: true, bremse: false, lehnen: -Math.sign(unterschied) * 0.9 };
+    };
   };
 
   it('lässt einen einfachen Fahrer zehn verschiedene Strecken schaffen', () => {
     for (let n = 1; n <= 10; n++) {
-      const l = fahren(neuesSpiel(streckenSaat(n)), 300, bot);
+      const l = fahren(neuesSpiel(streckenSaat(n)), 300, machBot());
       expect(l.vorbei, `Strecke ${n} endete nicht`).toBe(true);
       expect(l.gewonnen, `Strecke ${n} war nicht zu schaffen`).toBe(true);
     }

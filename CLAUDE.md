@@ -163,6 +163,7 @@ gelbe Kreisfigur, keine originalen Steinfarben.
 | `tempo` | Tap Rush |
 | `kistenschieben` | Box Push |
 | `laufen` | Dash City |
+| `radfahren` | Flow MTB |
 
 Die `id` bleibt immer die alte, deutsche — daran hängt die Bestenliste in
 `localStorage`. Nur `title` ändert sich, sonst nichts.
@@ -2552,6 +2553,229 @@ darüber hinaus — CLAUDE.md, `index.css`, `core/useInput.ts`,
 `shell/spielfarbe.ts` — haben sie gemeldet statt geändert. Das ist die
 richtige Regel; sie erzeugt aber eine Nachliste, und die ist Teil der
 Arbeit, nicht ihr Rest.
+
+## Flow MTB — Besonderheiten
+
+Ronnis Wunsch: „ein physikbasiertes 2D-Mountainbike-Spiel … Speed + Airtime
++ Control + Landing." Interne `id` ist `radfahren`. **Das erste
+Canvas-2D-Spiel im Projekt** — `CLAUDE.md` sah das für Spiele mit
+fortlaufender Bewegung schon immer vor (siehe „Zu 3-D" weiter oben), nur
+gab es bis hierhin keins. Dieselbe Dreiteilung wie bei Dash City:
+`logik.ts` (reine Physik, ohne Browser geprüft), `zeichnen.ts` (Canvas,
+kennt keine Spielregel), `FlowMtb.tsx` (verbindet nur Uhr, Eingabe,
+Anzeige).
+
+### Das Gelände: von einer Kette großer Sprünge zu vier Abschnittsarten
+
+Die Strecke ist ein analytisches Höhenfeld — Sinuswellen plus Gauß-Glocken
+für die Sprungschanzen (Kicker), mit von Hand hergeleiteter exakter
+Ableitung (`bodenSteigung`) statt eines numerischen Differenzenquotienten:
+Der Absprungwinkel hängt direkt daran, und ein rauschender Wert hieße ein
+zufälliger Absprung.
+
+`gelaendeBauen` ist in dieser einen Session **viermal** umgebaut worden,
+jedes Mal auf eine konkrete Rückmeldung hin:
+
+1. Hügel mit vereinzelten Kickern und großzügigem Flachstück dazwischen.
+2. Rückmeldung: „Nicht so viele geraden Ebenen, die Sprünge müssen groß
+   sein, sodass du in andere Sprünge springst." → eine ununterbrochene
+   Kette großer Kicker.
+3. Rückmeldung: „Jetzt spring ich ja wirklich nur in die Sprünge an, das
+   sind einfach nur Zickzack … ich bin immer wieder an der gleichen Stelle
+   aufgekommen." → **vier gewürfelte Abschnittsarten** statt einer festen
+   Kette: `ruhig` (kein Kicker, nur Erholung und neuer Schwung), `doppel`
+   (zwei kleine, eigenständige Buckel mit klarer Lücke dazwischen — ein
+   „Double" im BMX-Sinn, Ronni: „kleine Hubbel, wo du versuchen musst, den
+   anderen zu überspringen"), `kicker` (eine kurze Kette von zwei bis vier
+   normalen Sprüngen) und `mega` (ein einzelner, deutlich größerer Sprung
+   mit großzügiger Landezone — „ein paar Sprünge, die dich mega hoch
+   kicken … aber nicht immer", daher der Würfel statt einer festen Abfolge).
+4. Ein vierter, unsichtbarer Umbau: eine Obergrenze für die Steigung jedes
+   Kickers, siehe unten — keine neue Abschnittsart, aber die wichtigste
+   Korrektur von allen.
+
+### Der wichtigste gefundene Fehler: eine Steigung, an der man für immer hängen bleibt
+
+Der Fairness-Test (unten) blieb nach der dritten Fassung auf mehreren
+Strecken rot — nicht durch Absturz, sondern weil der Bot **nie ankam**.
+Ein Blick auf den mitgeloggten Verlauf zeigte: `vx` sank sanft gegen null
+und blieb dort, exakt am selben `x`, für den Rest der 300 simulierten
+Sekunden.
+
+Der Grund ist reine Mathematik: Bergauf gilt
+`vx -= sin(hangWinkel) · SCHWERKRAFT · dt`, bei vollem Gas kommt
+`+ ANTRIEB · dt` dazu. Bei `ANTRIEB` = 11,5 und `SCHWERKRAFT` = 22 gibt es
+einen exakten Winkel (`asin(ANTRIEB / SCHWERKRAFT)` ≈ 31,5°), an dem sich
+beide **exakt aufheben** — ein stabiler Fixpunkt der Simulation, kein
+Zufall. Ein Kicker, dessen Steigung diesen Winkel irgendwo auf seiner
+Anfahrt überschreitet, hat zwangsläufig genau diesen einen Punkt, und ein
+Fahrer, der dort mit zu wenig Schwung ankommt, konvergiert dorthin und
+bleibt hängen.
+
+Zwei Korrekturen zusammen beheben das:
+
+- **`RUECKROLL_MAX`**: `vx` darf jetzt negativ werden (gedeckelt, nicht bei
+  null abgeschnitten) — Ronni, unabhängig davon beobachtet: „Wenn man auf
+  'nem Berg stehen bleiben sollte, sollte man auch zurückrollen, sonst
+  sieht's komisch aus, wenn man einfach stehen bleibt, ohne die Bremse zu
+  ziehen." Ohne diese Änderung fror `vx` am Fixpunkt komplett ein; damit
+  kann die Schwerkraft einen wieder herunterziehen, sobald das Gas
+  losgelassen wird.
+- **`MAX_KICKER_STEIGUNG`**: Die Steigung von `kicker`- und
+  `doppel`-Kickern ist jetzt strukturell gedeckelt (Sicherheitsabstand
+  0,78 unter dem kritischen Winkel) — Höhe kommt seitdem aus einer
+  **breiteren** Glocke, nicht aus einer steileren. Wichtig dabei: Nur das
+  Rückrollen allein reichte nicht. Zwei benachbarte, beide zu steile
+  Kicker (eine ganz normale Kicker-Kette) ließen den Bot endlos zwischen
+  ihnen pendeln, weil der Boden dazwischen selbst zu steil war, um Schwung
+  aufzubauen. Auch `mega`-Kicker bekamen die Decke, aus demselben Grund:
+  Der Würfel verbietet nicht, dass zwei Mega-Abschnitte kurz hintereinander
+  fallen, und genau diese Nachbarschaft war die eigentliche Falle, nicht
+  die Höhe eines einzelnen Kickers für sich.
+
+*Merksatz:* Wenn ein Bot an einer Stelle für immer hängen bleibt statt zu
+stürzen, lohnt sich die Frage „gibt es hier einen Winkel, an dem sich zwei
+Kräfte exakt aufheben?", bevor man an Bot-Verhalten oder Landeschwellen
+herumjustiert — beides hätte hier nur Symptome behandelt.
+
+### Der Fairness-Bot musste zweimal klüger werden — beide Male, um wie ein normaler Fahrer zu reagieren, nicht um besser zu spielen
+
+Der Bot in `logik.test.ts` steht für „ein einfacher Fahrer, der es
+trotzdem schafft" — wird er rot, ist eine Fahrwert-Änderung schiefgegangen,
+nicht der Test. Zwei Nachbesserungen, keine davon macht ihn geschickter:
+
+- **Zurückrollen statt stur Gas geben.** Ein Bot, der auf einem zu steilen
+  Hang (siehe oben) stur Gas gibt, bleibt exakt am Fixpunkt hängen — genau
+  das würde kein echter Fahrer tun. Mit einer einzigen Schwelle
+  („Steigung > X → loslassen") wackelte das Gas aber bei jedem Bildschritt
+  um genau diesen Winkel, ohne Boden gutzumachen. Erst zwei Schwellen mit
+  Hysterese (loslassen über 0,55 Radiant, erst unter 0,2 wieder Gas geben)
+  ließen ihn wirklich zurückrollen und neuen Anlauf holen, statt am Fuß
+  desselben Stücks sofort wieder anzudrücken.
+- **Vorausschau, die mit der Flugzeit wächst.** Die feste Vorausschau von
+  0,3 s beim Zielen auf den Landewinkel passte zu kurzen Standard-Hüpfern,
+  war aber bei einem Mega-Sprung (bis zu 1,6 s Flugzeit) viel zu
+  kurzsichtig — der Bot zielte weit vor die tatsächliche Landestelle und
+  stürzte zuverlässig. `vorausschau = 0.3 + luftZeit * 0.5` löst das: Wer
+  spürt, dass er gerade lange fliegt statt kurz hoppelt, schaut weiter
+  voraus — das ist eine Frage der Aufmerksamkeit, kein Können.
+
+### Fahrgefühl
+
+- **Lehnen in der Luft ist jetzt doppelt so stark** (`LUFT_DREHUNG`: 4,2 →
+  8,5) — Rückmeldung: „Das Kippen nach vorne oder hinten muss leichter,
+  heißt schneller gehen. Wenn ich nur kurz drauf tippe, soll sich schon
+  gut was bewegen." Bei 4,2 baute ein kurzer, 100-ms-Antipper kaum mehr
+  als 15° Drehung auf.
+- **Die Steuerrichtung war einmal falsch herum** — echter Physik-Fehler,
+  keine Geschmacksfrage. `Lauf.winkel` ist „positiv = Vorderrad hoch";
+  Gewicht nach hinten (`lehnen = −1`) muss das Vorderrad anheben, genau wie
+  bei jedem Trials- oder Hügel-Spiel. Rückmeldung: „Wenn ich den Pfeil nach
+  hinten drücke, geht das Körpergewicht nicht nach hinten, sondern nach
+  vorne." Ein fehlendes Minuszeichen bei `drehen -= e.lehnen * ...`
+  reichte.
+- **Ein Sturz bricht nicht mehr schlagartig ab.** Rückmeldung: „Falls man
+  stürzt, soll es nicht im letzten Moment abbrechen, sondern man soll
+  sehen, wie der Typ stürzt." Vorher fror `vx` im Sturzmoment hart auf
+  null, und die Zusatzdrehung beim Zeichnen (`sturzDreh`) erreichte ihren
+  Deckel schon nach 0,44 s — für den Rest der 1,1-Sekunden-Verzögerung bis
+  zum Rundenende-Bildschirm stand die Szene dann einfach still. Jetzt
+  behält der Sturz einen Rest Schwung (`vx * 0.35`), der über die
+  Sturzuhr ausrollt, und die Drehung läuft über die **ganze**
+  Verzögerung weiter statt nur über deren ersten Drittel. Der Punktestand
+  ist davon unberührt: `FlowMtb.tsx` liest ihn genau einmal, im selben
+  Bild, in dem `vorbei` wahr wird.
+
+### Der Hintergrund: kompakt und ausdrücklich unbeweglich
+
+Rückmeldung, nachdem die Sprünge größer wurden und mehr Weitsicht
+brauchten: „Ich will gar nicht, dass man den Himmel sieht und dass da
+Berge und Bäume sind, das sieht doof aus … nur den Grünstreifen von der
+Wiese und darunter eine hellere und eine dunklere Schicht Erde." Die
+komplette Parallax-Bergkette, Bäume und Steine sind deshalb weg.
+
+Später durfte der Himmel wieder etwas werden — aber mit einer harten
+Bedingung: „Überleg dir für den Hintergrund noch was Cooles, das schön
+aussieht, aber sich nicht mitbewegt, weil das sonst doof aussieht und
+irritiert." Himmel-Verlauf, ein festes Sonnenlicht und zwei Wolken stehen
+deshalb **in Bildschirmkoordinaten**, nicht in Weltkoordinaten — kein
+`kameraX` kommt in ihrer Rechnung vor, sie können sich also strukturell
+nicht mitbewegen, ganz gleich was auf der Strecke passiert.
+
+Der Boden selbst durfte dagegen Struktur bekommen, weil er Teil der
+Strecke ist und zwangsläufig mitläuft: Recherche zu anderen 2D-Bike-Spielen
+(Trials, Bike Mayhem, Mad Skills BMX 2) zeigte durchgehend drei bis vier
+Erdschichten statt zweier, dazu einen hellen Saum direkt unter der
+Grasnarbe („Sonne trifft die Kuppe"). Beides jetzt über zusätzliche Aufrufe
+derselben `bodenFlaeche()`-Funktion. **Die Reihenfolge dieser Aufrufe ist
+keine Nebensache**: Jede Schicht füllt von ihrem eigenen `versatz` bis zum
+unteren Bildrand, eine später gezeichnete Schicht übermalt also alles
+darüber. Sichtbar bleibt von jeder Schicht nur das Band bis zur
+**nächsten** — die Aufrufe müssen deshalb nach aufsteigendem `versatz`
+sortiert sein, sonst verschluckt eine weiter oben ansetzende, aber später
+gezeichnete Schicht alle vorherigen sofort wieder (genau das ist beim
+ersten Versuch passiert).
+
+Kein Staub, kein Rauch beim Aufschlagen — testweise drin, Rückmeldung:
+„sieht komisch aus." Ersatzlos raus, die Federung zeigt den Einschlag
+schon deutlich genug.
+
+### Der Fahrer: Gelenkscheiben gegen Lücken in der Silhouette
+
+Rumpf, Arme und Beine sind wie bei Dash Citys Läufer keine Rohre, sondern
+weiche Kapseln mit rundem Ansatz und Gelenk (`glied()`), der Rumpf ein
+geschlossener Umriss mit unterschiedlicher Wölbung von Rücken- und
+Bauchseite.
+
+**Ein echter Geometrie-Fehler, kein Geschmacksurteil:** Rückmeldung: „Bei
+dem Fahrer gibt's einen Fehler, an der Schulter ist dann kurz nichts, da
+ist was raus." Der Rumpf rundet die Schulter nur über einen Halbkreis ab
+(die andere Hälfte gehört den Kurven zur Hüfte), und an der Hüfte endet er
+mit einer geraden Kante (`closePath()` zieht dort nur eine Sehne, keinen
+Bogen). Arm- und Beinansatz decken mit ihrer eigenen Kapsel-Rundung zwar
+das meiste davon ab, aber nicht den vollen Kreis — bei der Schulter blieb
+ein schmaler Keil übrig, durch den der Himmel durchschien. Eine einfache
+gefüllte Scheibe an Hüfte und Schulter, unter Arm/Hals bzw. schon unter dem
+Bein gezeichnet, schließt die Lücke **unabhängig vom genauen Winkel** —
+robuster, als die Kurven nur für die aktuelle Körperhaltung enger
+zusammenzuziehen. Kleinere Geschwister davon sitzen jetzt auch an Ellbogen
+und Knie, wo der Übergang zwischen den beiden Kapseln eines Glieds sonst
+als Knick statt als Gelenk gelesen wird — dieselbe Lücken-Anfälligkeit,
+nur unauffälliger.
+
+Recherche zu Fahrerfiguren in anderen 2D-Bike-Spielen (Trials, Bike Mayhem,
+Mad Skills BMX 2, Happy Wheels) bestätigt: **Ein sichtbar dünner Hals ist
+einer der zuverlässigsten Gründe, warum eine Figur aus Grundformen nach
+Strichmännchen statt nach Körper aussieht.** Der Hals ist deshalb kräftiger
+gezeichnet als vorher (0,055/0,05 m → 0,065/0,06 m) — nicht als schmaler
+sichtbarer Steg, sondern so, dass Helm und Schulter ihn größtenteils
+überlappen.
+
+**Bewusst nicht umgesetzt aus derselben Recherche:** Zwei-Knochen-IK für
+Arm/Bein (Hand und Fuß exakt auf Lenker/Pedal einrasten, unabhängig vom
+Winkel) — ein echter Realismus-Hebel, aber ein struktureller Umbau, kein
+Fehler. Vorerst zurückgestellt, falls die Figur später noch einmal
+angefasst wird.
+
+### Sounds
+
+Ausdrücklich keine Toneffekte — Rückmeldung: „Macht die Sounds weg."
+`sfx()` ist komplett raus; `haptik()` bleibt (kein Ton, auf Florians
+Geräten ohnehin stumm, siehe „Feiern, Spielstart, Haptik" weiter oben),
+gemeldet wird nur noch der Sturz und ein gewonnener Lauf.
+
+### Die Fairness-Tests
+
+`läuft bei jeder Bildrate praktisch gleich weit` und
+`lässt einen einfachen Fahrer zehn verschiedene Strecken schaffen` sind
+die wichtigsten im Spiel — dieselbe Rolle wie `istPassierbar` bei Dash
+City. Beide liefen während dieser Session mehrfach rot, nie wegen eines
+Fehlers im Test selbst, sondern weil eine Fahrwert- oder
+Gelände-Änderung eine der beiden Garantien gebrochen hatte (siehe oben).
+Ein temporäres Debug-Skript mit Sekunden-für-Sekunden-Ausgabe (`console.log`
+je simulierter Sekunde, `--reporter=verbose` nötig, sonst unterdrückt
+Vitest die Ausgabe) war beide Male der schnellste Weg zur Diagnose —
+schneller als Vermutungen im Code nachzuverfolgen.
 
 ## Befehle
 
