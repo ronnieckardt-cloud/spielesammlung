@@ -359,11 +359,20 @@ export const LUFT = 0.06;
  * Korrekturimpuls überproportional, und ein reiner Proportionalregler (wie
  * der Fairness-Bot in `logik.test.ts`) überschießt regelmäßig über das
  * Ziel hinaus, bevor er bremsen kann — mit sichtbaren Ausschlägen von über
- * 100°. `10` reicht für spürbar schnelles Kippen (siehe oben), ohne die
- * Regelstrecke unnötig zu verschärfen; siehe `NATUR_NICKEN` für den Rest
- * der Geschichte.
+ * 100°. `10` reichte für spürbar schnelles Kippen, ohne die Regelstrecke
+ * unnötig zu verschärfen.
+ *
+ * **Noch einmal auf 9 gesenkt, als `FlowMtb.tsx` eine Rampe für `lehnen`
+ * bekam** (siehe dort): Tasten/Knöpfe springen seitdem nicht mehr
+ * schlagartig auf −1/0/1, sondern nähern sich dem Ziel über rund 100 ms
+ * an. Das macht Steuern spürbar weicher, kostet aber ein Stück
+ * Reaktionsgeschwindigkeit — ein realistischer Spieler-Bot (binäre
+ * Entscheidung **plus** dieselbe Rampe) kam bei `10` seltener durch als
+ * vorher ohne Rampe. `9` gleicht das aus, ohne die „dreht das Rad in der
+ * Luft, wenn man lehnt"-Garantie zu verlieren (die braucht nur
+ * `LUFT_DREHUNG > NATUR_NICKEN`, siehe `NATUR_NICKEN`).
  */
-export const LUFT_DREHUNG = 10;
+export const LUFT_DREHUNG = 9;
 /**
  * Feste Drehbeschleunigung nach unten (Nase runter), die in der Luft immer
  * wirkt — unabhängig von `lehnen`. Siehe die Herleitung in `takt`: Ohne
@@ -374,29 +383,37 @@ export const LUFT_DREHUNG = 10;
  * zu bewegen."
  *
  * **Die Zahl ist das Ergebnis einer Gratwanderung, kein Wunschwert.** Zwei
- * Tests ziehen in entgegengesetzte Richtungen: reines Gasgeben darf auf
- * höchstens 2 von 10 Strecken ins Ziel kommen (`kommt mit reinem Gasgeben
- * nicht zuverlässig ins Ziel`), aber ein einfacher **aktiver** Bot muss
- * weiterhin alle 10 schaffen (Fairness). Kleine Werte (2–5) drehen die
- * Nase zwar spürbar, aber zufällig fast immer in dieselbe Richtung, in
- * die ein Kicker-Absprung ohnehin zur Landung hin rotiert — reines Gas
- * gewann damit trotzdem 9–10 von 10 Strecken. Ab etwa 7 kippt das
- * Verhältnis um. `8` ist der Wert, bei dem beide Tests zusammen zum
- * ersten Mal gleichzeitig grün sind (passiv 1/10, aktiv 10/10) — siehe
- * `LUFT_DREHUNG` für die zweite Hälfte der Geschichte, warum eine hohe
- * `NATUR_NICKEN` allein nicht reicht, wenn `LUFT_DREHUNG` mitwächst.
+ * Tests ziehen in entgegengesetzte Richtungen: reines Gasgeben darf nur
+ * auf einer Minderheit der 10 Strecken ins Ziel kommen (`kommt mit reinem
+ * Gasgeben nicht zuverlässig ins Ziel`), aber ein einfacher **aktiver**
+ * Bot muss weiterhin alle 10 schaffen (Fairness). Kleine Werte (2–5)
+ * drehen die Nase zwar spürbar, aber zufällig fast immer in dieselbe
+ * Richtung, in die ein Kicker-Absprung ohnehin zur Landung hin rotiert —
+ * reines Gas gewann damit trotzdem 9–10 von 10 Strecken. Ab etwa 7 kippt
+ * das Verhältnis um.
+ *
+ * **Von 8 auf 7 gesenkt**, im selben Zug wie `LUFT_DREHUNG` (siehe dort):
+ * Die neue Lehnen-Rampe in `FlowMtb.tsx` macht Gegenlenken spürbar
+ * weicher, aber auch minimal langsamer — ein realistischer Bot mit
+ * derselben Rampe kam bei den alten Werten seltener durch. `7` behält
+ * die Mehrheit-scheitert-Anforderung (passiv 5/10) und bringt den
+ * realistischen Bot zurück auf ein gutes Niveau, ohne die Fairness-
+ * Garantie (aktiver Bot 10/10) zu gefährden.
  */
-export const NATUR_NICKEN = 8.0;
+export const NATUR_NICKEN = 7.0;
 /**
  * So lange nach dem Abheben wirkt `NATUR_NICKEN` noch **nicht** — reine
  * Reaktionszeit für den Menschen am anderen Ende der Steuerung.
  *
  * Ohne diese Verzögerung ist die Anforderung „Gegenlenken muss nötig
  * sein" zwar erfüllt, aber nur für einen Bot, der jedes Bild neu plant.
- * Ein echter Spieler steuert ausschließlich binär (siehe `FlowMtb.tsx`,
- * `lehnen` ist immer −1, 0 oder 1 — kein Analogwert wie beim Fairness-Bot
- * in `logik.test.ts`) und braucht eine echte, spürbare Reaktionszeit,
- * bevor die erste Korrektur überhaupt beim Rad ankommt. Bei kurzen
+ * Ein echter Spieler entscheidet sich binär (Taste oder Knopf, an oder
+ * aus — siehe `FlowMtb.tsx`) und braucht eine echte, spürbare
+ * Reaktionszeit, bevor die erste Korrektur überhaupt beim Rad ankommt.
+ * (Seit der dortigen Lehnen-Rampe kommt `lehnen` bei `takt` selbst zwar
+ * als weich ansteigender Analogwert an, nicht mehr als Sprung — das
+ * ändert an dieser Reaktionszeit aber nichts, die Entscheidung „welche
+ * Richtung" bleibt binär und bleibt verzögert.) Bei kurzen
  * Kicker-Hüpfern (oft nur 0,3–0,5 s Flugzeit insgesamt) frisst eine
  * Drehbeschleunigung, die ab der ersten Millisekunde wirkt, genau das
  * kleine Zeitfenster auf, das ein Mensch bräuchte, um überhaupt zu

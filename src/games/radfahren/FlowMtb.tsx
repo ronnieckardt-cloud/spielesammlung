@@ -305,6 +305,19 @@ export function FlowMtb({
 
   /** Die Eingaben. Auch in einer Ref — sie ändern sich mehrmals je Sekunde. */
   const eingabeRef = useRef<Eingabe>({ gas: false, bremse: false, lehnen: 0 });
+  /**
+   * Wohin `lehnen` gerade will — Taste/Knopf schreiben nur hierhin, nie
+   * direkt in `eingabeRef`. `lehnen` selbst nähert sich dem Ziel jedes
+   * Bild ein Stück an (siehe die Uhr unten), statt beim Loslassen/Drücken
+   * sofort auf −1/0/1 zu springen. Ohne die Rampe fühlt sich Steuern wie
+   * ein Schalter an: entweder volle Auslenkung oder gar keine, mit nichts
+   * dazwischen — bei rein binärer Tasten-/Knopf-Eingabe (siehe unten,
+   * `lehnen` ist im ganzen Spiel nie ein Analogwert) ist das der einzige
+   * Hebel, um die Steuerung weicher wirken zu lassen, ohne die Physik
+   * selbst anzufassen: `takt()` bekommt weiterhin nur eine Zahl zwischen
+   * −1 und 1, egal ob sie von einer Taste oder von hier kommt.
+   */
+  const lehnenZielRef = useRef(0);
   /** `onGameOver` darf genau einmal je Runde raus. */
   const beendet = useRef(false);
 
@@ -360,11 +373,11 @@ export function FlowMtb({
           return true;
         case 'ArrowRight':
         case 'KeyD':
-          e.lehnen = an ? 1 : 0;
+          lehnenZielRef.current = an ? 1 : 0;
           return true;
         case 'ArrowLeft':
         case 'KeyA':
-          e.lehnen = an ? -1 : 0;
+          lehnenZielRef.current = an ? -1 : 0;
           return true;
         default:
           return false;
@@ -395,16 +408,38 @@ export function FlowMtb({
   const lauf = laufRef.current;
   useGameLoop(
     (dt) => {
+      /*
+       * `lehnen` der Rampe entlang ans Ziel heranführen, bevor die Physik
+       * es sieht — siehe `lehnenZielRef` oben. `RAMPZEIT` ist die Zeit für
+       * die volle Auslenkung (0 → 1); von −1 auf 1 dauert es entsprechend
+       * doppelt so lang. `takt()` bekommt dadurch nie einen Sprung,
+       * sondern eine Zahl, die sich stetig bewegt — dieselbe Eingabeform,
+       * die der Fairness-Bot in `logik.test.ts` schon immer nutzt.
+       */
+      const RAMPZEIT = 0.1;
+      const e = eingabeRef.current;
+      const ziel = lehnenZielRef.current;
+      const differenz = ziel - e.lehnen;
+      const maxSchritt = (dt / RAMPZEIT) || 0;
+      e.lehnen =
+        Math.abs(differenz) <= maxSchritt ? ziel : e.lehnen + Math.sign(differenz) * maxSchritt;
+
       const vorher = holeLauf();
       const neu = takt(vorher, dt, eingabeRef.current);
       laufRef.current = neu;
 
-      // Rückmeldung bei einem Sturz — einmal, beim Wechsel. Ronni wollte
-      // ausdrücklich keine Töne im Spiel („macht die Sounds weg"); Haptik
-      // bleibt, das ist keine Tonausgabe und auf Florians Geräten (iOS)
-      // ohnehin stumm, siehe `core/haptik.ts`.
-      if (neu.letzteLandung !== vorher.letzteLandung && neu.letzteLandung === 'sturz') {
-        haptik('ende');
+      /*
+       * Rückmeldung bei jeder Landung — einmal, beim Wechsel, genau wie
+       * beim Sturz. Ronni wollte ausdrücklich keine Töne im Spiel („macht
+       * die Sounds weg"); Haptik bleibt, das ist keine Tonausgabe und auf
+       * Florians Geräten (iOS) ohnehin stumm, siehe `core/haptik.ts`.
+       * `perfekt`/`gut`/`hart` sind dort bewusst als eigene, kurze
+       * Anlässe angelegt — landungsstark genug für ein spürbares
+       * Feedback, aber kurz genug, dass eine Kicker-Kette mit mehreren
+       * Landungen hintereinander nicht wie ein Alarm wirkt.
+       */
+      if (neu.letzteLandung !== vorher.letzteLandung && neu.letzteLandung !== null) {
+        haptik(neu.letzteLandung === 'sturz' ? 'ende' : neu.letzteLandung);
       }
 
       zeichnerRef.current?.zeichnen(neu, dt);
@@ -600,13 +635,13 @@ export function FlowMtb({
             kind=""
             label="Hinten"
             zeichen="↺"
-            setzen={(an) => (eingabeRef.current.lehnen = an ? -1 : 0)}
+            setzen={(an) => (lehnenZielRef.current = an ? -1 : 0)}
           />
           <Knopf
             kind=""
             label="Vorne"
             zeichen="↻"
-            setzen={(an) => (eingabeRef.current.lehnen = an ? 1 : 0)}
+            setzen={(an) => (lehnenZielRef.current = an ? 1 : 0)}
           />
         </div>
         <div className="flex gap-2">
