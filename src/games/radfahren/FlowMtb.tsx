@@ -549,9 +549,14 @@ export function FlowMtb({
           <div className="rounded-2xl bg-black/40 px-3 py-1.5 text-sm font-bold text-white tabular-nums backdrop-blur-sm">
             <span ref={zeitRef}>0.0</span>s
           </div>
+          {/* Etwas präsenter als vorher (größere Schrift, kräftigerer
+              Hintergrund, dünner Rand) — sie ist die einzige laufende
+              Rückmeldung zur Landungsqualität, seit die Text-Overlays
+              „PERFEKT!" usw. ausdrücklich raus sind (siehe unten). Kein
+              neues Element, nur derselbe Pill etwas deutlicher. */}
           <div
             ref={flowRef}
-            className="rounded-full bg-teal-400/25 px-2.5 py-1 text-xs font-black text-teal-200 transition-opacity duration-200"
+            className="rounded-full border border-teal-300/40 bg-teal-400/35 px-3 py-1 text-sm font-black text-teal-100 transition-opacity duration-200"
             style={{ opacity: 0 }}
           >
             FLOW ×1
@@ -611,20 +616,22 @@ export function FlowMtb({
         </div>
       </div>
 
-      {/* Der Hinweis verschwindet mit der ersten Eingabe. */}
+      {/*
+       * Der Hinweis verschwindet mit der ersten Eingabe.
+       *
+       * **Gestrafft von drei Listenpunkten auf zwei Zeilen** — dieselben
+       * drei Informationen (Gas, Luftlage, was „perfekt" bedeutet), aber
+       * ohne dass man erst eine Liste lesen muss, um loszufahren.
+       */}
       {zeigeHinweis && (
         <div className="pointer-events-none absolute inset-x-0 top-[38%] grid place-items-center px-6">
           <div className="rounded-2xl bg-black/60 px-5 py-4 text-center backdrop-blur-sm">
             <p className="text-base font-black text-white">So geht&apos;s</p>
-            <ul className="mt-2 space-y-1 text-sm text-white/90">
-              <li>
-                <span aria-hidden="true">▶</span> Gas geben und Schwung holen
-              </li>
-              <li>
-                <span aria-hidden="true">↺↻</span> In der Luft das Rad gerade halten
-              </li>
-              <li>Beide Räder zugleich aufsetzen = perfekt</li>
-            </ul>
+            <p className="mt-2 text-sm text-white/90">
+              <span aria-hidden="true">▶</span> Gas geben, <span aria-hidden="true">↺↻</span> in der Luft
+              gerade halten
+            </p>
+            <p className="text-sm text-white/90">Beide Räder zugleich = perfekt</p>
             <p className="mt-2 text-xs text-white/60">
               {settings.reducedMotion ? 'Pfeiltasten gehen auch' : 'Pfeiltasten oder WASD gehen auch'}
             </p>
