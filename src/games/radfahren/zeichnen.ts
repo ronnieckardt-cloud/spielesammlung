@@ -105,8 +105,16 @@ const FARBEN = {
  * sondern Voraussetzung — sonst sieht man die nächste Kuppe nicht mehr
  * rechtzeitig, um sich in der Luft danach auszurichten.
  */
-const SICHT_RUHIG = 12;
-const SICHT_SCHNELL = 16;
+/*
+ * Feinschliff: die Spanne zwischen Ruhig und Schnell etwas weiter
+ * gezogen (12–16 → 11,5–17,5) — der Tempo-Zoom war vorhanden, aber kaum
+ * zu bemerken. Am unteren Ende etwas näher dran (mehr „mittendrin" bei
+ * gemütlichem Tempo), am oberen Ende etwas weiter zurück (mehr sichtbare
+ * Vorwarnung bei Höchsttempo) — beide Richtungen der ursprünglichen
+ * Begründung oben bleiben erhalten, nur deutlicher spürbar.
+ */
+const SICHT_RUHIG = 11.5;
+const SICHT_SCHNELL = 17.5;
 
 /**
  * Mischt zwei Farben — gebraucht für die Verlaufsstopps der Rohre.
@@ -196,6 +204,21 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   let schuettelStaerke = 0;
   /** Gesamtdrehung der Laufräder in Radiant. */
   let radDrehung = 0;
+  /**
+   * Staub — **zweiter Anlauf.** Der erste (Rückmeldung: „sieht komisch
+   * aus", ersatzlos raus) warf offenbar zu viel auf einmal auf; hier sind
+   * es bewusst nur einzelne, kleine Punkte statt einer Wolke: ein paar
+   * beim harten Einschlag (derselbe `kraft > 0,35`-Schwellenwert wie das
+   * Kamera-Wackeln, kein eigener Sonderfall), dazu höchstens alle 0,15 s
+   * ein einzelnes Staubkorn hinterm Hinterrad bei hohem Tempo am Boden.
+   * Jedes Korn lebt kaum eine halbe Sekunde. Sollte sich das wieder
+   * seltsam anfühlen, ist die Regel dieselbe wie beim ersten Mal:
+   * ersatzlos raus, nicht kleiner drehen.
+   */
+  type Staubkorn = { x: number; y: number; vx: number; vy: number; alter: number; lebenszeit: number; groesse: number };
+  let staub: Staubkorn[] = [];
+  /** Seit dem letzten Trag-Staubkorn vergangene Zeit. */
+  let staubUhr = 0;
   /** Für die Federung: die senkrechte Geschwindigkeit des letzten Bildes. */
   let vyVorher = 0;
   /**
@@ -240,6 +263,14 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
      * Das Rad steht bei 34 % von links, nicht in der Mitte: Nach vorn
      * braucht man Sicht, nach hinten nicht. Die Kamera folgt gedämpft —
      * hart mitzuziehen wirkt hektisch.
+     *
+     * **Etwas mehr Nachlauf als vorher** (Faktor 7 → 5,5): Bei 7 hatte
+     * die Kamera das Rad praktisch schon nach einem Zehntel Sekunde
+     * eingeholt — kaum als eigene Bewegung spürbar, eher wie starr
+     * angeheftet. Ein spürbarerer Nachlauf gibt der Kamera ein Stück
+     * eigenes Gewicht, ohne bei normalen Richtungswechseln hektisch zu
+     * wirken (dafür bleibt sie mit 5,5 immer noch deutlich schneller als
+     * das Rad selbst reagieren kann).
      */
     const zielX = lauf.x + sicht * 0.16;
     const zielY = lauf.y + 1.1;
@@ -248,7 +279,7 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       kameraY = zielY;
       kameraGesetzt = true;
     } else {
-      const folgen = Math.min(1, dt * 7);
+      const folgen = Math.min(1, dt * 5.5);
       kameraX += (zielX - kameraX) * folgen;
       kameraY += (zielY - kameraY) * folgen;
     }
@@ -270,7 +301,23 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       federHinten = Math.min(1, federHinten + kraft * 1.15);
       // Erst ab einer echt harten Landung wackeln, nicht bei jedem
       // normalen Aufsetzen — sonst zittert das Bild ständig mit.
-      if (kraft > 0.35) schuettelStaerke = Math.min(1, schuettelStaerke + kraft);
+      if (kraft > 0.35) {
+        schuettelStaerke = Math.min(1, schuettelStaerke + kraft);
+        // Eine Handvoll Staubkörner beim Einschlag — derselbe Schwellenwert,
+        // kein eigener Sonderfall. Bewusst wenige (3–5), keine Wolke.
+        const anzahl = 3 + Math.floor(kraft * 3);
+        for (let i = 0; i < anzahl; i++) {
+          staub.push({
+            x: lauf.x + (Math.random() - 0.5) * 0.6,
+            y: 0.05,
+            vx: (Math.random() - 0.5) * 3.5,
+            vy: 1 + Math.random() * 1.8,
+            alter: 0,
+            lebenszeit: 0.3 + Math.random() * 0.25,
+            groesse: 0.05 + Math.random() * 0.05,
+          });
+        }
+      }
     }
     // Lichtblitz beim Wechsel auf eine perfekte Landung auslösen — nur
     // beim Wechsel, sonst bliebe er die ganze Landungsanzeige über an.
@@ -285,6 +332,37 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
     schuettelStaerke = Math.max(0, schuettelStaerke - dt * 5);
     // Schnell ausklingend — rund 150 ms, ein Wimpernschlag, kein Dauerglühen.
     blitzStaerke = Math.max(0, blitzStaerke - dt * 6.5);
+
+    /*
+     * Einzelne Staubkörner hinterm Hinterrad bei zügigem Tempo am Boden —
+     * höchstens eins alle 0,15 s, nicht bei jedem Bild. Bewusst dieselbe
+     * Kornform wie beim Einschlag, nur seltener und schwächer geworfen.
+     */
+    staubUhr += dt;
+    if (lauf.amBoden && lauf.vx > 9 && staubUhr > 0.15) {
+      staubUhr = 0;
+      staub.push({
+        x: lauf.x - RADSTAND * 0.5,
+        y: 0.03,
+        vx: -lauf.vx * 0.15 + (Math.random() - 0.5) * 0.6,
+        vy: 0.6 + Math.random() * 0.5,
+        alter: 0,
+        lebenszeit: 0.35,
+        groesse: 0.04,
+      });
+    }
+    // Bewegen, altern (durchsichtiger, siehe Zeichnung unten) und
+    // aussortieren, sobald ein Korn seine Lebenszeit überschritten hat.
+    // Eine leichte, rein dekorative Fallbeschleunigung — bewusst kein
+    // Bezug zu `SCHWERKRAFT` aus `logik.ts`, das wäre Physik für einen
+    // Effekt, der keine ist.
+    for (const korn of staub) {
+      korn.x += korn.vx * dt;
+      korn.y += korn.vy * dt;
+      korn.vy -= 6 * dt;
+      korn.alter += dt;
+    }
+    staub = staub.filter((korn) => korn.alter < korn.lebenszeit && korn.y > -0.5);
     // Zufällig statt gerichtet — reines Bildschirm-Zittern, keine
     // Spielregel, deshalb ist `Math.random()` hier genau richtig
     // (anders als im Gelände, das aus der Saat kommen muss).
@@ -517,6 +595,17 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
           ctx.fillRect(zx - 3 + i * feld, zy - hoch + j * feld, feld, feld);
         }
       }
+    }
+
+    // --- Staub -------------------------------------------------------
+    // Vor dem Rad gezeichnet, damit kein Korn optisch vor dem Fahrer
+    // schwebt — Bewegung/Alterung sind oben schon berechnet.
+    for (const korn of staub) {
+      const durchsichtig = 1 - korn.alter / korn.lebenszeit;
+      ctx.fillStyle = `rgba(138,106,69,${(durchsichtig * 0.5).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(bx(korn.x), by(korn.y), korn.groesse * proMeter, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     // --- Räder --------------------------------------------------------

@@ -3168,6 +3168,29 @@ tun" und „aktiv steuern" zusätzlich), der aktive realistische Bot bleibt
 im selben Bereich wie vor der Terrain-Änderung (7–8/10). Alle 974 Tests
 grün, keine Anpassung an Physik-Parametern nötig.
 
+### Feinschliff-Runde: Kamera, Staub, HUD
+
+Reine Darstellung, `logik.ts` unangetastet.
+
+- **Kamera:** Sichtspanne 12–16 m → 11,5–17,5 m (der Tempo-Zoom war
+  vorhanden, aber kaum zu bemerken), Nachlauf-Faktor 7 → 5,5 (spürbar mehr
+  Kamera-Gewicht, ohne bei normalen Richtungswechseln hektisch zu wirken).
+- **Staub — zweiter Anlauf.** Staub/Rauch war schon einmal drin und wurde
+  ersatzlos entfernt (Rückmeldung: „sieht komisch aus", die Federung zeige
+  den Einschlag schon deutlich genug — siehe oben bei der Bodentextur).
+  Diesmal ausdrücklich zurückhaltender: nur 3–5 einzelne kleine Körner bei
+  einem harten Einschlag (derselbe `kraft > 0,35`-Schwellenwert wie das
+  Kamera-Wackeln), dazu höchstens alle 0,15 s ein Korn hinterm Hinterrad
+  bei zügigem Tempo — keine Wolke, jedes Korn lebt unter einer halben
+  Sekunde. Falls sich das wieder seltsam anfühlt, gilt dieselbe Regel wie
+  beim ersten Mal: ersatzlos raus, nicht kleiner drehen.
+- **HUD:** Der Hinweis-Overlay ist von drei Listenpunkten auf zwei Zeilen
+  gestrafft (dieselben drei Informationen: Gas, Luftlage, was „perfekt"
+  bedeutet). Die Flow-Anzeige ist etwas präsenter (größere Schrift,
+  kräftigerer Hintergrund, dünner Rand) — sie ist die einzige laufende
+  Rückmeldung zur Landungsqualität, seit die Text-Overlays „PERFEKT!" usw.
+  ausdrücklich entfernt wurden. Kein neues HUD-Element.
+
 ## Befehle
 
 ```bash
