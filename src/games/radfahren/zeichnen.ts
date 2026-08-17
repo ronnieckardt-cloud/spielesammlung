@@ -1355,6 +1355,36 @@ function radFahrerZeichnen(
   };
 
   /*
+   * Ein Gelenk: runde Scheibe mit demselben Licht-Schatten-Verlauf wie
+   * `glied()`, nicht mehr eine flache Einfarb-Fläche.
+   *
+   * Rückmeldung: „Der Mensch sieht immer noch schlecht aus." Die
+   * ursprünglichen Gelenkscheiben (Schulter, Hüfte, Knie, Ellbogen) waren
+   * jede für sich ein reiner `fillStyle`-Kreis ohne Verlauf — direkt neben
+   * den weich schattierten Gliedern (`glied()`) und dem Rumpf (eigener
+   * Verlauf) fiel das als aufgesetzte, flache „Kugel" auf, nicht als
+   * Gelenk aus demselben Material. Ein Radialverlauf mit Licht oben links
+   * behebt genau das, unabhängig vom Winkel der angrenzenden Glieder.
+   */
+  const gelenkKugel = (mx: number, my: number, radius: number, farbe: string) => {
+    const gk = ctx.createRadialGradient(
+      mx - radius * 0.35,
+      my - radius * 0.35,
+      radius * 0.1,
+      mx,
+      my,
+      radius,
+    );
+    gk.addColorStop(0, mischen(farbe, '#ffffff', 0.32));
+    gk.addColorStop(0.65, farbe);
+    gk.addColorStop(1, mischen(farbe, '#000000', 0.32));
+    ctx.beginPath();
+    ctx.arc(mx, my, radius, 0, Math.PI * 2);
+    ctx.fillStyle = gk;
+    ctx.fill();
+  };
+
+  /*
    * **Zwei-Knochen-IK für Arm und Bein.**
    *
    * Vorher stand das Gelenk (Ellbogen/Knie) an einem festen Versatz von
@@ -1418,10 +1448,7 @@ function radFahrerZeichnen(
   glied(knie.x, knie.y, pedalX, pedalZielY, 0.084 * m, 0.064 * m, FARBEN.hose);
   // Kleine Gelenkscheibe am Knie — ohne sie liest sich der Übergang
   // zwischen den beiden Bein-Kapseln als Knick, nicht als Gelenk.
-  ctx.beginPath();
-  ctx.arc(knie.x, knie.y, 0.09 * m, 0, Math.PI * 2);
-  ctx.fillStyle = mischen(FARBEN.hose, '#000000', 0.1);
-  ctx.fill();
+  gelenkKugel(knie.x, knie.y, 0.09 * m, FARBEN.hose);
   // Schuh: Sohle und Spann getrennt, damit er nicht wie ein Klumpen wirkt.
   ctx.fillStyle = '#15161b';
   ctx.beginPath();
@@ -1496,6 +1523,32 @@ function radFahrerZeichnen(
   ctx.fill();
 
   /*
+   * Teal-Akzentstreifen aufs Trikot — dieselbe Akzentfarbe wie am
+   * Unterrohr und am Tauchrohr des Rads. Rückmeldung: „Der Mensch sieht
+   * immer noch schlecht aus." Ein Grund dafür: Kleidung, Hose und die
+   * (jetzt schattierten) Gelenke sind alle nah beieinanderliegende
+   * Grautöne — der Rumpf liest sich als einfarbige Fläche, nicht als
+   * Kleidungsstück. Ein einzelner diagonaler Streifen über die Bauchseite
+   * bricht das auf und verbindet Fahrer und Rad optisch, ohne dass die
+   * Silhouette selbst angefasst werden muss.
+   */
+  {
+    const t1 = 0.22;
+    const t2 = 0.62;
+    const p1x = huefte.x + rDx * t1 - rNx * breitHuefte * 0.55;
+    const p1y = huefte.y + rDy * t1 - rNy * breitHuefte * 0.55;
+    const p2x = huefte.x + rDx * t2 - rNx * breitSchulter * 0.5;
+    const p2y = huefte.y + rDy * t2 - rNy * breitSchulter * 0.5;
+    ctx.strokeStyle = FARBEN.akzent;
+    ctx.lineWidth = Math.max(2, 0.045 * m);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y);
+    ctx.stroke();
+  }
+
+  /*
    * Hals — ohne ihn sitzt der Helm direkt auf den Schultern.
    *
    * **Muss vor Schulterscheibe und Arm gezeichnet werden, nicht danach.**
@@ -1548,18 +1601,13 @@ function radFahrerZeichnen(
    * als die Kurven noch enger aneinander zu ziehen, das nur bei genau
    * dieser Körperhaltung gepasst hätte.
    */
-  const gelenkscheibe = (mx: number, my: number, radius: number) => {
-    ctx.beginPath();
-    ctx.arc(mx, my, radius, 0, Math.PI * 2);
-    ctx.fillStyle = mischen(FARBEN.kleidung, '#000000', 0.12);
-    ctx.fill();
-  };
   // Radius jeweils etwas größer als der Kapsel-Ansatz an dieser Stelle
   // (Bein 0,115 m, Arm 0,10 m) — sonst reicht die Scheibe selbst nicht
   // bis zum sichtbaren Rand der jetzt dickeren Gliedmaßen und die Lücke
-  // wird größer statt kleiner.
-  gelenkscheibe(huefte.x, huefte.y, 0.135 * m);
-  gelenkscheibe(schulter.x, schulter.y, 0.115 * m);
+  // wird größer statt kleiner. `gelenkKugel()` statt einer flachen
+  // Scheibe, siehe die Herleitung dort.
+  gelenkKugel(huefte.x, huefte.y, 0.135 * m, FARBEN.kleidung);
+  gelenkKugel(schulter.x, schulter.y, 0.115 * m, FARBEN.kleidung);
 
   // Rückenprotektor, als aufgesetzte Platte auf dem Rücken.
   ctx.fillStyle = 'rgba(20,22,28,0.55)';
@@ -1582,10 +1630,7 @@ function radFahrerZeichnen(
   glied(schulter.x, schulter.y, ellbogen.x, ellbogen.y, 0.1 * m, 0.076 * m, FARBEN.kleidung);
   glied(ellbogen.x, ellbogen.y, lenker.x, lenker.y, 0.074 * m, 0.06 * m, FARBEN.kleidung);
   // Kleine Gelenkscheibe am Ellbogen — dieselbe Überlegung wie am Knie.
-  ctx.beginPath();
-  ctx.arc(ellbogen.x, ellbogen.y, 0.082 * m, 0, Math.PI * 2);
-  ctx.fillStyle = mischen(FARBEN.kleidung, '#000000', 0.1);
-  ctx.fill();
+  gelenkKugel(ellbogen.x, ellbogen.y, 0.082 * m, FARBEN.kleidung);
   // Handschuh am Lenker.
   ctx.fillStyle = '#2a2d36';
   ctx.strokeStyle = '#12141a';

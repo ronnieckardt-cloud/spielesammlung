@@ -303,8 +303,24 @@ export function FlowMtb({
     return laufRef.current;
   }, []);
 
-  /** Die Eingaben. Auch in einer Ref — sie ändern sich mehrmals je Sekunde. */
-  const eingabeRef = useRef<Eingabe>({ gas: false, bremse: false, lehnen: 0 });
+  /*
+   * Die Eingaben. Auch in einer Ref — sie ändern sich mehrmals je Sekunde.
+   *
+   * **`gas` startet auf `true` und bleibt es — kein Knopf dafür mehr.**
+   * Rückmeldung: „Wenn ich Gas drücke, kann ich nicht zur gleichen Zeit
+   * auch nach hinten oder vorne lehnen. Das funktioniert nicht … vielleicht,
+   * dass es automatisch fährt." Der Multitouch-Fix an den Knöpfen (siehe
+   * `Knopf` unten) reicht auf manchen Geräten offenbar nicht — zwei
+   * gleichzeitige Finger sind ohnehin ein hohes Risiko für genau diese Art
+   * Bug, egal wie sorgfältig man sie behandelt. Die robustere Lösung ist,
+   * das Problem gar nicht erst entstehen zu lassen: Fahren ist ab jetzt
+   * kein Knopf mehr, sondern der Grundzustand. Übrig bleibt genau eine
+   * Sache, die während der Fahrt gleichzeitig gebraucht wird — Lehnen —,
+   * und die braucht nur einen Finger. Bremsen bleibt als zweite, bewusst
+   * seltene Aktion erhalten (siehe unten), für die man ohnehin kurz nicht
+   * lehnt.
+   */
+  const eingabeRef = useRef<Eingabe>({ gas: true, bremse: false, lehnen: 0 });
   /**
    * Wohin `lehnen` gerade will — Taste/Knopf schreiben nur hierhin, nie
    * direkt in `eingabeRef`. `lehnen` selbst nähert sich dem Ziel jedes
@@ -362,11 +378,6 @@ export function FlowMtb({
     const setzen = (code: string, an: boolean) => {
       const e = eingabeRef.current;
       switch (code) {
-        case 'ArrowUp':
-        case 'KeyW':
-        case 'Space':
-          e.gas = an;
-          return true;
         case 'ArrowDown':
         case 'KeyS':
           e.bremse = an;
@@ -519,7 +530,7 @@ export function FlowMtb({
     return (
       <Startbildschirm
         titel="Flow MTB"
-        untertitel="Gas geben, springen, sauber landen. In der Luft das Rad gerade halten."
+        untertitel="Du fährst automatisch los. Springen, sauber landen, in der Luft das Rad gerade halten."
         bestScore={bestScore}
         verlauf="linear-gradient(165deg, #0f2b40 0%, #1d4d5c 45%, #0b1a24 100%)"
         deko={DEKO}
@@ -633,7 +644,17 @@ export function FlowMtb({
         </div>
       </div>
 
-      {/* Steuerung: links Gewicht, rechts Antrieb — genau wie gewünscht */}
+      {/*
+       * Steuerung: links Gewicht, rechts Bremse.
+       *
+       * **Kein Gas-Knopf mehr** — Fahren ist jetzt der Grundzustand, siehe
+       * `eingabeRef` oben. Während der Fahrt gleichzeitig gebraucht wird
+       * nur noch Lehnen, und das ist eine einzelne Hand/ein einzelner
+       * Finger. Bremse bleibt rechts stehen: Man bremst nie **und** lehnt
+       * im selben Moment absichtlich (man will vor einem Sprung langsamer
+       * werden, nicht mitten im Absprung), deshalb ist das gleichzeitige
+       * Bedienen beider Seiten hier kein echter Anwendungsfall mehr.
+       */}
       <div className="pointer-events-none absolute inset-x-0 bottom-5 flex items-end justify-between px-4">
         <div className="flex gap-2">
           <Knopf
@@ -649,36 +670,28 @@ export function FlowMtb({
             setzen={(an) => (lehnenZielRef.current = an ? 1 : 0)}
           />
         </div>
-        <div className="flex gap-2">
-          <Knopf
-            kind=""
-            label="Bremse"
-            zeichen="⊘"
-            setzen={(an) => (eingabeRef.current.bremse = an)}
-          />
-          <Knopf
-            kind="bg-teal-500/35"
-            label="Gas"
-            zeichen="▶"
-            setzen={(an) => (eingabeRef.current.gas = an)}
-          />
-        </div>
+        <Knopf
+          kind=""
+          label="Bremse"
+          zeichen="⊘"
+          setzen={(an) => (eingabeRef.current.bremse = an)}
+        />
       </div>
 
       {/*
        * Der Hinweis verschwindet mit der ersten Eingabe.
        *
-       * **Gestrafft von drei Listenpunkten auf zwei Zeilen** — dieselben
-       * drei Informationen (Gas, Luftlage, was „perfekt" bedeutet), aber
-       * ohne dass man erst eine Liste lesen muss, um loszufahren.
+       * Seit Fahren der Grundzustand ist (kein Gas-Knopf mehr, siehe
+       * `eingabeRef` oben), geht es hier nur noch um das eine, was
+       * während der Fahrt wirklich zu tun ist: lehnen.
        */}
       {zeigeHinweis && (
         <div className="pointer-events-none absolute inset-x-0 top-[38%] grid place-items-center px-6">
           <div className="rounded-2xl bg-black/60 px-5 py-4 text-center backdrop-blur-sm">
             <p className="text-base font-black text-white">So geht&apos;s</p>
             <p className="mt-2 text-sm text-white/90">
-              <span aria-hidden="true">▶</span> Gas geben, <span aria-hidden="true">↺↻</span> in der Luft
-              gerade halten
+              Du fährst automatisch los — <span aria-hidden="true">↺↻</span> in der Luft das Rad gerade
+              halten
             </p>
             <p className="text-sm text-white/90">Beide Räder zugleich = perfekt</p>
             <p className="mt-2 text-xs text-white/60">

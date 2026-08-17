@@ -3205,6 +3205,44 @@ von 7 auf 7,5 nachjustiert (siehe die Herleitung direkt am Wert in
 `logik.ts`) behebt es, ohne Fairness-Garantie oder Bildratentest zu
 gefährden. Alle 974 Tests grün nach dem Merge.
 
+### Live-Rückmeldung nach dem Deploy: Gas als Knopf war der eigentliche Fehler
+
+Direkt nach dem Live-Test, wörtlich: „Wenn ich Gas drücke, kann ich nicht
+zur gleichen Zeit auch nach hinten oder vorne lehnen. Das funktioniert
+nicht … vielleicht, dass es automatisch fährt." Der Multitouch-Fix an den
+Knöpfen (`touch-action: none` direkt an jedem `Knopf`, siehe weiter oben)
+reichte auf Ronnis Gerät offenbar trotzdem nicht — zwei gleichzeitige
+Finger sind strukturell ein hohes Risiko für genau diese Art Bug, egal
+wie sorgfältig man die Touch-Events behandelt.
+
+**Die robustere Lösung: das Problem gar nicht erst entstehen lassen.**
+`eingabeRef` startet jetzt mit `gas: true` und bleibt es — kein Gas-Knopf
+mehr, kein `ArrowUp`/`KeyW`/`Space` dafür. Fahren ist der Grundzustand;
+während der Fahrt gleichzeitig gebraucht wird nur noch **eine** Sache
+(Lehnen), und die braucht nur einen Finger. Bremse bleibt als zweite,
+bewusst seltene Aktion erhalten — man bremst nie und lehnt im selben
+Moment absichtlich, das gleichzeitige Bedienen beider Seiten ist also
+kein echter Anwendungsfall. `logik.ts` musste dafür nicht angefasst
+werden (`takt()` kannte `e.gas`/`e.bremse` schon immer unabhängig
+voneinander); auch kein Test musste geändert werden, weil die
+Fairness-Tests direkt mit `takt()` arbeiten, nicht über die UI.
+
+**Gleichzeitig, zweite Rückmeldung:** „Der Mensch sieht immer noch
+schlecht aus." Zwei konkrete Schwachstellen gefunden und behoben:
+- Die Gelenkscheiben (Schulter, Hüfte, Knie, Ellbogen) waren reine
+  `fillStyle`-Kreise ohne Verlauf — direkt neben den weich schattierten
+  Gliedern (`glied()`) und dem Rumpf fielen sie als aufgesetzte, flache
+  „Kugeln" auf. Neuer gemeinsamer Helfer `gelenkKugel()` mit
+  Radialverlauf (Licht oben links, wie bei einer echten Kugel) für alle
+  vier Gelenke.
+- Trikot, Hose und die (jetzt schattierten) Gelenke waren alle nah
+  beieinanderliegende Grautöne — der Rumpf las sich als einfarbige
+  Fläche. Ein diagonaler Teal-Akzentstreifen über die Bauchseite (dieselbe
+  Akzentfarbe wie am Unterrohr und Tauchrohr des Rads) bricht das auf und
+  verbindet Fahrer und Rad optisch.
+
+Service-Worker-Version v71 → v72.
+
 ## Befehle
 
 ```bash
