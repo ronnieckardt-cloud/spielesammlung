@@ -450,12 +450,25 @@ export const LUFT_DREHUNG = 9;
  * **Von 8 auf 7 gesenkt**, im selben Zug wie `LUFT_DREHUNG` (siehe dort):
  * Die neue Lehnen-Rampe in `FlowMtb.tsx` macht Gegenlenken spürbar
  * weicher, aber auch minimal langsamer — ein realistischer Bot mit
- * derselben Rampe kam bei den alten Werten seltener durch. `7` behält
- * die Mehrheit-scheitert-Anforderung (passiv 5/10) und bringt den
+ * derselben Rampe kam bei den alten Werten seltener durch. `7` behielt
+ * die Mehrheit-scheitert-Anforderung (passiv 5/10) und brachte den
  * realistischen Bot zurück auf ein gutes Niveau, ohne die Fairness-
- * Garantie (aktiver Bot 10/10) zu gefährden.
+ * Garantie (aktiver Bot 10/10) zu gefährden — **allein betrachtet**.
+ *
+ * **Auf 7,5 nachjustiert beim Zusammenführen mit der fünften
+ * Geländefassung** (Flow-/Skill-Zonen, siehe dort): Jeder der beiden
+ * Branches war für sich genommen validiert, aber kombiniert stieg
+ * „reines Gasgeben" wieder auf 6 von 10 Strecken — die neuen, großzügig
+ * geschnittenen Flow-Zonen sind für den 7er-Wert etwas zu nachsichtig.
+ * `7,5` bringt passiv zurück auf 5/10 (Mehrheit scheitert), ohne den
+ * realistischen Bot spürbar zu verschlechtern. **Lehrstück Nummer zwei
+ * zum selben Thema wie oben:** Zwei unabhängig validierte Änderungen an
+ * physisch benachbarten Stellschrauben (Steuerungsgefühl und
+ * Streckenrhythmus) können sich gegenseitig verschieben — nach jedem
+ * Zusammenführen erneut mit dem realistischen Bot prüfen, nicht nur mit
+ * den bestehenden Tests.
  */
-export const NATUR_NICKEN = 7.0;
+export const NATUR_NICKEN = 7.5;
 /**
  * So lange nach dem Abheben wirkt `NATUR_NICKEN` noch **nicht** — reine
  * Reaktionszeit für den Menschen am anderen Ende der Steuerung.

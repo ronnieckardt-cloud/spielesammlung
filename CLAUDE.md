@@ -3191,6 +3191,20 @@ Reine Darstellung, `logik.ts` unangetastet.
   Rückmeldung zur Landungsqualität, seit die Text-Overlays „PERFEKT!" usw.
   ausdrücklich entfernt wurden. Kein neues HUD-Element.
 
+### Zusammenführung aller vier Runden: eine Nachjustierung nötig
+
+Bike-Optik, Game-Feel, Streckengenerierung und Feinschliff liefen als vier
+unabhängige Branches, jede für sich mit `npm test` grün. Beim
+Zusammenführen zeigte sich: „kommt mit reinem Gasgeben nicht zuverlässig
+ins Ziel" sprang auf 6 von 10 Strecken (erlaubt: unter 6) — Game-Feel
+(senkt `NATUR_NICKEN`/`LUFT_DREHUNG` wegen der neuen Lehnen-Rampe) und
+Streckengenerierung (großzügigere Flow-Zonen) verschieben dieselbe
+Balance in dieselbe Richtung, was jede für sich beim Validieren gegen den
+jeweils *alten* Stand der anderen Baustelle nicht auffiel. `NATUR_NICKEN`
+von 7 auf 7,5 nachjustiert (siehe die Herleitung direkt am Wert in
+`logik.ts`) behebt es, ohne Fairness-Garantie oder Bildratentest zu
+gefährden. Alle 974 Tests grün nach dem Merge.
+
 ## Befehle
 
 ```bash
