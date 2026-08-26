@@ -11,7 +11,7 @@
  * Beim Veröffentlichen einer neuen Fassung die Zahl in SPEICHER erhöhen.
  */
 
-const SPEICHER = 'flow-games-v74';
+const SPEICHER = 'flow-games-v75';
 const GRUNDGERUEST = ['/', '/index.html', '/manifest.webmanifest'];
 
 /**
@@ -32,6 +32,19 @@ const GRUNDGERUEST = ['/', '/index.html', '/manifest.webmanifest'];
  * Schlägt das Holen fehl (kein Netz beim allerersten Besuch), wird die
  * Einrichtung **nicht** abgebrochen — das Grundgerüst steht, und der Rest
  * kommt wie früher beim ersten Abruf dazu.
+ *
+ * **Der Godot-Web-Export unter `/arena-brawler-godot/` steht bewusst NICHT
+ * in dieser Liste.** `vite.config.ts` nimmt nur `public/arena-brawler/`
+ * (den kleinen Phaser-Prototyp) mit auf — dessen `index.wasm` allein ist
+ * rund 35 MB, und `Cache.addAll` ist alles-oder-nichts: Ein einziges großes,
+ * auf schwacher Verbindung scheiterndes Herunterladen risse sonst den
+ * *gesamten* Vorrat mit sich, auch das kleine Grundgerüst und Dash Citys
+ * three.js-Brocken. Wer die Sammlung besucht, aber Arena Brawler (Godot) nie
+ * öffnet, soll dafür nicht ungefragt 35 MB laden. Offline verfügbar wird die
+ * Seite trotzdem — ganz ohne Sonderfall, sobald sie einmal mit Netz
+ * geöffnet wurde: Dafür reicht der allgemeine „erst Speicher, dann
+ * Netz"-Weg im `fetch`-Handler unten, der für jede Datei dieser Herkunft
+ * gilt.
  */
 async function vorratFuellen() {
   const speicher = await caches.open(SPEICHER);
@@ -63,10 +76,11 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Unterpfade außerhalb der eigentlichen Ein-Seiten-App (bisher nur der
-// Phaser-Prototyp Arena Brawler) — die haben eine **eigene** `index.html`
-// und dürfen mit der der SPA nicht verwechselt werden, siehe unten.
-const EIGENSTAENDIGE_PFADE = ['/arena-brawler/'];
+// Unterpfade außerhalb der eigentlichen Ein-Seiten-App (der Phaser-Prototyp
+// Arena Brawler und seit Kurzem auch dessen Godot-Web-Export) — die haben
+// eine **eigene** `index.html` und dürfen mit der der SPA nicht verwechselt
+// werden, siehe unten.
+const EIGENSTAENDIGE_PFADE = ['/arena-brawler/', '/arena-brawler-godot/'];
 
 function istEigenstaendig(pfad) {
   return EIGENSTAENDIGE_PFADE.some((praefix) => pfad.startsWith(praefix));

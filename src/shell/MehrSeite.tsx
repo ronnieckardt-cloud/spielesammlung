@@ -51,12 +51,15 @@ function Zeile({
  * innerhalb dieser App wechselt.
  *
  * Arena Brawler ist absichtlich kein `GameApi`-Spiel — kein Eintrag in
- * `registry.ts`, kein Wrapper, `src/games/` bleibt unangetastet. Es ist ein
- * eigenständiger Phaser-Prototyp mit eigener `index.html` unter
- * `/arena-brawler/` (siehe `arena-brawler-mini/README.md`), gespiegelt nach
- * `public/arena-brawler/`. Ein `<a>` mit echtem `href` navigiert deshalb die
- * **ganze Seite** dorthin, statt nur intern die Ansicht zu wechseln — genau
- * das ist hier richtig, nicht unabsichtlich einfacher gebaut. Bewusst ohne
+ * `registry.ts`, kein Wrapper, `src/games/` bleibt unangetastet. Es gibt ihn
+ * als zwei eigenständige Prototypen, beide mit eigener `index.html` und
+ * eigenem Bau, keiner Teil dieser React-App: der Phaser-Prototyp unter
+ * `/arena-brawler/` (siehe `arena-brawler-mini/README.md`, gespiegelt nach
+ * `public/arena-brawler/`) und der Godot-Web-Export unter
+ * `/arena-brawler-godot/` (siehe `arena-brawler-godot/README.md`, Abschnitt
+ * „Web-Export"). Ein `<a>` mit echtem `href` navigiert deshalb die **ganze
+ * Seite** dorthin, statt nur intern die Ansicht zu wechseln — genau das ist
+ * hier richtig, nicht unabsichtlich einfacher gebaut. Bewusst ohne
  * `target="_blank"`: In einer installierten Startbildschirm-App auf iOS ist
  * ein neuer Tab unzuverlässig, eine normale Navigation funktioniert dort
  * wie im Browser auch immer gleich, und der Zurück-Knopf/die Wisch-Geste
@@ -147,8 +150,14 @@ export function MehrSeite({
         <Zeile symbol="⚙️" titel="Einstellungen" hinweis="Ton und Bewegung" onKlick={onEinstellungen} />
         <ZeileLink
           symbol="🕹️"
-          titel="Arena Brawler"
-          hinweis="Prototyp · öffnet eine eigene Seite"
+          titel="Arena Brawler (Godot)"
+          hinweis="Prototyp · volle Godot-Fassung · öffnet eine eigene Seite"
+          href="/arena-brawler-godot/"
+        />
+        <ZeileLink
+          symbol="🕹️"
+          titel="Arena Brawler (Mini / Phaser)"
+          hinweis="Prototyp · leichtere Fassung · öffnet eine eigene Seite"
           href="/arena-brawler/"
         />
       </ul>

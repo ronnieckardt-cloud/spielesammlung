@@ -676,6 +676,108 @@ pausiert wird (`Eingabe.touch_verfuegbar` wird dafür extra erzwungen und
 am Ende wieder zurückgesetzt, sonst bliebe sie im Testlauf ohnehin
 unsichtbar — kein echter Touchscreen hier).
 
+## Web-Export (HTML5)
+
+Das Projekt lässt sich als reines HTML5/WebAssembly-Paket bauen und läuft
+dann ganz ohne Godot-Editor im Browser — so kommt es auf Netlify unter
+`/arena-brawler-godot/` bei Florian an, parallel zum Phaser-Prototyp unter
+`/arena-brawler/`.
+
+**Godot-Version: 4.3** (genau die, mit der das Projekt sonst auch geöffnet
+wird — `config/features` in `project.godot` nennt sie explizit).
+
+### Voraussetzung: Web-Export-Templates
+
+Der Editor selbst reicht nicht — er braucht zusätzlich die **Export
+Templates** (vorgefertigte Engine-Binärdateien fürs Zielsystem, getrennt vom
+Editor, weil sie für jede Plattform anders sind und niemand alle auf einmal
+braucht). Ohne sie bricht der Export mit „Cannot export project … due to
+configuration errors" ab — diese Meldung nennt die eigentliche Ursache
+leider nicht, sie erscheint identisch auch bei einer falschen Export-Option.
+
+**Im Editor:** Menü **Editor → Manage Export Templates…** → „Download and
+Install" für Version 4.3.stable. Lädt automatisch das komplette Paket
+(alle Plattformen, gut 1 GB) und legt es an der richtigen Stelle ab.
+
+**Ohne Editor-GUI (Kommandozeile), wie in dieser Session gemacht:**
+
+```bash
+# Das komplette Vorlagen-Paket für 4.3-stable (~1 GB) laden …
+curl -L -o export_templates.tpz \
+  https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
+
+# … und an die Stelle entpacken, an der Godot 4.3.stable sie unter Linux
+# erwartet. Nur die Web-Dateien werden wirklich gebraucht (die anderen
+# Plattformen kosten nur Platz, wenn man sie nie exportiert):
+mkdir -p ~/.local/share/godot/export_templates/4.3.stable
+unzip -j export_templates.tpz \
+  "templates/version.txt" \
+  "templates/web_release.zip" \
+  "templates/web_debug.zip" \
+  "templates/web_nothreads_release.zip" \
+  "templates/web_nothreads_debug.zip" \
+  -d ~/.local/share/godot/export_templates/4.3.stable
+```
+
+`templates/version.txt` muss danach exakt `4.3.stable` enthalten und im
+selben Ordner wie die `web_*.zip`-Dateien liegen — der Ordnername *ist* die
+Versionsprüfung, Godot vergleicht nichts anderes.
+
+### Preset: `export_presets.cfg`
+
+Liegt fertig im Projekt, von Hand geschrieben wie `project.godot`. Wichtige
+Festlegungen darin, mit Begründung direkt im Kommentarkopf der Datei:
+
+- **Export-Pfad** `../public/arena-brawler-godot/index.html` — zeigt bewusst
+  aus diesem Projekt heraus in die Spielesammlung, landet dort neben dem
+  Phaser-Prototyp.
+- **Threads AUS** (`variant/thread_support=false`). Mit Threads bräuchte die
+  Seite `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy`-Header
+  (SharedArrayBuffer-Pflicht) — CLAUDE.md dokumentiert unter „Zu 3-D" schon
+  die WebGL-Einbrüche auf älterem iOS-Safari, und Florians Geräte sind
+  ausschließlich iPhone/iPad. Ohne Threads läuft es überall gleich, ohne
+  Zusatz-Header, die die restliche Sammlung stören könnten. Nachgemessen im
+  gebauten `index.js`: weder `PThread` noch `new Worker` kommen vor, es lädt
+  wirklich die `*_nothreads_*`-Vorlage.
+- **`vram_texture_compression/for_mobile` bewusst nicht aktiviert** — diese
+  eine Option allein ließ den Export in der Prüf-Umgebung mit derselben
+  unspezifischen Konfigurationsfehler-Meldung scheitern (offenbar fehlt ein
+  Kompressionsmodul im jeweiligen Editor-Build). Kein Verlust: Arena Brawler
+  hat keine einzige Bild-Textur, alles ist Code-Zeichnung (Polygon2D,
+  `_draw()`) — die Option hätte hier ohnehin nichts zu komprimieren.
+- Canvas-Resize-Policy `2` (adaptiv, füllt den Container) passt zum
+  `canvas_items`/`expand`-Stretch-Modus, den `project.godot` schon für die
+  normale Fensterdarstellung setzt.
+- Progressive-Web-App-Unterstützung aus (`progressive_web_app/enabled=false`)
+  — die Spielesammlung hat schon einen eigenen Service Worker fürs ganze
+  Netlify-Deployment; ein zweiter, verschachtelter unter `/arena-brawler-
+  godot/` würde nur verwirren, ohne dass Florian ihn getrennt bräuchte.
+
+### Lokal exportieren
+
+**Im Editor:** Projekt öffnen → **Projekt → Exportieren…** → Preset „Web"
+auswählen → „Export Project". Landet automatisch unter
+`public/arena-brawler-godot/` der Spielesammlung.
+
+**Über die Kommandozeile** (das Vorgehen dieser Session, reproduzierbar):
+
+```bash
+cd arena-brawler-godot
+godot --headless --path . --import          # Ressourcen neu einlesen
+godot --headless --path . --export-release "Web"
+```
+
+Ergebnis: `index.html`, `index.js`, `index.wasm`, `index.pck`,
+`index.audio.worklet.js` sowie zwei Icon-PNGs unter
+`../public/arena-brawler-godot/` — alles, was der Browser zum Start braucht.
+
+**Nach jeder größeren Änderung am Spiel muss neu exportiert werden** — der
+Export ist ein Schnappschuss, kein automatischer Build-Schritt. Die
+Spielesammlung selbst baut ihn nicht mit (`npm run build` fasst
+`arena-brawler-godot/` nicht an); die fertigen Dateien unter
+`public/arena-brawler-godot/` werden wie jede andere Datei unter `public/`
+eingecheckt und mitausgeliefert.
+
 ## Was als Nächstes fehlt
 
 Ton. Bewusst noch nicht gebaut: Erst sollte eine ganze Runde mit echter
