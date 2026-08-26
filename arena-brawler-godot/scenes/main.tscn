@@ -1,0 +1,28 @@
+[gd_scene load_steps=4 format=3 uid="uid://bqarena0main"]
+
+[ext_resource type="Script" path="res://scripts/welt/main.gd" id="1_main"]
+[ext_resource type="PackedScene" uid="uid://bqarena0arena" path="res://scenes/arena.tscn" id="2_arena"]
+[ext_resource type="PackedScene" uid="uid://bqarena0spieler" path="res://characters/spieler.tscn" id="3_spieler"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Arena" parent="." instance=ExtResource("2_arena")]
+
+[node name="Spieler" parent="." instance=ExtResource("3_spieler")]
+position = Vector2(576, 324)
+
+[node name="Kamera" type="Camera2D" parent="Spieler"]
+position_smoothing_enabled = true
+position_smoothing_speed = 6.0
+
+[node name="Oberflaeche" type="CanvasLayer" parent="."]
+
+[node name="Kopfzeile" type="Label" parent="Oberflaeche"]
+offset_left = 20.0
+offset_top = 14.0
+offset_right = 1130.0
+offset_bottom = 44.0
+theme_override_colors/font_color = Color(0.878431, 0.905882, 0.976471, 1)
+theme_override_font_sizes/font_size = 18
+text = "Arena Brawler"
