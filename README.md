@@ -80,4 +80,12 @@ keine gemeinsame Bestenliste. Näheres in ihren eigenen `README.md`.
 
 `arena-brawler-mini/` ist zusätzlich unverändert nach `public/arena-brawler/`
 gespiegelt und dadurch auf der ausgelieferten Netlify-Seite unter
-`/arena-brawler/` als eigene, rein statische Seite erreichbar.
+
+**`/arena-brawler/`**
+
+als eigene, rein statische Seite erreichbar — über die Startseite (Reiter
+„Mehr" → „Arena Brawler", klar als Prototyp gekennzeichnet, öffnet dieselbe
+Adresse als echten Link) oder direkt über diese URL. Der Link liegt bewusst
+nur in `shell/MehrSeite.tsx` als normaler `<a href="/arena-brawler/">` —
+kein Eintrag in `src/core/registry.ts`, kein `GameApi`-Wrapper, kein Ordner
+unter `src/games/`.

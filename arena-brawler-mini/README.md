@@ -27,6 +27,12 @@ React-Sammlung: nicht in `src/core/registry.ts` eingetragen, kein Zugriff auf
 `public/arena-brawler/` von Hand nachziehen — die beiden sind bewusst zwei
 Kopien, kein Build-Schritt verbindet sie.
 
+Ein sichtbarer Einstieg dorthin steht auf der Reiterseite „Mehr" der
+Spielesammlung (`shell/MehrSeite.tsx`), klar als „Prototyp" beschriftet —
+ein ganz normaler `<a href="/arena-brawler/">`, der die Seite verlässt,
+kein interner Ansichtswechsel. Die Richtung bleibt also einseitig: Die
+Sammlung verlinkt hierher, dieser Ordner weiß von der Sammlung nichts.
+
 ## Steuerung
 
 Zielgerät ist der Touchscreen (iPhone, iPad) — die Tastatur ist nur die
