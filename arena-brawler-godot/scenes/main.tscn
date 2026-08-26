@@ -1,0 +1,300 @@
+[gd_scene load_steps=9 format=3 uid="uid://bqarena0main"]
+
+[ext_resource type="Script" path="res://scripts/welt/main.gd" id="1_main"]
+[ext_resource type="PackedScene" uid="uid://bqarena0arena" path="res://scenes/arena.tscn" id="2_arena"]
+[ext_resource type="PackedScene" uid="uid://bqarena0spieler" path="res://characters/spieler.tscn" id="3_spieler"]
+[ext_resource type="Script" path="res://scripts/welt/wellenleiter.gd" id="4_wellenleiter"]
+[ext_resource type="Script" path="res://scripts/welt/rundenende.gd" id="5_rundenende"]
+[ext_resource type="Script" path="res://ui/aufwertungsauswahl.gd" id="6_aufwertungsauswahl"]
+[ext_resource type="Script" path="res://ui/charakterauswahl.gd" id="7_charakterauswahl"]
+[ext_resource type="Script" path="res://scripts/gemeinsam/figur.gd" id="8_figur"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Arena" parent="." instance=ExtResource("2_arena")]
+
+[node name="Spieler" parent="." instance=ExtResource("3_spieler")]
+position = Vector2(576, 324)
+
+[node name="Kamera" type="Camera2D" parent="Spieler"]
+position_smoothing_enabled = true
+position_smoothing_speed = 6.0
+
+[node name="Wellenleiter" type="Node" parent="."]
+script = ExtResource("4_wellenleiter")
+
+[node name="Oberflaeche" type="CanvasLayer" parent="."]
+process_mode = 3
+
+[node name="Kopfzeile" type="Label" parent="Oberflaeche"]
+offset_left = 20.0
+offset_top = 14.0
+offset_right = 1130.0
+offset_bottom = 44.0
+theme_override_colors/font_color = Color(0.878431, 0.905882, 0.976471, 1)
+theme_override_font_sizes/font_size = 18
+text = "Arena Brawler"
+
+[node name="Wellenmeldung" type="Label" parent="Oberflaeche"]
+visible = false
+mouse_filter = 2
+anchor_right = 1.0
+anchor_top = 0.32
+anchor_bottom = 0.32
+offset_top = -30.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 34
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "Welle 1 geschafft!"
+
+[node name="Rundenende" type="Control" parent="Oberflaeche"]
+visible = false
+mouse_filter = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("5_rundenende")
+
+[node name="Hintergrund" type="ColorRect" parent="Oberflaeche/Rundenende"]
+mouse_filter = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.043137, 0.047059, 0.070588, 0.82)
+
+[node name="Text" type="Label" parent="Oberflaeche/Rundenende"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "Vorbei"
+
+[node name="Aufwertungsauswahl" type="CanvasLayer" parent="Oberflaeche"]
+script = ExtResource("6_aufwertungsauswahl")
+
+[node name="Hintergrund" type="ColorRect" parent="Oberflaeche/Aufwertungsauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.043137, 0.047059, 0.070588, 0.88)
+
+[node name="Titel" type="Label" parent="Oberflaeche/Aufwertungsauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 64.0
+offset_bottom = 104.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+text = "Aufwertung wählen"
+
+[node name="Karte1" type="Button" parent="Oberflaeche/Aufwertungsauswahl"]
+offset_left = 64.0
+offset_top = 160.0
+offset_right = 384.0
+offset_bottom = 560.0
+theme_override_font_sizes/font_size = 21
+autowrap_mode = 3
+text = "Karte 1"
+
+[node name="Karte2" type="Button" parent="Oberflaeche/Aufwertungsauswahl"]
+offset_left = 416.0
+offset_top = 160.0
+offset_right = 736.0
+offset_bottom = 560.0
+theme_override_font_sizes/font_size = 21
+autowrap_mode = 3
+text = "Karte 2"
+
+[node name="Karte3" type="Button" parent="Oberflaeche/Aufwertungsauswahl"]
+offset_left = 768.0
+offset_top = 160.0
+offset_right = 1088.0
+offset_bottom = 560.0
+theme_override_font_sizes/font_size = 21
+autowrap_mode = 3
+text = "Karte 3"
+
+[node name="Hinweis" type="Label" parent="Oberflaeche/Aufwertungsauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 578.0
+offset_bottom = 610.0
+theme_override_colors/font_color = Color(0.65, 0.68, 0.78, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+text = "Karte antippen zum Wählen"
+
+[node name="Charakterauswahl" type="CanvasLayer" parent="Oberflaeche"]
+script = ExtResource("7_charakterauswahl")
+
+[node name="Hintergrund" type="ColorRect" parent="Oberflaeche/Charakterauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.043137, 0.047059, 0.070588, 1)
+
+[node name="Titel" type="Label" parent="Oberflaeche/Charakterauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 36.0
+offset_bottom = 72.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+text = "Charakter wählen"
+
+[node name="Rekord" type="Label" parent="Oberflaeche/Charakterauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 76.0
+offset_bottom = 100.0
+theme_override_colors/font_color = Color(0.65, 0.68, 0.78, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+text = "Noch kein Lauf gewertet"
+
+[node name="KarteAusgewogen" type="Button" parent="Oberflaeche/Charakterauswahl"]
+offset_left = 64.0
+offset_top = 118.0
+offset_right = 384.0
+offset_bottom = 588.0
+text = ""
+
+[node name="Figur" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteAusgewogen"]
+position = Vector2(160, 200)
+scale = Vector2(4, 4)
+script = ExtResource("8_figur")
+charakter_id = &"ausgewogen"
+
+[node name="Name" type="Label" parent="Oberflaeche/Charakterauswahl/KarteAusgewogen"]
+mouse_filter = 2
+offset_right = 320.0
+offset_top = 360.0
+offset_bottom = 395.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+text = "Ausgewogen"
+
+[node name="Werte" type="Label" parent="Oberflaeche/Charakterauswahl/KarteAusgewogen"]
+mouse_filter = 2
+offset_right = 320.0
+offset_top = 398.0
+offset_bottom = 428.0
+theme_override_colors/font_color = Color(0.72, 0.75, 0.86, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+text = "5 Leben · Tempo 260 · Schuss 0.25s"
+
+[node name="Marke" type="Label" parent="Oberflaeche/Charakterauswahl/KarteAusgewogen"]
+visible = false
+mouse_filter = 2
+offset_right = 320.0
+offset_top = 432.0
+offset_bottom = 456.0
+theme_override_colors/font_color = Color(0.62, 0.86, 0.6, 1)
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+text = "★ Zuletzt gespielt"
+
+[node name="KarteSchnell" type="Button" parent="Oberflaeche/Charakterauswahl"]
+offset_left = 416.0
+offset_top = 118.0
+offset_right = 736.0
+offset_bottom = 588.0
+text = ""
+
+[node name="Figur" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteSchnell"]
+position = Vector2(160, 200)
+scale = Vector2(4, 4)
+script = ExtResource("8_figur")
+charakter_id = &"schnell"
+
+[node name="Name" type="Label" parent="Oberflaeche/Charakterauswahl/KarteSchnell"]
+mouse_filter = 2
+offset_right = 320.0
+offset_top = 360.0
+offset_bottom = 395.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+text = "Schnell"
+
+[node name="Werte" type="Label" parent="Oberflaeche/Charakterauswahl/KarteSchnell"]
+mouse_filter = 2
+offset_right = 320.0
+offset_top = 398.0
+offset_bottom = 428.0
+theme_override_colors/font_color = Color(0.72, 0.75, 0.86, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+text = "4 Leben · Tempo 355 · Schuss 0.22s"
+
+[node name="Marke" type="Label" parent="Oberflaeche/Charakterauswahl/KarteSchnell"]
+visible = false
+mouse_filter = 2
+offset_right = 320.0
+offset_top = 432.0
+offset_bottom = 456.0
+theme_override_colors/font_color = Color(0.62, 0.86, 0.6, 1)
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+text = "★ Zuletzt gespielt"
+
+[node name="KarteTank" type="Button" parent="Oberflaeche/Charakterauswahl"]
+offset_left = 768.0
+offset_top = 118.0
+offset_right = 1088.0
+offset_bottom = 588.0
+text = ""
+
+[node name="Figur" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteTank"]
+position = Vector2(160, 200)
+scale = Vector2(4, 4)
+script = ExtResource("8_figur")
+charakter_id = &"tank"
+
+[node name="Name" type="Label" parent="Oberflaeche/Charakterauswahl/KarteTank"]
+mouse_filter = 2
+offset_right = 320.0
+offset_top = 360.0
+offset_bottom = 395.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+text = "Tank"
+
+[node name="Werte" type="Label" parent="Oberflaeche/Charakterauswahl/KarteTank"]
+mouse_filter = 2
+offset_right = 320.0
+offset_top = 398.0
+offset_bottom = 428.0
+theme_override_colors/font_color = Color(0.72, 0.75, 0.86, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+text = "7 Leben · Tempo 215 · Schuss 0.30s"
+
+[node name="Marke" type="Label" parent="Oberflaeche/Charakterauswahl/KarteTank"]
+visible = false
+mouse_filter = 2
+offset_right = 320.0
+offset_top = 432.0
+offset_bottom = 456.0
+theme_override_colors/font_color = Color(0.62, 0.86, 0.6, 1)
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+text = "★ Zuletzt gespielt"
+
+[node name="Hinweis" type="Label" parent="Oberflaeche/Charakterauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 600.0
+offset_bottom = 628.0
+theme_override_colors/font_color = Color(0.65, 0.68, 0.78, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+text = "Charakter antippen zum Starten"

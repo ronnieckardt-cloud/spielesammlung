@@ -1,0 +1,20 @@
+[gd_scene load_steps=4 format=3 uid="uid://bqarena0spieler"]
+
+[ext_resource type="Script" path="res://scripts/spieler/spieler.gd" id="1_spieler"]
+[ext_resource type="Script" path="res://scripts/gemeinsam/figur.gd" id="2_figur"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_spieler"]
+radius = 16.0
+
+[node name="Spieler" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_spieler")
+
+[node name="Form" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_spieler")
+
+[node name="Anzeige" type="Node2D" parent="."]
+
+[node name="Figur" type="Node2D" parent="Anzeige"]
+script = ExtResource("2_figur")

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- user-scalable=no und viewport-fit: Zielgerät ist das Tablet, ein
+         Doppeltipp darf das Spielfeld nicht wegzoomen. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Arena Brawler Mini</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  </head>
+  <body>
+    <div id="game-container"></div>
+
+    <!-- Nur im Hochformat sichtbar, siehe style.css. `pointer-events: none`
+         dort ist wesentlich: Der Hinweis liegt über dem Spielfeld und dürfte
+         sonst einen Tipp schlucken, statt ihn durchzulassen. Das Zeichen ist
+         ein eigenes SVG und kein Schriftzeichen — ein Glyph hängt an der
+         Schrift des Geräts, dieselbe Falle wie bei den Herzen. -->
+    <div id="dreh-hinweis">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect x="9" y="2" width="6" height="14" rx="1.5" />
+        <path d="M4.5 14.5a8 8 0 0 0 6 6.4" />
+        <path d="M2.4 12.2l2.1 2.3 2.3-2.1" />
+      </svg>
+      <span>Am besten im Querformat spielen</span>
+    </div>
+
+    <!-- Reihenfolge wichtig: Steuerung, Anzeige und Entities vor der Szene,
+         die Szene vor main.js -->
+    <script src="js/spiel/rekord.js"></script>
+    <script src="js/spiel/wellen.js"></script>
+    <script src="js/spiel/charaktere.js"></script>
+    <script src="js/spiel/aufwertungen.js"></script>
+    <script src="js/steuerung/Stick.js"></script>
+    <script src="js/anzeige/Lebensanzeige.js"></script>
+    <script src="js/anzeige/Kopfanzeige.js"></script>
+    <script src="js/anzeige/Auswahl.js"></script>
+    <script src="js/entities/Player.js"></script>
+    <script src="js/entities/Enemy.js"></script>
+    <script src="js/scenes/GameScene.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>

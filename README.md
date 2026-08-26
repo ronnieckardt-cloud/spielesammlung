@@ -70,3 +70,14 @@ npm run build    # Typprüfung und fertige Fassung nach dist/
 - Keine persönlichen Daten, keine Anmeldung. Punktestände bleiben im Browser.
 - Die Spielprinzipien sind frei, Namen und Optik der Vorbilder nicht —
   deshalb durchgehend eigene Namen und ein eigenes Aussehen.
+
+## Prototypen außerhalb der Sammlung
+
+`arena-brawler-mini/` (Phaser 3) und `arena-brawler-godot/` (Godot 4) sind
+eigenständige Prototypen im selben Repository, aber **nicht Teil dieser
+Sammlung** — kein Eintrag in `src/core/registry.ts`, kein gemeinsamer Code,
+keine gemeinsame Bestenliste. Näheres in ihren eigenen `README.md`.
+
+`arena-brawler-mini/` ist zusätzlich unverändert nach `public/arena-brawler/`
+gespiegelt und dadurch auf der ausgelieferten Netlify-Seite unter
+`/arena-brawler/` als eigene, rein statische Seite erreichbar.

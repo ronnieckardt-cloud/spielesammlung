@@ -1,0 +1,12 @@
+# Godots Import-Zwischenspeicher. Wird beim Öffnen neu erzeugt, ist plattform-
+# und rechnerabhängig und würde jedes Diff mit hunderten Dateien zumüllen.
+.godot/
+
+# Exporte
+/build/
+/export/
+*.tmp
+
+# Betriebssystem
+.DS_Store
+Thumbs.db
