@@ -34,18 +34,29 @@ extends RefCounted
 
 ## Ein gezeichnetes Teil: Fläche plus Umriss. `rand_breite` 0 heißt „ohne
 ## Umriss" — für den Schatten und für Kleinteile, die sonst nur noch Rand wären.
+##
+## `schattiert` entscheidet, ob `Figur` einen Verlauf zeichnet (hell zur
+## Lichtseite, dunkel zur Gegenseite — „wirkt rund") oder eine flache Fläche
+## („ist schon selbst Licht" oder zu klein für einen sichtbaren Verlauf).
+## Standard ist an: Panzerung, Helm, Gliedmaßen sollen wie Körper wirken, nicht
+## wie ausgeschnittenes Papier. Flach bleibt bewusst: Visier, dünne
+## Zierstreifen, Glanzpunkte — die sollen selbst leuchten, nicht beleuchtet
+## werden.
 class Teil extends RefCounted:
 	var punkte: PackedVector2Array
 	var farbe: Color
 	var rand_breite: float
 	var kontur: Color
+	var schattiert: bool
 
 	func _init(p_punkte: PackedVector2Array, p_farbe: Color,
-			p_rand_breite: float = 0.0, p_kontur: Color = Color.BLACK) -> void:
+			p_rand_breite: float = 0.0, p_kontur: Color = Color.BLACK,
+			p_schattiert: bool = true) -> void:
 		punkte = p_punkte
 		farbe = p_farbe
 		rand_breite = p_rand_breite
 		kontur = p_kontur
+		schattiert = p_schattiert
 
 
 ## Halbe Breite der breitesten Figur (Tank). Der Auswahlbildschirm kann damit
@@ -137,13 +148,28 @@ static func _gespiegelt(punkte: PackedVector2Array) -> PackedVector2Array:
 
 
 static func _paar(liste: Array[Teil], punkte: PackedVector2Array, farbe: Color,
-		rand: float, kontur: Color) -> void:
-	liste.append(Teil.new(punkte, farbe, rand, kontur))
-	liste.append(Teil.new(_gespiegelt(punkte), farbe, rand, kontur))
+		rand: float, kontur: Color, schattiert: bool = true) -> void:
+	liste.append(Teil.new(punkte, farbe, rand, kontur, schattiert))
+	liste.append(Teil.new(_gespiegelt(punkte), farbe, rand, kontur, schattiert))
 
 
 static func _schatten(radius: float, versatz: float, deckung: float) -> Teil:
-	return Teil.new(_kreis(Vector2(0, versatz), radius, 20), Color(0, 0, 0, deckung))
+	# Flach: Ein Schatten ist per Definition keine beleuchtete Fläche.
+	return Teil.new(_kreis(Vector2(0, versatz), radius, 20), Color(0, 0, 0, deckung), 0.0, Color.BLACK, false)
+
+
+## Kleiner, opaker Lichtreflex — die letzte Zutat aus der Sternenschlucker-
+## Formel („dazu ein einzelner harter Glanzpunkt"). Bewusst **opak** und nicht
+## halbdurchsichtig: Eine Ellipse in einem hellen Farbton liest sich schon als
+## Glanz, ohne dass es Transparenz braucht — und `pruefen.gd` verlangt, dass
+## einzig der Schatten durchsichtig ist. Eine Ellipse aus Kreispunkten mit
+## unabhängig skalierter x/y-Achse bleibt konvex, genau wie ein Kreis.
+static func _glanz(mitte: Vector2, radius_x: float, radius_y: float, farbe: Color) -> Teil:
+	var p := PackedVector2Array()
+	for i in 12:
+		var t := TAU * float(i) / 12.0
+		p.append(mitte + Vector2(cos(t) * radius_x, sin(t) * radius_y))
+	return Teil.new(p, farbe, 0.0, Color.BLACK, false)
 
 
 # ── Die drei Figuren ────────────────────────────────────────────────────────
@@ -182,7 +208,13 @@ static func _ausgewogen(a: Charaktere.Anstrich) -> Array[Teil]:
 	# Die Streifen liegen auf der weißen Brustplatte und sind deshalb blau,
 	# nicht in der Leuchtfarbe: Hellcyan auf Weiß ist kein Streifen mehr.
 	# Dicker und enger an der Mitte als vorher — ein Rennstreifen, keine Naht.
-	_paar(t, _kapsel(Vector2(-9.5, -10.5), 1.7, Vector2(-7.8, -1), 1.6), a.platte, 0.0, a.kontur)
+	# Flach: Ein Rennstreifen soll scharf und einfarbig wirken, kein Verlauf.
+	_paar(t, _kapsel(Vector2(-9.5, -10.5), 1.7, Vector2(-7.8, -1), 1.6), a.platte, 0.0, a.kontur, false)
+
+	# Glanzpunkt auf der Brustplatte — der „einzelne harte Glanzpunkt" aus der
+	# Sternenschlucker-Formel. Liegt oben links, wo auch der Verlauf am
+	# hellsten wird, und verstärkt genau diese Stelle noch einmal deutlich.
+	t.append(_glanz(Vector2(-4.5, -8.5), 2.8, 1.8, a.brust.lightened(0.5)))
 
 	_paar(t, _kapsel(Vector2(-13.5, -1), 4.6, Vector2(-11, -13), 3.7), a.panzer, 2.0, a.kontur)
 	_paar(t, _kreis(Vector2(-11, -13), 3.5, 12), a.dunkel, 1.5, a.kontur)
@@ -199,9 +231,12 @@ static func _ausgewogen(a: Charaktere.Anstrich) -> Array[Teil]:
 	t.append(Teil.new(_kapsel(Vector2(8.5, -15.5), 2.3, Vector2(9, -22), 1.9), a.dunkel, 1.6, a.kontur))
 
 	t.append(Teil.new(_kreis(Vector2(0, -4), 6.8), a.helm, 2.1, a.kontur))
+	# Visier flach: Es soll selbst wie eine Lichtquelle wirken, nicht wie eine
+	# beleuchtete Fläche — ein Verlauf darauf würde genau das wieder auffressen.
 	t.append(Teil.new(PackedVector2Array([
 		Vector2(-4.8, -7.2), Vector2(4.8, -7.2), Vector2(3.4, -11.8), Vector2(-3.4, -11.8),
-	]), a.leuchten, 1.6, a.kontur))
+	]), a.leuchten, 1.6, a.kontur, false))
+	t.append(_glanz(Vector2(-2.6, -5.6), 1.5, 1.1, a.helm.lightened(0.55)))
 
 	return t
 
@@ -221,9 +256,11 @@ static func _schnell(a: Charaktere.Anstrich) -> Array[Teil]:
 	_paar(t, PackedVector2Array([
 		Vector2(-3.5, 7), Vector2(-7, 8), Vector2(-12.5, 25), Vector2(-8, 21.5),
 	]), a.platte, 1.7, a.kontur)
+	# Flach: Der innere Streamer ist die Leuchtfarbe obendrauf, kein
+	# beleuchteter Stoff — er soll wie eine helle Kante im Wind aufblitzen.
 	_paar(t, PackedVector2Array([
 		Vector2(-3, 7.5), Vector2(-5.5, 8.5), Vector2(-8, 19), Vector2(-5.8, 17),
-	]), a.leuchten, 0.0, a.kontur)
+	]), a.leuchten, 0.0, a.kontur, false)
 
 	_paar(t, _kapsel(Vector2(-4.5, 8.5), 3.0, Vector2(-4.5, 15), 2.4), a.dunkel, 1.5, a.kontur)
 
@@ -246,7 +283,12 @@ static func _schnell(a: Charaktere.Anstrich) -> Array[Teil]:
 		Vector2(0, -19), Vector2(9, -6.5), Vector2(0, -1), Vector2(-9, -6.5),
 	]), a.brust, 1.9, a.kontur))
 
-	_paar(t, _kapsel(Vector2(-8.6, -8), 1.4, Vector2(-7.4, 5), 1.4), a.leuchten, 0.0, a.kontur)
+	t.append(_glanz(Vector2(-3.2, -11), 2.2, 3.2, a.brust.lightened(0.5)))
+
+	# Flach: Die Zierstreifen längs des Rumpfs sind kein Verlauf, sondern
+	# scharfe Leuchtkanten — dieselbe Rolle wie der Rennstreifen beim
+	# Ausgewogenen, nur schmaler.
+	_paar(t, _kapsel(Vector2(-8.6, -8), 1.4, Vector2(-7.4, 5), 1.4), a.leuchten, 0.0, a.kontur, false)
 
 	_paar(t, _kapsel(Vector2(-9.8, -2), 3.4, Vector2(-7.6, -11.5), 2.7), a.panzer, 1.8, a.kontur)
 	_paar(t, _kreis(Vector2(-7.6, -11.5), 2.6, 12), a.dunkel, 1.4, a.kontur)
@@ -263,7 +305,8 @@ static func _schnell(a: Charaktere.Anstrich) -> Array[Teil]:
 	t.append(Teil.new(_kreis(Vector2(0, -5.5), 5.4), a.helm, 1.9, a.kontur))
 	t.append(Teil.new(PackedVector2Array([
 		Vector2(-3.8, -7.8), Vector2(3.8, -7.8), Vector2(2.6, -11.8), Vector2(-2.6, -11.8),
-	]), a.leuchten, 1.4, a.kontur))
+	]), a.leuchten, 1.4, a.kontur, false))
+	t.append(_glanz(Vector2(-2.2, -7), 1.3, 1.0, a.helm.lightened(0.55)))
 
 	return t
 
@@ -298,14 +341,18 @@ static func _tank(a: Charaktere.Anstrich) -> Array[Teil]:
 		Vector2(8.5, 3), Vector2(-8.5, 3), Vector2(-14, -1.5),
 	]), a.brust, 2.1, a.kontur))
 
+	t.append(_glanz(Vector2(-5.5, -6), 3.2, 1.8, a.brust.lightened(0.45)))
+
 	# Grüner Saum am unteren Rand der Brustplatte: bindet das Schulter-Grün
 	# in die Mitte ein, ohne die Brust selbst grün zu färben — Schulter und
-	# Brust bleiben zwei getrennte Flächen, nur der Rand verbindet sie.
+	# Brust bleiben zwei getrennte Flächen, nur der Rand verbindet sie. Flach,
+	# wie ein aufgesetztes Band, kein Verlauf auf drei Pixeln Höhe.
 	t.append(Teil.new(PackedVector2Array([
 		Vector2(-8.5, 2.2), Vector2(8.5, 2.2), Vector2(9.3, 4.6), Vector2(-9.3, 4.6),
-	]), a.platte, 1.5, a.kontur))
+	]), a.platte, 1.5, a.kontur, false))
 
-	_paar(t, _kapsel(Vector2(-11, -8), 1.7, Vector2(-9.3, -0.5), 1.7), a.leuchten, 0.0, a.kontur)
+	# Kontrollleuchten flach — dieselbe Rolle wie das Visier: selbst leuchtend.
+	_paar(t, _kapsel(Vector2(-11, -8), 1.7, Vector2(-9.3, -0.5), 1.7), a.leuchten, 0.0, a.kontur, false)
 
 	_paar(t, _kapsel(Vector2(-15.5, 1.5), 5.8, Vector2(-13, -10.5), 4.7), a.panzer, 2.2, a.kontur)
 	_paar(t, _kreis(Vector2(-13, -10.5), 4.4, 12), a.dunkel, 1.6, a.kontur)
@@ -327,6 +374,7 @@ static func _tank(a: Charaktere.Anstrich) -> Array[Teil]:
 	t.append(Teil.new(_kreis(Vector2(0, -2.5), 7.0), a.helm, 2.2, a.kontur))
 	t.append(Teil.new(PackedVector2Array([
 		Vector2(-5.4, -5), Vector2(5.4, -5), Vector2(4.3, -9.8), Vector2(-4.3, -9.8),
-	]), a.leuchten, 1.6, a.kontur))
+	]), a.leuchten, 1.6, a.kontur, false))
+	t.append(_glanz(Vector2(-2.8, -4.2), 1.6, 1.2, a.helm.lightened(0.5)))
 
 	return t

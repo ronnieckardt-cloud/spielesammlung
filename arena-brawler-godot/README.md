@@ -161,6 +161,35 @@ welcher der drei gerade auf dem Feld steht — auch bei kleiner Darstellung und
 aus jedem Drehwinkel, das ist der Grund für die beiden Prüfungen zu Länge und
 Breite weiter unten.
 
+**Verlauf statt flacher Fläche — dritte Runde.** Eine einzige Farbe je Teil
+sah aus wie ein Aufkleber, egal wie durchdacht der Umriss war: „Das sieht
+immer noch aus wie in den Achtzigern, nicht wie ein modernes App-Store-Spiel."
+Genau das ist die Lektion, die die Spielesammlung nebenan beim Sternenschlucker
+schon gelernt hat — „Radialverlauf im Körper, Licht oben links, dazu ein
+einzelner harter Glanzpunkt." Jetzt gilt dieselbe Formel hier:
+
+- `Gestalt.Teil` trägt ein Feld `schattiert`. Ist es an (Standard), bekommt
+  das Vieleck keine flache Füllung mehr, sondern eine Farbe **je Eckpunkt** —
+  hell zur Lichtseite, dunkel zur Gegenseite —, die Godots `draw_polygon`
+  selbst weich über die Fläche verläuft. Panzerung, Helm und Gliedmaßen
+  wirken dadurch rund statt ausgeschnitten.
+- Flach bleibt bewusst, was selbst wie Licht wirken soll: Visier,
+  Kontrollleuchten, dünne Zierstreifen. Ein Verlauf darauf würde genau die
+  Leuchtwirkung wieder auffressen, die sie haben sollen.
+- Jede Figur bekommt zusätzlich ein bis zwei **Glanzpunkte** (`_glanz()`) —
+  kleine, opake Ellipsen in einem aufgehellten Ton auf Brustplatte und Helm.
+  Bewusst opak statt halbdurchsichtig: Eine helle Ellipse an der richtigen
+  Stelle liest sich schon als Glanzlicht, und die Prüfung unten verlangt
+  ohnehin, dass nur der Schatten durchsichtig ist.
+- Die Lichtrichtung (`Figur.LICHT`) steht in **lokalen** Koordinaten der
+  Figur, nicht der Welt — dreht sich die Anzeige mit der Laufrichtung, dreht
+  sich der Glanz mit. Das ist kein Kompromiss: Top-Down-Actionspiele zeigen
+  das durchweg so, ein weltfestes Licht müsste bei jeder Drehung neu
+  gerechnet werden, ohne dass es sichtbar etwas brächte.
+
+Kostet nichts an Bilddateien oder Bibliotheken — `draw_polygon` mit einer
+Farbe je Eckpunkt ist eingebautes Godot, kein Shader.
+
 Drei Sachen, die im Bild nicht auffallen und deshalb geprüft werden:
 
 - **Jedes Teil ist konvex.** Ein konkaves Vieleck malt seinen Umriss quer durch
