@@ -1,11 +1,13 @@
 html,
 body {
-  height: 100%;
+  /* `100dvh` statt `100vh`: Auf iOS Safari zählt `vh` die Adressleiste mit,
+     solange sie eingeblendet ist — die Seite ist dann höher als das sichtbare
+     Fenster, und unten fehlt ein Streifen. `100vh` bleibt als Rückfall für
+     ältere Browser davor stehen. */
+  height: 100vh;
+  height: 100dvh;
   margin: 0;
   background: #111;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   overflow: hidden;
 
   /* Zielgerät ist der Touchscreen: Textauswahl und die iOS-Lupe müssen weg,
@@ -15,21 +17,93 @@ body {
   -webkit-touch-callout: none;
 }
 
+/**
+ * Die Größe der Leinwand bestimmt jetzt Phaser (Scale.FIT + CENTER_BOTH), nicht
+ * mehr das Stylesheet. Der Behälter gibt nur den verfügbaren Platz vor.
+ *
+ * Vorher standen hier `max-width: 100%` und `max-height: 100%` an der Leinwand
+ * selbst. Das sah richtig aus, war aber genau der Fehler: Es verkleinerte das
+ * Bild rein optisch, während Phaser weiter mit 960 × 540 rechnete. Beides darf
+ * nicht dieselbe Sache festlegen — sonst weiß keiner mehr, welche Größe gilt.
+ */
 #game-container {
-  max-width: 100vw;
-  max-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
+  height: 100%;
 }
 
 #game-container canvas {
-  max-width: 100%;
-  max-height: 100%;
   display: block;
 
   /* Direkt auf der Leinwand, nicht nur geerbt vom Elternelement: Auf iOS
      Safari reicht Erben nicht zuverlässig, und ein Zieh-Gefühl, das der
      Browser als Scroll- oder Zoom-Geste wegnimmt, macht den Stick unbrauchbar. */
   touch-action: none;
+}
+
+/**
+ * Hinweis aufs Querformat. Steht bewusst im DOM und nicht im Spielfeld: Im
+ * Hochformat ist die Leinwand nur rund 220 Pixel hoch, ein Hinweis darin wäre
+ * mitskaliert und damit gerade dort am kleinsten, wo er gebraucht wird.
+ */
+#dreh-hinweis {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+
+  padding: 10px 16px;
+  border: 1px solid #333d63;
+  border-radius: 999px;
+  background: rgba(19, 26, 46, 0.92);
+  color: #c8d0f0;
+  font: 500 14px/1.3 system-ui, -apple-system, sans-serif;
+  white-space: nowrap;
+
+  /* Wesentlich: Der Hinweis liegt über dem Spielfeld. Ohne das schluckt er den
+     Tipp, der ihn eigentlich wegblenden soll — und gleichzeitig den Zug am
+     Stick, wenn der Finger dort aufsetzt. */
+  pointer-events: none;
+}
+
+#dreh-hinweis svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: #7ee081;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Nur im Hochformat, und nur solange nicht getippt wurde. */
+@media (orientation: portrait) {
+  #dreh-hinweis:not(.weg) {
+    display: flex;
+    animation: dreh-hinweis-auf var(--zeit, 320ms) ease-out both;
+  }
+}
+
+@keyframes dreh-hinweis-auf {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* Wer weniger Bewegung eingestellt hat, bekommt den Hinweis ohne Auftritt —
+   aber er bleibt sichtbar, das Endbild der Animation ist der Normalzustand. */
+@media (prefers-reduced-motion: reduce) {
+  #dreh-hinweis:not(.weg) {
+    animation-duration: 1ms;
+  }
 }

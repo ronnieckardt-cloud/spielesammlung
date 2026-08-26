@@ -123,9 +123,31 @@ Runde — kein `Math.random` beim Ziehen. Die Auswahl ist eine Spielregel, und
 dieselbe Runde soll sich nachstellen lassen; ein Fehlerbericht wie „in Welle 4
 stand da eine Karte, die nichts tat" ist sonst nicht nachvollziehbar.
 
+## Darstellung auf kleinen Geräten
+
+Das Spielfeld ist intern immer 960 × 540 — alle Positionen im Code rechnen mit
+diesen Zahlen. Phaser skaliert die Leinwand mit `Scale.FIT` auf den
+verfügbaren Platz und zentriert sie (`CENTER_BOTH`); das Seitenverhältnis
+bleibt unangetastet, schwarze Ränder sind eingeplant.
+
+Vorher stand dort gar kein Modus, also `NONE`. Die Leinwand war 960 × 540
+CSS-Pixel groß und wurde nur vom `max-width: 100%` im Stylesheet optisch
+verkleinert — **Phaser wusste davon nichts.** `scale.displaySize` meldete
+weiterhin 960, während die Leinwand auf dem iPhone tatsächlich 390 breit war.
+Merksatz: Größe darf nicht an zwei Stellen gleichzeitig festgelegt werden,
+sonst weiß keiner mehr, welche gilt.
+
+Im Hochformat erscheint unten ein Hinweis aufs Querformat. Er steht im DOM und
+nicht im Spielfeld: Im Hochformat ist die Leinwand nur rund 220 Pixel hoch, ein
+Hinweis darin wäre mitskaliert und gerade dort am kleinsten, wo er gebraucht
+wird. Er hat `pointer-events: none` — ohne das schluckt er genau den Tipp, der
+ihn wegblenden soll. Beim Drehen blendet ihn eine Medienabfrage von selbst aus,
+dafür braucht es kein JavaScript. Gespielt werden kann im Hochformat trotzdem;
+es ist ein Hinweis, keine Sperre.
+
 ## Status
 
-Prototyp Phase 5 – Charaktere, Wellen, Aufwertungen, Punktestand, Lebenspunkte,
+Prototyp Phase 6 – Charaktere, Wellen, Aufwertungen, Punktestand, Lebenspunkte,
 Game-Over und Neustart.
 
 Offen für spätere Ausbaustufen: Ton, mehr Gegnerarten, Bestenliste.

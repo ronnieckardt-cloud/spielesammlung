@@ -15,6 +15,20 @@
   <body>
     <div id="game-container"></div>
 
+    <!-- Nur im Hochformat sichtbar, siehe style.css. `pointer-events: none`
+         dort ist wesentlich: Der Hinweis liegt über dem Spielfeld und dürfte
+         sonst einen Tipp schlucken, statt ihn durchzulassen. Das Zeichen ist
+         ein eigenes SVG und kein Schriftzeichen — ein Glyph hängt an der
+         Schrift des Geräts, dieselbe Falle wie bei den Herzen. -->
+    <div id="dreh-hinweis">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect x="9" y="2" width="6" height="14" rx="1.5" />
+        <path d="M4.5 14.5a8 8 0 0 0 6 6.4" />
+        <path d="M2.4 12.2l2.1 2.3 2.3-2.1" />
+      </svg>
+      <span>Am besten im Querformat spielen</span>
+    </div>
+
     <!-- Reihenfolge wichtig: Steuerung, Anzeige und Entities vor der Szene,
          die Szene vor main.js -->
     <script src="js/spiel/wellen.js"></script>
