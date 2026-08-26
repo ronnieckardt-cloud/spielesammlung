@@ -14,6 +14,22 @@ einem eigenen Server hinter Caddy, optional mit Supabase für
 geräteübergreifende Bestenlisten — **nichts einbauen, was das verbaut, aber
 jetzt noch nicht umsetzen.**
 
+**Zielgerät ist ausschließlich der Touchscreen** — iPhone und iPad, sonst
+nichts. Daraus folgt die harte Regel: **Ein Spiel, das sich nur mit der
+Tastatur bedienen lässt, ist nicht unfertig, sondern kaputt.** Touch ist
+die Pflicht, Tastatur die Zugabe für die Entwicklung am Rechner. Wer eine
+neue Steuerung baut, baut die Touch-Variante zuerst und prüft sie am Gerät,
+nicht am Schreibtisch mit der Tastatur.
+
+Das erklärt rückblickend eine ganze Reihe von Entscheidungen, die weiter
+unten einzeln begründet sind und alle in dieselbe Richtung zeigen:
+`.druckbar`/`.kippbar` statt Hover (auf dem iPad schwebt nichts), das
+`Steuerkreuz` mit Winkel-Trefffläche, das Auslösen des Wischens schon
+während der Bewegung statt beim Loslassen, der Wegfall des Gas-Knopfes in
+Flow MTB zugunsten von Dauergas (zwei gleichzeitige Finger sind auf iOS ein
+Risiko), und der Tastatur-Hinweis auf der Startseite, der nur auf breiten
+Geräten überhaupt erscheint.
+
 **Keine Bibliothek dazunehmen, ohne vorher zu fragen.** Bisher bewusst
 aufgenommen: React, Tailwind, Vitest — und **three.js**, ausdrücklich von
 Ronni freigegeben („wenn 3-D, dann auch gleich richtiges, keine halben

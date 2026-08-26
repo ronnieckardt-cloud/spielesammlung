@@ -6,11 +6,19 @@ class Player {
     this.naechsterSchussAb = 0;
     this.blickrichtung = { x: 1, y: 0 };
 
+    // Reichweite des Auto-Feuers. Ohne Grenze schießt der Spieler quer über
+    // die ganze Arena und trifft Gegner, die er noch gar nicht gesehen hat.
+    this.feuerReichweite = 460;
+
     this.sprite = scene.physics.add.sprite(x, y, Player.erzeugeTextur(scene));
     this.sprite.setCollideWorldBounds(true);
     this.sprite.setData('instanz', this);
 
     this.bullets = scene.physics.add.group();
+
+    // Touch ist die Pflicht (Zielgerät ist iPhone/iPad), die Tastatur nur die
+    // Zugabe für die Entwicklung am Rechner — siehe CLAUDE.md, Abschnitt Technik.
+    this.stick = new Stick(scene);
 
     this.cursors = scene.input.keyboard.createCursorKeys();
     this.wasd = scene.input.keyboard.addKeys({
@@ -48,27 +56,78 @@ class Player {
     return schluessel;
   }
 
-  update() {
-    let vx = 0;
-    let vy = 0;
+  update(gegnerListe) {
+    this.bewegen();
 
-    if (this.cursors.left.isDown || this.wasd.links.isDown) vx -= 1;
-    if (this.cursors.right.isDown || this.wasd.rechts.isDown) vx += 1;
-    if (this.cursors.up.isDown || this.wasd.hoch.isDown) vy -= 1;
-    if (this.cursors.down.isDown || this.wasd.runter.isDown) vy += 1;
-
-    if (vx !== 0 || vy !== 0) {
-      const laenge = Math.hypot(vx, vy);
-      vx /= laenge;
-      vy /= laenge;
-      this.blickrichtung = { x: vx, y: vy };
+    // Auto-Feuer: Am Stick hängt der eine Daumen, der zum Steuern gebraucht
+    // wird — es bleibt keine Hand zum Zielen. Geschossen wird deshalb von
+    // selbst auf den nächsten Gegner in Reichweite.
+    const ziel = this.naechstesZiel(gegnerListe);
+    if (ziel) {
+      const dx = ziel.sprite.x - this.sprite.x;
+      const dy = ziel.sprite.y - this.sprite.y;
+      const laenge = Math.hypot(dx, dy) || 1;
+      this.blickrichtung = { x: dx / laenge, y: dy / laenge };
+      this.schiessen();
     }
 
-    this.sprite.body.setVelocity(vx * this.geschwindigkeit, vy * this.geschwindigkeit);
-
+    // Die Leertaste bleibt als manueller Schuss erhalten, damit sich das Spiel
+    // am Rechner ohne Maus testen lässt.
     if (Phaser.Input.Keyboard.JustDown(this.leertaste)) {
       this.schiessen();
     }
+  }
+
+  bewegen() {
+    let vx = 0;
+    let vy = 0;
+
+    if (this.stick.istAktiv) {
+      vx = this.stick.richtung.x;
+      vy = this.stick.richtung.y;
+    } else {
+      if (this.cursors.left.isDown || this.wasd.links.isDown) vx -= 1;
+      if (this.cursors.right.isDown || this.wasd.rechts.isDown) vx += 1;
+      if (this.cursors.up.isDown || this.wasd.hoch.isDown) vy -= 1;
+      if (this.cursors.down.isDown || this.wasd.runter.isDown) vy += 1;
+
+      // Diagonale auf Länge 1 bringen, sonst läuft man schräg schneller.
+      // Beim Stick ist das nicht nötig — der liefert die Länge schon passend
+      // und ein Kürzen würde die Feinabstufung wieder wegnehmen.
+      const laenge = Math.hypot(vx, vy);
+      if (laenge > 0) {
+        vx /= laenge;
+        vy /= laenge;
+      }
+    }
+
+    if (vx !== 0 || vy !== 0) {
+      const laenge = Math.hypot(vx, vy);
+      this.blickrichtung = { x: vx / laenge, y: vy / laenge };
+    }
+
+    this.sprite.body.setVelocity(vx * this.geschwindigkeit, vy * this.geschwindigkeit);
+  }
+
+  naechstesZiel(gegnerListe) {
+    if (!gegnerListe) return null;
+
+    let bester = null;
+    let besteEntfernung = this.feuerReichweite;
+
+    gegnerListe.forEach((gegner) => {
+      if (!gegner.sprite.active) return;
+      const entfernung = Math.hypot(
+        gegner.sprite.x - this.sprite.x,
+        gegner.sprite.y - this.sprite.y,
+      );
+      if (entfernung < besteEntfernung) {
+        besteEntfernung = entfernung;
+        bester = gegner;
+      }
+    });
+
+    return bester;
   }
 
   schiessen() {

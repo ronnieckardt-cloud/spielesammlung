@@ -46,10 +46,37 @@ class GameScene extends Phaser.Scene {
       fontSize: '18px',
       color: '#ffffff',
     });
+
+    this.hinweisAnzeigen();
+  }
+
+  /**
+   * Kurzer Hinweis auf die Steuerung, der von selbst wieder verschwindet —
+   * gleiche Machart wie in Dash City: Ohne ihn findet man den schwebenden
+   * Stick nicht, mit ihm auf Dauer stört er.
+   */
+  hinweisAnzeigen() {
+    const hinweis = this.add.text(
+      this.scale.width / 2,
+      this.scale.height - 48,
+      'Finger aufs Feld legen und ziehen — geschossen wird von selbst',
+      { fontFamily: 'sans-serif', fontSize: '17px', color: '#ffffff' },
+    );
+    hinweis.setOrigin(0.5);
+    hinweis.setAlpha(0.75);
+    hinweis.setDepth(1001);
+
+    const ausblenden = () => {
+      if (!hinweis.active) return;
+      this.tweens.add({ targets: hinweis, alpha: 0, duration: 300, onComplete: () => hinweis.destroy() });
+    };
+
+    this.input.once('pointerdown', ausblenden);
+    this.time.delayedCall(4500, ausblenden);
   }
 
   update(time, delta) {
-    this.player.update();
+    this.player.update(this.enemies);
 
     this.enemies.forEach((gegner) => {
       if (gegner.sprite.active) {

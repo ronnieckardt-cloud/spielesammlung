@@ -2,7 +2,12 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- user-scalable=no und viewport-fit: Zielgerät ist das Tablet, ein
+         Doppeltipp darf das Spielfeld nicht wegzoomen. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>Arena Brawler Mini</title>
     <link rel="stylesheet" href="style.css" />
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
@@ -10,7 +15,9 @@
   <body>
     <div id="game-container"></div>
 
-    <!-- Reihenfolge wichtig: Entities vor der Szene, die Szene vor main.js -->
+    <!-- Reihenfolge wichtig: Steuerung und Entities vor der Szene,
+         die Szene vor main.js -->
+    <script src="js/steuerung/Stick.js"></script>
     <script src="js/entities/Player.js"></script>
     <script src="js/entities/Enemy.js"></script>
     <script src="js/scenes/GameScene.js"></script>

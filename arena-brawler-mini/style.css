@@ -7,6 +7,12 @@ body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+
+  /* Zielgerät ist der Touchscreen: Textauswahl und die iOS-Lupe müssen weg,
+     sonst legt sich beim Ziehen am Stick die Lupe über das Spielfeld. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 #game-container {
@@ -21,4 +27,9 @@ body {
   max-width: 100%;
   max-height: 100%;
   display: block;
+
+  /* Direkt auf der Leinwand, nicht nur geerbt vom Elternelement: Auf iOS
+     Safari reicht Erben nicht zuverlässig, und ein Zieh-Gefühl, das der
+     Browser als Scroll- oder Zoom-Geste wegnimmt, macht den Stick unbrauchbar. */
+  touch-action: none;
 }
