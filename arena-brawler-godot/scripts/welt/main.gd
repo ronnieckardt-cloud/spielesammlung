@@ -125,6 +125,7 @@ func _welle_geschafft(welle: int) -> void:
 		return
 
 	_pause_setzen(true)
+	Ton.abspielen(&"welle_geschafft")
 
 	_wellenmeldung.text = "Welle %d geschafft!" % welle
 	_wellenmeldung.visible = true
@@ -153,6 +154,7 @@ func _runde_beenden() -> void:
 	if _vorbei:
 		return
 	_vorbei = true
+	Ton.abspielen(&"game_over")
 
 	_wellenleiter.anhalten()
 	_wellenmeldung.visible = false
