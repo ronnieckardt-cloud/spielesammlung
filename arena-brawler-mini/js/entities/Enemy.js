@@ -1,7 +1,14 @@
 class Enemy {
-  constructor(scene, x, y) {
+  /**
+   * Die Physics-Group gehört in den Konstruktor, nicht an den Aufrufer:
+   * `Arcade.Group.add()` schaltet den Körper des Kindes wieder **ein**. Wer
+   * erst einblendet und dann hinzufügt, hebt die Sperre während des
+   * Erscheinens damit stillschweigend wieder auf — genau das war hier der
+   * Fall, und im Code sieht man es der Zeile nicht an.
+   */
+  constructor(scene, x, y, geschwindigkeit = 60, gruppe = null) {
     this.scene = scene;
-    this.geschwindigkeit = 60;
+    this.geschwindigkeit = geschwindigkeit;
     this.lebenspunkte = 2;
 
     // Getrennt von `sprite.active`: Beim Sterben läuft noch eine kurze
@@ -13,6 +20,50 @@ class Enemy {
     this.sprite = scene.physics.add.sprite(x, y, Enemy.erzeugeTextur(scene));
     this.sprite.setCollideWorldBounds(true);
     this.sprite.setData('instanz', this);
+
+    if (gruppe) gruppe.add(this.sprite);
+
+    this.einblenden();
+  }
+
+  /**
+   * Kurzes Auftauchen aus dem Nichts. Der Körper bleibt währenddessen
+   * abgeschaltet — ein Gegner, der im selben Augenblick erscheint und trifft,
+   * kostet ein Leben ohne jede Vorwarnung.
+   */
+  einblenden() {
+    const dauer = 320;
+
+    this.erscheint = true;
+    this.sprite.body.enable = false;
+    this.sprite.setAlpha(0).setScale(0.2).setAngle(-90);
+
+    // Ein Ring, der von außen zusammenläuft — er zeigt die Stelle schon an,
+    // bevor der Gegner selbst zu sehen ist.
+    const ring = this.scene.add.circle(this.sprite.x, this.sprite.y, 34);
+    ring.setStrokeStyle(3, 0xe74c3c, 0.9);
+    ring.setDepth(5);
+
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 0.3,
+      alpha: 0,
+      duration: dauer,
+      onComplete: () => ring.destroy(),
+    });
+
+    this.scene.tweens.add({
+      targets: this.sprite,
+      alpha: 1,
+      scale: 1,
+      angle: 0,
+      duration: dauer,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.erscheint = false;
+        if (this.sprite.active && !this.tot) this.sprite.body.enable = true;
+      },
+    });
   }
 
   // Erzeugt einmalig ein rotes Rechteck als Platzhalter-Textur für Gegner
@@ -83,6 +134,7 @@ class Enemy {
   sterben() {
     this.tot = true;
     this.sprite.body.enable = false;
+    this.scene.gegnerBesiegt(this);
 
     this.scene.tweens.add({
       targets: this.sprite,

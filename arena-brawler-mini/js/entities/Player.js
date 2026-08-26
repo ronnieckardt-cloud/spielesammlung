@@ -125,7 +125,7 @@ class Player {
     let besteEntfernung = this.feuerReichweite;
 
     gegnerListe.forEach((gegner) => {
-      if (gegner.tot || !gegner.sprite.active) return;
+      if (gegner.tot || gegner.erscheint || !gegner.sprite.active) return;
       const entfernung = Math.hypot(
         gegner.sprite.x - this.sprite.x,
         gegner.sprite.y - this.sprite.y,
