@@ -39,6 +39,19 @@ class Kopfanzeige {
     this.punkte += betrag;
   }
 
+  /**
+   * Sofort auf den echten Stand springen, ohne den Rest hochzuzählen.
+   *
+   * Gebraucht beim Game Over: Dort steigt `update()` aus, die Zahl hört also
+   * mitten im Lauf auf. Ohne dieses Nachziehen steht in der Kopfzeile
+   * dauerhaft eine andere Zahl als im Ergebnis daneben — und der Spieler
+   * glaubt eher der kleineren.
+   */
+  sofortZeigen() {
+    this.gezeigt = this.punkte;
+    this.punkteText.setText(String(this.gezeigt));
+  }
+
   welleSetzen(welle) {
     this.welleText.setText(`Welle ${welle}`);
 

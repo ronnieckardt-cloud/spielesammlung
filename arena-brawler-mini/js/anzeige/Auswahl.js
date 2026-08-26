@@ -49,6 +49,15 @@ class Auswahl {
     ueberschrift.setOrigin(0.5).setDepth(1801);
     this.teile.push(ueberschrift);
 
+    // Optionale, dezente Zeile unter der Überschrift — hier der Rekord.
+    if (plan.unterschrift) {
+      const unterschrift = scene.add.text(breite / 2, 110, plan.unterschrift, {
+        fontFamily: 'sans-serif', fontSize: '16px', color: '#8a93bd',
+      });
+      unterschrift.setOrigin(0.5).setDepth(1801);
+      this.teile.push(unterschrift);
+    }
+
     const kartenBreite = 240;
     // Zweimal gewachsen, beide Male wegen umbrechender Texte: erst 250 → 270,
     // weil „Schnellere Schüsse" zweizeilig an die Beschreibung stieß, dann

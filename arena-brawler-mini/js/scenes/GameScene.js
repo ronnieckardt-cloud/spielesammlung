@@ -59,9 +59,11 @@ class GameScene extends Phaser.Scene {
     this.auswahlLaeuft = true;
 
     const zuletzt = this.registry.get('letzterCharakter') || null;
+    const rekord = Rekord.lesen();
 
     this.auswahl = new Auswahl(this, {
       ueberschrift: 'Wer soll kämpfen?',
+      unterschrift: Rekord.zeile(rekord) || 'Noch kein Lauf gewertet',
       karten: Charaktere.LISTE.map((c) => ({
         id: c.id, titel: c.name, wirkung: c.staerke, farbe: c.farbe, charakter: c,
       })),
@@ -262,6 +264,15 @@ class GameScene extends Phaser.Scene {
       if (gegner.sprite.active) gegner.sprite.body.setVelocity(0, 0);
     });
 
+    // Die hochzählende Punktzahl bleibt sonst auf ihrem Zwischenstand stehen,
+    // weil `update()` ab jetzt aussteigt — in der Kopfzeile stünde dauerhaft
+    // eine andere Zahl als im Ergebnis daneben.
+    this.kopfanzeige.sofortZeigen();
+
+    // Rekord melden, bevor der Bildschirm gebaut wird — er zeigt das Ergebnis
+    // gleich mit an. `melden` schreibt nur, wenn es wirklich besser war.
+    this.rekordErgebnis = Rekord.melden(this.kopfanzeige.punkte, this.welle);
+
     const mitte = { x: this.scale.width / 2, y: this.scale.height / 2 };
 
     const schleier = this.add.rectangle(
@@ -269,28 +280,53 @@ class GameScene extends Phaser.Scene {
     );
     schleier.setDepth(2000);
 
-    const titel = this.add.text(mitte.x, mitte.y - 62, 'Game Over', {
-      fontFamily: 'sans-serif', fontSize: '58px', color: '#ffffff',
+    const titel = this.add.text(mitte.x, mitte.y - 92, 'Game Over', {
+      fontFamily: 'sans-serif', fontSize: '54px', color: '#ffffff',
     });
     titel.setOrigin(0.5).setDepth(2001);
 
     const ergebnis = this.add.text(
-      mitte.x, mitte.y + 6,
+      mitte.x, mitte.y - 30,
       `${this.kopfanzeige.punkte} Punkte  ·  Welle ${this.welle}`,
       { fontFamily: 'sans-serif', fontSize: '26px', color: '#f1c40f' },
     );
     ergebnis.setOrigin(0.5).setDepth(2001);
 
-    const anleitung = this.add.text(mitte.x, mitte.y + 62, 'Tippen zum Neustart', {
+    // Bei einem Rekord ist der beste Lauf genau dieser — eine zusätzliche
+    // Zeile „Bester: dasselbe nochmal" wäre nur Rauschen. Deshalb entweder
+    // die Rekordmeldung oder der bisherige Bestwert, nie beides.
+    const rekordZeile = this.rekordErgebnis.istRekord
+      ? this.add.text(mitte.x, mitte.y + 20, 'Neuer Rekord!', {
+        fontFamily: 'sans-serif', fontSize: '30px', color: '#7ee081', fontStyle: 'bold',
+      })
+      : this.add.text(mitte.x, mitte.y + 20, Rekord.zeile(this.rekordErgebnis.neu) || '', {
+        fontFamily: 'sans-serif', fontSize: '17px', color: '#8a93bd',
+      });
+    rekordZeile.setOrigin(0.5).setDepth(2001);
+
+    const anleitung = this.add.text(mitte.x, mitte.y + 74, 'Tippen zum Neustart', {
       fontFamily: 'sans-serif', fontSize: '22px', color: '#9aa4cc',
     });
     anleitung.setOrigin(0.5).setDepth(2001);
 
-    [schleier, titel, ergebnis, anleitung].forEach((teil, i) => {
+    [schleier, titel, ergebnis, rekordZeile, anleitung].forEach((teil, i) => {
       const ziel = teil === schleier ? 0.78 : 1;
       teil.setAlpha(0);
       this.tweens.add({ targets: teil, alpha: ziel, duration: 260, delay: i * 70 });
     });
+
+    // Der Rekord bekommt einen eigenen kleinen Auftritt — er ist die
+    // Belohnung, und ein Text, der genauso einblendet wie alles andere, geht
+    // zwischen vier Zeilen unter.
+    if (this.rekordErgebnis.istRekord) {
+      this.tweens.add({
+        targets: rekordZeile,
+        scale: { from: 0.6, to: 1 },
+        duration: 420,
+        delay: 210,
+        ease: 'Back.easeOut',
+      });
+    }
 
     // Kurze Sperre, bevor die Berührung zählt: Wer im Moment des Todes noch
     // den Finger am Stick hat, würde die Runde sonst sofort wieder neu starten

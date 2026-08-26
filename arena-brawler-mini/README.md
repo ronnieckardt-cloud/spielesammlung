@@ -145,9 +145,37 @@ ihn wegblenden soll. Beim Drehen blendet ihn eine Medienabfrage von selbst aus,
 dafür braucht es kein JavaScript. Gespielt werden kann im Hochformat trotzdem;
 es ist ein Hinweis, keine Sperre.
 
+## Bestleistung
+
+Der beste Punktestand und die weiteste Welle werden lokal gespeichert und
+überleben das Schließen der Seite. Sie stehen dezent unter der Überschrift der
+Charakterwahl und beim Game Over.
+
+Punkte und Welle zählen **getrennt**: Man kann dieselbe Welle erreichen und
+dabei mehr Gegner erwischt haben — das ist ein Punkterekord ohne Wellenrekord,
+und beides ist eine eigene Leistung. Bei einem Rekord steht dort „Neuer
+Rekord!" statt der bisherigen Bestleistung; eine Zeile „Bester: dasselbe
+nochmal" wäre nur Rauschen.
+
+`js/spiel/rekord.js` ist die **einzige** Stelle im Prototyp, die
+`localStorage` anfasst — abgeschaut von der Spielesammlung, wo das nur
+`shell/speicher.ts` darf. Dann gibt es genau einen Ort, an dem der
+Schlüsselname steht, und genau einen, der abgesichert sein muss.
+
+Rechnen und Speichern sind getrennt: `bereinigen` und `vergleichen` sind reine
+Funktionen ohne Browser. Gerade die Frage „ist das ein Rekord?" will man nicht
+nur dadurch geprüft haben, dass man zufällig gut gespielt hat.
+
+Alle Zugriffe liegen in `try`/`catch` und fallen auf den leeren Stand zurück.
+Das deckt drei verschiedene Fälle ab, nicht nur einen: gar kein
+`localStorage`, ein Schreibversuch der scheitert (Safari im privaten Modus —
+der Speicher ist da, das Schreiben wirft trotzdem), und unlesbarer oder von
+Hand veränderter Inhalt. Ein Prototyp darf an einer Bestenliste nicht
+scheitern.
+
 ## Status
 
-Prototyp Phase 6 – Charaktere, Wellen, Aufwertungen, Punktestand, Lebenspunkte,
-Game-Over und Neustart.
+Prototyp Phase 7 – Bestleistung, Charaktere, Wellen, Aufwertungen, Punktestand,
+Lebenspunkte, Game-Over und Neustart.
 
-Offen für spätere Ausbaustufen: Ton, mehr Gegnerarten, Bestenliste.
+Offen für spätere Ausbaustufen: Ton, mehr Gegnerarten, geräteübergreifende Bestenliste.
