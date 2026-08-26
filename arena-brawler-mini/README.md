@@ -37,11 +37,37 @@ Vor jeder Runde wählt man einen von dreien. Die Werte gelten für die ganze
 Runde; die Wellen-Aufwertungen rechnen darauf **auf**, ersetzen sie also
 nicht — „Mehr Tempo" macht den Schnellen schneller als den Tank.
 
-| | Leben | Tempo | Schusspause | Reichweite | Unverwundbar |
-|---|---|---|---|---|---|
-| Ausgewogen | 5 | 200 | 250 ms | 460 | 900 ms |
-| Schnell | 4 | 275 | 215 ms | 380 | 900 ms |
-| Tank | 7 | 165 | 300 ms | 460 | 1300 ms |
+| | Aussehen | Leben | Tempo | Schusspause | Reichweite | Unverwundbar |
+|---|---|---|---|---|---|---|
+| Ausgewogen | blau/weiß, athletisch, aufrecht | 5 | 200 | 250 ms | 460 | 900 ms |
+| Schnell | orange/schwarz, schlank, vorgeneigt | 4 | 275 | 215 ms | 380 | 900 ms |
+| Tank | grün/grau, breite Schultern, schwer | 7 | 165 | 300 ms | 460 | 1300 ms |
+
+Jede Figur wird **einmal** in eine 96er-Textur gezeichnet; Auswahlkarte und
+Spielfeld benutzen dieselbe, nur in unterschiedlicher Größe. Damit können
+Karte und Spiel nicht auseinanderlaufen — die Karte zeigt wirklich die Figur,
+die man gleich steuert.
+
+Groß zeichnen und klein anzeigen ist dabei kein Umweg: Im Spiel ist die Figur
+48 Pixel breit, auf einem iPhone im Querformat noch rund 30 physische. Direkt
+in dieser Größe gezeichnet franst jede Kante aus. Und alles Erkennbare steckt
+im **Umriss** — Breite, Stand, Neigung —, weil bei dieser Größe kein Detail
+mehr ankommt; dieselbe Lehre wie beim Männchen in Ghost Chase, wo mehr
+Realismus die Figur schlechter erkennbar gemacht hätte. Je Charakter gibt es
+deshalb genau **ein** Merkmal über den Umriss hinaus: weißer Brustkeil,
+schwarzes Visier, dunkle Schulterplatten.
+
+Das Orange des Schnellen ist bewusst gelbstichig gewählt. Die Gegner sind rot
+(`0xe74c3c`), und bei Tempo 275 quer über die Arena entscheidet der
+Farbabstand mit darüber, ob man sich selbst noch wiederfindet.
+
+**Die Anzeige ist größer als die Trefferfläche** (48 gegen 32). Der Umriss
+braucht Fläche, die Spielregeln sollen sich aber nicht mit ändern. Achtung
+beim Ändern: `body.setSize` rechnet in *Textur*pixeln und wird danach mit der
+Sprite-Skalierung multipliziert — ein glattes `setSize(32, 32)` ergäbe hier
+13 × 13, und der Spieler wäre plötzlich kaum noch zu treffen, ohne dass eine
+Regel angefasst wurde. Deshalb wird gegengerechnet, und ein Test hält die
+32 × 32 fest.
 
 Der Tank bekommt eine **längere** Unverwundbarkeit, nicht wie ursprünglich
 angedacht eine kürzere: Eine kürzere wäre für ihn ein Nachteil und das genaue
@@ -175,7 +201,8 @@ scheitern.
 
 ## Status
 
-Prototyp Phase 7 – Bestleistung, Charaktere, Wellen, Aufwertungen, Punktestand,
-Lebenspunkte, Game-Over und Neustart.
+Prototyp Phase 8 – gezeichnete Charaktere, Bestleistung, Wellen, Aufwertungen,
+Punktestand, Lebenspunkte, Game-Over und Neustart.
 
-Offen für spätere Ausbaustufen: Ton, mehr Gegnerarten, geräteübergreifende Bestenliste.
+Offen für spätere Ausbaustufen: Ton, gezeichnete Gegner (noch schlichte Rechtecke),
+mehr Gegnerarten, geräteübergreifende Bestenliste.

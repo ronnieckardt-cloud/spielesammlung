@@ -1,4 +1,8 @@
 class Player {
+  // Groesser als die alten 32: Die Figur ist schmaler als ein voller Block, der
+  // Umriss braucht Flaeche, um bei rund 20 physischen Pixeln noch zu lesen.
+  static ANZEIGE_GROESSE = 48;
+
   /**
    * Sämtliche Startwerte kommen aus dem Charakter (`charaktere.js`), keiner
    * ist hier noch einmal fest verdrahtet. Sonst gälte für einen Wert der
@@ -34,6 +38,21 @@ class Player {
     this.feuerReichweite = werte.reichweite;
 
     this.sprite = scene.physics.add.sprite(x, y, Player.erzeugeTextur(scene, charakter));
+
+    // Die Figur wird etwas größer angezeigt als ihre Trefferfläche: Der Umriss
+    // braucht Luft, damit man ihn erkennt. Der Körper bleibt aber bei 32 x 32
+    // wie vorher — die Wellen, der Mindestabstand beim Erscheinen und das
+    // Ausweichgefühl hängen daran, und die sollen sich nicht mit ändern.
+    this.sprite.setDisplaySize(Player.ANZEIGE_GROESSE, Player.ANZEIGE_GROESSE);
+
+    // `body.setSize` rechnet in TEXTURpixeln und wird danach mit der
+    // Sprite-Skalierung multipliziert. Ein glattes `setSize(32, 32)` ergäbe
+    // bei einer 96er-Textur auf 40 Pixel Anzeige also 13 x 13 — der Spieler
+    // wäre plötzlich kaum noch zu treffen, ohne dass eine Regel geändert wurde.
+    // Deshalb gegenrechnen statt raten.
+    const massstab = this.sprite.scaleX;
+    this.sprite.body.setSize(32 / massstab, 32 / massstab, true);
+
     this.sprite.setCollideWorldBounds(true);
     this.sprite.setData('instanz', this);
 
@@ -54,21 +73,11 @@ class Player {
   }
 
   /**
-   * Platzhalter-Textur in der Farbe des Charakters. Je Charakter eine eigene
-   * Textur, damit man auf dem Feld sieht, wen man spielt — der Schlüssel trägt
-   * die Kennung, sonst bekäme der zweite Charakter die Farbe des ersten
-   * (`textures.exists` wäre ja erfüllt).
+   * Die Figur kommt aus `charaktere.js` — Karte und Spielfeld zeigen dadurch
+   * garantiert dieselbe Gestalt und können nicht auseinanderlaufen.
    */
   static erzeugeTextur(scene, charakter = Charaktere.standard()) {
-    const schluessel = `spieler-${charakter.id}`;
-    if (!scene.textures.exists(schluessel)) {
-      const grafik = scene.add.graphics();
-      grafik.fillStyle(charakter.farbe, 1);
-      grafik.fillRect(0, 0, 32, 32);
-      grafik.generateTexture(schluessel, 32, 32);
-      grafik.destroy();
-    }
-    return schluessel;
+    return Charaktere.erzeugeTextur(scene, charakter);
   }
 
   // Erzeugt einmalig einen gelben Kreis als Platzhalter-Textur für Geschosse
