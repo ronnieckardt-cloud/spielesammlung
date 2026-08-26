@@ -1,15 +1,27 @@
 /**
- * Die drei Startcharaktere — reine Daten, keine Grafik.
+ * Die drei Startcharaktere — Werte und Gestalt an einer Stelle.
  *
- * Alles, was den Spieler ausmacht, steht hier an einer Stelle: Der Spieler
- * liest seine Startwerte vollständig aus `werte`, nichts davon ist im
- * Spielercode noch einmal fest verdrahtet. Sonst gälte für einen Wert der
- * Charakter und für den nächsten die alte Zahl, und das fiele erst beim
- * Spielen auf.
+ * Alles, was den Spieler ausmacht, steht hier: Der Spieler liest seine
+ * Startwerte vollständig aus `werte`, nichts davon ist im Spielercode noch
+ * einmal fest verdrahtet. Sonst gälte für einen Wert der Charakter und für den
+ * nächsten die alte Zahl, und das fiele erst beim Spielen auf.
  *
  * Die Aufwertungen aus `aufwertungen.js` rechnen auf diese Werte **auf**,
  * ersetzen sie also nicht — „Mehr Tempo" macht den Schnellen schneller als
  * den Tank, und das soll auch so bleiben.
+ *
+ * ## Zur Zeichnung
+ *
+ * Alles ist **eckig**: Vielecke mit geraden Kanten, keine Kreise und keine
+ * abgerundeten Balken. Das ist nicht Geschmack, sondern eine Folge der Größe.
+ * Im Spiel ist die Figur 48 Pixel groß, auf einem iPhone im Querformat noch
+ * rund 30 physische. Eine Rundung braucht mehrere Pixel, um als Rundung zu
+ * lesen — bei dieser Größe wird sie zu Matsch. Eine Kante bleibt eine Kante.
+ *
+ * Deshalb auch: wenige große Flächen mit hohem Kontrast, statt vieler kleiner
+ * Teile. Erkennbar ist am Ende nur der **Umriss** — Breite, Stand, Neigung —
+ * plus zwei, drei große Farbflächen darin. Dieselbe Lehre wie beim Männchen in
+ * Ghost Chase, wo mehr Realismus die Figur schlechter erkennbar gemacht hätte.
  */
 const Charaktere = {
   LISTE: [
@@ -17,21 +29,33 @@ const Charaktere = {
       id: 'ausgewogen',
       name: 'Ausgewogen',
       staerke: 'Kann alles ein bisschen — gut zum Anfangen',
-      farbe: 0x4a90e2,
-      zweitfarbe: 0xf2f6ff,
-      hosenfarbe: 0x2f4f7d,
-      dunkel: 0x14243d,
+      // `farbe` ist die Kennfarbe für die Oberfläche (Kartenrand, Farbband).
+      // Sie ist nicht zwingend die Anzugfarbe: Beim Schnellen ist der Anzug
+      // schwarz, und ein schwarzer Kartenrand wäre unsichtbar.
+      farbe: 0x3d8bf2,
+      anzug: 0x2f6fd0,
+      akzent: 0xf4f8ff,
+      bein: 0x24558f,
+      stiefel: 0x16375e,
+      dunkel: 0x0e1c33,
       gestalt: {
-        kopf: { y: 22, r: 11 },
-        schulterY: 34,
-        schulterHalb: 17,
-        taillenY: 57,
-        taillenHalb: 12,
-        armBreite: 7,
-        beinBreite: 10,
-        beinAbstand: 8,
-        beinBis: 87,
         neigung: 0,
+        kopfHalb: 10,
+        kopfOben: 12,
+        kopfUnten: 31,
+        kinnHalb: 7,
+        schulterHalb: 21,
+        schulterY: 34,
+        taillenHalb: 12,
+        taillenY: 58,
+        armDicke: 8,
+        armBis: 60,
+        beinHalb: 6,
+        beinAbstand: 9,
+        beinBis: 82,
+        fussHalb: 8,
+        fussY: 82,
+        fussBis: 90,
       },
       werte: {
         leben: 5,
@@ -46,26 +70,35 @@ const Charaktere = {
       id: 'schnell',
       name: 'Schnell',
       staerke: 'Läuft allen davon, hält aber wenig aus',
-      // Bewusst ein gelbstichiges Orange, kein rötliches: Die Gegner sind rot
-      // (0xe74c3c), und bei Tempo 275 quer über die Arena entscheidet der
-      // Farbabstand mit darüber, ob man sich selbst noch findet.
-      farbe: 0xff9f1c,
-      zweitfarbe: 0x1a1a22,
-      hosenfarbe: 0x1a1a22,
-      dunkel: 0x3d2200,
+      // Gelbstichiges Orange, kein rötliches: Die Gegner sind rot (0xe74c3c),
+      // und bei Tempo 275 quer über die Arena entscheidet der Farbabstand mit
+      // darüber, ob man sich selbst noch wiederfindet.
+      farbe: 0xff8a00,
+      anzug: 0x2b2b35,
+      akzent: 0xff8a00,
+      bein: 0x22222b,
+      stiefel: 0xff8a00,
+      dunkel: 0x0a0a10,
       gestalt: {
-        kopf: { y: 24, r: 10 },
+        // Nach vorn geneigt — bei 48 Pixeln das einzige Merkmal „Bewegung",
+        // das noch ankommt.
+        neigung: 0.22,
+        kopfHalb: 9,
+        kopfOben: 14,
+        kopfUnten: 31,
+        kinnHalb: 5,
+        schulterHalb: 14,
         schulterY: 35,
-        schulterHalb: 13,
-        taillenY: 56,
-        taillenHalb: 9,
-        armBreite: 6,
-        beinBreite: 8,
-        beinAbstand: 11,
-        beinBis: 87,
-        // Nach vorn geneigt — das ist bei 32 Pixeln das einzige Merkmal
-        // „Bewegung", das noch ankommt.
-        neigung: 0.2,
+        taillenHalb: 8,
+        taillenY: 57,
+        armDicke: 6,
+        armBis: 59,
+        beinHalb: 4,
+        beinAbstand: 10,
+        beinBis: 82,
+        fussHalb: 7,
+        fussY: 82,
+        fussBis: 89,
       },
       werte: {
         leben: 4,
@@ -80,23 +113,33 @@ const Charaktere = {
       id: 'tank',
       name: 'Tank',
       staerke: 'Steckt viel ein, ist dafür schwerfällig',
-      farbe: 0x4caf50,
-      zweitfarbe: 0x39404a,
-      hosenfarbe: 0x39404a,
-      dunkel: 0x11301a,
+      farbe: 0x74a03c,
+      anzug: 0x6b9438,
+      akzent: 0x333941,
+      bein: 0x4d6b2a,
+      stiefel: 0x333941,
+      dunkel: 0x14200c,
       gestalt: {
-        kopf: { y: 26, r: 10 },
-        schulterY: 36,
-        // Doppelt so breit wie beim Schnellen — der Unterschied muss allein
-        // über den Umriss ankommen, Details sind bei 32 Pixeln längst Matsch.
-        schulterHalb: 25,
-        taillenY: 62,
-        taillenHalb: 16,
-        armBreite: 9,
-        beinBreite: 13,
-        beinAbstand: 10,
-        beinBis: 88,
         neigung: 0,
+        kopfHalb: 10,
+        kopfOben: 18,
+        kopfUnten: 35,
+        kinnHalb: 9,
+        // Fast doppelt so breit wie beim Schnellen. Der Unterschied muss
+        // allein über den Umriss ankommen — Details sind bei dieser Größe
+        // längst Matsch.
+        schulterHalb: 27,
+        schulterY: 38,
+        taillenHalb: 18,
+        taillenY: 63,
+        armDicke: 10,
+        armBis: 66,
+        beinHalb: 9,
+        beinAbstand: 11,
+        beinBis: 82,
+        fussHalb: 12,
+        fussY: 82,
+        fussBis: 91,
       },
       werte: {
         leben: 7,
@@ -125,8 +168,8 @@ const Charaktere = {
 
   /**
    * Kurze Werte-Zeile für die Karte. Bewusst in Worten statt in Zahlen: „275"
-   * sagt einem Kind nichts, „sehr schnell" schon — und die Zahl steht ohnehin
-   * nirgends im Spiel, mit der man sie vergleichen könnte.
+   * sagt einem Kind nichts, „flink" schon — und die Zahl steht ohnehin nirgends
+   * im Spiel, mit der man sie vergleichen könnte.
    */
   werteZeile(charakter) {
     const w = charakter.werte;
@@ -159,15 +202,9 @@ const Charaktere = {
    * Zeichnet die Figur **einmal** in eine 96er-Textur; Spielfeld und Karte
    * benutzen dieselbe, nur in unterschiedlicher Größe.
    *
-   * Groß zeichnen und klein anzeigen ist hier keine Bequemlichkeit: Im Spiel
-   * ist die Figur 32 Pixel breit, auf einem iPhone im Querformat noch rund 20
-   * physische. Direkt in 32 Pixel gezeichnet würde jede Kante ausfransen; aus
-   * einer 96er-Textur heruntergerechnet bleibt sie sauber.
-   *
-   * Und deshalb steht auch alles Erkennbare im **Umriss**: Breite, Stand,
-   * Neigung. Bei zwanzig Pixeln kommt kein Detail mehr an — dieselbe Lehre wie
-   * beim Männchen in Ghost Chase, wo mehr Realismus die Figur schlechter
-   * erkennbar gemacht hätte.
+   * Groß zeichnen und klein anzeigen ist keine Bequemlichkeit: Direkt in
+   * Spielgröße gezeichnet franst jede Kante aus; aus einer 96er-Textur
+   * heruntergerechnet bleibt sie sauber.
    */
   erzeugeTextur(scene, charakter) {
     const schluessel = `figur-${charakter.id}`;
@@ -178,8 +215,8 @@ const Charaktere = {
     const f = charakter.gestalt;
     const g = scene.add.graphics();
 
-    // Um den Bauchnabel kippen, nicht um die Bildmitte — sonst hebt eine
-    // geneigte Figur die Füße vom Boden.
+    // Um die Taille kippen, nicht um die Bildmitte — sonst hebt eine geneigte
+    // Figur die Füße vom Boden.
     const drehpunkt = { x: mitte, y: f.taillenY };
     const dreh = (p) => {
       if (!f.neigung) return p;
@@ -190,81 +227,24 @@ const Charaktere = {
       return { x: drehpunkt.x + dx * cos - dy * sin, y: drehpunkt.y + dx * sin + dy * cos };
     };
 
-    // Jede Fläche zuerst dunkel und etwas größer, dann farbig darüber. Das gibt
-    // eine Kontur, ohne jede Form zweimal beschreiben zu müssen — und die
-    // Kontur ist bei dieser Größe das, was die Figur vom Hintergrund trennt.
-    const kontur = 5;
-    const flaeche = (zeichnen) => {
-      g.lineStyle(kontur, charakter.dunkel, 1);
+    /**
+     * Eine Fläche: erst als dicke dunkle Kontur, dann farbig gefüllt. Die
+     * Kontur ist bei dieser Größe das, was die Figur überhaupt vom Hintergrund
+     * trennt — ohne sie verschwimmt ein dunkelgrüner Tank im dunklen Feld.
+     */
+    const flaeche = (punkte, farbe) => {
+      const p = punkte.map(dreh);
+      g.lineStyle(3, charakter.dunkel, 1);
       g.fillStyle(charakter.dunkel, 1);
-      zeichnen(true);
+      g.strokePoints(p, true, true);
+      g.fillPoints(p, true);
       g.lineStyle(0, 0, 0);
-      zeichnen(false);
+      g.fillStyle(farbe, 1);
+      g.fillPoints(p, true);
     };
 
-    const balken = (x, y, breite, hoehe, radius, farbe) => {
-      const eck = dreh({ x, y });
-      flaeche((istKontur) => {
-        g.fillStyle(istKontur ? charakter.dunkel : farbe, 1);
-        if (istKontur) {
-          g.strokeRoundedRect(eck.x, eck.y, breite, hoehe, radius);
-          g.fillRoundedRect(eck.x, eck.y, breite, hoehe, radius);
-        } else {
-          g.fillRoundedRect(eck.x, eck.y, breite, hoehe, radius);
-        }
-      });
-    };
-
-    const vieleck = (punkte, farbe) => {
-      const gedreht = punkte.map(dreh);
-      flaeche((istKontur) => {
-        g.fillStyle(istKontur ? charakter.dunkel : farbe, 1);
-        if (istKontur) g.strokePoints(gedreht, true, true);
-        g.fillPoints(gedreht, true);
-      });
-    };
-
-    // --- Beine (zuerst, damit der Rumpf darüber liegt) ---
-    [-1, 1].forEach((seite) => {
-      balken(
-        mitte + seite * f.beinAbstand - f.beinBreite / 2,
-        f.taillenY - 4,
-        f.beinBreite,
-        f.beinBis - f.taillenY + 4,
-        f.beinBreite / 2,
-        charakter.hosenfarbe,
-      );
-    });
-
-    // --- Arme ---
-    [-1, 1].forEach((seite) => {
-      balken(
-        mitte + seite * (f.schulterHalb - 1) - f.armBreite / 2,
-        f.schulterY,
-        f.armBreite,
-        f.taillenY - f.schulterY + 6,
-        f.armBreite / 2,
-        charakter.farbe,
-      );
-    });
-
-    // --- Rumpf: breite Schultern, schmalere Taille ---
-    vieleck([
-      { x: mitte - f.schulterHalb, y: f.schulterY },
-      { x: mitte + f.schulterHalb, y: f.schulterY },
-      { x: mitte + f.taillenHalb, y: f.taillenY },
-      { x: mitte - f.taillenHalb, y: f.taillenY },
-    ], charakter.farbe);
-
-    // --- Kopf ---
-    const kopf = dreh({ x: mitte, y: f.kopf.y });
-    flaeche((istKontur) => {
-      g.fillStyle(istKontur ? charakter.dunkel : charakter.farbe, 1);
-      if (istKontur) g.strokeCircle(kopf.x, kopf.y, f.kopf.r);
-      g.fillCircle(kopf.x, kopf.y, f.kopf.r);
-    });
-
-    Charaktere.merkmalZeichnen(g, charakter, { mitte, f, dreh, kopf });
+    const teile = Charaktere.teile(charakter, mitte);
+    teile.forEach(({ punkte, farbe }) => flaeche(punkte, farbe));
 
     g.generateTexture(schluessel, kante, kante);
     g.destroy();
@@ -273,48 +253,214 @@ const Charaktere = {
   },
 
   /**
-   * Das eine Merkmal je Charakter, das über den Umriss hinausgeht. Bewusst nur
-   * eines und großflächig: Zwei kleine Details heben sich bei 32 Pixeln
-   * gegenseitig auf.
+   * Die Figur als Liste von Vielecken, von hinten nach vorn. Getrennt vom
+   * Zeichnen, damit sich die Gestalt lesen lässt, ohne durch Grafikaufrufe zu
+   * waten — und damit ein Test die Umrisse nachrechnen kann.
    */
-  merkmalZeichnen(g, charakter, { mitte, f, dreh, kopf }) {
+  teile(charakter, mitte) {
+    const f = charakter.gestalt;
+    const x = (versatz) => mitte + versatz;
+    const teile = [];
+
+    // --- Beine: nach unten schmaler, damit der Stand fest wirkt ---
+    [-1, 1].forEach((seite) => {
+      teile.push({
+        farbe: charakter.bein,
+        punkte: [
+          { x: x(seite * (f.beinAbstand - f.beinHalb)), y: f.taillenY - 2 },
+          { x: x(seite * (f.beinAbstand + f.beinHalb)), y: f.taillenY - 2 },
+          { x: x(seite * (f.beinAbstand + f.beinHalb * 0.8)), y: f.fussY },
+          { x: x(seite * (f.beinAbstand - f.beinHalb * 0.8)), y: f.fussY },
+        ],
+      });
+    });
+
+    // --- Stiefel: breiter als das Bein, das erdet die Figur ---
+    [-1, 1].forEach((seite) => {
+      teile.push({
+        farbe: charakter.stiefel,
+        punkte: [
+          { x: x(seite * (f.beinAbstand - f.beinHalb)), y: f.fussY - 2 },
+          { x: x(seite * (f.beinAbstand + f.beinHalb)), y: f.fussY - 2 },
+          { x: x(seite * (f.beinAbstand + f.fussHalb)), y: f.fussBis },
+          { x: x(seite * (f.beinAbstand - f.fussHalb)), y: f.fussBis },
+        ],
+      });
+    });
+
+    // --- Arme: keilförmig, oben breit an der Schulter ---
+    [-1, 1].forEach((seite) => {
+      const aussen = f.schulterHalb;
+      const innen = f.schulterHalb - f.armDicke;
+      teile.push({
+        farbe: charakter.anzug,
+        punkte: [
+          { x: x(seite * innen), y: f.schulterY },
+          { x: x(seite * aussen), y: f.schulterY },
+          { x: x(seite * (aussen + 1)), y: f.armBis },
+          { x: x(seite * (innen + 1.5)), y: f.armBis },
+        ],
+      });
+    });
+
+    // --- Rumpf: abgeschrägte Schultern, zur Taille verjüngt ---
+    teile.push({
+      farbe: charakter.anzug,
+      punkte: [
+        { x: x(-f.schulterHalb * 0.7), y: f.schulterY - 5 },
+        { x: x(f.schulterHalb * 0.7), y: f.schulterY - 5 },
+        { x: x(f.schulterHalb), y: f.schulterY + 3 },
+        { x: x(f.taillenHalb), y: f.taillenY },
+        { x: x(-f.taillenHalb), y: f.taillenY },
+        { x: x(-f.schulterHalb), y: f.schulterY + 3 },
+      ],
+    });
+
+    // --- Kopf: facettierter Helm statt Kreis ---
+    teile.push({
+      farbe: charakter.anzug,
+      punkte: [
+        { x: x(-f.kopfHalb * 0.55), y: f.kopfOben },
+        { x: x(f.kopfHalb * 0.55), y: f.kopfOben },
+        { x: x(f.kopfHalb), y: f.kopfOben + 6 },
+        { x: x(f.kinnHalb), y: f.kopfUnten },
+        { x: x(-f.kinnHalb), y: f.kopfUnten },
+        { x: x(-f.kopfHalb), y: f.kopfOben + 6 },
+      ],
+    });
+
+    Charaktere.plattenAnhaengen(teile, charakter, mitte);
+    return teile;
+  },
+
+  /**
+   * Die Panzerung — die zwei bis drei großen Flächen, die den Charakter
+   * ausmachen. Bewusst wenige und groß: Zwei kleine Details heben sich bei 48
+   * Pixeln gegenseitig auf, eine große Fläche bleibt eine große Fläche.
+   */
+  plattenAnhaengen(teile, charakter, mitte) {
+    const f = charakter.gestalt;
+    const x = (versatz) => mitte + versatz;
+
     if (charakter.id === 'ausgewogen') {
-      // Weißer Brustkeil — hell auf Blau, der stärkste Kontrast im Bild
-      const punkte = [
-        { x: mitte - 7, y: f.schulterY + 4 },
-        { x: mitte + 7, y: f.schulterY + 4 },
-        { x: mitte + 4, y: f.taillenY - 4 },
-        { x: mitte - 4, y: f.taillenY - 4 },
-      ].map(dreh);
-      g.fillStyle(charakter.zweitfarbe, 1);
-      g.fillPoints(punkte, true);
-    } else if (charakter.id === 'schnell') {
-      // Schwarzes Visier quer über den Kopf
-      const links = dreh({ x: mitte - f.kopf.r, y: f.kopf.y - 1 });
-      const rechts = dreh({ x: mitte + f.kopf.r, y: f.kopf.y - 1 });
-      g.lineStyle(7, charakter.zweitfarbe, 1);
-      g.beginPath();
-      g.moveTo(links.x, links.y);
-      g.lineTo(rechts.x, rechts.y);
-      g.strokePath();
-      g.lineStyle(0, 0, 0);
-    } else {
-      // Zwei dunkle Schulterplatten — sie machen den Tank oben noch breiter
+      // Zwei weiße Schulterplatten, eckig und deutlich abgesetzt
       [-1, 1].forEach((seite) => {
-        const p = dreh({ x: mitte + seite * (f.schulterHalb - 4), y: f.schulterY + 4 });
-        g.fillStyle(charakter.zweitfarbe, 1);
-        g.fillCircle(p.x, p.y, 9);
-        g.lineStyle(4, charakter.dunkel, 1);
-        g.strokeCircle(p.x, p.y, 9);
-        g.lineStyle(0, 0, 0);
+        teile.push({
+          farbe: charakter.akzent,
+          punkte: [
+            { x: x(seite * f.schulterHalb * 0.42), y: f.schulterY - 4 },
+            { x: x(seite * (f.schulterHalb + 1)), y: f.schulterY + 2 },
+            { x: x(seite * (f.schulterHalb + 1)), y: f.schulterY + 12 },
+            { x: x(seite * f.schulterHalb * 0.42), y: f.schulterY + 9 },
+          ],
+        });
+      });
+
+      // Weiße Brustplatte als breiter Keil — die größte helle Fläche im Bild
+      teile.push({
+        farbe: charakter.akzent,
+        punkte: [
+          { x: x(-9), y: f.schulterY + 5 },
+          { x: x(9), y: f.schulterY + 5 },
+          { x: x(6), y: f.taillenY - 8 },
+          { x: x(0), y: f.taillenY - 3 },
+          { x: x(-6), y: f.taillenY - 8 },
+        ],
+      });
+
+      // Kurzes dunkles Haar als Kappe über der Stirn
+      teile.push({
+        farbe: charakter.dunkel,
+        punkte: [
+          { x: x(-f.kopfHalb * 0.6), y: f.kopfOben - 1 },
+          { x: x(f.kopfHalb * 0.6), y: f.kopfOben - 1 },
+          { x: x(f.kopfHalb + 1), y: f.kopfOben + 5 },
+          { x: x(f.kopfHalb - 1), y: f.kopfOben + 6 },
+          { x: x(-f.kopfHalb + 1), y: f.kopfOben + 6 },
+          { x: x(-f.kopfHalb - 1), y: f.kopfOben + 5 },
+        ],
+      });
+    } else if (charakter.id === 'schnell') {
+      // Orangefarbener Schrägstreifen über die Brust — eine einzige, klar
+      // gerichtete Fläche. Die Schräge deutet Bewegung an, ohne dass es dafür
+      // Striche braucht, die bei dieser Größe verschwinden.
+      teile.push({
+        farbe: charakter.akzent,
+        punkte: [
+          { x: x(-f.schulterHalb + 2), y: f.schulterY + 2 },
+          { x: x(f.schulterHalb - 3), y: f.schulterY + 9 },
+          { x: x(f.taillenHalb - 1), y: f.taillenY - 2 },
+          { x: x(-f.schulterHalb + 3), y: f.schulterY + 11 },
+        ],
+      });
+
+      // Orangefarbene Unterarme. Zusammen mit Schrägstreifen, Helmkamm und
+      // Stiefeln ergibt das genug helle Fläche, um die Figur auf dem dunklen
+      // Boden überhaupt zu finden — eine dunkle Kontur trennt auf dunklem Grund
+      // nichts, das leisten nur die hellen Teile.
+      [-1, 1].forEach((seite) => {
+        const aussen = f.schulterHalb;
+        const innen = f.schulterHalb - f.armDicke;
+        teile.push({
+          farbe: charakter.akzent,
+          punkte: [
+            { x: x(seite * (innen + 0.8)), y: f.schulterY + 12 },
+            { x: x(seite * (aussen + 0.5)), y: f.schulterY + 12 },
+            { x: x(seite * (aussen + 1)), y: f.armBis },
+            { x: x(seite * (innen + 1.5)), y: f.armBis },
+          ],
+        });
+      });
+
+      // Orangefarbener Helmkamm — spitz nach hinten, in Fahrtrichtung gelesen
+      teile.push({
+        farbe: charakter.akzent,
+        punkte: [
+          { x: x(-f.kopfHalb * 0.55), y: f.kopfOben },
+          { x: x(f.kopfHalb * 0.55), y: f.kopfOben },
+          { x: x(f.kopfHalb), y: f.kopfOben + 6 },
+          { x: x(f.kopfHalb - 4), y: f.kopfOben + 8 },
+          { x: x(-f.kopfHalb), y: f.kopfOben + 7 },
+        ],
+      });
+    } else {
+      // Zwei schwere, eckige Schulterpanzer — sie machen den Umriss oben
+      // deutlich breiter als alles andere im Spiel und sind das Merkmal, an
+      // dem man den Tank auch aus dem Augenwinkel erkennt.
+      [-1, 1].forEach((seite) => {
+        teile.push({
+          farbe: charakter.akzent,
+          punkte: [
+            { x: x(seite * f.schulterHalb * 0.5), y: f.schulterY - 6 },
+            { x: x(seite * (f.schulterHalb + 3)), y: f.schulterY - 2 },
+            { x: x(seite * (f.schulterHalb + 3)), y: f.schulterY + 14 },
+            { x: x(seite * f.schulterHalb * 0.5), y: f.schulterY + 12 },
+          ],
+        });
+      });
+
+      // Ein schmales dunkles Brustband, nicht der ganze Rumpf: Grün ist die
+      // Kennfarbe des Tanks, eine graue Platte über die volle Höhe deckt sie zu
+      // und macht ihn auf dem dunklen Boden zum Schatten.
+      teile.push({
+        farbe: charakter.akzent,
+        punkte: [
+          { x: x(-f.schulterHalb * 0.46), y: f.schulterY + 2 },
+          { x: x(f.schulterHalb * 0.46), y: f.schulterY + 2 },
+          { x: x(f.schulterHalb * 0.4), y: f.schulterY + 13 },
+          { x: x(-f.schulterHalb * 0.4), y: f.schulterY + 13 },
+        ],
       });
     }
   },
 
   /** Die Figur als Bild für die Auswahlkarte — dieselbe Textur, nur größer. */
   zeichen(scene, charakter, y) {
-    const bild = scene.add.image(0, y + 8, Charaktere.erzeugeTextur(scene, charakter));
-    bild.setDisplaySize(84, 84);
+    // Groß und weit oben: Die Karte ist 300 Pixel hoch, zwischen Farbband und
+    // Titel liegen rund 110 davon — die gehören der Figur. Der Versatz nach
+    // oben ist nötig, weil sie sonst unten an den Titel stößt.
+    const bild = scene.add.image(0, y - 2, Charaktere.erzeugeTextur(scene, charakter));
+    bild.setDisplaySize(96, 96);
     return bild;
   },
 };

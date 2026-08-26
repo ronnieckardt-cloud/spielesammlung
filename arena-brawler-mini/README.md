@@ -39,9 +39,18 @@ nicht — „Mehr Tempo" macht den Schnellen schneller als den Tank.
 
 | | Aussehen | Leben | Tempo | Schusspause | Reichweite | Unverwundbar |
 |---|---|---|---|---|---|---|
-| Ausgewogen | blau/weiß, athletisch, aufrecht | 5 | 200 | 250 ms | 460 | 900 ms |
-| Schnell | orange/schwarz, schlank, vorgeneigt | 4 | 275 | 215 ms | 380 | 900 ms |
-| Tank | grün/grau, breite Schultern, schwer | 7 | 165 | 300 ms | 460 | 1300 ms |
+| Ausgewogen | blau, weiße Schulter- und Brustplatten, aufrecht | 5 | 200 | 250 ms | 460 | 900 ms |
+| Schnell | dunkler Anzug, orange Akzente, vorgeneigt | 4 | 275 | 215 ms | 380 | 900 ms |
+| Tank | olivgrün, graue Schulterpanzer, sehr breit | 7 | 165 | 300 ms | 460 | 1300 ms |
+
+Alles ist **eckig** gezeichnet: Vielecke mit geraden Kanten, keine Kreise und
+keine abgerundeten Balken. Das ist eine Folge der Größe, nicht des Geschmacks
+— eine Rundung braucht mehrere Pixel, um als Rundung zu lesen, und wird bei
+30 physischen Pixeln zu Matsch. Eine Kante bleibt eine Kante.
+
+Aus demselben Grund wenige, große Farbflächen statt vieler kleiner Teile.
+`Charaktere.teile()` liefert die Figur als Liste von Vielecken, getrennt vom
+Zeichnen — so lässt sich die Gestalt lesen, ohne durch Grafikaufrufe zu waten.
 
 Jede Figur wird **einmal** in eine 96er-Textur gezeichnet; Auswahlkarte und
 Spielfeld benutzen dieselbe, nur in unterschiedlicher Größe. Damit können
@@ -53,13 +62,21 @@ Groß zeichnen und klein anzeigen ist dabei kein Umweg: Im Spiel ist die Figur
 in dieser Größe gezeichnet franst jede Kante aus. Und alles Erkennbare steckt
 im **Umriss** — Breite, Stand, Neigung —, weil bei dieser Größe kein Detail
 mehr ankommt; dieselbe Lehre wie beim Männchen in Ghost Chase, wo mehr
-Realismus die Figur schlechter erkennbar gemacht hätte. Je Charakter gibt es
-deshalb genau **ein** Merkmal über den Umriss hinaus: weißer Brustkeil,
-schwarzes Visier, dunkle Schulterplatten.
+Realismus die Figur schlechter erkennbar gemacht hätte.
+
+**Auf dunklem Grund trennt eine dunkle Kontur gar nichts — das leisten nur die
+hellen Flächen.** Der Schnelle war in einer Zwischenfassung ein schwarzer
+Anzug mit schwarzer Kontur auf dem fast schwarzen Arenaboden und schlicht
+nicht zu finden. Er trägt jetzt Orange an Helmkamm, Brustschräge, Unterarmen
+und Stiefeln, und der Anzug ist Anthrazit statt Schwarz. Beim Tank deckte
+umgekehrt eine graue Brustplatte über die volle Rumpfhöhe sein Grün zu; sie
+ist auf ein schmales Band eingedampft.
 
 Das Orange des Schnellen ist bewusst gelbstichig gewählt. Die Gegner sind rot
 (`0xe74c3c`), und bei Tempo 275 quer über die Arena entscheidet der
-Farbabstand mit darüber, ob man sich selbst noch wiederfindet.
+Farbabstand mit darüber, ob man sich selbst noch wiederfindet. Aus demselben
+Grund ist `farbe` (Kartenrand, Farbband) getrennt von `anzug`: Ein schwarzer
+Kartenrand wäre unsichtbar.
 
 **Die Anzeige ist größer als die Trefferfläche** (48 gegen 32). Der Umriss
 braucht Fläche, die Spielregeln sollen sich aber nicht mit ändern. Achtung
