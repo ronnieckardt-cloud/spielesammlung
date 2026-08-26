@@ -7,6 +7,19 @@
   [headers.values]
     Cache-Control = "no-cache"
 
+# Arena Brawler Mini (eigenständiger Phaser-Prototyp, siehe
+# arena-brawler-mini/README.md, gespiegelt nach public/arena-brawler/) —
+# eigene statische Dateien unter /arena-brawler/*, kein Teil der React-SPA.
+# Echte Dateien im Bau (dist/arena-brawler/index.html, style.css, js/…)
+# haben bei Netlify ohnehin Vorrang vor einem nicht erzwungenen
+# Wildcard-Redirect wie dem SPA-Catch-all unten; diese Regel steht trotzdem
+# explizit davor und ohne force=true, damit das im Config-File sichtbar ist
+# und nicht am unausgesprochenen Standardverhalten hängt.
+[[redirects]]
+  from = "/arena-brawler/*"
+  to = "/arena-brawler/:splat"
+  status = 200
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

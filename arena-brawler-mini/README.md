@@ -11,6 +11,22 @@ Kein Bezug zu bestehenden Marken.
 
 Einfach `index.html` im Browser öffnen oder mit einem Live-Server starten.
 
+## Auf der Netlify-Seite erreichbar
+
+Der Inhalt dieses Ordners liegt zusätzlich unverändert unter
+`public/arena-brawler/` in der Spielesammlung und landet dadurch bei jedem
+`npm run build` unverändert nach `dist/arena-brawler/`. Auf der ausgelieferten
+Seite ist der Prototyp deshalb unter
+
+**`/arena-brawler/`**
+
+erreichbar — als reine statische Dateien, ganz ohne Anbindung an die
+React-Sammlung: nicht in `src/core/registry.ts` eingetragen, kein Zugriff auf
+`shell/` oder deren Bestenliste, eigener `localStorage`-Schlüssel über
+`js/spiel/rekord.js`. Wer an diesem Prototyp etwas ändert, muss den Ordner
+`public/arena-brawler/` von Hand nachziehen — die beiden sind bewusst zwei
+Kopien, kein Build-Schritt verbindet sie.
+
 ## Steuerung
 
 Zielgerät ist der Touchscreen (iPhone, iPad) — die Tastatur ist nur die
