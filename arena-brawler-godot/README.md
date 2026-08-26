@@ -7,9 +7,11 @@ Moderner 2D-Arena-Brawler in Godot 4 mit GDScript.
 > `arena-brawler-mini/` — kein gemeinsamer Code, keine gemeinsamen Abhängigkeiten.
 > Es liegt nur im selben Repository.
 
-Stand: **Fundament**. Arena, Spieler, Bewegung, Schießen und drei
-Charaktervarianten mit eigenen Figuren stehen. Wellen, Aufwertungen, Gegner und
-Oberfläche kommen später — erst soll das Fundament stabil sein.
+Stand: **erste spielbare Runde**. Arena, Spieler, Bewegung, Schießen, drei
+Charaktervarianten mit eigenen Figuren, ein Verfolger-Gegner und ein
+Wellensystem stehen — man kann eine Runde von Anfang bis Game-Over
+durchspielen. Aufwertungen, Auswahlbildschirm und Touch-Bedienung kommen
+später.
 
 ## Öffnen und starten
 
@@ -50,13 +52,17 @@ arena-brawler-godot/
 │   ├── charaktere.gd        die drei Varianten (reine Daten)
 │   └── spielstand.gd        gewählter Charakter + Bestleistung, speichert nach user://
 ├── scenes/
-│   ├── main.tscn            Hauptszene: Arena + Spieler + Kamera + Kopfzeile
+│   ├── main.tscn            Hauptszene: Arena + Spieler + Wellenleiter + Kamera + Kopfzeile + Rundenende
 │   ├── arena.tscn           Boden, Rand, Wände
 │   ├── geschoss.tscn
 │   ├── pruefen.tscn         Prüfszene (nicht Teil des Spiels)
-│   └── musterblatt.tscn     gibt die Figuren als JSON aus (Werkzeug)
+│   ├── musterblatt.tscn     gibt die Figuren als JSON aus (Werkzeug)
+│   └── rundenprobe.tscn     spielt eine Runde mehrere Sekunden durch (Werkzeug)
 ├── characters/
 │   └── spieler.tscn
+├── enemies/
+│   ├── gegner.tscn
+│   └── gegner.gd
 ├── scripts/
 │   ├── gemeinsam/
 │   │   ├── bewegung.gd      reine Rechnung, ohne Node und ohne Uhr
@@ -67,10 +73,12 @@ arena-brawler-godot/
 │   │   └── geschoss.gd
 │   ├── welt/
 │   │   ├── main.gd
-│   │   └── arena.gd
+│   │   ├── arena.gd
+│   │   ├── wellen.gd        Steigerung über die Wellen, reine Rechnung
+│   │   └── wellenleiter.gd  spawnt Gegner, wartet, startet die nächste Welle
 │   ├── pruefen.gd
-│   └── musterblatt.gd
-├── enemies/               (noch leer)
+│   ├── musterblatt.gd
+│   └── rundenprobe.gd
 ├── ui/                    (noch leer)
 └── assets/
     ├── sprites/  audio/  fonts/   (noch leer)
@@ -227,15 +235,91 @@ daraus. Wichtig dabei: Die Geometrie kommt aus `Gestalt` selbst. Ein
 Vorschaubild, das die Formen nachbaut, zeigt irgendwann etwas anderes als das
 Spiel — und dann sieht man beim Prüfen einen Fehler nicht, der da ist.
 
+## Gegner, Wellen und Kampf
+
+**Der Gegner ist bewusst der einfachste denkbare Verfolger.** `enemies/gegner.gd`
+kennt keine Wegfindung und kein Ausweichen — er läuft in jedem Bild geradewegs
+auf sein Ziel zu. Die Richtung dafür kommt aus `Bewegung.richtung_zu` (reine
+Funktion, genau wie beim Spieler): eine Richtung von A nach B, auf Länge 1
+gebracht. Alles, was den Gegner zu einem Gegner macht — Trefferfläche, Ebenen,
+Berührung, Tod — steht in `gegner.gd` selbst; für einen so kleinen Umfang lohnt
+sich keine eigene `Gestalt`/`Figur`-Trennung wie beim Spieler. Die Figur ist
+zweckmäßig, nicht ambitioniert: ein achtzackiger dunkelroter Stern (Silhouette)
+mit hellerem rotem Kern, eigens gewählt, um auf den ersten Blick „Gegner"
+statt „Spielfigur" zu sagen — spitz und warnfarben gegen die klaren
+geometrischen Formen der Charaktere.
+
+**Berührung wird jeden Schritt neu geprüft, nicht nur beim ersten Kontakt.**
+Ein `Area2D`-Kind (`Beruehrung`, Ebene der Spielfigur im Zielraster) meldet in
+jedem `_physics_process`, wen der Gegner gerade berührt — nicht nur über das
+einmalige `body_entered`-Signal. Ein Verfolger bleibt am Spieler kleben,
+sobald er ihn erreicht hat; mit einem einmaligen Signal käme der zweite
+Treffer erst, wenn beide sich kurz trennen und neu berühren. Die **bestehende**
+Unverwundbarkeit in `Spieler.schaden_nehmen` bremst die Wiederholung dabei
+schon von selbst ab — dafür musste an `spieler.gd` nichts geändert werden.
+Geschosse treffen Gegner genau umgekehrt über dieselbe Schnittstelle: Ein
+Geschoss ruft `schaden_nehmen(1)` auf jedem Körper auf, den es trifft, egal ob
+das der Spieler oder ein Gegner ist — `Gegner.schaden_nehmen` hat also absichtlich
+dieselbe Form wie beim Spieler.
+
+**Tod ist ein kurzes Aufblitzen, kein lautloses Verschwinden.** Ein Treffer, der
+tötet, entfernt den Gegner **sofort** aus der Gruppe `"gegner"` (darüber zählt
+der Wellenleiter „noch da") und feuert `gestorben`, aber der Knoten selbst
+bleibt noch `STERBE_DAUER` (180 ms) stehen, blendet aus und wächst leicht, bevor
+er sich wirklich entfernt. Zählung und Anzeige sind damit bewusst getrennt: Der
+Wellenleiter darf die nächste Welle vorbereiten, während der letzte Treffer
+gerade noch zu sehen ist.
+
+**Der Wellenleiter startet nicht von selbst.** Als Kind von `Main` liefe sein
+eigenes `_ready()` **vor** dem von `Main` — Godot ruft `_ready()` von unten
+nach oben auf, Arena und Spieler wären in dem Moment noch gar nicht gesetzt.
+`main.gd` ruft deshalb `Wellenleiter.starten(...)` explizit auf, nachdem es
+selbst alles andere aufgebaut hat. Wie viele Gegner eine Welle hat und wie
+schnell sie laufen, steht **reingerechnet** in `wellen.gd`
+(`Wellen.gegner_fuer_welle`, `Wellen.tempo_faktor_fuer_welle`, beide mit
+Deckel) — der Wellenleiter selbst kennt nur die Uhr: warten, bis die Gruppe
+`"gegner"` leer ist, kurze Pause, nächste Welle.
+
+**Gegner spawnen am eingerückten Rand der Arena, nicht im Feld.**
+`Wellen.punkt_am_rand(flaeche, t, rand)` ist ebenfalls reine Rechnung: `t`
+läuft einmal um den ganzen Umfang, `rand` schiebt den Punkt so weit nach innen,
+dass niemand halb in der Wand steckt. Der Zufall bleibt draußen — der
+Wellenleiter würfelt `t`, die Funktion rechnet nur nach, und lässt sich damit
+für 40 Werte auf einmal durchprüfen, ohne dass eine Szene läuft.
+
+**Game-Over friert mit einer einzigen Zeile ein.** `get_tree().paused = true`
+hält Spieler, Gegner, Geschosse und den Wellenleiter gleichzeitig an, statt
+jedes System einzeln zu stoppen. Damit trotzdem noch etwas auf den Neustart
+reagiert, bekommt `Main` selbst `process_mode = PROCESS_MODE_ALWAYS` — nur
+diese eine Datei läuft während der Pause weiter, und ihr `_unhandled_input`
+nimmt Taste, Maus oder Bildschirmberührung entgegen und lädt die Szene neu
+(`reload_current_scene()`, nachdem `paused` wieder auf `false` steht). Die
+Rundenende-Fläche selbst bekommt `mouse_filter = 2` (Ignorieren) — ein
+`Control` blockiert Mausklicks sonst standardmäßig, bevor sie `Main` überhaupt
+erreichen.
+
+**Punkte und Welle laufen in dieselbe Bestenliste ein wie schon vorbereitet**:
+Am Rundenende ruft `main.gd` `Spielstand.runde_melden(punkte, welle)` auf —
+dieselbe Funktion, die vorher schon existierte, nur jetzt zum ersten Mal mit
+echten Werten aus einer echten Runde gefüttert.
+
+Ansehen kann man eine ganze Runde ohne Editor so — die Probe steuert den
+Spieler selbst (er zielt auf den jeweils nächsten Gegner und schießt
+durchgehend) und gibt jedes Ereignis mit Zeitstempel aus:
+
+```bash
+godot --headless --path . scenes/rundenprobe.tscn
+```
+
 ## Prüfungen
 
 ```bash
 godot --headless --path . scenes/pruefen.tscn
 ```
 
-62 Prüfungen: die reine Rechnung in `bewegung.gd`, die Charakterdaten, die
-Umrisse aus `gestalt.gd`, der Spielstand — und eine **Rauchprobe an den echten
-Szenen**. Die ist bewusst
+85 Prüfungen: die reine Rechnung in `bewegung.gd` und `wellen.gd`, die
+Charakterdaten, die Umrisse aus `gestalt.gd`, der Spielstand, der Gegner für
+sich allein — und eine **Rauchprobe an den echten Szenen**. Die ist bewusst
 dabei: Die häufigste Art, ein Godot-Projekt kaputtzumachen, ist ein Knotenpfad,
 der nicht mehr stimmt. Reine Rechnung zu prüfen fängt das nicht; ein Start mit
 leerer Szene fällt sonst erst beim Spielen auf.
@@ -245,7 +329,8 @@ Autoloads braucht — die richtet Godot nur für eine laufende Szene ein.
 
 ## Was als Nächstes fehlt
 
-Gegner, Wellen, Aufwertungen, Auswahlbildschirm, Touch-Bedienung, Ton. Alles
-bewusst noch nicht gebaut: erst das stabile Fundament. Der Auswahlbildschirm
-braucht dafür nichts Neues mehr — `Figur` lässt sich dort einfach hinstellen
-und über `scale` größer ziehen.
+Aufwertungen nach jeder Welle, ein Auswahlbildschirm vor dem Start,
+Touch-Bedienung, Ton, weitere Gegnertypen (bisher nur der eine Verfolger).
+Alles bewusst noch nicht gebaut: Erst sollte eine ganze Runde von Anfang bis
+Game-Over stehen. Der Auswahlbildschirm braucht dafür nichts Neues mehr —
+`Figur` lässt sich dort einfach hinstellen und über `scale` größer ziehen.

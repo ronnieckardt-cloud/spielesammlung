@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://bqarena0main"]
+[gd_scene load_steps=5 format=3 uid="uid://bqarena0main"]
 
 [ext_resource type="Script" path="res://scripts/welt/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://bqarena0arena" path="res://scenes/arena.tscn" id="2_arena"]
 [ext_resource type="PackedScene" uid="uid://bqarena0spieler" path="res://characters/spieler.tscn" id="3_spieler"]
+[ext_resource type="Script" path="res://scripts/welt/wellenleiter.gd" id="4_wellenleiter"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -16,6 +17,9 @@ position = Vector2(576, 324)
 position_smoothing_enabled = true
 position_smoothing_speed = 6.0
 
+[node name="Wellenleiter" type="Node" parent="."]
+script = ExtResource("4_wellenleiter")
+
 [node name="Oberflaeche" type="CanvasLayer" parent="."]
 
 [node name="Kopfzeile" type="Label" parent="Oberflaeche"]
@@ -26,3 +30,24 @@ offset_bottom = 44.0
 theme_override_colors/font_color = Color(0.878431, 0.905882, 0.976471, 1)
 theme_override_font_sizes/font_size = 18
 text = "Arena Brawler"
+
+[node name="Rundenende" type="Control" parent="Oberflaeche"]
+visible = false
+mouse_filter = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Hintergrund" type="ColorRect" parent="Oberflaeche/Rundenende"]
+mouse_filter = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.043137, 0.047059, 0.070588, 0.82)
+
+[node name="Text" type="Label" parent="Oberflaeche/Rundenende"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "Vorbei"

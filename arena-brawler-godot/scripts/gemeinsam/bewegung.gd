@@ -63,3 +63,12 @@ static func naechstes_ziel(von: Vector2, ziele: PackedVector2Array, reichweite: 
 			bestes = ziel
 
 	return bestes
+
+
+## Richtung von einem Punkt zu einem anderen, auf Länge 1 gebracht — der
+## Rechenkern eines einfachen Verfolgers. Getrennt von `naechstes_ziel` (das
+## sucht unter mehreren Zielen das nächste): Ein Verfolger hat sein Ziel
+## schon, er muss nur noch wissen, in welche Richtung es liegt.
+static func richtung_zu(von: Vector2, ziel: Vector2) -> Vector2:
+	var unterschied := ziel - von
+	return unterschied.normalized() if unterschied.length_squared() > 0.0 else Vector2.ZERO

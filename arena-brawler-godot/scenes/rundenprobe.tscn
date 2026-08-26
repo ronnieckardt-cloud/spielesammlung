@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://bqarena0rundenprobe"]
+
+[ext_resource type="Script" path="res://scripts/rundenprobe.gd" id="1_rundenprobe"]
+
+[node name="Rundenprobe" type="Node"]
+script = ExtResource("1_rundenprobe")

@@ -18,8 +18,10 @@ func _ready() -> void:
 	_pruefe_bewegung()
 	_pruefe_charaktere()
 	_pruefe_gestalt()
+	_pruefe_wellen()
 	_pruefe_spielstand()
 	_pruefe_szenen()
+	_pruefe_gegner()
 
 	var durchgefallen := _berichte.filter(func(z: String) -> bool: return z.begins_with("FEHL"))
 	for zeile in _berichte:
@@ -79,6 +81,51 @@ func _pruefe_bewegung() -> void:
 		Bewegung.naechstes_ziel(Vector2.ZERO, ziele, 50.0), null)
 	_pruefe("ohne Ziele gibt es kein Ziel",
 		Bewegung.naechstes_ziel(Vector2.ZERO, PackedVector2Array(), 460.0), null)
+
+	# Verfolger-Richtung — der Rechenkern hinter jedem Gegner.
+	_pruefe("Richtung zu einem Ziel rechts", Bewegung.richtung_zu(Vector2.ZERO, Vector2(50, 0)), Vector2.RIGHT)
+	_pruefe("Richtung zu einem Ziel oben", Bewegung.richtung_zu(Vector2.ZERO, Vector2(0, -30)), Vector2.UP)
+	_pruefe("dasselbe Ziel ergibt Stillstand", Bewegung.richtung_zu(Vector2(10, 10), Vector2(10, 10)), Vector2.ZERO)
+	_pruefe_wahr("Richtung zu einem Ziel ist immer Laenge 1",
+		absf(Bewegung.richtung_zu(Vector2.ZERO, Vector2(7, -13)).length() - 1.0) < 0.0001)
+
+
+## Die Steigerung über die Wellen — reine Zahlen, kein Node.
+func _pruefe_wellen() -> void:
+	_pruefe("Welle 1 hat die Grundzahl", Wellen.gegner_fuer_welle(1), 3)
+	_pruefe("Welle 2 hat mehr als Welle 1", Wellen.gegner_fuer_welle(2), 5)
+	_pruefe_wahr("die Gegnerzahl ist gedeckelt",
+		Wellen.gegner_fuer_welle(999) <= Wellen.MAX_ANZAHL)
+	_pruefe_wahr("die Gegnerzahl faellt nie",
+		Wellen.gegner_fuer_welle(9) >= Wellen.gegner_fuer_welle(4))
+
+	_pruefe_wahr("Welle 1 hat das Grundtempo",
+		absf(Wellen.tempo_faktor_fuer_welle(1) - Wellen.GRUND_TEMPO_FAKTOR) < 0.0001)
+	_pruefe_wahr("spaetere Wellen sind nicht langsamer",
+		Wellen.tempo_faktor_fuer_welle(20) >= Wellen.tempo_faktor_fuer_welle(5))
+	_pruefe_wahr("das Tempo ist gedeckelt",
+		Wellen.tempo_faktor_fuer_welle(999) <= Wellen.MAX_TEMPO_FAKTOR)
+
+	# Rand-Spawnpunkt: eine ganze Umrundung muss wieder am Anfang ankommen,
+	# und jeder Punkt muss wirklich auf dem eingerückten Rand liegen, nicht
+	# irgendwo im Feld — sonst würde ein Gegner neben dem Spieler auftauchen.
+	var flaeche := Rect2(Vector2.ZERO, Vector2(1152, 648))
+	_pruefe("t=0 liegt auf der eingerueckten linken oberen Ecke",
+		Wellen.punkt_am_rand(flaeche, 0.0, 24.0), Vector2(24, 24))
+	_pruefe_wahr("t=1 kommt wieder beim Start an",
+		Wellen.punkt_am_rand(flaeche, 1.0, 24.0).is_equal_approx(Wellen.punkt_am_rand(flaeche, 0.0, 24.0)))
+
+	var zufaellige_treffer := 0
+	for i in 40:
+		var p := Wellen.punkt_am_rand(flaeche, float(i) / 40.0, 24.0)
+		var auf_dem_rand := (
+			is_equal_approx(p.x, 24.0) or is_equal_approx(p.x, 1128.0)
+			or is_equal_approx(p.y, 24.0) or is_equal_approx(p.y, 624.0)
+		)
+		var im_feld := flaeche.has_point(p)
+		if auf_dem_rand and im_feld:
+			zufaellige_treffer += 1
+	_pruefe("alle 40 Punkte liegen auf dem eingerueckten Rand", zufaellige_treffer, 40)
 
 
 func _pruefe_charaktere() -> void:
@@ -281,4 +328,57 @@ func _pruefe_szenen() -> void:
 	_pruefe_wahr("und die Figur wechselt mit",
 		figur != null and figur.charakter_id == &"tank")
 
+	# Der Wellenleiter startet nicht von selbst (siehe seinen Kommentar dazu),
+	# `Main._ready()` ruft `starten()` deshalb explizit auf — genau das prüft
+	# dieser Block: Ohne den Aufruf stünde `welle` bei 0 und kein einziger
+	# Gegner wäre gespawnt.
+	var wellenleiter: Wellenleiter = haupt.get_node_or_null("Wellenleiter")
+	_pruefe_wahr("Hauptszene hat einen Wellenleiter", wellenleiter != null)
+	_pruefe("Welle 1 laeuft nach dem Start", wellenleiter.welle, 1)
+
+	var gegner_in_szene := 0
+	var naechster_abstand := INF
+	for kind in haupt.get_children():
+		if kind.is_in_group(&"gegner"):
+			gegner_in_szene += 1
+			naechster_abstand = minf(naechster_abstand, kind.global_position.distance_to(spieler.global_position))
+
+	_pruefe("Welle 1 hat die Grundzahl Gegner gespawnt",
+		gegner_in_szene, Wellen.gegner_fuer_welle(1))
+	# Der eigentliche Punkt der Rand-Spawns: Kein Gegner darf nah am Spieler
+	# auftauchen. 200 liegt deutlich unter dem kleinstmöglichen Randabstand
+	# (rund 300 bei einer 1152×648-Arena mit Spieler in der Mitte) — Luft
+	# genug, um nicht bei jeder Zufallslage knapp durchzufallen, aber immer
+	# noch weit von einem echten Überfall entfernt.
+	_pruefe_wahr("kein gespawnter Gegner steht nah am Spieler", naechster_abstand > 200.0)
+
 	haupt.queue_free()
+
+
+## Der Gegner für sich allein: Ebenen, Gruppe, und dass ein Treffer wirklich
+## tötet. Läuft **ohne** die Hauptszene — ein einzelner Gegner lässt sich
+## billiger prüfen, ohne dass Arena, Spieler und Wellenleiter mitlaufen
+## müssen.
+func _pruefe_gegner() -> void:
+	var gegner: Gegner = load("res://enemies/gegner.tscn").instantiate()
+	add_child(gegner)
+
+	# Ebene 3 = Gegner, Ebene 4 = Spielergeschoss (siehe project.godot) — das
+	# Geschoss sucht Ebene 4 nach Ebene 3 ab (siehe oben), stimmt das hier
+	# nicht überein, trifft kein Schuss je einen Gegner.
+	_pruefe("Gegner liegt auf der Gegnerebene", gegner.collision_layer, 4)
+	_pruefe("Gegner kollidiert nur mit der Welt, nicht mit dem Spieler",
+		gegner.collision_mask, 1)
+	_pruefe_wahr("Gegner steht in der Gruppe 'gegner'", gegner.is_in_group(&"gegner"))
+
+	var beruehrung: Area2D = gegner.get_node("Beruehrung")
+	_pruefe("Beruehrung erkennt nur die Spielerebene", beruehrung.collision_mask, 2)
+
+	# Ein Treffer muss sofort aus der Gruppe raus — der Wellenleiter zählt
+	# „noch da" darüber, und der Treffer selbst ist der Moment, der zählt,
+	# nicht erst das Verblassen danach (siehe Kommentar in `_sterben`).
+	gegner.schaden_nehmen(1)
+	_pruefe_wahr("ein toedlicher Treffer entfernt den Gegner sofort aus der Gruppe",
+		not gegner.is_in_group(&"gegner"))
+
+	gegner.queue_free()
