@@ -139,27 +139,38 @@ nicht gibt:
 | nach vorn gebeugt | lang und vorn spitz |
 | breite Schultern | echte Breite in X, Schulterstücke außen |
 
-Alle drei sind aus demselben Baukasten gebaut — Schatten, Stiefel, Rumpf,
-Rücken- und Brustplatte, Arme mit Handschuh, Schulterstücke, Waffe, Helm,
-Visier —, unterscheiden sich aber in Proportion und Farbverteilung. Zweite
-Überarbeitungsrunde: schärfere, asymmetrischere Silhouetten statt der
-anfänglich eher rundlichen Fassung.
+**Dritte Überarbeitungsrunde: Silhouette zuerst.** Die ersten beiden Runden
+verbesserten Proportion und Schattierung, ließen aber den Grundfehler stehen —
+alle drei waren letztlich derselbe abgerundete, getonnte Torso mit
+austauschbaren Kapsel-Armen, Kapsel-Beinen und einer Kapsel-Waffe daran. Der
+Prüfstein, den Ronni dafür genannt hat: „Deckt man alle drei komplett schwarz
+ab, muss man sie trotzdem sofort auseinanderhalten." Das bestand die
+zweite Fassung nicht — drei ähnlich getonte Tonnen unterschieden sich vor
+allem über die Farbe, nicht über die Form.
 
-| | halbe Breite | Merkmal |
-|---|---|---|
-| Ausgewogen | 18,0 | V-Taper von der Brust zur Hüfte, klingenförmige Schulterstücke, dickerer Brust-Kontraststreifen |
-| Schnell | 14,8 | schlankerer, gestreckterer Rumpf, weit vorgezogener Keil, zwei gestaffelte Streamer statt einem Schal |
-| Tank | 21,2 | sechseckige Schulterplatten mit je zwei Nieten, grüner Saum verbindet Schulter und Brust |
+Jetzt hat jede Figur einen **grundverschiedenen** Rumpf, und die Gliedmaßen,
+die sich zwischen allen dreien fast gleich anfühlten, sind bis auf die Beine
+ersatzlos raus — eine Klinge, eine Finne oder eine Schulterplatte trägt die
+Aussage „hier ist die Schulter" allein, ohne einen Arm dahinter:
 
-Der Sprinter ist jetzt deutlich schmaler als vorher (15,0 → 14,8 wirkt gleich,
-aber der Rumpf selbst ist um 7 % schlanker — die Differenz steckt in der
-Schulterflosse, die enger am Körper liegt statt weit auszuladen), das
-Bollwerk entsprechend breiter (20,5 → 21,2, knapp unter der 21,6-Grenze aus
-der Trefferflächen-Prüfung unten). Der Abstand zwischen allen dreien ist
-absichtlich groß: Ein Blick auf den Umriss allein soll reichen, um zu sagen,
-welcher der drei gerade auf dem Feld steht — auch bei kleiner Darstellung und
-aus jedem Drehwinkel, das ist der Grund für die beiden Prüfungen zu Länge und
-Breite weiter unten.
+| | Rumpf | halbe Breite | Markenzeichen |
+|---|---|---|---|
+| Ausgewogen | Sechseck, vorn **und** hinten spitz (ein Schild von oben) | 18,0 | klingenförmige Schulterstücke nach vorn-außen, große weiße Brustraute |
+| Schnell | langer Pfeil, Nase bis y = −20 | 14,0 | Finne nach **hinten**-außen gefegt (Gegenentwurf zur Klinge), ein breites Streamer-Band |
+| Tank | Achteck mit geraden Kanten, kaum verjüngt | 21,0 | massive blockige Schulterplatten, dicht an der 21,6-Grenze unten |
+
+Als reiner schwarzer Schattenriss (Farbe komplett weg) ergibt das ein
+Sechseck mit zwei Flügeln, einen Pfeil mit gegabeltem Schwanz und einen
+breiten, flachschultrigen Block — drei Formen, die sich nicht verwechseln
+lassen, geprüft mit einem eigenen Silhouetten-Rendering vor dem Commit, nicht
+nur behauptet.
+
+Weniger Teile als vorher (13–14 statt 16–17), aber jedes größer: eine
+einzelne große Fläche liest sich bei 32 bis 40 Pixel Darstellungsgröße noch
+klar, ein halbes Dutzend kleiner Rundungen verschwimmt zu Matsch. Die Beine
+sind jetzt eckige Trapeze statt gerundeter Kapseln, Arme, Handschuhe und
+Waffen sind komplett weg — `_kapsel()` steht nur noch einmal im Code, für den
+schmalen Rennstreifen auf der Brustraute des Ausgewogenen.
 
 **Verlauf statt flacher Fläche — dritte Runde.** Eine einzige Farbe je Teil
 sah aus wie ein Aufkleber, egal wie durchdacht der Umriss war: „Das sieht
