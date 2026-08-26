@@ -120,6 +120,12 @@ func _physics_process(delta: float) -> void:
 	var gegner := get_tree().get_nodes_in_group(&"gegner")
 	var richtung := Vector2.ZERO
 	if not gegner.is_empty():
+		# Zum nächsten Gegner hinlaufen, ganz gleich wie weit weg — sonst
+		# bliebe die Probe bei einem gerade erst gespawnten, noch fernen
+		# Gegner einfach stehen. Über Hindernisse hinweg lenken, aus
+		# demselben Grund wie bei einem echten Gegner (siehe
+		# `Bewegung.richtung_um_hindernisse`) — sonst bliebe die Probe selbst
+		# an der Kreuz-Karte stecken, nicht nur die Gegner.
 		var naechster: Node2D = gegner[0]
 		var beste := INF
 		for g in gegner:
@@ -127,9 +133,22 @@ func _physics_process(delta: float) -> void:
 			if d < beste:
 				beste = d
 				naechster = g
-		richtung = Bewegung.richtung_zu(_spieler.global_position, naechster.global_position)
+		var hindernisse := Karten.fuer_welle(_wellenleiter.welle).hindernisse
+		richtung = Bewegung.richtung_um_hindernisse(
+			_spieler.global_position, naechster.global_position, hindernisse, 55.0, Spieler.RADIUS,
+		)
 
 	_spieler.velocity = richtung * _spieler.effektives_tempo()
 	_spieler.move_and_slide()
 	_spieler.global_position = Bewegung.in_arena(_spieler.global_position, _spieler.arena, Spieler.RADIUS)
-	_spieler._schiessen(richtung)
+
+	# Schießen läuft über dieselbe Auto-Ziel-Funktion wie das echte Spiel —
+	# nur *in* Reichweite wird wirklich geschossen, auch wenn die Probe
+	# gerade auf einen noch fernen Gegner zuläuft.
+	var positionen := PackedVector2Array()
+	for g in gegner:
+		positionen.append(g.global_position)
+	var ziel: Variant = Bewegung.naechstes_ziel(
+		_spieler.global_position, positionen, _spieler.effektive_reichweite(),
+	)
+	_spieler._schiessen(ziel)

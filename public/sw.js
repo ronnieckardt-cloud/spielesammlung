@@ -11,7 +11,7 @@
  * Beim Veröffentlichen einer neuen Fassung die Zahl in SPEICHER erhöhen.
  */
 
-const SPEICHER = 'flow-games-v76';
+const SPEICHER = 'flow-games-v77';
 const GRUNDGERUEST = ['/', '/index.html', '/manifest.webmanifest'];
 
 /**

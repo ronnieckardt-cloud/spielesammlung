@@ -76,6 +76,7 @@ charakter_wechseln={
 2d_physics/layer_2="spieler"
 2d_physics/layer_3="gegner"
 2d_physics/layer_4="spielergeschoss"
+2d_physics/layer_5="hindernis"
 
 [rendering]
 

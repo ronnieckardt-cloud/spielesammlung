@@ -10,7 +10,12 @@ extends CharacterBody2D
 ## geben, Berührung mit dem Ziel melden — und jetzt zusätzlich: welcher Typ
 ## das gerade ist.
 
-signal gestorben
+## Trägt die Todesposition mit — der Wellenleiter braucht sie, um mit einer
+## kleinen Chance ein Powerup genau dort fallen zu lassen (siehe
+## `wellenleiter.gd`). Zum Zeitpunkt des Signals steht der Knoten noch im
+## Baum (er verblasst nur noch, siehe `_sterben()` unten), `global_position`
+## ist also gültig.
+signal gestorben(position: Vector2)
 
 ## Grundwerte, solange `einrichten()` nie aufgerufen wurde — etwa beim
 ## direkten Instanziieren in einer Prüfung. Entsprechen dem Verfolger, dem
@@ -33,6 +38,17 @@ const STERBE_DAUER := 0.22
 ## `_physics_process` — dieselbe Reihenfolge wie bei `Spieler.arena`.
 var ziel: Node2D
 var tempo_faktor: float = 1.0
+
+## Die Hindernisse der aktuellen Karte, ebenfalls vom Wellenleiter gesetzt —
+## siehe `Bewegung.richtung_um_hindernisse` für den Grund, warum ein
+## Verfolger sie überhaupt kennen muss.
+var hindernisse: Array[Rect2] = []
+
+## Ab welchem Abstand zu einem Hindernis-Rand die Ausweichrichtung überhaupt
+## einsetzt. Größer als die Hindernisdicke (siehe `karten.gd`), damit ein
+## Gegner schon vor dem eigentlichen Kontakt zu lenken beginnt, statt erst,
+## wenn er schon an der Wand klebt.
+const HINDERNIS_EINFLUSS := 55.0
 
 var _art: Gegnertypen.Art
 var _leben: int = LEBEN
@@ -85,7 +101,10 @@ func _physics_process(_delta: float) -> void:
 
 	if ziel != null:
 		var grundtempo := _art.tempo if _art != null else TEMPO
-		var richtung := Bewegung.richtung_zu(global_position, ziel.global_position)
+		var eigener_radius := _art.radius if _art != null else 12.0
+		var richtung := Bewegung.richtung_um_hindernisse(
+			global_position, ziel.global_position, hindernisse, HINDERNIS_EINFLUSS, eigener_radius,
+		)
 		velocity = richtung * grundtempo * tempo_faktor
 		if richtung != Vector2.ZERO:
 			_anzeige.rotation = richtung.angle() + PI / 2.0
@@ -139,7 +158,7 @@ func _sterben() -> void:
 	# Wellenleiter zählt „noch da" über die Gruppe, und der Treffer, nicht das
 	# Verblassen, ist der Moment, der zählt.
 	remove_from_group(&"gegner")
-	gestorben.emit()
+	gestorben.emit(global_position)
 
 	if _blitz_tween != null and _blitz_tween.is_valid():
 		_blitz_tween.kill()

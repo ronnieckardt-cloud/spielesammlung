@@ -29,12 +29,18 @@ extends Node2D
 ## Wie lange „Welle X geschafft!" steht, bevor die Karten kommen.
 const WELLENMELDUNG_DAUER := 1.3
 
+## Wie lange die kurze Powerup-Meldung ("Schild!") steht — deutlich kürzer
+## als die Wellenmeldung und ohne Pause: Ein Powerup wird mitten im Kampf
+## eingesammelt, das Spiel darf dafür nicht anhalten.
+const POWERUP_MELDUNG_DAUER := 1.1
+
 @onready var _arena: Arena = $Arena
 @onready var _spieler: Spieler = $Spieler
 @onready var _kamera: Camera2D = $Spieler/Kamera
 @onready var _wellenleiter: Wellenleiter = $Wellenleiter
 @onready var _kopfzeile: Label = $Oberflaeche/Kopfzeile
 @onready var _wellenmeldung: Label = $Oberflaeche/Wellenmeldung
+@onready var _powerup_meldung: Label = $Oberflaeche/PowerupMeldung
 @onready var _rundenende: Rundenende = $Oberflaeche/Rundenende
 @onready var _rundenende_stats: Label = $Oberflaeche/Rundenende/Karte/Stats
 @onready var _rundenende_rekord: Label = $Oberflaeche/Rundenende/Karte/Rekord
@@ -69,6 +75,8 @@ func _ready() -> void:
 	_wellenleiter.welle_gestartet.connect(_kopfzeile_setzen.unbind(1))
 	_wellenleiter.welle_geschafft.connect(_welle_geschafft)
 	_wellenleiter.punkte_geaendert.connect(_kopfzeile_setzen.unbind(1))
+	_wellenleiter.karte_gewechselt.connect(_karte_gewechselt)
+	_spieler.powerup_eingesammelt.connect(_powerup_eingesammelt)
 	_aufwertungsauswahl.gewaehlt.connect(_aufwertung_gewaehlt)
 	_rundenende.neustart_angefordert.connect(_neustart)
 	_charakterauswahl.gewaehlt.connect(_charakter_gewaehlt)
@@ -98,6 +106,37 @@ func _kopfzeile_setzen() -> void:
 func _pause_setzen(pausiert: bool) -> void:
 	get_tree().paused = pausiert
 	_touchsteuerung.pause_setzen(pausiert)
+
+
+## Von `Wellenleiter.karte_gewechselt` aufgerufen, immer am Anfang einer
+## Welle mit neuem Layout (siehe `Karten.fuer_welle`). Reicht die neuen
+## Hindernisse an `Arena` weiter und schiebt den Spieler heraus, falls er
+## zufällig genau dort steht, wo jetzt eins erscheint — seine Position ist
+## zu diesem Zeitpunkt „eingefroren" von der vorherigen Karte (die Runde
+## pausiert zwischen zwei Wellen, siehe `_welle_geschafft`/
+## `_aufwertung_gewaehlt`), sonst stünde er sichtbar im Hindernis fest.
+## Gegner selbst brauchen dieselbe Behandlung nicht: Eine neue Welle spawnt
+## erst, nachdem alle Gegner der vorherigen tot sind (siehe `Wellenleiter`),
+## es gibt also nie einen lebenden Gegner, der von einem Kartenwechsel
+## überrascht werden könnte.
+func _karte_gewechselt(karte: Karten.Karte) -> void:
+	_arena.hindernisse = karte.hindernisse
+	_spieler.global_position = Bewegung.aus_hindernissen_geschoben(
+		_spieler.global_position, _arena.hindernisse_welt(), Spieler.RADIUS,
+	)
+
+
+## Kurze Einblendung, was gerade aufgesammelt wurde — läuft **ohne** Pause,
+## anders als `_welle_geschafft`: Ein Powerup wird mitten im Kampf
+## eingesammelt, das Spiel soll währenddessen weiterlaufen. Zwei Pickups so
+## dicht hintereinander, dass sich ihre Meldungen überschneiden, sind bei
+## höchstens einem Powerup gleichzeitig auf dem Feld praktisch ausgeschlossen
+## — dafür lohnt sich keine eigene Warteschlange.
+func _powerup_eingesammelt(art_id: StringName) -> void:
+	_powerup_meldung.text = "%s!" % Powerups.name_von(art_id)
+	_powerup_meldung.visible = true
+	await get_tree().create_timer(POWERUP_MELDUNG_DAUER).timeout
+	_powerup_meldung.visible = false
 
 
 ## Von `Charakterauswahl.gewaehlt` aufgerufen — wendet die Wahl an und startet

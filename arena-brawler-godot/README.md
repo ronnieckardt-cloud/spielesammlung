@@ -7,19 +7,26 @@ Moderner 2D-Arena-Brawler in Godot 4 mit GDScript.
 > `arena-brawler-mini/` — kein gemeinsamer Code, keine gemeinsamen Abhängigkeiten.
 > Es liegt nur im selben Repository.
 
-Stand: **spielbare Runde mit Charakterauswahl, drei Gegnertypen, Aufwertungen,
-Touch-Bedienung und Ton**. Arena, Spieler, Bewegung, Schießen, drei
+Stand: **spielbare Runde mit Charakterauswahl, Auto-Ziel/Auto-Feuer, drei
+Gegnertypen, Hindernissen, drei wechselnden Arena-Layouts, Aufwertungen,
+Powerups, Touch-Bedienung und Ton**. Arena, Spieler, Bewegung, Schießen, drei
 Charaktervarianten mit eigenen Figuren, drei Gegnertypen (Verfolger,
 Panzer-Verfolger, Flink), ein Wellensystem mit steigender Typenmischung und
-eine Kartenauswahl nach jeder geschafften Welle stehen — man wählt vor jeder
-Runde erst einen Charakter auf einem eigenen Bildschirm, spielt dann von
-Anfang bis Game-Over, wird dabei stärker, und ein Neustart führt sauber
+eine Aufwertungsauswahl nach jeder geschafften Welle stehen — man wählt vor
+jeder Runde erst einen Charakter auf einem eigenen Bildschirm, spielt dann
+von Anfang bis Game-Over, wird dabei stärker, und ein Neustart führt sauber
 zurück zur Auswahl. Bedienbar mit Tastatur **und** Touch (virtueller Stick
 + Feuerknopf), die Oberfläche durchgehend mit Karten, Rahmen und Rückmeldung
-statt flacher Textzeilen. Acht kurze, selbst im Code erzeugte Toneffekte
-(Schuss, Treffer, Tod, Schaden, Welle, Aufwertung, Game Over, Tipp) lassen
-sich über einen Knopf auf der Charakterauswahl abschalten — siehe „Ton"
-weiter unten.
+statt flacher Textzeilen. Zehn kurze, selbst im Code erzeugte Toneffekte
+(Schuss, Treffer, Tod, Schaden, Welle, Aufwertung, Game Over, Tipp, Powerup,
+Schild-Bruch) lassen sich über einen Knopf auf der Charakterauswahl
+abschalten — siehe „Ton" weiter unten.
+
+**Wichtigste Änderung: Zielen und Schießen brauchen keine exakte
+Ausrichtung mehr.** Auf Touch musste man sich vorher exakt zum Gegner drehen
+— faktisch unspielbar mit einem Daumen auf einem kleinen Bildschirm. Jetzt
+übernimmt Auto-Ziel/Auto-Feuer beides: siehe „Auto-Ziel und Auto-Feuer"
+weiter unten, das war die Priorität dieser Ausbaustufe.
 
 ## Öffnen und starten
 
@@ -43,12 +50,19 @@ godot --headless --path . scenes/pruefen.tscn # lässt die Prüfungen laufen
 | | |
 |---|---|
 | Bewegen | WASD/Pfeiltasten **oder** virtueller Stick links unten |
-| Schießen | Leertaste **oder** Feuerknopf rechts unten (beides: gedrückt halten = Dauerfeuer) |
+| Zielen | automatisch — der nächste Gegner in Reichweite, egal wie man gerade läuft |
+| Schießen | auf Touch von selbst, sobald ein Gegner in Reichweite ist (Auto-Feuer) — **oder** Leertaste/Feuerknopf gedrückt halten |
 | Charakter wechseln | Tab |
 | Charakter wählen (vor Rundenstart) | Karte antippen/anklicken |
 
 Tab bleibt der schnelle Wechsel mitten in der Runde, ist aber nicht mehr der
 Hauptweg — der ist jetzt die Auswahl vor dem Start, siehe unten.
+
+**Auf Touch reicht ein einziger Finger auf dem Stick fürs ganze Spiel** —
+zielen und schießen laufen von selbst mit, siehe „Auto-Ziel und Auto-Feuer"
+weiter unten. Der Feuerknopf bleibt trotzdem da: gehaltene Taste/Knopf
+feuern weiterhin unabhängig davon, ob gerade ein Ziel in Reichweite ist,
+sobald eins auftaucht.
 
 Touch und Tastatur laufen nebeneinander her, nicht als zwei getrennte
 Betriebsarten — siehe „Touch-Steuerung" weiter unten.
@@ -67,6 +81,7 @@ arena-brawler-godot/
 │   ├── main.tscn            Hauptszene: Arena + Spieler + Wellenleiter + Kamera + Touchsteuerung + Kopfzeile + Rundenende + Charakterauswahl
 │   ├── arena.tscn           Boden (mit Verlauf), Raster, Rand (außen + innen + Eckmarken), Wände
 │   ├── geschoss.tscn        Schweif + Bild + Kern
+│   ├── powerup.tscn         aufsammelbares Powerup (Area2D + Kreisform)
 │   ├── pruefen.tscn         Prüfszene (nicht Teil des Spiels)
 │   ├── musterblatt.tscn     gibt die Figuren als JSON aus (Werkzeug)
 │   └── rundenprobe.tscn     spielt eine Runde mehrere Sekunden durch (Werkzeug)
@@ -75,9 +90,11 @@ arena-brawler-godot/
 ├── enemies/
 │   ├── gegner.tscn          Form + Anzeige (Formanzeige) + Beruehrung, alle drei Typen
 │   └── gegner.gd
+├── powerups/
+│   └── powerup.gd            zeichnet, meldet Aufsammeln — kennt die eigene Wirkung nicht
 ├── scripts/
 │   ├── gemeinsam/
-│   │   ├── bewegung.gd      reine Rechnung, ohne Node und ohne Uhr
+│   │   ├── bewegung.gd      reine Rechnung, ohne Node und ohne Uhr — inkl. Auto-Ziel und Hindernis-Ausweichen
 │   │   ├── gestalt.gd       die Vielecke der drei Charaktere, ebenso rein
 │   │   ├── gegnergestalt.gd die Vielecke der drei Gegnertypen, ebenso rein
 │   │   ├── formanzeige.gd   zeichnet eine Teileliste — der einzige Knoten dafür, Charaktere **und** Gegner
@@ -87,11 +104,13 @@ arena-brawler-godot/
 │   │   └── geschoss.gd
 │   ├── welt/
 │   │   ├── main.gd
-│   │   ├── arena.gd
+│   │   ├── arena.gd            Boden, Rand, **und die Hindernis-Blöcke einer Karte**
 │   │   ├── wellen.gd           Steigerung über die Wellen + Typenmischung, reine Rechnung
-│   │   ├── wellenleiter.gd     spawnt Gegner, meldet geschaffte Wellen
+│   │   ├── wellenleiter.gd     spawnt Gegner **und Powerups**, meldet geschaffte Wellen, wechselt Karten
 │   │   ├── gegnertypen.gd      die drei Gegnertypen (reine Daten), das Gegenstück zu `charaktere.gd`
-│   │   ├── aufwertungen.gd     die fünf Karten, reine Rechnung
+│   │   ├── aufwertungen.gd     die fünf Aufwertungskarten, reine Rechnung
+│   │   ├── karten.gd           die drei Arena-Layouts (reine Daten) + Erreichbarkeits-Beweis
+│   │   ├── powerups.gd         die drei Powerup-Arten (reine Daten), das Gegenstück zu `aufwertungen.gd`
 │   │   └── rundenende.gd       Neustart-Erkennung, siehe „Pause" unten
 │   ├── pruefen.gd
 │   ├── musterblatt.gd
@@ -379,6 +398,179 @@ Am Rundenende ruft `main.gd` `Spielstand.runde_melden(punkte, welle)` auf —
 dieselbe Funktion, die vorher schon existierte, nur jetzt zum ersten Mal mit
 echten Werten aus einer echten Runde gefüttert.
 
+## Auto-Ziel und Auto-Feuer
+
+**Die eigentliche Priorität dieser Ausbaustufe.** Vorher musste man sich mit
+dem Stick exakt zum Gegner drehen und selbst treffen — auf einem Touchscreen
+mit einem Daumen praktisch unspielbar, weil derselbe Finger gleichzeitig
+laufen **und** zielen sollte. Jetzt übernehmen Blickrichtung **und** Schuss
+das automatisch, unabhängig von der Laufrichtung.
+
+**Zwei bereits fertige, reine Funktionen mussten dafür nicht angefasst
+werden.** `Bewegung.naechstes_ziel(von, ziele, reichweite)` (das nächste Ziel
+innerhalb der Reichweite, oder `null`) und `Bewegung.richtung_zu(von, ziel)`
+gab es schon — nur `spieler.gd` wusste bisher nichts von ihnen. Genau diese
+Trennung (siehe „Trennung von Logik und Darstellung" oben) zahlt sich hier
+aus: Das eigentliche Auto-Ziel ist reine Wiederverdrahtung, keine neue
+Rechnung, und war deshalb schon vorher an einer einzigen Stelle geprüft.
+
+**`Spieler._physics_process` bestimmt das Ziel jedes Bild neu**, aus den
+Positionen aller lebenden Gegner (`_gegnerpositionen()`, über die Gruppe
+`"gegner"`) und der eigenen `effektive_reichweite()`. Gibt es eins, dreht
+sich die Anzeige (`_anzeige.rotation`, sanft über `lerp_angle`) darauf —
+**nicht** die Kollisionsform, dieselbe Trennung wie beim ursprünglichen
+Aufbau (siehe „Trennung von Logik und Darstellung"). Gibt es keins, folgt die
+Anzeige stattdessen weiter der Laufrichtung wie bisher, damit sie beim
+Loslaufen nicht in einer alten Blickrichtung einfriert.
+
+**Auto-Feuer ist neu, „gedrückt halten" bleibt.** `_schiessen(ziel)` feuert
+jetzt, sobald `ziel != null` ist **und** entweder die `"schiessen"`-Aktion
+gehalten wird (Taste oder Feuerknopf, unverändert) **oder**
+`Eingabe.touch_verfuegbar` wahr ist — auf einem Gerät mit erkanntem
+Touchscreen genügt also ein einziger Finger auf dem Stick, ganz ohne den
+Feuerknopf zu berühren. Auf Tastatur bleibt es bewusst bei „Leertaste
+halten": Wer am Rechner testet, hat ohnehin beide Hände frei, und ein
+Dauerfeuer ganz ohne jede Eingabe wäre dort überraschend.
+
+**Kein Schuss mehr ins Leere.** `_schiessen(ziel: Variant)` nimmt jetzt das
+Ziel selbst entgegen statt einer Richtung und bricht sofort ab, wenn
+`ziel == null` — vorher feuerte ein gehaltener Feuerknopf ohne Gegner in der
+Nähe einfach in die zuletzt gelaufene Richtung.
+
+**Die Pause blockiert Auto-Feuer weiterhin, ohne dass dafür eine einzige
+Zeile nötig war.** `Spieler` hängt als direktes Kind von `Main` im Baum,
+`Main` selbst bekommt bewusst kein `PROCESS_MODE_ALWAYS` (siehe „Wie die
+Pause wirklich funktioniert" unten) — der Spieler erbt also ganz regulär
+`PROCESS_MODE_INHERIT` und friert mit dem Rest der Runde ein, sobald
+`get_tree().paused = true` steht. Ein eigener Test sichert das jetzt explizit
+ab (`spieler.process_mode == Node.PROCESS_MODE_INHERIT`), statt sich nur auf
+die bestehende Architektur zu verlassen.
+
+## Hindernisse
+
+Feste, rechteckige Blöcke innerhalb der Arena — Kollision für Spieler und
+Gegner, eine klare Regel für Geschosse, reine Geometrie für Spawn-Sicherheit.
+
+**Die Regel für Geschosse: blockiert, nicht zerstörbar.** Ein Hindernis
+selbst lässt sich durch nichts wegschießen — die Arena-Layouts sind feste,
+von Hand entworfene Rätsel (siehe „Karten" unten), ein zerstörbares
+Hindernis würde die Karte während der Runde verändern. Ein Geschoss, das ein
+Hindernis trifft, verschwindet dort einfach (`Geschoss._on_body_entered`
+läuft unverändert, nur meldet ein Hindernis kein `schaden_nehmen` — der
+Schuss endet trotzdem an Ort und Stelle, statt hindurchzufliegen).
+
+**Eine eigene Kollisionsebene statt der Wiederverwendung von „welt".**
+`project.godot` bekam `2d_physics/layer_5="hindernis"` dazu. Der Grund:
+Geschosse ignorieren bislang den äußeren Arenarand (Ebene „welt") komplett —
+ihre Reichweite begrenzt sie schon selbst, ein zweiter Mechanismus wäre
+doppelt gemoppelt. Läge ein Hindernis auf derselben Ebene, würde genau dieses
+bestehende Verhalten unbeabsichtigt mitgeändert. Mit einer eigenen Ebene
+bleibt der Rand wie er war, und nur Hindernisse blockieren zusätzlich:
+`Geschoss.collision_mask` wurde von `4` (Gegner) auf `4 | 16` erweitert,
+`Spieler`/`Gegner` von `1` auf `1 | 16` (Welt **und** Hindernis).
+
+**Optik ohne Bilddatei, dieselbe Handschrift wie der Rest der Arena.**
+`arena.gd` zeichnet zu jedem Rechteck einen Schatten (dunkle, versetzte
+Kopie), eine Fläche mit demselben Licht-oben-links-Verlauf wie der
+Arenaboden (`vertex_colors`, nur kräftiger — ein kleiner Block braucht mehr
+Kontrast als die große Bodenfläche) und eine helle Umriss-Kante — dieselbe
+Reihenfolge (Schatten zuerst) wie überall sonst im Projekt.
+
+**Gegner laufen jetzt um Hindernisse herum, nicht stur hindurch.** Ein
+echter, in der simulierten Runde (`scenes/rundenprobe.tscn`) gefundener
+Fehler, kein vorausschauendes Design: Ein Verfolger, der stur
+`Bewegung.richtung_zu(von, ziel)` nimmt, bleibt an einer flachen
+Hindernis-Wand **mittig stecken**, sobald sein Ziel exakt auf der anderen
+Seite steht — Anziehung zum Ziel und die Kollision mit der Wand heben sich
+an genau dieser Stelle auf, `move_and_slide()` gleitet dann bestenfalls
+ziellos am Rand entlang. Nach Einführung der Kreuz-Karte blieben mehrere
+Gegner zwanzig simulierte Sekunden lang ohne einen einzigen weiteren Treffer
+stehen — derselbe Fehlertyp wie ein Bot, der für immer an einem
+Steigungswinkel hängen bleibt (siehe Flow MTB in `CLAUDE.md`): Erst die
+simulierte Probe deckt ihn auf, nicht das bloße Ansehen im Editor.
+
+`Bewegung.richtung_um_hindernisse(von, ziel, hindernisse, einfluss, rand)`
+behebt das — keine Wegfindung, nur genug, um an einer einzelnen, konvexen
+Wand nicht steckenzubleiben: Für jedes Hindernis näher als `einfluss` kommt
+eine Fluchtrichtung vom nächsten Randpunkt weg dazu, gewichtet danach, wie
+nah. **Reine Flucht allein reicht dabei nicht** — steht man exakt auf der
+Senkrechten zur Wandmitte, zeigt die Fluchtrichtung exakt entgegengesetzt zur
+Zielrichtung, beide heben sich beim Addieren zu einem kürzeren Vektor
+**derselben** Richtung auf, keine seitliche Ablenkung entsteht, und der
+ursprüngliche Fehler wäre nur eine Formel weiter verschoben. Eine feste
+**Tangente** (die Fluchtrichtung um 90° gedreht) bricht die Symmetrie
+zuverlässig in eine Richtung. Gegner (`gegner.gd`) und Spieler (die simulierte
+Probe, siehe unten) benutzen dieselbe Funktion — der Spieler selbst braucht
+sie im echten Spiel nicht, er wird ja von der Berührung geführt, nicht vom
+Code.
+
+**Ein Hindernis, das genau dort erscheint, wo jemand steht, schiebt ihn
+sanft heraus.** Beim Kartenwechsel (siehe unten) ist die Position des
+Spielers „eingefroren" von der vorherigen Karte — steht er zufällig genau an
+einer Stelle, an der jetzt ein neues Hindernis liegt, holt
+`Bewegung.aus_hindernissen_geschoben(punkt, hindernisse, rand)` ihn an den
+nächsten freien Rand zurück. Dieselbe Funktion platziert auch
+zeitgesteuerte Powerups nie halb in einer Wand (siehe „Powerups" unten).
+
+## Karten
+
+Drei Arena-Layouts, reine Daten in `scripts/welt/karten.gd`
+(`Karten.Karte`: `id`, `name`, `hindernisse: Array[Rect2]`) — testbar, ohne
+dass eine Szene läuft:
+
+| Id | Name | Hindernisse |
+|---|---|---|
+| `offen` | Offen | keine — die bisherige, unveränderte Arena |
+| `kreuz` | Kreuz | vier Balken um die Mitte, mit echter Lücke an jeder Ecke |
+| `gasse` | Gasse | zwei lange Blöcke links/rechts, breiter Durchgang dazwischen |
+
+**Kein durchgehendes Kreuz.** Ein geschlossenes Plus schottete vier Viertel
+komplett gegeneinander ab — das hier ist ein Hindernis, um das man laufen
+kann, kein Labyrinth. Die Lücke zwischen zwei Armen ist keine
+Geschmacksfrage: Die erste Fassung (`luecke=70`, `dicke=56`) ließ an jedem
+der vier „Ellbogen" nur rund 4 Pixel Luft — deutlich weniger, als ein Körper
+braucht (siehe „Beweist die Erreichbarkeit" unten, das hat genau das
+gefunden, nicht das Auge). Jetzt `luecke=95`, `dicke=40`, rund 37 Pixel
+Ellbogen-Luft.
+
+**Wechsel automatisch alle drei Wellen** (`Karten.WECHSEL_ALLE_WELLEN`),
+nicht über einen Auswahlbildschirm vor der Runde. Bewusste Entscheidung,
+nicht die einzige denkbare: Ein dritter Bildschirm vor jeder Runde (nach der
+Charakterauswahl) wäre ein zusätzlicher Tipp und eine zusätzliche
+Entscheidung — ausgerechnet auf dem einen Zielgerät dieses Projekts, wo
+jeder Tipp zählt. Der automatische Wechsel reiht sich stattdessen genau in
+die Steigerung ein, die die Wellen ohnehin schon automatisch mitbringen
+(`Wellen.gegner_fuer_welle` und Geschwister) — Abwechslung **innerhalb**
+einer Runde, keine zweite, eigene Bedienebene. `Karten.fuer_welle(welle)` ist
+reine Rechnung: Dieselbe Wellenzahl ergibt überall dieselbe Karte, ganz ohne
+Zufall oder Absprache.
+
+**Der Wechsel meldet sich nur, wenn er wirklich passiert.**
+`Wellenleiter.karte_gewechselt(karte)` feuert ausschließlich beim
+tatsächlichen Wechsel auf eine **andere** Karte, nicht bei jeder Welle —
+`main.gd._karte_gewechselt()` reicht die neuen Hindernisse an `Arena` weiter
+und schiebt den Spieler heraus, falls nötig (siehe „Hindernisse" oben).
+Gegner brauchen dieselbe Behandlung nicht: Eine neue Welle spawnt erst,
+nachdem alle Gegner der vorherigen tot sind, es gibt also nie einen
+lebenden Gegner, der von einem Kartenwechsel überrascht werden könnte.
+
+**Beweist die Erreichbarkeit, statt sie nur anzunehmen.**
+`Karten.ist_voll_erreichbar(karte, rand, raster)` flutet ein grobes
+Rasterfeld von einer garantiert freien Ecke aus (dieselbe Grundidee wie der
+Flutfüllungs-Test in Ghost Chase, nur auf Rechtecken statt einem
+Text-Labyrinth) und prüft, dass **jedes** unblockierte Feld erreicht wird —
+kein Hindernis darf eine Ecke so abschotten, dass ein Gegner (der nur um
+Rechtecke herumgleitet, nicht sucht) den Spieler nicht erreichen kann. `rand`
+weitet jedes Hindernis dabei um den größten vorkommenden Körperradius auf,
+sonst gälte ein Spalt als begehbar, durch den in Wirklichkeit niemand passt
+— genau der Maßstab, an dem die erste Kreuz-Fassung oben gescheitert ist.
+
+**Sicherheitsabstand zum Rand.** `Karten.RAND_SICHERHEITSABSTAND` (90 Pixel)
+hält jedes Hindernis vom Arenarand fern — deutlich mehr als
+`Wellenleiter.SPAWN_ABSTAND` (24) selbst, weil ein Gegner kein Punkt ist,
+sondern einen eigenen Radius mitbringt (bis 17 beim Panzer-Verfolger), der
+am Spawnpunkt noch hineinpassen muss.
+
 ## Aufwertungen
 
 Nach jeder geschafften Welle: kurze Meldung, dann genau drei Karten, dann
@@ -464,6 +656,97 @@ während der Pause weiter (`process_always` ist dort `true`), und ein
 `await` auf ein Signal wird von der **Signalquelle** wachgerufen, nicht vom
 `process_mode` des wartenden Knotens. Auch das wurde an derselben Testszene
 nachgemessen, bevor es in den echten Code kam.
+
+## Powerups
+
+Drei aufsammelbare Arten, reine Daten in `scripts/welt/powerups.gd`
+(`Powerups`, das Gegenstück zu `aufwertungen.gd`) — zeitlich begrenzt,
+selten, mit klaren Stapel-Regeln:
+
+| Art | Wirkung | Dauer | Stapel-Regel |
+|---|---|---|---|
+| Schild | fängt genau einen Treffer ab, kein Lebensverlust | bis zum nächsten abgefangenen Treffer | ein zweites Schild während der Wirkung ändert nichts — es bleibt bei „aktiv" |
+| Tempo-Boost | Tempo × 1,35 | 5 s | ein zweites Einsammeln **erneuert** die Uhr auf die volle Dauer, verlängert nicht zusätzlich |
+| Schnellfeuer | Schusspause × 0,55 | 5 s | dieselbe „erneuert, nicht addiert"-Regel wie Tempo |
+
+Genau die vom Auftrag verlangte klare Regel: nie unbegrenzt länger, egal wie
+oft man nachsammelt.
+
+**Selten, an zwei Quellen, nie mehr als eins gleichzeitig.** Ein sterbender
+Gegner lässt mit geringer Wahrscheinlichkeit eins fallen
+(`Powerups.DROP_CHANCE = 0.09`, „nicht spam" ist eine ausdrückliche Vorgabe
+der Aufgabe) — genau an der Todesstelle, damit sich das Finden als Belohnung
+für den Treffer liest, nicht als beliebiger Fund irgendwo im Feld. Fällt
+lange keins, sorgt ein zeitgesteuerter Nachschub dafür, dass nie ewig nichts
+auf dem Feld liegt (`Powerups.ZEITGESTEUERT_ALLE_SEKUNDEN = 22`). Beide
+Quellen prüfen zuerst, ob schon eins da ist (`get_tree().get_nodes_in_group(
+&"powerup")`) — es liegt also nie mehr als eins gleichzeitig auf dem Feld.
+
+**Aufsammeln per Berührung, wie überall sonst im Projekt.** `Powerup` ist ein
+`Area2D` (`collision_mask = 2`, nur die Spieler-Ebene), `_on_body_entered`
+ruft `koerper.powerup_einsammeln(art_id)` auf — dieselbe Trennung wie bei
+den Aufwertungskarten: Ein Powerup kennt seine eigene Wirkung nicht, die
+steht in `Powerups` und wird von `Spieler.powerup_einsammeln()` angewendet.
+
+**Eigene Silhouette und Farbe je Art, keine Bilddatei.** Ein Fünfeck mit
+gerundeter Spitze für den Schild, ein Chevron für Tempo, drei kleine Pfeile
+für Schnellfeuer — jeweils in `Powerup._draw()` gezeichnet, mit einem
+Bodenring in derselben Farbe darunter (dieselbe „Bodenring"-Idee wie bei Dash
+Citys Schüben in der React-Sammlung: Die Farbe taucht am Ring **und** in der
+Form wieder auf). Ein aktiver Schild erscheint zusätzlich als heller Ring um
+die Trefferfläche des Spielers (`Spieler._draw`, dieselbe Farbe) — „das habe
+ich eingesammelt" und „das wirkt gerade" gehören damit sichtbar zusammen,
+ganz ohne Text.
+
+**Die kurze HUD-Meldung läuft ohne Pause, anders als „Welle geschafft".**
+Ein Powerup wird mitten im Kampf eingesammelt, das Spiel darf dafür nicht
+anhalten — `main.gd._powerup_eingesammelt()` blendet für 1,1 Sekunden einen
+Text wie „Schild!" ein und wieder aus, ohne `get_tree().paused` anzurühren.
+
+### Eine Lehre aus der simulierten Runde: neue Flächen mitten in einer Physik-Abfrage
+
+Die simulierte Runde (`rundenprobe.tscn`) meldete nach dem Einbau der
+Powerups gelegentlich `ERROR: Can't change this state while flushing
+queries.` — nicht reproduzierbar in den synchronen Kopflos-Prüfungen (die
+lassen nie einen echten Bildschritt laufen), nicht spielzerstörend
+(`exit=0`, die Runde lief weiter), aber ein echter, unerklärter Fehler, den
+dieses Projekt nicht kommentarlos stehen lässt.
+
+Die naheliegende erste Vermutung — `Powerup`s eigenes Schweben bewegt
+`global_position` und rührt damit die beim Physikserver registrierte
+Fläche an — war nur ein Teil der Wahrheit: Das Schweben lebt seither
+komplett in `_draw()`/`draw_set_transform()`, eine reine Zeichenoperation
+ohne jede Wirkung auf die Kollisionsform. Der Fehler blieb trotzdem.
+
+Zweiter Verdacht: Ein `Powerup`/`Geschoss`, das sich mitten in der eigenen
+`body_entered`-Abfrage per `queue_free()` selbst entfernt, stört die noch
+laufende Kollisionsabfrage. Beide Stellen (`Powerup._on_body_entered`,
+`Geschoss._on_body_entered`, dazu `Geschoss`s zweiter `queue_free()`-Aufruf
+beim Erreichen der Reichweite) bekamen `call_deferred(&"queue_free")` statt
+eines direkten Aufrufs. Auch das senkte die Häufigkeit, behob den Fehler
+aber nicht vollständig.
+
+**Der eigentliche Auslöser lag beim Neu-Anlegen, nicht beim Entfernen.**
+`Wellenleiter._gegner_gestorben()` — verbunden mit `Gegner.gestorben`, das
+`Gegner._sterben()` synchron auslöst, aufgerufen aus `schaden_nehmen()`,
+aufgerufen aus `Geschoss._on_body_entered()` — legte mit `DROP_CHANCE` eine
+komplett **neue** `Powerup`-Instanz per `add_child()` an, mitten in genau
+derselben Physik-Signal-Kette. Ein brandneues, überwachendes `Area2D` synchron
+in den Baum zu hängen, während der Physikserver noch Kollisionen für den
+aktuellen Schritt abarbeitet, meldet dieselbe Fehlermeldung wie ein
+synchrones `queue_free()` — nur beim **Hinzufügen** statt beim Entfernen
+einer überwachenden Fläche. `_powerup_erzeugen()` schiebt das Anlegen jetzt
+über `call_deferred(&"_powerup_erzeugen_jetzt", position)` hinter das Ende
+der Abfrage, genau wie die drei `queue_free()`-Stellen zuvor.
+
+*Merksatz:* Bei einem überwachenden `Area2D` ist nicht nur das **Entfernen**
+mitten in einer Physik-Abfrage gefährlich, sondern genauso das **Anlegen** —
+beides ändert den Satz der beim Physikserver registrierten Flächen, während
+er gerade selbst mit ihnen rechnet. Betroffen ist dabei nicht nur die Stelle,
+die den Fehler auslöst (`add_child`/`queue_free` selbst), sondern jeder Punkt
+in der Aufrufkette davor, der noch innerhalb desselben Physik-Signals läuft
+— hier vier Stellen in drei verschiedenen Dateien für ein und denselben
+Fehler.
 
 ## Charakterauswahl
 
@@ -665,7 +948,7 @@ einer beim Wiedereinschalten.
 godot --headless --path . scenes/pruefen.tscn
 ```
 
-180 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
+243 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
 `aufwertungen.gd`, die Charakter- und Gegnerdaten, die Umrisse aus
 `gestalt.gd` und `gegnergestalt.gd`, der Spielstand, der Gegner und der
 Wellenablauf jeweils für sich allein, dass Aufwertungen wirklich am Spieler
@@ -728,7 +1011,7 @@ pausiert wird (`Eingabe.touch_verfuegbar` wird dafür extra erzwungen und
 am Ende wieder zurückgesetzt, sonst bliebe sie im Testlauf ohnehin
 unsichtbar — kein echter Touchscreen hier).
 
-Dazugekommen mit dem Ton: dass jeder der acht Effekte einen echten,
+Dazugekommen mit dem Ton: dass jeder der Effekte einen echten,
 nicht-leeren Klangpuffer erzeugt, dass ein unbekannter Name nicht abstürzt,
 und dass die An/Aus-Einstellung ein erneutes Laden übersteht (dieselbe
 `ConfigFile`-Prüfung wie beim Spielstand). Wie ein Effekt klingt, lässt sich
@@ -744,6 +1027,53 @@ der Kopflos-Meldung selbst aber nichts, weil die verbliebenen Wiedergabe-
 Objekte woanders (im Audio-Server) hängen, nicht in `Ton` selbst. Im
 echten Spiel im Browser tritt das nicht auf: Dort läuft ein echter
 Audio-Ausgang, der jede beendete Wiedergabe laufend selbst aufräumt.
+
+Dazugekommen mit Auto-Ziel, Hindernissen, Karten und Powerups: dass
+Auto-Ziel wirklich den nächsten Gegner in Reichweite wählt (und außerhalb
+der Reichweite `null` liefert statt eines Schusses in eine falsche
+Richtung), dass Auto-Feuer nur bei Touch **und** vorhandenem Ziel von selbst
+feuert, dass eine gehaltene Taste weiterhin auch ohne Touch feuert, und dass
+der Spieler wirklich `PROCESS_MODE_INHERIT` von `Main` erbt statt eines
+eigenen `ALWAYS` (siehe „Auto-Ziel und Auto-Feuer" oben). Für Hindernisse:
+dass ein Hindernis-Rechteck wirklich eine Kollisionsform **und** eine
+sichtbare Fläche bekommt, dass ein zweites Setzen von `Arena.hindernisse`
+die alten Formen als `is_queued_for_deletion()` markiert statt sie
+synchron zu entfernen (`queue_free()` ist absichtlich verzögert, siehe
+„Hindernisse" oben), dass `hindernisse_welt()` wirklich in Weltkoordinaten
+umrechnet, und dass sowohl `Bewegung.aus_hindernissen_geschoben` als auch
+`Bewegung.richtung_um_hindernisse` sich korrekt verhalten (Letzteres mit
+`absf(...)`, nicht mit dem rohen Vorzeichen — ein früher Testentwurf prüfte
+sonst in die falsche Richtung). Für Karten: dass jede Karte innerhalb ihres
+Sicherheitsabstands zum Rand bleibt und **vollständig erreichbar** ist
+(`Karten.ist_voll_erreichbar`, siehe oben), und dass `Karten.fuer_welle` die
+richtigen Wellen auf die richtigen Karten abbildet. Für Powerups: die Wirkung
+und Stapel-Regel jeder der drei Arten am Spieler (Schild fängt genau einen
+Treffer ab und dann nicht noch einmal, ein zweites Tempo-Powerup verlängert
+nicht zusätzlich), dass Aufsammeln nur bei einem Körper mit
+`powerup_einsammeln` auslöst, dass unter genug Toden irgendwann eins fällt
+und nie ein zweites dazukommt, solange eins liegt.
+
+Zwei bestehende Prüfungen mussten dabei nachgezogen werden, kein Zufall,
+sondern eine echte Nebenwirkung der neuen Powerup-Spawns: Zwei ältere
+Schleifen in `_pruefe_wellenleiter_ablauf()` und
+`_pruefe_gegnertyp_mischung()` gingen unbedingt davon aus, dass **jedes**
+Kind einer Gegner-Gruppe ein Gegner ist (`kind.schaden_nehmen(99)`,
+`kind.art_id()`) — sobald ein Powerup zufällig in dieselbe Gruppe von
+Kindknoten spawnte, brach das mit „Nonexistent function 'schaden_nehmen' in
+base 'Area2D (Powerup)'". Behoben mit `if kind.is_in_group(&"gegner"):` vor
+beiden Zugriffen — derselbe Fehlertyp wie die `resource_local_to_scene`-Falle
+weiter oben: unsichtbar, solange nur ein einziger Knotentyp im Spiel ist,
+und erst durch eine zweite, gleichzeitige Art aufgedeckt.
+
+**Eine wiederkehrende Falle beim Prüfen der Kartenwechsel-Verdrahtung:**
+Der erste Testentwurf trieb die **echte** `haupt`-Instanz aus der Rauchprobe
+über mehrere echte Wellen, um `karte_gewechselt` zu beobachten — genau die
+Falle, die der Wellenablauf-Test oben schon einmal umgangen hatte: `haupt`
+hängt `main.gd`s eigenen `welle_geschafft`-Handler am Signal, der pausiert
+den Baum echt und wartet auf eine Aufwertungsauswahl, die im Test nie kommt.
+Behoben, indem der Test `haupt._karte_gewechselt(testkarte)` direkt aufruft
+— derselbe Kniff wie beim Wellenablauf: Godots eigenen asynchronen Ablauf
+ganz umgehen, statt ihn hinterher aufzuräumen.
 
 ## Web-Export (HTML5)
 
@@ -849,12 +1179,19 @@ eingecheckt und mitausgeliefert.
 
 ## Was als Nächstes fehlt
 
-Ton. Bewusst noch nicht gebaut: Erst sollte eine ganze Runde mit echter
-Steigerung, einem Einstieg davor, einem Gegenüber, das nicht nach drei
-Wellen langweilig wird, und einer richtig bedienbaren Oberfläche stehen.
+Ton, Auto-Ziel/Auto-Feuer, Hindernisse, mehrere Arena-Layouts und Powerups
+stehen inzwischen alle — dieser Abschnitt ist entsprechend aktualisiert
+worden, nachdem er eine Weile hinter dem tatsächlichen Stand
+zurückgeblieben war.
 
 Denkbare nächste Ausbaustufen für die Gegner selbst: ein Fernkämpfer (bisher
 läuft jeder Typ nur geradewegs auf sein Ziel zu, kein einziger schießt
 zurück), ein eigenes Modul für Gegner-Geschosse (`Geschoss.gd` kennt bisher
 nur den Spieler als Absender), und ein spürbares Boss-Ereignis in größeren
 Abständen statt einer reinen Typenmischung.
+
+Denkbare nächste Ausbaustufen für Karten und Hindernisse: mehr als drei
+Layouts, bewegliche oder zerstörbare Hindernisse (bisher ausdrücklich fest
+und unzerstörbar, siehe „Hindernisse" oben), und eine Kartenauswahl statt
+des automatischen Wechsels — falls sich „alle drei Wellen" im Spielen als
+zu unvorhersehbar erweist.
