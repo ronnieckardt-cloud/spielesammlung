@@ -8,7 +8,7 @@ radius = 16.0
 
 [node name="Spieler" type="CharacterBody2D"]
 collision_layer = 2
-collision_mask = 1
+collision_mask = 17
 script = ExtResource("1_spieler")
 
 [node name="Form" type="CollisionShape2D" parent="."]

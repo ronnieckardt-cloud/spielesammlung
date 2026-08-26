@@ -23,3 +23,9 @@ default_color = Color(0.290196, 0.333333, 0.439216, 1)
 [node name="Waende" type="StaticBody2D" parent="."]
 collision_layer = 1
 collision_mask = 0
+
+[node name="HindernisAnzeige" type="Node2D" parent="."]
+
+[node name="HindernisKoerper" type="StaticBody2D" parent="."]
+collision_layer = 16
+collision_mask = 0

@@ -195,6 +195,26 @@ horizontal_alignment = 1
 vertical_alignment = 1
 text = "Welle 1 geschafft!"
 
+[node name="PowerupMeldung" type="Label" parent="Oberflaeche"]
+visible = false
+mouse_filter = 2
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_top = 0.0
+anchor_bottom = 0.0
+offset_left = -110.0
+offset_right = 110.0
+offset_top = 64.0
+offset_bottom = 104.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 22
+theme_override_constants/outline_size = 5
+theme_override_colors/font_outline_color = Color(0.043137, 0.047059, 0.070588, 0.9)
+theme_override_styles/normal = SubResource("StyleBoxFlat_meldung")
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "Schild!"
+
 [node name="Rundenende" type="Control" parent="Oberflaeche"]
 visible = false
 mouse_filter = 2

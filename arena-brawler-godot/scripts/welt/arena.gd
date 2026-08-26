@@ -35,6 +35,15 @@ const ECKE_LAENGE := 28.0
 const ECKE_BREITE := 3.0
 const ECKE_FARBE := Color(0.55, 0.75, 1.0, 0.85)
 
+## Optik der Hindernisse — dieselbe Handschrift wie der Rest der Arena:
+## Licht oben links (`vertex_colors`, wie beim Boden), ein echter, aber
+## billiger Schatten als versetzte, dunkle Kopie der Fläche statt eines
+## Shaders, dazu eine helle Kante wie beim äußeren Arenarand.
+const HINDERNIS_FARBE := Color(0.30, 0.34, 0.46)
+const HINDERNIS_KANTE_FARBE := Color(0.58, 0.66, 0.86, 0.9)
+const HINDERNIS_SCHATTEN_FARBE := Color(0, 0, 0, 0.32)
+const HINDERNIS_SCHATTEN_VERSATZ := Vector2(5, 6)
+
 @export var groesse := Vector2(1152, 648):
 	set(wert):
 		groesse = wert
@@ -44,12 +53,23 @@ const ECKE_FARBE := Color(0.55, 0.75, 1.0, 0.85)
 @export var bodenfarbe := Color("232634")
 @export var randfarbe := Color("4a5570")
 
+## Feste Blöcke innerhalb der Arena, in arena-lokalen Koordinaten (0,0 bis
+## `groesse`) — dieselbe Herkunft wie `Karten.Karte.hindernisse`. Leer heißt
+## „offene Arena", genau wie die Karte „Offen".
+@export var hindernisse: Array[Rect2] = []:
+	set(wert):
+		hindernisse = wert
+		if is_inside_tree():
+			_hindernisse_aufbauen()
+
 @onready var _boden: Polygon2D = $Boden
 @onready var _rand: Line2D = $Rand
 @onready var _rand_innen: Line2D = $RandInnen
 @onready var _raster: Node2D = $Raster
 @onready var _ecken: Node2D = $Ecken
 @onready var _waende: StaticBody2D = $Waende
+@onready var _hindernis_koerper: StaticBody2D = $HindernisKoerper
+@onready var _hindernis_anzeige: Node2D = $HindernisAnzeige
 
 
 func _ready() -> void:
@@ -59,6 +79,15 @@ func _ready() -> void:
 ## Der Bereich, in dem sich Figuren aufhalten dürfen — in Weltkoordinaten.
 func flaeche() -> Rect2:
 	return Rect2(global_position, groesse)
+
+
+## `hindernisse` in Weltkoordinaten — für Code außerhalb der Arena, der mit
+## globalen Spielerpositionen rechnet (siehe `main.gd` beim Kartenwechsel).
+func hindernisse_welt() -> Array[Rect2]:
+	var ergebnis: Array[Rect2] = []
+	for r in hindernisse:
+		ergebnis.append(Rect2(r.position + global_position, r.size))
+	return ergebnis
 
 
 func aufbauen() -> void:
@@ -95,6 +124,7 @@ func aufbauen() -> void:
 	_raster_zeichnen()
 	_ecken_zeichnen(ecken_punkte)
 	_waende_setzen()
+	_hindernisse_aufbauen()
 
 
 ## Dünne, sehr blasse Linien quer über den Boden — als Kind-Knoten erzeugt,
@@ -168,3 +198,80 @@ func _waende_setzen() -> void:
 		kollision.shape = form
 		kollision.position = seite[0]
 		_waende.add_child(kollision)
+
+
+## Kollision **und** Optik für jedes Hindernis, aus derselben Rechteckliste.
+## Ein eigener Kollisionskörper (`_hindernis_koerper`, Ebene "hindernis") statt
+## der Wände auf Ebene "welt": Geschosse sollen an Hindernissen abprallen,
+## am äußeren Arenarand bisher aber nicht (der begrenzt sie schon über die
+## eigene Reichweite) — zwei getrennte Ebenen halten diese Entscheidung
+## auseinander, ohne bestehendes Verhalten am Rand zu ändern.
+func _hindernisse_aufbauen() -> void:
+	# `queue_free()`, nicht `.free()` — genau umgekehrt zur ersten Fassung.
+	# Ein Kartenwechsel läuft in echtem Spielbetrieb mitten in Godots
+	# normaler Bildverarbeitung, potenziell überlappend mit einer noch
+	# laufenden Physik-Abfrage (`move_and_slide()`, Kollisionssignale). Ein
+	# sofortiges `.free()` einer Kollisionsform genau in diesem Moment
+	# meldete real: „Can't change this state while flushing queries." —
+	# reproduzierbar in der simulierten Runde (`rundenprobe.tscn`), nicht in
+	# den synchronen Kopflos-Prüfungen, die nie einen echten Bildschritt
+	# laufen lassen. `queue_free()` ist der sichere, im ganzen Projekt sonst
+	# ohnehin übliche Weg (siehe `_raster_zeichnen`/`_ecken_zeichnen`/
+	# `_waende_setzen` oben) — ein Bild lang bestehen alte und neue
+	# Hindernisse nebeneinander, unsichtbar, weil neue Formen einfach
+	# darüber gezeichnet werden.
+	for kind in _hindernis_koerper.get_children():
+		kind.queue_free()
+	for kind in _hindernis_anzeige.get_children():
+		kind.queue_free()
+
+	for rechteck in hindernisse:
+		var mitte := rechteck.position + rechteck.size / 2.0
+
+		var form := RectangleShape2D.new()
+		form.size = rechteck.size
+		var kollision := CollisionShape2D.new()
+		kollision.shape = form
+		kollision.position = mitte
+		_hindernis_koerper.add_child(kollision)
+
+		var punkte := _rechteck_punkte(rechteck.size)
+
+		# Schatten zuerst, versetzt nach unten rechts — dieselbe Reihenfolge
+		# wie überall sonst im Projekt: erst die dunkle Fläche, dann das
+		# eigentliche Teil darüber.
+		var schatten := Polygon2D.new()
+		schatten.polygon = punkte
+		schatten.position = mitte + HINDERNIS_SCHATTEN_VERSATZ
+		schatten.color = HINDERNIS_SCHATTEN_FARBE
+		_hindernis_anzeige.add_child(schatten)
+
+		var flaeche := Polygon2D.new()
+		flaeche.polygon = punkte
+		flaeche.position = mitte
+		# Dasselbe Licht-oben-links wie der Boden (siehe `aufbauen()`), nur
+		# etwas kräftiger — ein kleiner Block braucht mehr Kontrast als die
+		# große Bodenfläche, um überhaupt als Körper zu wirken.
+		flaeche.vertex_colors = PackedColorArray([
+			HINDERNIS_FARBE.lightened(0.16), HINDERNIS_FARBE.lightened(0.04),
+			HINDERNIS_FARBE.darkened(0.1), HINDERNIS_FARBE.darkened(0.02),
+		])
+		_hindernis_anzeige.add_child(flaeche)
+
+		var kante := Line2D.new()
+		var umriss := punkte.duplicate()
+		umriss.append(punkte[0])
+		kante.points = umriss
+		kante.position = mitte
+		kante.width = 2.0
+		kante.default_color = HINDERNIS_KANTE_FARBE
+		_hindernis_anzeige.add_child(kante)
+
+
+## Die vier Eckpunkte eines Rechtecks, mittig um den Ursprung — dieselbe
+## lokale Form für Kollision (übers `position`-Feld verschoben) und Optik.
+func _rechteck_punkte(groesse_stueck: Vector2) -> PackedVector2Array:
+	var h := groesse_stueck / 2.0
+	return PackedVector2Array([
+		Vector2(-h.x, -h.y), Vector2(h.x, -h.y), Vector2(h.x, h.y), Vector2(-h.x, h.y),
+	])

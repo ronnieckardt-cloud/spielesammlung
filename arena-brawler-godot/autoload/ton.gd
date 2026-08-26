@@ -126,6 +126,7 @@ func _exit_tree() -> void:
 const EFFEKTE: Array[StringName] = [
 	&"schuss", &"gegner_treffer", &"gegner_tod", &"spieler_schaden",
 	&"welle_geschafft", &"aufwertung_gewaehlt", &"game_over", &"ui_klick",
+	&"powerup", &"schild_bricht",
 ]
 
 
@@ -177,6 +178,21 @@ func _erzeugen(name: StringName) -> AudioStreamWAV:
 		&"ui_klick":
 			# Sehr kurz und leise — ein Antippen, keine Ansage.
 			return _wav(_sweep(700.0, 700.0, 0.02, 0.16, true))
+		&"powerup":
+			# Heller Doppel-Blip, deutlich höher als "aufwertung_gewaehlt" —
+			# ein Powerup ist ein Fund am Boden, keine gewählte Karte, die
+			# beiden Rückmeldungen sollen sich nicht gleich anhören.
+			return _wav(_folge([
+				{"von": 760.0, "bis": 760.0, "dauer": 0.05, "lautstaerke": 0.3},
+				{"von": 1140.0, "bis": 1140.0, "dauer": 0.1, "lautstaerke": 0.36},
+			]))
+		&"schild_bricht":
+			# Rauschen plus ein kurzer, hoher Sinus-"Klirr" — ein Schild, der
+			# einen Treffer abfängt, klingt nach Glas, nicht nach Schaden.
+			return _wav(_mischen(
+				_rauschen(0.09, 0.28, 0.5),
+				_sweep(1400.0, 900.0, 0.09, 0.3, false),
+			))
 		_:
 			return null
 

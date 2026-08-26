@@ -21,6 +21,13 @@ var _letzte_gemeldete_welle := -1
 ## Lambda fängt äußere lokale Variablen wertweise, nicht per Referenz.
 var _meldungen_zaehler := 0
 
+## Nur für den Wellenleiter-Ablauftest, dieselbe Begründung wie oben bei
+## `_letzte_gemeldete_welle`.
+var _letzte_gewechselte_karte_id: StringName = &""
+
+## Nur für die Powerup-Tests, dieselbe Begründung wie oben.
+var _letzte_powerup_art: StringName = &""
+
 
 func _ready() -> void:
 	_pruefe_bewegung()
@@ -36,7 +43,16 @@ func _ready() -> void:
 	_pruefe_gegner_getrennte_trefferflaechen()
 	_pruefe_gegnertyp_mischung()
 	_pruefe_geschoss_schaden()
+	_pruefe_arena_hindernisse()
+	_pruefe_karten()
+	_pruefe_aus_hindernissen_geschoben()
+	_pruefe_richtung_um_hindernisse()
+	_pruefe_powerups()
+	_pruefe_powerup_am_spieler()
+	_pruefe_powerup_knoten()
+	_pruefe_powerup_spawn_regeln()
 	_pruefe_aufwertungen_am_spieler()
+	_pruefe_auto_ziel_und_feuer()
 	_pruefe_eingabe_touch_erkennung()
 	_pruefe_stick()
 	_pruefe_feuerknopf()
@@ -361,7 +377,12 @@ func _pruefe_szenen() -> void:
 
 	var geschoss: Node = load("res://scenes/geschoss.tscn").instantiate()
 	_pruefe("Geschoss liegt auf der Geschossebene", geschoss.collision_layer, 8)
-	_pruefe("Geschoss sucht nur Gegner", geschoss.collision_mask, 4)
+	# Ebene 5 = Hindernis kam mit den Arena-Hindernissen dazu: Ein Schuss
+	# soll dort abprallen (siehe "Hindernisse" in arena.gd), am äußeren
+	# Arenarand (Ebene 1 "welt") aber weiterhin nicht — der begrenzt Schüsse
+	# schon über ihre eigene Reichweite, das bleibt unverändert.
+	_pruefe("Geschoss sucht Gegner und Hindernisse, nicht die Außenwand",
+		geschoss.collision_mask, 4 | 16)
 	geschoss.free()
 
 	# Die Figur hängt an der Anzeige und nicht am Körper: Ein gedrehter
@@ -422,6 +443,13 @@ func _pruefe_szenen() -> void:
 	_pruefe("vor der Wahl laeuft noch keine Welle", wellenleiter.welle, 0)
 	_pruefe_wahr("und der Baum steht still, solange die Auswahl offen ist",
 		get_tree().paused)
+	# Auto-Feuer darf die Pause nicht umgehen: `Spieler` erbt `process_mode`
+	# von `Main` (nicht ALWAYS, siehe weiter unten), Godot ruft seine
+	# `_physics_process` — und damit jedes Schießen, automatisch oder nicht —
+	# während der Pause deshalb gar nicht erst auf. Dieselbe Architektur, die
+	# schon Gegner und Wellenleiter während der Auswahl anhält.
+	_pruefe("Spieler erbt den Pause-Modus, kein eigenes ALWAYS",
+		spieler.process_mode, Node.PROCESS_MODE_INHERIT)
 
 	# Karte "Schnell" antippen — absichtlich nicht der Standard
 	# ("ausgewogen"), sonst zeigte die nächste Prüfung auch bei einem
@@ -448,6 +476,22 @@ func _pruefe_szenen() -> void:
 	# genug, um nicht bei jeder Zufallslage knapp durchzufallen, aber immer
 	# noch weit von einem echten Überfall entfernt.
 	_pruefe_wahr("kein gespawnter Gegner steht nah am Spieler", naechster_abstand > 200.0)
+
+	# Der Kartenwechsel wirklich am echten main.gd verdrahtet: den privaten
+	# Handler direkt aufrufen (dieselbe Abkürzung wie bei
+	# `Aufwertungsauswahl._bei_druck` weiter unten), statt den Wellenleiter
+	# mehrere echte Wellen durchlaufen zu lassen. Genau das brach beim ersten
+	# Versuch: `wellenleiter._process()` löst auf **diesem** echten `haupt`
+	# das ebenso echte `welle_geschafft`-Signal aus, an dem `main.gd`s
+	# eigener Pause-Timer-Ablauf hängt — der pausiert dann den *geteilten*
+	# Baum dieser ganzen Prüfszene dauerhaft, siehe die ausführliche
+	# Begründung in `_pruefe_wellenleiter_ablauf`, warum jener Test deshalb
+	# einen eigenen, isolierten Wellenleiter benutzt. Der direkte Aufruf hier
+	# prüft dieselbe Verdrahtung, ohne diese Falle zu berühren.
+	var testkarte := Karten.nach_id(Karten.KREUZ)
+	haupt._karte_gewechselt(testkarte)
+	_pruefe("main.gd wendet einen Kartenwechsel wirklich auf die Arena an",
+		arena.hindernisse, testkarte.hindernisse)
 
 	# Die Pause-Verdrahtung: `Oberflaeche` muss ALWAYS sein (sonst reagiert
 	# während der Aufwertungsauswahl gar nichts mehr auf Eingaben), aber genau
@@ -545,13 +589,26 @@ func _pruefe_wellenleiter_ablauf() -> void:
 	add_child(ziel)
 	ziel.global_position = Vector2(576, 324)
 
+	# Karte 1 gilt schon ab dem Start selbst -- `_aktuelle_karte_id` beginnt
+	# leer, genau damit auch die allererste Welle als „Wechsel" zählt.
+	_letzte_gewechselte_karte_id = &""
+	wellenleiter.karte_gewechselt.connect(
+		func(k: Karten.Karte) -> void: _letzte_gewechselte_karte_id = k.id)
+
 	wellenleiter.starten(Rect2(Vector2.ZERO, Vector2(1152, 648)), ziel, eltern)
 	_pruefe("Welle 1 laeuft nach dem Start", wellenleiter.welle, 1)
 	_pruefe("Welle 1 hat die Grundzahl Gegner gespawnt",
 		eltern.get_child_count(), Wellen.gegner_fuer_welle(1))
+	_pruefe("Welle 1 meldet gleich die erste Karte",
+		_letzte_gewechselte_karte_id, Karten.alle_karten()[0].id)
 
+	# Nur die Gegner treffen, nicht jedes Kind ungeprüft: Ein sterbender
+	# Gegner kann mit kleiner Chance ein Powerup unter denselben `eltern`
+	# hängen (siehe `Wellenleiter._gegner_gestorben`), und das kennt kein
+	# `schaden_nehmen`.
 	for kind in eltern.get_children():
-		kind.schaden_nehmen(99)
+		if kind.is_in_group(&"gegner"):
+			kind.schaden_nehmen(99)
 
 	# Über ein Feld statt einer lokalen Variablen abgreifen: Eine Lambda in
 	# GDScript fängt äußere lokale Variablen **wertweise**, nicht per
@@ -567,10 +624,23 @@ func _pruefe_wellenleiter_ablauf() -> void:
 
 	wellenleiter.naechste_welle_erzwingen()
 	_pruefe("erst 'naechste_welle_erzwingen' startet die naechste Welle", wellenleiter.welle, 2)
+	_pruefe("Welle 2 wechselt die Karte noch nicht",
+		_letzte_gewechselte_karte_id, Karten.alle_karten()[0].id)
 
-	# `.free()`, nicht `queue_free()` — `eltern` trägt jetzt fünf lebendige
-	# Welle-2-Gegner, die sonst bis zum Bildende in der globalen Gruppe
-	# "gegner" stünden. Siehe den Kommentar in `_pruefe_szenen`.
+	# Bis Welle 4 durchspulen (jeden Gegner sofort erledigen, dann erzwingen)
+	# -- ab da muss laut `Karten.WECHSEL_ALLE_WELLEN` die zweite Karte gelten.
+	while wellenleiter.welle < 4:
+		for kind in eltern.get_children():
+			if kind.is_in_group(&"gegner"):
+				kind.schaden_nehmen(99)
+		wellenleiter._process(0.016)
+		wellenleiter.naechste_welle_erzwingen()
+	_pruefe("Welle 4 wechselt zur zweiten Karte",
+		_letzte_gewechselte_karte_id, Karten.alle_karten()[1].id)
+
+	# `.free()`, nicht `queue_free()` — `eltern` trägt noch lebendige
+	# Gegner der letzten Welle, die sonst bis zum Bildende in der globalen
+	# Gruppe "gegner" stünden. Siehe den Kommentar in `_pruefe_szenen`.
 	wellenleiter.free()
 	eltern.free()
 	ziel.free()
@@ -588,8 +658,8 @@ func _pruefe_gegner() -> void:
 	# Geschoss sucht Ebene 4 nach Ebene 3 ab (siehe oben), stimmt das hier
 	# nicht überein, trifft kein Schuss je einen Gegner.
 	_pruefe("Gegner liegt auf der Gegnerebene", gegner.collision_layer, 4)
-	_pruefe("Gegner kollidiert nur mit der Welt, nicht mit dem Spieler",
-		gegner.collision_mask, 1)
+	_pruefe("Gegner kollidiert mit Welt und Hindernissen, nicht mit dem Spieler",
+		gegner.collision_mask, 1 | 16)
 	_pruefe_wahr("Gegner steht in der Gruppe 'gegner'", gegner.is_in_group(&"gegner"))
 
 	var beruehrung: Area2D = gegner.get_node("Beruehrung")
@@ -729,14 +799,20 @@ func _pruefe_gegnertyp_mischung() -> void:
 
 	wellenleiter.starten(Rect2(Vector2.ZERO, Vector2(1152, 648)), ziel, eltern)
 	while wellenleiter.welle < Wellen.FLINK_AB_WELLE:
+		# Nur die Gegner treffen, nicht jedes Kind ungeprüft — ein sterbender
+		# Gegner kann mit kleiner Chance ein Powerup unter denselben `eltern`
+		# hängen (siehe `Wellenleiter._gegner_gestorben`), und das kennt
+		# weder `schaden_nehmen` noch `art_id`.
 		for kind in eltern.get_children():
-			kind.schaden_nehmen(99)
+			if kind.is_in_group(&"gegner"):
+				kind.schaden_nehmen(99)
 		wellenleiter._process(0.016)
 		wellenleiter.naechste_welle_erzwingen()
 
 	var typen := {}
 	for kind in eltern.get_children():
-		typen[kind.art_id()] = true
+		if kind.is_in_group(&"gegner"):
+			typen[kind.art_id()] = true
 	_pruefe_wahr("in einer spaeten Welle mischen sich mehrere Gegnertypen",
 		typen.size() > 1)
 
@@ -765,6 +841,272 @@ func _pruefe_geschoss_schaden() -> void:
 	# `.free()`: `ziel` überlebt den Schuss und steht danach noch lebendig in
 	# der Gruppe "gegner" — siehe den Kommentar in `_pruefe_szenen`.
 	ziel.free()
+
+	# Ein Hindernis blockiert, wird aber nicht beschädigt — es hat kein
+	# `schaden_nehmen`. Klare Regel, siehe arena.gd: Geschosse sind
+	# blockiert, nicht zerstörbar.
+	var geschoss2: Geschoss = load("res://scenes/geschoss.tscn").instantiate()
+	add_child(geschoss2)
+	geschoss2.starten(Vector2.RIGHT, 100.0, Color.WHITE, 3)
+	var hindernis := StaticBody2D.new()
+	geschoss2._on_body_entered(hindernis)
+	_pruefe_wahr("ein Hindernis blockiert das Geschoss, ohne 'schaden_nehmen' zu brauchen",
+		not hindernis.has_method(&"schaden_nehmen"))
+	hindernis.free()
+	# geschoss2 entfernt sich selbst über call_deferred(&"queue_free") --
+	# aufgeschoben, damit nichts mehr aufzuräumen ist als self selbst am Ende.
+
+
+## Die drei Kartenvarianten: kein Hindernis zu nah am Rand (sonst könnte ein
+## Gegner in einem spawnen), jede Karte komplett zusammenhängend begehbar,
+## und der automatische Wechsel alle drei Wellen rechnet richtig.
+func _pruefe_karten() -> void:
+	var karten := Karten.alle_karten()
+	_pruefe("drei Kartenvarianten", karten.size(), 3)
+
+	# Größter vorkommender Radius (Panzer-Verfolger, 17) plus eine kleine
+	# Reserve — die Erreichbarkeits- und Randprüfung müssen für den
+	# größten Körper gelten, nicht nur für einen Punkt.
+	var groesster_radius := 0.0
+	for a in Gegnertypen.alle_arten():
+		groesster_radius = maxf(groesster_radius, a.radius)
+	groesster_radius = maxf(groesster_radius, Spieler.RADIUS)
+
+	for karte in karten:
+		for h in karte.hindernisse:
+			_pruefe_wahr("%s: Hindernis haelt Sicherheitsabstand zum Rand" % karte.name,
+				h.position.x >= Karten.RAND_SICHERHEITSABSTAND
+				and h.position.y >= Karten.RAND_SICHERHEITSABSTAND
+				and h.end.x <= Karten.ARENA_GROESSE.x - Karten.RAND_SICHERHEITSABSTAND
+				and h.end.y <= Karten.ARENA_GROESSE.y - Karten.RAND_SICHERHEITSABSTAND)
+
+		_pruefe_wahr("%s: komplett zusammenhaengend begehbar" % karte.name,
+			Karten.ist_voll_erreichbar(karte, groesster_radius + 2.0))
+
+	_pruefe_wahr("'Offen' hat keine Hindernisse", Karten.nach_id(Karten.OFFEN).hindernisse.is_empty())
+	_pruefe_wahr("'Kreuz' hat Hindernisse", not Karten.nach_id(Karten.KREUZ).hindernisse.is_empty())
+	_pruefe_wahr("'Gasse' hat Hindernisse", not Karten.nach_id(Karten.GASSE).hindernisse.is_empty())
+
+	_pruefe("Welle 1 zeigt die erste Karte", Karten.fuer_welle(1).id, karten[0].id)
+	_pruefe("Welle 3 bleibt noch bei der ersten Karte", Karten.fuer_welle(3).id, karten[0].id)
+	_pruefe("Welle 4 wechselt zur zweiten Karte", Karten.fuer_welle(4).id, karten[1].id)
+	_pruefe("Welle 7 wechselt zur dritten Karte", Karten.fuer_welle(7).id, karten[2].id)
+	_pruefe("Welle 10 beginnt wieder bei der ersten Karte", Karten.fuer_welle(10).id, karten[0].id)
+
+
+## Ein Punkt, der in einem Hindernis feststeckt (z. B. weil der Spieler
+## genau dort stand, als ein Kartenwechsel es erscheinen ließ), muss
+## wirklich außerhalb landen — nicht nur ein bisschen näher am Rand.
+func _pruefe_aus_hindernissen_geschoben() -> void:
+	var hindernisse: Array[Rect2] = [Rect2(Vector2(100, 100), Vector2(50, 50))]
+
+	var innen := Vector2(120, 120)
+	var draussen := Bewegung.aus_hindernissen_geschoben(innen, hindernisse, 10.0)
+	_pruefe_wahr("ein Punkt im Hindernis landet ausserhalb (aufgeweitet um 'rand')",
+		not Rect2(Vector2(100, 100), Vector2(50, 50)).grow(10.0).has_point(draussen))
+
+	var schon_draussen := Vector2(500, 500)
+	_pruefe("ein Punkt ausserhalb bleibt unveraendert",
+		Bewegung.aus_hindernissen_geschoben(schon_draussen, hindernisse, 10.0), schon_draussen)
+
+
+## Ein Verfolger darf an einer flachen Hindernis-Wand nicht steckenbleiben,
+## nur weil das Ziel genau dahinter steht — genau das ist einmal in der
+## simulierten Runde passiert (siehe Kommentar in `bewegung.gd`).
+func _pruefe_richtung_um_hindernisse() -> void:
+	_pruefe("ohne Hindernisse bleibt es beim direkten Zielkurs",
+		Bewegung.richtung_um_hindernisse(Vector2.ZERO, Vector2(300, 0), [], 50.0, 10.0),
+		Bewegung.richtung_zu(Vector2.ZERO, Vector2(300, 0)))
+
+	# Direkt vor einer Wand, Ziel genau dahinter: Der reine Zielkurs würde
+	# frontal in die Wand zeigen -- die Ausweichrichtung muss spürbar davon
+	# abweichen (nicht mehr fast genau nach rechts).
+	var wand: Array[Rect2] = [Rect2(Vector2(100, -50), Vector2(20, 100))]
+	var von := Vector2(80, 0)
+	var ziel := Vector2(300, 0)
+	var direkt := Bewegung.richtung_zu(von, ziel)
+	var ausweichend := Bewegung.richtung_um_hindernisse(von, ziel, wand, 55.0, 12.0)
+	_pruefe_wahr("nah an einer Wand weicht die Richtung spuerbar vom direkten Kurs ab",
+		absf(direkt.angle_to(ausweichend)) > 0.2)
+
+	# Weit weg von jedem Hindernis bleibt die Ablenkung aus -- die Steuerung
+	# soll nur nah an einer Wand wirken, nicht überall ein bisschen zittern.
+	var weit_weg := Vector2(-500, 0)
+	var ablenkungsfrei := Bewegung.richtung_um_hindernisse(weit_weg, ziel, wand, 55.0, 12.0)
+	_pruefe_wahr("weit weg von jedem Hindernis bleibt der Kurs praktisch direkt",
+		direkt.angle_to(Bewegung.richtung_zu(weit_weg, ziel)) < 0.01
+		and Bewegung.richtung_zu(weit_weg, ziel).angle_to(ablenkungsfrei) < 0.01)
+
+
+## Die reine Datenseite der Powerups: drei Arten, Namen, und der Zufallszug
+## aus einem gereichten `t` (dieselbe Aufteilung wie bei
+## `Wellen.gegnertyp_auswaehlen`).
+func _pruefe_powerups() -> void:
+	_pruefe("drei Powerup-Arten", Powerups.ALLE_ARTEN.size(), 3)
+	_pruefe_wahr("Schild ist eine gueltige Art", Powerups.ist_gueltige_art(Powerups.SCHILD))
+	_pruefe_wahr("ein unbekannter Name ist keine gueltige Art",
+		not Powerups.ist_gueltige_art(&"gibtsnicht"))
+	_pruefe("Name zu einer bekannten Art", Powerups.name_von(Powerups.SCHILD), "Schild")
+	_pruefe("Name zu einer unbekannten Art ist leer", Powerups.name_von(&"gibtsnicht"), "")
+
+	_pruefe("t=0 trifft die erste Art", Powerups.zufaellige_art(0.0), Powerups.ALLE_ARTEN[0])
+	_pruefe("t nahe 1 trifft die letzte Art", Powerups.zufaellige_art(0.999), Powerups.ALLE_ARTEN[2])
+
+
+## Der Spieler wendet ein eingesammeltes Powerup wirklich an: Schild fängt
+## genau einen Treffer ab (kein Lebensverlust, aber danach verbraucht),
+## Tempo/Schnellfeuer erhöhen die effektiven Werte für ihre Dauer — und ein
+## zweites Einsammeln während der ersten Wirkung **erneuert** nur die Uhr,
+## verstärkt den Effekt nicht zusätzlich (die geforderte klare Stack-Regel).
+func _pruefe_powerup_am_spieler() -> void:
+	var spieler: Spieler = load("res://characters/spieler.tscn").instantiate()
+	add_child(spieler)
+
+	_letzte_powerup_art = &""
+	spieler.powerup_eingesammelt.connect(func(a: StringName) -> void: _letzte_powerup_art = a)
+
+	var leben_vorher := spieler.leben
+	spieler.powerup_einsammeln(Powerups.SCHILD)
+	_pruefe("powerup_eingesammelt meldet die richtige Art", _letzte_powerup_art, Powerups.SCHILD)
+
+	spieler.schaden_nehmen(1)
+	_pruefe("ein Schild faengt genau einen Treffer ab, kein Lebensverlust",
+		spieler.leben, leben_vorher)
+
+	# Nach Verbrauch schützt derselbe Schild kein zweites Mal — die
+	# Unverwundbarkeit danach ist dieselbe wie nach einem echten Treffer,
+	# hier für den Test direkt zurückgesetzt.
+	spieler._unverwundbar_bis = 0.0
+	spieler.schaden_nehmen(1)
+	_pruefe("nach Verbrauch schuetzt der Schild kein zweites Mal",
+		spieler.leben, leben_vorher - 1)
+
+	var grund_tempo := spieler.variante.tempo
+	spieler.powerup_einsammeln(Powerups.TEMPO)
+	_pruefe_wahr("Tempo-Powerup erhoeht das effektive Tempo",
+		spieler.effektives_tempo() > grund_tempo)
+
+	var grund_pause := spieler.variante.schuss_pause
+	spieler.powerup_einsammeln(Powerups.SCHNELLFEUER)
+	_pruefe_wahr("Schnellfeuer-Powerup senkt die effektive Schusspause",
+		spieler.effektive_schuss_pause() < grund_pause)
+
+	var tempo_mit_einem_boost := spieler.effektives_tempo()
+	spieler.powerup_einsammeln(Powerups.TEMPO)
+	_pruefe("ein zweites Tempo-Powerup waehrend der Wirkung verstaerkt nicht zusaetzlich",
+		spieler.effektives_tempo(), tempo_mit_einem_boost)
+
+	spieler.queue_free()
+
+
+## Der Powerup-Knoten für sich: Berühren durch den Spieler wendet die
+## Wirkung an und entfernt das Powerup, ein fremder Körper ohne
+## `powerup_einsammeln` löst nichts aus.
+func _pruefe_powerup_knoten() -> void:
+	var p: Powerup = load("res://scenes/powerup.tscn").instantiate()
+	add_child(p)
+	p.einrichten(Powerups.TEMPO)
+	p.global_position = Vector2(400, 250)
+	_pruefe("art_id steht nach einrichten fest", p.art_id, Powerups.TEMPO)
+
+	var fremdkoerper := Node2D.new()
+	p._on_body_entered(fremdkoerper)
+	_pruefe_wahr("ein Koerper ohne powerup_einsammeln loest nichts aus", is_instance_valid(p))
+	fremdkoerper.free()
+
+	var spieler: Spieler = load("res://characters/spieler.tscn").instantiate()
+	add_child(spieler)
+	_letzte_powerup_art = &""
+	p.eingesammelt.connect(func(a: StringName, _pos: Vector2) -> void: _letzte_powerup_art = a)
+	p._on_body_entered(spieler)
+	_pruefe("Aufsammeln meldet die richtige Art", _letzte_powerup_art, Powerups.TEMPO)
+	_pruefe_wahr("der Spieler hat den Tempo-Boost wirklich bekommen",
+		spieler.effektives_tempo() > spieler.variante.tempo)
+
+	spieler.queue_free()
+	# `p` entfernt sich selbst über call_deferred(&"queue_free") --
+	# aufgeschoben, nichts weiter aufzuräumen.
+
+
+## Spawn-Regeln am Wellenleiter: Unter genug Toden fällt irgendwann eins
+## (die Chance ist klein, aber nicht so klein, dass es unter vielen
+## Versuchen ausbleiben dürfte), und liegt schon eins auf dem Feld, kommt
+## trotz vieler weiterer Tode kein zweites dazu — "nicht spam" ist eine
+## ausdrückliche Vorgabe. `randf()` lässt sich hier nicht gezielt steuern,
+## deshalb viele Wiederholungen statt eines einzelnen Wurfs.
+func _pruefe_powerup_spawn_regeln() -> void:
+	var wellenleiter := Wellenleiter.new()
+	add_child(wellenleiter)
+	var eltern := Node.new()
+	add_child(eltern)
+	var ziel := Node2D.new()
+	add_child(ziel)
+	wellenleiter.starten(Rect2(Vector2.ZERO, Vector2(1152, 648)), ziel, eltern)
+
+	# 200 Versuche bei 9 % Chance: Die Wahrscheinlichkeit, dass dabei nicht
+	# ein einziges Mal eins fällt, liegt unter 1 zu 10^9.
+	for _i in 200:
+		wellenleiter._gegner_gestorben(Vector2(300, 300))
+		if not get_tree().get_nodes_in_group(&"powerup").is_empty():
+			break
+	_pruefe_wahr("unter genug Toden faellt irgendwann ein Powerup",
+		not get_tree().get_nodes_in_group(&"powerup").is_empty())
+
+	var vor_weiteren_toden := get_tree().get_nodes_in_group(&"powerup").size()
+	for _i in 200:
+		wellenleiter._gegner_gestorben(Vector2(300, 300))
+	_pruefe("liegt schon eins auf dem Feld, kommt kein zweites dazu",
+		get_tree().get_nodes_in_group(&"powerup").size(), vor_weiteren_toden)
+
+	wellenleiter.free()
+	eltern.free()
+	ziel.free()
+
+
+## Die Arena baut aus `hindernisse` (Rechtecke) echte Kollisionsformen UND
+## Optik — beides aus derselben Liste, damit man nie eines vergisst, wenn
+## sich die Liste ändert.
+func _pruefe_arena_hindernisse() -> void:
+	var arena: Arena = load("res://scenes/arena.tscn").instantiate()
+	add_child(arena)
+
+	_pruefe_wahr("frisch gebaute Arena hat keine Hindernisse", arena.hindernisse.is_empty())
+
+	var rechtecke: Array[Rect2] = [
+		Rect2(Vector2(200, 200), Vector2(80, 40)),
+		Rect2(Vector2(600, 300), Vector2(50, 120)),
+	]
+	arena.hindernisse = rechtecke
+
+	var koerper: StaticBody2D = arena.get_node("HindernisKoerper")
+	_pruefe("je Hindernis eine eigene Kollisionsform", koerper.get_child_count(), 2)
+
+	var anzeige: Node2D = arena.get_node("HindernisAnzeige")
+	# Je Hindernis drei Anzeigeteile: Schatten, Fläche, Kante.
+	_pruefe("je Hindernis drei Anzeigeteile (Schatten, Flaeche, Kante)",
+		anzeige.get_child_count(), rechtecke.size() * 3)
+
+	# Ein zweites Setzen räumt die alten Formen weg — über `queue_free()`,
+	# nicht sofort per `.free()` (das eine echte Physik-Abfrage mitten in
+	# einer Kollision zum Absturz brachte, siehe Kommentar in
+	# `_hindernisse_aufbauen`). Synchron prüfbar ist deshalb nicht die
+	# sofortige Kinderzahl, sondern dass die alten Formen wirklich zum
+	# Entfernen markiert sind, statt für immer liegen zu bleiben.
+	var alte_formen := koerper.get_children().duplicate()
+	arena.hindernisse = [rechtecke[0]]
+	_pruefe_wahr("die alten Kollisionsformen sind zum Entfernen markiert",
+		alte_formen.all(func(k: Node) -> bool: return k.is_queued_for_deletion()))
+	_pruefe("die neue Form kommt sofort dazu (die alten hängen bis zum naechsten Bild noch mit dran)",
+		koerper.get_child_count(), alte_formen.size() + 1)
+
+	# Weltkoordinaten: Arena steht in main.tscn nicht zwingend bei (0,0) --
+	# hindernisse_welt() muss die eigene Position mit einrechnen.
+	arena.global_position = Vector2(1000, 2000)
+	var welt := arena.hindernisse_welt()
+	_pruefe("hindernisse_welt versetzt um die globale Arena-Position",
+		welt[0].position, rechtecke[0].position + Vector2(1000, 2000))
+
+	arena.free()
 
 
 ## Aufwertungen wirklich am Spieler angewendet: Die vier stapelbaren ändern
@@ -817,6 +1159,81 @@ func _pruefe_aufwertungen_am_spieler() -> void:
 	_pruefe_wahr("volles Leben bietet die Leben-Karte nicht mehr an", not hat_leben_karte)
 
 	spieler.queue_free()
+
+
+## Auto-Ziel und Auto-Feuer: die reine Rechnung, dann eine echte Runde am
+## Spieler. `Bewegung.naechstes_ziel` entscheidet, `Spieler._physics_process`
+## nutzt sie jedes Bild neu, unabhängig von Lauf- oder Blickrichtung.
+func _pruefe_auto_ziel_und_feuer() -> void:
+	var ziele := PackedVector2Array([Vector2(300, 0), Vector2(100, 0), Vector2(1000, 0)])
+	_pruefe("Auto-Ziel waehlt den naechsten Gegner in Reichweite",
+		Bewegung.naechstes_ziel(Vector2.ZERO, ziele, 460.0), Vector2(100, 0))
+	_pruefe("kein Gegner in Reichweite ergibt kein Ziel",
+		Bewegung.naechstes_ziel(Vector2.ZERO, ziele, 50.0), null)
+	_pruefe("eine leere Gegnerliste ergibt ebenfalls kein Ziel",
+		Bewegung.naechstes_ziel(Vector2.ZERO, PackedVector2Array(), 460.0), null)
+
+	# Integration am echten Spieler: ein Gegner ausserhalb der Reichweite
+	# darf keinen Schuss ausloesen, einer innerhalb schon -- per Auto-Feuer,
+	# also ganz ohne gehaltenen Knopf.
+	var eltern := Node.new()
+	add_child(eltern)
+
+	var spieler: Spieler = load("res://characters/spieler.tscn").instantiate()
+	eltern.add_child(spieler)
+	spieler.arena = Rect2(Vector2.ZERO, Vector2(1152, 648))
+	spieler.global_position = Vector2(576, 324)
+
+	var touch_vorher := Eingabe.touch_verfuegbar
+	Eingabe.touch_verfuegbar = true  # Auto-Feuer-Standard auf Touch
+
+	Input.action_release(&"links")
+	Input.action_release(&"rechts")
+	Input.action_release(&"hoch")
+	Input.action_release(&"runter")
+	Input.action_release(&"schiessen")
+	Eingabe.stick_richtung = Vector2.ZERO
+
+	var fern: Gegner = load("res://enemies/gegner.tscn").instantiate()
+	eltern.add_child(fern)
+	fern.global_position = spieler.global_position + Vector2(spieler.effektive_reichweite() + 200.0, 0)
+
+	var kinder_vorher := eltern.get_child_count()
+	spieler._physics_process(0.016)
+	_pruefe("Gegner ausserhalb der Reichweite: kein Schuss ins Leere",
+		eltern.get_child_count(), kinder_vorher)
+
+	var nah: Gegner = load("res://enemies/gegner.tscn").instantiate()
+	eltern.add_child(nah)
+	nah.global_position = spieler.global_position + Vector2(80, 0)
+
+	kinder_vorher = eltern.get_child_count()
+	spieler._physics_process(0.016)
+	_pruefe("Gegner in Reichweite: Auto-Feuer schiesst von selbst, ohne gehaltenen Knopf",
+		eltern.get_child_count(), kinder_vorher + 1)
+
+	# Ohne Touch UND ohne gehaltene Taste bleibt es beim reinen Zielen --
+	# Auto-Feuer ist Touch-Standard, auf Tastatur bleibt Leertaste Pflicht.
+	Eingabe.touch_verfuegbar = false
+	spieler._naechster_schuss = 0.0
+	kinder_vorher = eltern.get_child_count()
+	spieler._physics_process(0.016)
+	_pruefe("ohne Touch und ohne gehaltene Taste schiesst nichts von selbst",
+		eltern.get_child_count(), kinder_vorher)
+
+	Input.action_press(&"schiessen")
+	spieler._naechster_schuss = 0.0
+	kinder_vorher = eltern.get_child_count()
+	spieler._physics_process(0.016)
+	_pruefe("gehaltene Taste schiesst weiterhin, auch ohne Touch",
+		eltern.get_child_count(), kinder_vorher + 1)
+	Input.action_release(&"schiessen")
+
+	Eingabe.touch_verfuegbar = touch_vorher
+	# `.free()`, nicht `queue_free()`: `nah`/`fern` stehen sonst bis zum
+	# Bildende weiter in der globalen Gruppe "gegner" — siehe den Kommentar
+	# dazu in `_pruefe_szenen`.
+	eltern.free()
 
 
 ## `Eingabe.touch_verfuegbar` ist ein Setter mit eigener Logik (nur beim
