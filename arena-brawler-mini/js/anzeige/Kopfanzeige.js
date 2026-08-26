@@ -18,21 +18,21 @@ class Kopfanzeige {
       color: '#ffffff',
       fontStyle: 'bold',
     });
-    this.punkteText.setDepth(900).setScrollFactor(0);
+    this.punkteText.setDepth(1900).setScrollFactor(0);
 
     this.punkteLabel = scene.add.text(16, 82, 'PUNKTE', {
       fontFamily: 'sans-serif',
       fontSize: '12px',
       color: '#9aa4cc',
     });
-    this.punkteLabel.setLetterSpacing(2).setDepth(900).setScrollFactor(0);
+    this.punkteLabel.setLetterSpacing(2).setDepth(1900).setScrollFactor(0);
 
     this.welleText = scene.add.text(scene.scale.width - 16, 52, 'Welle 1', {
       fontFamily: 'sans-serif',
       fontSize: '18px',
       color: '#9aa4cc',
     });
-    this.welleText.setOrigin(1, 0).setDepth(900).setScrollFactor(0);
+    this.welleText.setOrigin(1, 0).setDepth(1900).setScrollFactor(0);
   }
 
   punkteGeben(betrag) {

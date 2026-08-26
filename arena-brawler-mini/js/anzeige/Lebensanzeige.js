@@ -17,32 +17,56 @@ class Lebensanzeige {
     this.scene = scene;
     this.maximum = maximum;
 
-    const groesse = 26;
-    this.groesse = groesse;
-    const abstand = 6;
-    const randRechts = 16;
-    const oben = 18;
+    this.groesse = 26;
+    this.abstand = 6;
+    this.randRechts = 16;
+    this.oben = 18;
 
     this.herzen = [];
-
-    for (let i = 0; i < maximum; i += 1) {
-      // Von rechts nach links aufbauen, damit das erste Herz außen sitzt und
-      // die Reihe beim Verlieren nicht springt.
-      const x = scene.scale.width - randRechts - groesse / 2 - i * (groesse + abstand);
-
-      const leer = scene.add.image(x, oben + groesse / 2, Lebensanzeige.erzeugeTextur(scene, false));
-      const voll = scene.add.image(x, oben + groesse / 2, Lebensanzeige.erzeugeTextur(scene, true));
-
-      [leer, voll].forEach((teil) => {
-        teil.setDisplaySize(groesse, groesse);
-        teil.setScrollFactor(0);
-        teil.setDepth(900);
-      });
-
-      this.herzen.push({ voll });
-    }
+    for (let i = 0; i < maximum; i += 1) this.herzHinzufuegen();
 
     this.setzen(maximum);
+  }
+
+  /**
+   * Hängt ein Herz an. Die Reihe wächst nach **links**, damit das erste Herz
+   * außen am Rand stehen bleibt — eine Reihe, die bei „+1 Leben" komplett
+   * verrutscht, liest sich als Fehler statt als Gewinn.
+   */
+  herzHinzufuegen() {
+    const i = this.herzen.length;
+    const x = this.scene.scale.width - this.randRechts - this.groesse / 2
+      - i * (this.groesse + this.abstand);
+    const y = this.oben + this.groesse / 2;
+
+    const leer = this.scene.add.image(x, y, Lebensanzeige.erzeugeTextur(this.scene, false));
+    const voll = this.scene.add.image(x, y, Lebensanzeige.erzeugeTextur(this.scene, true));
+
+    [leer, voll].forEach((teil) => {
+      teil.setDisplaySize(this.groesse, this.groesse);
+      teil.setScrollFactor(0);
+      teil.setDepth(1900);
+    });
+
+    this.herzen.push({ voll, leer });
+    return this.herzen[i];
+  }
+
+  /** Nach „+1 Leben": ein Herz mehr, das kurz aufploppt. */
+  maximumSetzen(neuesMaximum, lebenspunkte) {
+    while (this.herzen.length < neuesMaximum) {
+      const frisch = this.herzHinzufuegen();
+
+      this.scene.tweens.add({
+        targets: [frisch.voll, frisch.leer],
+        scale: { from: 0, to: frisch.voll.scale },
+        duration: 340,
+        ease: 'Back.easeOut',
+      });
+    }
+
+    this.maximum = neuesMaximum;
+    this.setzen(lebenspunkte);
   }
 
   /**
@@ -148,7 +172,7 @@ class Lebensanzeige {
     const geist = this.scene.add.image(erloschen.voll.x, erloschen.voll.y, 'herz-voll');
     geist.setDisplaySize(this.groesse, this.groesse);
     geist.setScrollFactor(0);
-    geist.setDepth(901);
+    geist.setDepth(1901);
 
     this.scene.tweens.add({
       targets: geist,

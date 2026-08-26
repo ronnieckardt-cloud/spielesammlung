@@ -92,10 +92,10 @@ class Enemy {
     }
   }
 
-  takeDamage() {
+  takeDamage(schaden = 1) {
     if (this.tot) return;
 
-    this.lebenspunkte -= 1;
+    this.lebenspunkte -= schaden;
 
     if (this.lebenspunkte > 0) {
       this.trefferZeigen();

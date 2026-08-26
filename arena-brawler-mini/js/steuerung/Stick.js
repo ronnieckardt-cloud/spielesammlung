@@ -102,6 +102,17 @@ class Stick {
     this.griff.setVisible(false);
   }
 
+  /**
+   * Wieder freigeben — nach der Aufwertungs-Auswahl. `zeigerId` bleibt dabei
+   * leer: Wer die Karte angetippt und den Finger noch aufliegen hat, soll
+   * damit nicht sofort losfahren, sondern erst neu aufsetzen.
+   */
+  anschalten() {
+    this.abgeschaltet = false;
+    this.zeigerId = null;
+    this.richtung = { x: 0, y: 0 };
+  }
+
   aufraeumen() {
     this.scene.input.off('pointerdown', this.beiAufsetzen, this);
     this.scene.input.off('pointermove', this.beiBewegung, this);

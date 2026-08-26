@@ -9,6 +9,10 @@ class Player {
     this.maxLebenspunkte = 5;
     this.lebenspunkte = this.maxLebenspunkte;
 
+    // Schaden je Geschoss. Wird über die Aufwertung „Stärkere Kugeln" erhöht;
+    // ein Gegner hält zwei Treffer aus.
+    this.schaden = 1;
+
     // Kurze Unverwundbarkeit nach einem Treffer. Ohne sie liegt der Spieler
     // nach einer Berührung noch im Gegner und verliert bei 60 Bildern je
     // Sekunde alle fünf Leben, bevor er den Finger bewegen kann.

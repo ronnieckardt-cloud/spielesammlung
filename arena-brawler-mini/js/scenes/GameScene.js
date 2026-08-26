@@ -9,6 +9,15 @@ class GameScene extends Phaser.Scene {
     this.vorbei = false;
     this.welle = 0;
     this.wellePausiert = false;
+    this.auswahlLaeuft = false;
+
+    // Welche Aufwertung wie oft genommen wurde. Beim Neustart wieder leer —
+    // die Boni gelten für die Runde, nicht für das Gerät.
+    this.stufen = {};
+
+    // Eine Saat je Runde: Die Kartenauswahl ist eine Spielregel und soll
+    // nachstellbar sein, aber nicht in jeder Runde dieselbe Abfolge liefern.
+    this.saat = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
     // Einfacher Arena-Hintergrund als dunkelgraues Rechteck über die volle Spielfläche
     this.add.rectangle(
@@ -32,7 +41,7 @@ class GameScene extends Phaser.Scene {
       if (!gegner || gegner.tot || gegner.erscheint) return;
 
       kugel.destroy();
-      gegner.takeDamage();
+      gegner.takeDamage(this.player.schaden);
     });
 
     // Spieler und Gegner blockieren sich gegenseitig und der Spieler nimmt Schaden
@@ -135,7 +144,47 @@ class GameScene extends Phaser.Scene {
       onComplete: () => text.destroy(),
     });
 
-    this.time.delayedCall(1700, () => this.naechsteWelle());
+    this.time.delayedCall(1700, () => this.auswahlZeigen());
+  }
+
+  /**
+   * Drei Karten zur Wahl. Ist nichts mehr offen (alles ausgereizt), geht es
+   * ohne Zwischenschritt weiter — ein leerer Auswahlbildschirm, auf dem nichts
+   * anzutippen ist, wäre eine Sackgasse.
+   */
+  auswahlZeigen() {
+    if (this.vorbei) return;
+
+    const karten = Aufwertungen.auswahl(this.stufen, this.saat + this.welle * 7919);
+
+    if (karten.length === 0) {
+      this.naechsteWelle();
+      return;
+    }
+
+    this.auswahlLaeuft = true;
+    this.player.sprite.body.setVelocity(0, 0);
+    this.player.stick.abschalten();
+
+    this.auswahl = new Auswahl(this, karten, (karte) => {
+      this.aufwertungNehmen(karte);
+
+      this.auswahlLaeuft = false;
+      this.auswahl = null;
+      this.player.stick.anschalten();
+      this.naechsteWelle();
+    });
+  }
+
+  aufwertungNehmen(karte) {
+    this.stufen[karte.id] = (this.stufen[karte.id] || 0) + 1;
+    karte.anwenden(this.player);
+
+    // Die Herzenreihe muss der neuen Obergrenze folgen — sonst gewinnt man ein
+    // Leben, das nirgends zu sehen ist.
+    if (karte.id === 'leben') {
+      this.lebensanzeige.maximumSetzen(this.player.maxLebenspunkte, this.player.lebenspunkte);
+    }
   }
 
   // Meldung vom Spieler: Der Rest der Runde hängt an der Szene, nicht an ihm.
@@ -207,7 +256,11 @@ class GameScene extends Phaser.Scene {
   update(time, delta) {
     if (this.vorbei) return;
 
+    // Die Punktzahl darf weiterlaufen, während die Karten stehen — sie holt
+    // nur den schon verdienten Stand ein, das ist keine Spielhandlung.
     this.kopfanzeige.aktualisieren();
+    if (this.auswahlLaeuft) return;
+
     this.player.update(this.enemies);
 
     this.enemies.forEach((gegner) => {

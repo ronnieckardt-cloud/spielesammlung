@@ -65,8 +65,33 @@ Gegner erscheinen am Rand der Arena, nie direkt beim Spieler
 (`Mindestabstand`), und ihr Körper ist während der Einblendung abgeschaltet —
 sonst kostet ein Gegner im Moment des Auftauchens ein Leben ohne Vorwarnung.
 
+## Aufwertungen
+
+Nach jeder geschafften Welle stehen drei Karten zur Wahl; die Runde ist
+solange pausiert. Die Boni stapeln sich über die Runde und werden beim
+Neustart wieder zurückgesetzt — sie gelten für die Runde, nicht für das Gerät.
+
+| Karte | Wirkung | Stufen |
+|---|---|---|
+| +1 Leben | Ein Herz mehr, sofort aufgefüllt | 3 (5 → 8) |
+| Schnellere Schüsse | Pause zwischen Schüssen −35 ms | 4 (250 → 110 ms) |
+| Mehr Tempo | Spieler läuft +18 schneller | 5 (200 → 290) |
+| Stärkere Kugeln | Ein Treffer erledigt einen Gegner | 1 |
+| Größere Reichweite | Auto-Feuer greift +90 weiter | 4 (460 → 820) |
+
+„Stärkere Kugeln" hat bewusst nur eine Stufe: Ein Gegner hält zwei Treffer
+aus, mehr als zwei Schaden wäre also wirkungslos — und eine Karte, die nichts
+mehr tut, darf nicht in der Auswahl stehen. Ausgereizte Karten fallen aus der
+Auswahl heraus; ist gar nichts mehr offen, beginnt die nächste Welle direkt.
+
+Welche Karten kommen, entscheidet ein Kongruenzgenerator mit einer Saat je
+Runde — kein `Math.random` beim Ziehen. Die Auswahl ist eine Spielregel, und
+dieselbe Runde soll sich nachstellen lassen; ein Fehlerbericht wie „in Welle 4
+stand da eine Karte, die nichts tat" ist sonst nicht nachvollziehbar.
+
 ## Status
 
-Prototyp Phase 3 – Wellen, Punktestand, Lebenspunkte, Game-Over und Neustart.
+Prototyp Phase 4 – Wellen, Aufwertungen, Punktestand, Lebenspunkte,
+Game-Over und Neustart.
 
 Offen für spätere Ausbaustufen: Ton, mehr Gegnerarten, Bestenliste.
