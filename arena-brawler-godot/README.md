@@ -7,12 +7,13 @@ Moderner 2D-Arena-Brawler in Godot 4 mit GDScript.
 > `arena-brawler-mini/` — kein gemeinsamer Code, keine gemeinsamen Abhängigkeiten.
 > Es liegt nur im selben Repository.
 
-Stand: **spielbare Runde mit Aufwertungen**. Arena, Spieler, Bewegung,
-Schießen, drei Charaktervarianten mit eigenen Figuren, ein Verfolger-Gegner,
-ein Wellensystem und eine Kartenauswahl nach jeder geschafften Welle stehen —
-man kann eine Runde von Anfang bis Game-Over durchspielen, dabei stärker
-werden, und alles setzt sich beim Neustart sauber zurück. Auswahlbildschirm
-und Touch-Bedienung kommen später.
+Stand: **spielbare Runde mit Charakterauswahl und Aufwertungen**. Arena,
+Spieler, Bewegung, Schießen, drei Charaktervarianten mit eigenen Figuren, ein
+Verfolger-Gegner, ein Wellensystem und eine Kartenauswahl nach jeder
+geschafften Welle stehen — man wählt vor jeder Runde erst einen Charakter auf
+einem eigenen Bildschirm, spielt dann von Anfang bis Game-Over, wird dabei
+stärker, und ein Neustart führt sauber zurück zur Auswahl. Touch-Bedienung
+kommt später.
 
 ## Öffnen und starten
 
@@ -38,6 +39,10 @@ godot --headless --path . scenes/pruefen.tscn # lässt die Prüfungen laufen
 | Bewegen | WASD oder Pfeiltasten |
 | Schießen | Leertaste (gedrückt halten geht) |
 | Charakter wechseln | Tab |
+| Charakter wählen (vor Rundenstart) | Karte antippen/anklicken |
+
+Tab bleibt der schnelle Wechsel mitten in der Runde, ist aber nicht mehr der
+Hauptweg — der ist jetzt die Auswahl vor dem Start, siehe unten.
 
 Touch ist vorbereitet, aber noch nicht angeschlossen: `Bewegung.richtung_aus_stick`
 rechnet den Ausschlag eines virtuellen Sticks bereits um und ist geprüft — es
@@ -53,7 +58,7 @@ arena-brawler-godot/
 │   ├── charaktere.gd        die drei Varianten (reine Daten)
 │   └── spielstand.gd        gewählter Charakter + Bestleistung, speichert nach user://
 ├── scenes/
-│   ├── main.tscn            Hauptszene: Arena + Spieler + Wellenleiter + Kamera + Kopfzeile + Rundenende
+│   ├── main.tscn            Hauptszene: Arena + Spieler + Wellenleiter + Kamera + Kopfzeile + Rundenende + Charakterauswahl
 │   ├── arena.tscn           Boden, Rand, Wände
 │   ├── geschoss.tscn
 │   ├── pruefen.tscn         Prüfszene (nicht Teil des Spiels)
@@ -83,7 +88,8 @@ arena-brawler-godot/
 │   ├── musterblatt.gd
 │   └── rundenprobe.gd
 ├── ui/
-│   └── aufwertungsauswahl.gd   die drei Karten nach einer Welle
+│   ├── aufwertungsauswahl.gd   die drei Karten nach einer Welle
+│   └── charakterauswahl.gd     die drei Karten vor dem Rundenstart
 └── assets/
     ├── sprites/  audio/  fonts/   (noch leer)
 ```
@@ -382,8 +388,53 @@ während der Pause weiter (`process_always` ist dort `true`), und ein
 `process_mode` des wartenden Knotens. Auch das wurde an derselben Testszene
 nachgemessen, bevor es in den echten Code kam.
 
-Ansehen kann man eine ganze Runde ohne Editor so — die Probe steuert den
-Spieler selbst (er zielt auf den jeweils nächsten Gegner und schießt
+## Charakterauswahl
+
+Vor der ersten Welle steht jetzt ein eigener Bildschirm: drei große Karten,
+Ausgewogen/Schnell/Tank, jede mit der echten Figur, Name und Kurzwerten
+(Leben, Tempo, Schusspause). Antippen setzt den Charakter im `Spielstand` und
+startet erst dann die Runde — vorher läuft keine Welle, kein Gegner, kein
+Schuss.
+
+**Keine zweite Zeichenlogik.** Jede Karte trägt denselben `Figur`-Knoten wie
+am Spieler, nur mit `scale = Vector2(4, 4)` größer gezogen — genau der Zweck,
+für den `figur.gd` von Anfang an vorgesehen war („kann später auf dem
+Auswahlbildschirm stehen — dort mit `scale`, sonst nichts anders", siehe
+oben). `charakterauswahl.gd` ruft beim Start explizit `Figur.zeigen(variante)`
+für jede Karte mit der passenden Variante aus `Charaktere.liste` auf — nicht
+nur die im Editor gesetzte `charakter_id` der Karten-Kinder, damit Figur und
+Kurzwerte-Text garantiert aus derselben Quelle stammen und nie
+auseinanderlaufen können.
+
+**Dieselbe Pause-Architektur wie bei den Aufwertungskarten**, siehe den
+Abschnitt oben: `Charakterauswahl` liegt als weiteres Kind unter
+`Oberflaeche` (`ALWAYS`), nicht unter `Main` — sonst liefen Spieler, Gegner
+und Geschosse während der Auswahl einfach weiter mit. `main.gd` setzt
+`get_tree().paused = true`, bevor die Auswahl erscheint, und erst
+`_charakter_gewaehlt()` (ausgelöst durch das `gewaehlt`-Signal der Karte)
+hebt die Pause wieder auf und ruft `Wellenleiter.starten(...)` — vorher tut
+das niemand mehr in `_ready()`.
+
+**Neustart führt automatisch zurück zur Auswahl, ohne eine einzige eigene
+Zeile dafür.** `Rundenende._neustart()` ruft weiterhin nur
+`get_tree().reload_current_scene()` auf — das baut `main.tscn` komplett neu
+auf, und ein frischer Aufbau durchläuft `Main._ready()` von vorn, das die
+Auswahl unbedingt zeigt und den Baum pausiert, bevor überhaupt eine Welle
+existiert. Genau dieselbe Zeile, die schon Aufwertungen und Wellenzähler beim
+Neustart zurücksetzt (siehe „Zurücksetzen kostet keine einzige Zeile Code"
+oben), setzt jetzt auch die Auswahl zurück.
+
+**Zuletzt gespielter Charakter und Highscore stehen dezent dabei.**
+`Charakterauswahl.zeigen()` markiert die Karte, deren `id` zu
+`Spielstand.charakter_id` passt, mit einem kleinen „★ Zuletzt gespielt", und
+die Kopfzeile über den Karten zeigt `Spielstand.rekord_zeile()` — „Bester
+Lauf: X Punkte · Welle Y" oder „Noch kein Lauf gewertet". Beides frisch bei
+jedem `zeigen()`-Aufruf gelesen, nicht nur einmalig in `_ready()`: Nach einem
+Neustart kann sich der Rekord seit der letzten Auswahl geändert haben.
+
+Ansehen kann man eine ganze Runde ohne Editor so — die Probe tippt gleich zu
+Beginn den zuletzt gespielten Charakter auf der Auswahl an, steuert den
+Spieler danach selbst (er zielt auf den jeweils nächsten Gegner und schießt
 durchgehend, und tippt nach jeder geschafften Welle die erste angebotene
 Karte an) und gibt jedes Ereignis mit Zeitstempel aus:
 
@@ -397,7 +448,7 @@ godot --headless --path . scenes/rundenprobe.tscn
 godot --headless --path . scenes/pruefen.tscn
 ```
 
-116 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
+126 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
 `aufwertungen.gd`, die Charakterdaten, die Umrisse aus `gestalt.gd`, der
 Spielstand, der Gegner und der Wellenablauf jeweils für sich allein, dass
 Aufwertungen wirklich am Spieler wirken (und die geteilte `Variante`
@@ -407,6 +458,18 @@ prüft (`Oberflaeche` ALWAYS, `Main` bewusst nicht). Die Rauchprobe ist
 bewusst dabei: Die häufigste Art, ein Godot-Projekt kaputtzumachen, ist ein
 Knotenpfad, der nicht mehr stimmt. Reine Rechnung zu prüfen fängt das nicht;
 ein Start mit leerer Szene fällt sonst erst beim Spielen auf.
+
+Zur Rauchprobe gehört seit der Charakterauswahl ein eigener Ablauf: Beim
+bloßen Laden von `main.tscn` steht die Auswahl da, der Baum ist pausiert und
+`Wellenleiter.welle` steht bei 0 — erst ein simuliertes Antippen einer Karte
+(`Charakterauswahl._bei_druck(...)`, genau wie ein echtes Antippen es
+auslöst) setzt `Spielstand.charakter_id`, hebt die Pause auf und startet
+Welle 1. Ein zweites, unabhängig instanziertes `main.tscn` danach — mit
+einem inzwischen vom Standard abweichenden `charakter_id` — prüft zusätzlich,
+dass jede frische Instanz wieder bei der Auswahl beginnt, nicht nur die
+allererste: Genau das leistet `reload_current_scene()` bei einem echten
+Neustart, lässt sich in der Prüfszene selbst aber nicht auslösen (das würde
+versuchen, `pruefen.tscn` neu zu laden statt `main.tscn`).
 
 Der Wellenablauf-Test läuft dabei **nicht** über die geladene `haupt`-Instanz
 aus der Rauchprobe, sondern über einen eigenen, isolierten Wellenleiter ohne
@@ -423,9 +486,7 @@ Autoloads braucht — die richtet Godot nur für eine laufende Szene ein.
 
 ## Was als Nächstes fehlt
 
-Ein Auswahlbildschirm vor dem Start, Touch-Bedienung, Ton, weitere
-Gegnertypen (bisher nur der eine Verfolger — der Grund, warum „Stärkere
-Kugeln" noch keine sichtbare Wirkung hat, siehe oben). Alles bewusst noch
-nicht gebaut: Erst sollte eine ganze Runde mit echter Steigerung stehen. Der
-Auswahlbildschirm braucht dafür nichts Neues mehr —
-`Figur` lässt sich dort einfach hinstellen und über `scale` größer ziehen.
+Touch-Bedienung, Ton, weitere Gegnertypen (bisher nur der eine Verfolger —
+der Grund, warum „Stärkere Kugeln" noch keine sichtbare Wirkung hat, siehe
+oben). Alles bewusst noch nicht gebaut: Erst sollte eine ganze Runde mit
+echter Steigerung und einem Einstieg davor stehen.

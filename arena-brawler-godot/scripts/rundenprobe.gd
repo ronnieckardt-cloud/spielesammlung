@@ -24,6 +24,12 @@ extends Node
 ## Das funktioniert auch während der Pause, weil es über ein Signal und
 ## einen `SceneTreeTimer` läuft, nicht über einen eigenen `_process` — siehe
 ## den langen Kommentar dazu in `main.gd`.
+##
+## Die Charakterauswahl vor der ersten Welle läuft genauso echt und braucht
+## deshalb denselben Kniff, nur ohne Wartezeit — die Karten stehen schon
+## beim Laden da, es gibt keine Meldung davor abzuwarten. Ohne diesen Tipp
+## bliebe der Baum für die ganze Probe pausiert und nichts würde sich
+## bewegen.
 
 const DAUER := 30.0
 const AUFWERTUNG_WARTEZEIT := 1.6  ## etwas mehr als WELLENMELDUNG_DAUER in main.gd
@@ -41,6 +47,10 @@ func _ready() -> void:
 	_wellenleiter = haupt.get_node("Wellenleiter")
 	_aufwertungsauswahl = haupt.get_node("Oberflaeche/Aufwertungsauswahl")
 	_spieler.set_physics_process(false)
+
+	var charakterauswahl: Charakterauswahl = haupt.get_node("Oberflaeche/Charakterauswahl")
+	charakterauswahl._bei_druck(Spielstand.charakter_id)
+	print("Charakter gewaehlt: %s" % Spielstand.charakter_id)
 
 	print("Start: Welle %d, Spieler bei %s, Leben %d" % [
 		_wellenleiter.welle, _spieler.global_position, _spieler.leben,

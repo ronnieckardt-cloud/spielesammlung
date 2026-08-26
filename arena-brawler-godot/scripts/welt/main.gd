@@ -31,8 +31,10 @@ const WELLENMELDUNG_DAUER := 1.3
 @onready var _rundenende: Rundenende = $Oberflaeche/Rundenende
 @onready var _rundenende_text: Label = $Oberflaeche/Rundenende/Text
 @onready var _aufwertungsauswahl: Aufwertungsauswahl = $Oberflaeche/Aufwertungsauswahl
+@onready var _charakterauswahl: Charakterauswahl = $Oberflaeche/Charakterauswahl
 
 var _vorbei := false
+var _flaeche: Rect2
 
 
 func _ready() -> void:
@@ -42,12 +44,14 @@ func _ready() -> void:
 
 	# Die Kamera darf nicht über den Rand hinausfahren, sonst schaut man ins
 	# Leere neben der Arena. Die Grenzen kommen aus der Arena selbst, damit sie
-	# beim Ändern ihrer Größe nicht nachgezogen werden müssen.
-	var flaeche := _arena.flaeche()
-	_kamera.limit_left = int(flaeche.position.x)
-	_kamera.limit_top = int(flaeche.position.y)
-	_kamera.limit_right = int(flaeche.end.x)
-	_kamera.limit_bottom = int(flaeche.end.y)
+	# beim Ändern ihrer Größe nicht nachgezogen werden müssen. `_flaeche` ist
+	# ein Feld statt einer lokalen Variable, weil `_charakter_gewaehlt()` sie
+	# erst nach der Wahl braucht, deutlich später als dieses `_ready()`.
+	_flaeche = _arena.flaeche()
+	_kamera.limit_left = int(_flaeche.position.x)
+	_kamera.limit_top = int(_flaeche.position.y)
+	_kamera.limit_right = int(_flaeche.end.x)
+	_kamera.limit_bottom = int(_flaeche.end.y)
 
 	_spieler.getroffen.connect(_kopfzeile_setzen.unbind(1))
 	_spieler.gestorben.connect(_runde_beenden)
@@ -57,18 +61,35 @@ func _ready() -> void:
 	_wellenleiter.welle_geschafft.connect(_welle_geschafft)
 	_aufwertungsauswahl.gewaehlt.connect(_aufwertung_gewaehlt)
 	_rundenende.neustart_angefordert.connect(_neustart)
-
-	# `starten()` statt eines eigenen `_ready()` im Wellenleiter: Der säße
-	# unter `Main` und liefe damit **vor** diesem `_ready()` (Godot ruft von
-	# unten nach oben auf) — Arena und Spieler wären in dem Moment noch nicht
-	# gesetzt. Explizit aufrufen umgeht die Reihenfolge komplett.
-	_wellenleiter.starten(flaeche, _spieler, self)
+	_charakterauswahl.gewaehlt.connect(_charakter_gewaehlt)
 
 	_kopfzeile_setzen()
+
+	# Die Auswahl steht vor jeder Welle, auch der ersten — `starten()` beim
+	# Wellenleiter ruft erst `_charakter_gewaehlt()` auf, siehe dort. Bis
+	# dahin bleibt alles andere (Wellenleiter, Gegner, Schüsse) stehen,
+	# genau wie zwischen zwei Wellen bei der Aufwertungsauswahl.
+	_charakterauswahl.zeigen()
+	get_tree().paused = true
 
 
 func _kopfzeile_setzen() -> void:
 	_kopfzeile.text = "Leben: %d    Welle: %d" % [_spieler.leben, _wellenleiter.welle]
+
+
+## Von `Charakterauswahl.gewaehlt` aufgerufen — wendet die Wahl an und startet
+## erst jetzt die erste Welle. `starten()` statt eines eigenen `_ready()` im
+## Wellenleiter: Der säße unter `Main` und liefe damit **vor** diesem
+## `_ready()` (Godot ruft von unten nach oben auf) — Arena und Spieler wären
+## in dem Moment noch nicht gesetzt. Explizit aufrufen umgeht die Reihenfolge
+## komplett, und hier zusätzlich erst nach der Wahl statt gleich beim Laden.
+func _charakter_gewaehlt(charakter_id: StringName) -> void:
+	Spielstand.charakter_setzen(charakter_id)
+	_spieler.uebernehmen(Spielstand.charakter())
+	_kopfzeile_setzen()
+
+	get_tree().paused = false
+	_wellenleiter.starten(_flaeche, _spieler, self)
 
 
 ## Kurze Meldung, dann die drei Karten — dazwischen ist das ganze Spiel

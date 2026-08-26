@@ -381,12 +381,32 @@ func _pruefe_szenen() -> void:
 		figur != null and figur.charakter_id == &"tank")
 
 	# Der Wellenleiter startet nicht von selbst (siehe seinen Kommentar dazu),
-	# `Main._ready()` ruft `starten()` deshalb explizit auf — genau das prüft
-	# dieser Block: Ohne den Aufruf stünde `welle` bei 0 und kein einziger
-	# Gegner wäre gespawnt.
+	# aber jetzt auch `Main._ready()` nicht mehr direkt — dazwischen steht die
+	# Charakterauswahl. Genau dieser Ablauf wird hier geprüft: Beim bloßen
+	# Laden steht die Auswahl da, der Baum ist angehalten, und keine einzige
+	# Welle läuft. Erst ein simuliertes Antippen einer Karte (wie
+	# `Aufwertungsauswahl._bei_druck` in `rundenprobe.gd`) setzt den
+	# Charakter im Spielstand und startet die erste Welle.
 	var wellenleiter: Wellenleiter = haupt.get_node_or_null("Wellenleiter")
 	_pruefe_wahr("Hauptszene hat einen Wellenleiter", wellenleiter != null)
-	_pruefe("Welle 1 laeuft nach dem Start", wellenleiter.welle, 1)
+
+	var charakterauswahl: Charakterauswahl = haupt.get_node_or_null("Oberflaeche/Charakterauswahl")
+	_pruefe_wahr("Hauptszene hat eine Charakterauswahl", charakterauswahl != null)
+	_pruefe_wahr("die Auswahl erscheint zuerst -- nicht sofort Welle 1",
+		charakterauswahl != null and charakterauswahl.visible)
+	_pruefe("vor der Wahl laeuft noch keine Welle", wellenleiter.welle, 0)
+	_pruefe_wahr("und der Baum steht still, solange die Auswahl offen ist",
+		get_tree().paused)
+
+	# Karte "Schnell" antippen — absichtlich nicht der Standard
+	# ("ausgewogen"), sonst zeigte die nächste Prüfung auch bei einem
+	# Fehler zufällig den richtigen Wert.
+	charakterauswahl._bei_druck(&"schnell")
+	_pruefe("die Wahl setzt den Charakter im Spielstand", Spielstand.charakter_id, &"schnell")
+	_pruefe_wahr("und am Spieler selbst", spieler.variante.id == &"schnell")
+	_pruefe_wahr("die Auswahl verschwindet nach der Wahl", not charakterauswahl.visible)
+	_pruefe_wahr("der Baum laeuft danach wieder", not get_tree().paused)
+	_pruefe("Welle 1 laeuft erst jetzt, nach der Wahl", wellenleiter.welle, 1)
 
 	var gegner_in_szene := 0
 	var naechster_abstand := INF
@@ -432,6 +452,24 @@ func _pruefe_szenen() -> void:
 	# globalen Gruppe "gegner" und verfälschten dort die Leer-Prüfung. Genau
 	# das ist einmal passiert, bevor hier auf `.free()` umgestellt wurde.
 	haupt.free()
+
+	# Neustart nach Game Over ruft `get_tree().reload_current_scene()` auf —
+	# das lässt sich hier nicht sinnvoll auslösen, es würde versuchen, diese
+	# Prüf-Szene selbst neu zu laden, nicht `main.tscn`. Ein Neustart tut
+	# aber nichts anderes, als dieselbe Szene noch einmal frisch zu
+	# instanzieren, und genau das steht hier: ein zweites `main.tscn`, jetzt
+	# mit einem `Spielstand.charakter_id`, das nicht mehr der Standard ist
+	# (siehe die Wahl oben). Zeigte sich die Auswahl nur beim allerersten
+	# Laden — etwa weil eine künftige Änderung sie an "noch kein Charakter
+	# gewählt" statt an "gerade erst geladen" hängt —, bliebe sie hier aus.
+	var haupt2: Node = load("res://scenes/main.tscn").instantiate()
+	add_child(haupt2)
+	var charakterauswahl2: Node = haupt2.get_node_or_null("Oberflaeche/Charakterauswahl")
+	var wellenleiter2: Wellenleiter = haupt2.get_node_or_null("Wellenleiter")
+	_pruefe_wahr("nach einem Neustart erscheint die Auswahl erneut",
+		charakterauswahl2 != null and charakterauswahl2.visible)
+	_pruefe("und Welle 1 laeuft auch da noch nicht", wellenleiter2.welle, 0)
+	haupt2.free()
 
 
 ## Der Wellenablauf für sich allein, ohne `main.tscn`. Bewusst **nicht** in
