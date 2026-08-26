@@ -3,6 +3,32 @@ class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
+  /**
+   * Die Charakterbilder aus `assets/images/` laden — falls es sie gibt.
+   *
+   * Ein fehlendes Bild darf das Spiel **nicht** anhalten: Der Prototyp lief
+   * bisher ganz ohne Dateien, und ein Ladefehler würde sonst aus drei
+   * Charakteren drei unsichtbare Sprites machen. `loaderror` fängt das ab, und
+   * `Charaktere.bildSchluessel` fällt danach auf die gezeichnete Figur zurück.
+   *
+   * `preload()` läuft bei `scene.restart()` nicht erneut — Phaser ruft es nur
+   * beim ersten Start der Szene. Das ist hier richtig so: Die Bilder liegen
+   * danach im Texturspeicher und müssen nicht je Runde neu geholt werden.
+   */
+  preload() {
+    Charaktere.LISTE.forEach((c) => {
+      this.load.image(Charaktere.BILD_PRAEFIX + c.id, `assets/images/char-${c.id}.png`);
+    });
+
+    // Merken statt melden: Welche Datei fehlt, entscheidet später die Abfrage
+    // `textures.exists`. Der Zweig hier verhindert nur, dass Phaser den
+    // Ladefehler als Ausnahme weiterreicht.
+    this.load.on('loaderror', (datei) => {
+      if (!this.fehlendeBilder) this.fehlendeBilder = [];
+      this.fehlendeBilder.push(datei.key);
+    });
+  }
+
   create() {
     // Bei einem Neustart läuft create() erneut — alle Runden-Merkmale gehören
     // deshalb hierher und nicht in den Konstruktor.

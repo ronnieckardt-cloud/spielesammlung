@@ -102,6 +102,32 @@ ganze Sinn dreier Charaktere wäre weg. Damit schnelles Weiterspielen trotzdem
 schnell bleibt, ist der zuletzt gespielte Charakter markiert — man sucht ihn
 nicht, man sieht ihn.
 
+## Charakterbilder aus `assets/images/`
+
+Liegen dort `char-ausgewogen.png`, `char-schnell.png` und `char-tank.png`,
+werden sie als Sprites benutzt — auf der Auswahlkarte **und** im Spiel, beide
+über dieselbe Weiche (`Charaktere.bildSchluessel`), damit sie nicht
+auseinanderlaufen können.
+
+Fehlt eine Datei, fällt die Figur auf die gezeichnete Fassung zurück. Das ist
+kein Beiwerk: Der Prototyp lief lange ganz ohne Bilddateien und soll das weiter
+tun. Ohne Rückfall bekäme jeder, der ihn ohne die PNGs auscheckt, drei
+unsichtbare Sprites und ein Spiel, das aussieht wie kaputt. Der Browser
+protokolliert in dem Fall den fehlgeschlagenen Abruf — das ist erwartet, nicht
+kaputt.
+
+Bilder müssen **nicht quadratisch** sein: `Charaktere.einpassen` skaliert über
+die längere Kante, das Seitenverhältnis bleibt erhalten und die Transparenz
+sowieso. Die Trefferfläche wird dabei je Achse gegengerechnet und bleibt
+32 × 32 — bei einem nicht-quadratischen Bild sind `scaleX` und `scaleY`
+verschieden, und eine Gegenrechnung über nur eine Achse ergäbe eine krumme
+Hitbox.
+
+**Über `file://` lädt Safari keine Bilder** („access control checks"). Zum
+Ausprobieren mit echten Bildern deshalb einen kleinen Server nehmen, etwa
+`python3 -m http.server` im Ordner — mit `index.html` direkt im Browser greift
+sonst immer der Rückfall.
+
 ## Regeln
 
 - Die Lebenspunkte kommen vom Charakter (4 bis 7) und stehen als Herzen oben

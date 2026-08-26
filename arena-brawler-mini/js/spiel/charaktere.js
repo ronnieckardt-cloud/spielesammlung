@@ -198,6 +198,49 @@ const Charaktere = {
   /** Kantenlänge der erzeugten Figur-Textur. */
   TEXTUR_KANTE: 96,
 
+  /** Präfix der aus `assets/images/` geladenen Bilder. */
+  BILD_PRAEFIX: 'bild-',
+
+  /**
+   * Welche Textur die Figur benutzt: das echte Bild aus `assets/images/`, wenn
+   * es geladen werden konnte — sonst die gezeichnete Fassung.
+   *
+   * Der Rückfall ist kein Beiwerk. Der Prototyp lief lange ganz ohne
+   * Bilddateien, und er soll das weiter tun: Wer ihn frisch auscheckt, ohne
+   * dass die PNGs beiliegen, bekommt sonst drei unsichtbare Sprites und ein
+   * Spiel, das aussieht wie kaputt. Beide Wege liefern denselben Schlüssel
+   * für Karte und Spielfeld, die beiden können also nicht auseinanderlaufen.
+   */
+  bildSchluessel(scene, charakter) {
+    const ausDatei = Charaktere.BILD_PRAEFIX + charakter.id;
+    if (scene.textures.exists(ausDatei)) return ausDatei;
+    return Charaktere.erzeugeTextur(scene, charakter);
+  },
+
+  /** Liegt für diesen Charakter ein echtes Bild vor? */
+  hatBild(scene, charakter) {
+    return scene.textures.exists(Charaktere.BILD_PRAEFIX + charakter.id);
+  },
+
+  /**
+   * Ein Bild in ein Quadrat der Kantenlänge `kante` einpassen, ohne es zu
+   * verzerren: Es zählt die **längere** Seite, die kürzere bleibt anteilig.
+   *
+   * Die gezeichneten Figuren sind quadratisch, ein geliefertes PNG muss das
+   * nicht sein. Ein glattes `setDisplaySize(kante, kante)` würde ein
+   * hochformatiges Bild in die Breite ziehen — und das sieht man erst am
+   * fertigen Bild, nicht im Code.
+   */
+  einpassen(bild, kante) {
+    const quelle = bild.texture.getSourceImage();
+    const breite = quelle.width || kante;
+    const hoehe = quelle.height || kante;
+    const massstab = kante / Math.max(breite, hoehe);
+
+    bild.setDisplaySize(breite * massstab, hoehe * massstab);
+    return bild;
+  },
+
   /**
    * Zeichnet die Figur **einmal** in eine 96er-Textur; Spielfeld und Karte
    * benutzen dieselbe, nur in unterschiedlicher Größe.
@@ -459,8 +502,12 @@ const Charaktere = {
     // Groß und weit oben: Die Karte ist 300 Pixel hoch, zwischen Farbband und
     // Titel liegen rund 110 davon — die gehören der Figur. Der Versatz nach
     // oben ist nötig, weil sie sonst unten an den Titel stößt.
-    const bild = scene.add.image(0, y - 2, Charaktere.erzeugeTextur(scene, charakter));
-    bild.setDisplaySize(96, 96);
+    const bild = scene.add.image(0, y - 2, Charaktere.bildSchluessel(scene, charakter));
+
+    // Ins Quadrat einpassen statt hart auf 96 x 96 zu zwingen: Ein Bild mit
+    // anderem Seitenverhältnis würde sonst verzerrt. Beim Verkleinern zählt
+    // die längere Kante, damit nichts über den Rahmen hinausragt.
+    Charaktere.einpassen(bild, 96);
     return bild;
   },
 };

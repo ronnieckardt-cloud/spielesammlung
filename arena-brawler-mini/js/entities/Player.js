@@ -39,19 +39,22 @@ class Player {
 
     this.sprite = scene.physics.add.sprite(x, y, Player.erzeugeTextur(scene, charakter));
 
-    // Die Figur wird etwas größer angezeigt als ihre Trefferfläche: Der Umriss
+    // Die Figur wird größer angezeigt als ihre Trefferfläche: Der Umriss
     // braucht Luft, damit man ihn erkennt. Der Körper bleibt aber bei 32 x 32
     // wie vorher — die Wellen, der Mindestabstand beim Erscheinen und das
     // Ausweichgefühl hängen daran, und die sollen sich nicht mit ändern.
-    this.sprite.setDisplaySize(Player.ANZEIGE_GROESSE, Player.ANZEIGE_GROESSE);
+    //
+    // Eingepasst statt hart gesetzt: Ein geliefertes PNG muss nicht quadratisch
+    // sein, und ein glattes `setDisplaySize(48, 48)` würde es verzerren.
+    Charaktere.einpassen(this.sprite, Player.ANZEIGE_GROESSE);
 
     // `body.setSize` rechnet in TEXTURpixeln und wird danach mit der
     // Sprite-Skalierung multipliziert. Ein glattes `setSize(32, 32)` ergäbe
-    // bei einer 96er-Textur auf 40 Pixel Anzeige also 13 x 13 — der Spieler
+    // bei einer 96er-Textur auf 48 Pixel Anzeige also 16 x 16 — der Spieler
     // wäre plötzlich kaum noch zu treffen, ohne dass eine Regel geändert wurde.
-    // Deshalb gegenrechnen statt raten.
-    const massstab = this.sprite.scaleX;
-    this.sprite.body.setSize(32 / massstab, 32 / massstab, true);
+    // Deshalb gegenrechnen, und zwar je Achse: Bei einem nicht-quadratischen
+    // Bild sind scaleX und scaleY verschieden.
+    this.sprite.body.setSize(32 / this.sprite.scaleX, 32 / this.sprite.scaleY, true);
 
     this.sprite.setCollideWorldBounds(true);
     this.sprite.setData('instanz', this);
@@ -73,11 +76,13 @@ class Player {
   }
 
   /**
-   * Die Figur kommt aus `charaktere.js` — Karte und Spielfeld zeigen dadurch
-   * garantiert dieselbe Gestalt und können nicht auseinanderlaufen.
+   * Die Figur kommt aus `charaktere.js` — Karte und Spielfeld greifen auf
+   * dieselbe Weiche zu und können dadurch nicht auseinanderlaufen: Liegt ein
+   * Bild in `assets/images/` vor, nehmen beide das Bild, sonst beide die
+   * gezeichnete Figur.
    */
   static erzeugeTextur(scene, charakter = Charaktere.standard()) {
-    return Charaktere.erzeugeTextur(scene, charakter);
+    return Charaktere.bildSchluessel(scene, charakter);
   }
 
   // Erzeugt einmalig einen gelben Kreis als Platzhalter-Textur für Geschosse
