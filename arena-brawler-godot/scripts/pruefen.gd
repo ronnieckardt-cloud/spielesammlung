@@ -28,6 +28,9 @@ func _ready() -> void:
 	_pruefe_szenen()
 	_pruefe_wellenleiter_ablauf()
 	_pruefe_gegner()
+	_pruefe_gegnertypen()
+	_pruefe_gegner_getrennte_trefferflaechen()
+	_pruefe_gegnertyp_mischung()
 	_pruefe_geschoss_schaden()
 	_pruefe_aufwertungen_am_spieler()
 
@@ -372,6 +375,19 @@ func _pruefe_szenen() -> void:
 				zu_nah += 1
 	_pruefe("keine Flaechenfarbe verschwindet im Arenaboden", zu_nah, 0)
 
+	# Dieselbe Rechnung wie eben, aber umgekehrt verlangt: Gegner sollen
+	# nicht nur nicht verschwinden (wie beim Spieler), sondern **hoher**
+	# Kontrast war ausdrücklich gefordert ("Farbe klar 'Gegner'"). Die
+	# Schwelle liegt deshalb deutlich über der 0,12 von oben.
+	var zu_flau := 0
+	for a in Gegnertypen.alle_arten():
+		for farbe in [a.koerper, a.kern]:
+			var abstand := Vector3(
+				farbe.r - boden.r, farbe.g - boden.g, farbe.b - boden.b).length()
+			if abstand < 0.3:
+				zu_flau += 1
+	_pruefe("jede Gegnerfarbe hebt sich deutlich vom Arenaboden ab", zu_flau, 0)
+
 	# Charakter wechseln muss wirklich alle Werte mitziehen, nicht nur die Farbe
 	var vorher: float = spieler.variante.tempo
 	spieler.uebernehmen(Charaktere.nach_id(&"tank"))
@@ -548,6 +564,149 @@ func _pruefe_gegner() -> void:
 		not gegner.is_in_group(&"gegner"))
 
 	gegner.queue_free()
+
+
+## Die drei Gegnertypen für sich allein — reine Daten, kein Node. Ergänzt
+## `_pruefe_gegner()` oben (der prüft nur den Grundtyp/Verfolger-Fallback).
+func _pruefe_gegnertypen() -> void:
+	_pruefe("drei Gegnertypen", Gegnertypen.alle_arten().size(), 3)
+
+	var v := Gegnertypen.nach_id(Gegnertypen.VERFOLGER)
+	var p := Gegnertypen.nach_id(Gegnertypen.PANZER)
+	var f := Gegnertypen.nach_id(Gegnertypen.FLINK)
+
+	_pruefe("Verfolger hat 1 Leben", v.leben, 1)
+	_pruefe_wahr("Panzer-Verfolger haelt mehrere Treffer aus (2 bis 3 Leben)",
+		p.leben >= 2 and p.leben <= 3)
+	_pruefe_wahr("Panzer-Verfolger ist langsamer als der Verfolger", p.tempo < v.tempo)
+	_pruefe_wahr("Panzer-Verfolger ist breiter als der Verfolger", p.radius > v.radius)
+	_pruefe("Flink hat 1 Leben", f.leben, 1)
+	_pruefe_wahr("Flink ist schneller als der Verfolger", f.tempo > v.tempo)
+	_pruefe_wahr("Flink ist schmaler als der Verfolger", f.radius < v.radius)
+
+	# Schattenriss: dieselbe Anforderung wie bei den drei Charakteren -- die
+	# gezeichnete Silhouette muss die Unterschiede tragen, nicht nur die
+	# Kollisionszahl `radius`.
+	var breite_v := Gegnergestalt.abmessungen(v).size.x
+	var breite_p := Gegnergestalt.abmessungen(p).size.x
+	var breite_f := Gegnergestalt.abmessungen(f).size.x
+	_pruefe_wahr("Panzer-Verfolger ist auch als Silhouette breiter als der Verfolger",
+		breite_p > breite_v)
+	_pruefe_wahr("Flink ist auch als Silhouette schmaler als der Verfolger",
+		breite_f < breite_v)
+
+	for a in Gegnertypen.alle_arten():
+		_pruefe_wahr("%s: Figur zeichnet etwas" % a.id, Gegnergestalt.teile(a).size() > 0)
+
+	# Mischung nach Welle -- reine Rechnung, kein echter Zufall dabei.
+	_pruefe("vor der Panzer-Welle gibt es nur den Verfolger im Lostopf",
+		Wellen.gegnertyp_gewichte_fuer_welle(Wellen.PANZER_AB_WELLE - 1).size(), 1)
+	_pruefe_wahr("ab der Panzer-Welle ist der Panzer im Lostopf",
+		Wellen.gegnertyp_gewichte_fuer_welle(Wellen.PANZER_AB_WELLE).has(Gegnertypen.PANZER))
+	_pruefe("ab der Flink-Welle sind alle drei Typen im Lostopf",
+		Wellen.gegnertyp_gewichte_fuer_welle(Wellen.FLINK_AB_WELLE).size(), 3)
+	_pruefe_wahr("der Verfolger bleibt auch in einer sehr spaeten Welle im Lostopf",
+		Wellen.gegnertyp_gewichte_fuer_welle(999).has(Gegnertypen.VERFOLGER))
+
+	var gewichte := {Gegnertypen.VERFOLGER: 3, Gegnertypen.PANZER: 2}
+	_pruefe("t=0 trifft den ersten Eintrag im Lostopf",
+		Wellen.gegnertyp_auswaehlen(gewichte, 0.0), Gegnertypen.VERFOLGER)
+	_pruefe("t nahe 1 trifft den letzten Eintrag im Lostopf",
+		Wellen.gegnertyp_auswaehlen(gewichte, 0.999), Gegnertypen.PANZER)
+	_pruefe("ein leerer Lostopf ergibt den Verfolger",
+		Wellen.gegnertyp_auswaehlen({}, 0.5), Gegnertypen.VERFOLGER)
+
+	# Balance: Der langsamste Charakter muss selbst dem schnellsten
+	# Gegnertyp bei maximaler Wellensteigerung noch entkommen können --
+	# sonst gibt es ab einer bestimmten Welle kein Weglaufen mehr, nur noch
+	# Zufall. Genau das war ausdrücklich gefordert ("Tank muss noch
+	# entkommen können").
+	var langsamster_charakter := INF
+	for charakter in Charaktere.liste:
+		langsamster_charakter = minf(langsamster_charakter, charakter.tempo)
+
+	var schnellster_gegner := 0.0
+	for a in Gegnertypen.alle_arten():
+		schnellster_gegner = maxf(schnellster_gegner, a.tempo * Wellen.MAX_TEMPO_FAKTOR)
+
+	_pruefe_wahr("der langsamste Charakter entkommt selbst dem schnellsten Gegner in der letzten Welle",
+		langsamster_charakter > schnellster_gegner)
+
+	# Der eigentliche Anlass für den Panzer-Verfolger: Gegen den bisherigen
+	# 1-Leben-Verfolger tötete jeder Schaden schon beim ersten Treffer, "Stärkere
+	# Kugeln" hatte also nie einen sichtbaren Effekt. Gegen 3 Leben sieht man den
+	# Unterschied in den nötigen Treffern selbst.
+	var treffer_ohne_karte := int(ceil(float(p.leben) / Aufwertungen.schaden(0)))
+	var treffer_mit_zwei_stapeln := int(ceil(float(p.leben) / Aufwertungen.schaden(2)))
+	_pruefe("ohne 'Staerkere Kugeln' braucht der Panzer-Verfolger volle Treffer",
+		treffer_ohne_karte, p.leben)
+	_pruefe_wahr("zwei Stapel 'Staerkere Kugeln' senken die noetigen Treffer spuerbar",
+		treffer_mit_zwei_stapeln < treffer_ohne_karte)
+
+
+## Zwei gleichzeitige Gegner unterschiedlichen Typs müssen unterschiedliche
+## Trefferflächen behalten. Das ist keine Selbstverständlichkeit: `preload`
+## teilt sich dieselbe `CircleShape2D`-Ressource über alle Instanzen einer
+## Szene, solange sie nicht `resource_local_to_scene` ist (siehe der lange
+## Kommentar an `Gegner.einrichten`). Ohne das würde das Einrichten des
+## zweiten Gegners heimlich auch die Trefferfläche des ersten ändern -- ein
+## Fehler, der sich nur bemerkbar macht, wenn wirklich zwei Typen
+## gleichzeitig im Spiel sind, also frühestens ab der Panzer-Welle.
+func _pruefe_gegner_getrennte_trefferflaechen() -> void:
+	var g1: Gegner = load("res://enemies/gegner.tscn").instantiate()
+	add_child(g1)
+	g1.einrichten(Gegnertypen.nach_id(Gegnertypen.VERFOLGER))
+
+	var g2: Gegner = load("res://enemies/gegner.tscn").instantiate()
+	add_child(g2)
+	g2.einrichten(Gegnertypen.nach_id(Gegnertypen.PANZER))
+
+	var form1: CollisionShape2D = g1.get_node("Form")
+	var form2: CollisionShape2D = g2.get_node("Form")
+	_pruefe_wahr("zwei gleichzeitige Gegner behalten getrennte Trefferflaechen",
+		form1.shape.radius != form2.shape.radius)
+	_pruefe("und der zuerst eingerichtete behaelt seinen eigenen Radius",
+		form1.shape.radius, Gegnertypen.nach_id(Gegnertypen.VERFOLGER).radius)
+
+	g1.queue_free()
+	g2.queue_free()
+
+
+## Der Wellenablauf über mehrere Wellen hinweg, isoliert wie
+## `_pruefe_wellenleiter_ablauf` oben: Ab einer späten Welle müssen
+## tatsächlich mehrere Gegnertypen unter den Gespawnten sein, nicht nur der
+## Verfolger. Bei bis zu 14 Gegnern je Welle und einem Nicht-Verfolger-Anteil
+## von deutlich über der Hälfte im Lostopf ist die Chance auf "zufällig nur
+## Verfolger" verschwindend klein (unter einem Millionstel) -- kein
+## Flackertest.
+func _pruefe_gegnertyp_mischung() -> void:
+	var wellenleiter := Wellenleiter.new()
+	add_child(wellenleiter)
+	var eltern := Node.new()
+	add_child(eltern)
+	var ziel := Node2D.new()
+	add_child(ziel)
+	ziel.global_position = Vector2(576, 324)
+
+	wellenleiter.starten(Rect2(Vector2.ZERO, Vector2(1152, 648)), ziel, eltern)
+	while wellenleiter.welle < Wellen.FLINK_AB_WELLE:
+		for kind in eltern.get_children():
+			kind.schaden_nehmen(99)
+		wellenleiter._process(0.016)
+		wellenleiter.naechste_welle_erzwingen()
+
+	var typen := {}
+	for kind in eltern.get_children():
+		typen[kind.art_id()] = true
+	_pruefe_wahr("in einer spaeten Welle mischen sich mehrere Gegnertypen",
+		typen.size() > 1)
+
+	# `.free()`, nicht `queue_free()` -- dieselbe Begründung wie in
+	# `_pruefe_wellenleiter_ablauf`: `eltern` trägt noch lebendige,
+	# gruppierte Gegner der letzten Welle.
+	wellenleiter.free()
+	eltern.free()
+	ziel.free()
 
 
 ## Ein Geschoss reicht seinen Schaden weiter, statt fest 1 zu nehmen — das

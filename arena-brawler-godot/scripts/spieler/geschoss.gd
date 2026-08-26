@@ -17,6 +17,8 @@ var _geflogen := 0.0
 var _schaden := 1
 
 @onready var _bild: Polygon2D = $Bild
+@onready var _kern: Polygon2D = $Kern
+@onready var _schweif: Polygon2D = $Schweif
 
 
 ## `schaden` mit Standardwert 1, damit ein Aufruf ohne den Parameter (etwa
@@ -28,14 +30,18 @@ func starten(richtung: Vector2, reichweite: float, farbe: Color, schaden: int = 
 	rotation = _richtung.angle()
 
 	# Die Farbe kommt vom Charakter: Man soll sehen, dass das der eigene Schuss
-	# ist — später fliegen auch gegnerische Geschosse herum.
+	# ist — später fliegen auch gegnerische Geschosse herum. Kern und Schweif
+	# ziehen dieselbe Farbe nach, nicht ihre eigene: heller für den glühenden
+	# Kopf, halbdurchsichtig für den Schweif dahinter — beides bleibt an den
+	# Charakter gebunden statt an eine feste zweite Farbe.
 	if _bild != null:
 		_bild.color = farbe
-
-
-func _ready() -> void:
-	if _bild != null:
-		_bild.color = _bild.color
+	if _kern != null:
+		_kern.color = farbe.lightened(0.6)
+	if _schweif != null:
+		var schweiffarbe := farbe
+		schweiffarbe.a = 0.35
+		_schweif.color = schweiffarbe
 
 
 func _physics_process(delta: float) -> void:

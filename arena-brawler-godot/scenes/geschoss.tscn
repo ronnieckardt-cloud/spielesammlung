@@ -10,9 +10,17 @@ collision_layer = 8
 collision_mask = 4
 script = ExtResource("1_geschoss")
 
+[node name="Schweif" type="Polygon2D" parent="."]
+color = Color(0.945098, 0.768627, 0.058824, 0.35)
+polygon = PackedVector2Array(-6, -2, -24, -0.6, -24, 0.6, -6, 2)
+
 [node name="Bild" type="Polygon2D" parent="."]
 color = Color(0.945098, 0.768627, 0.058824, 1)
 polygon = PackedVector2Array(-7, -3, 7, -3, 9, 0, 7, 3, -7, 3)
+
+[node name="Kern" type="Polygon2D" parent="."]
+color = Color(1, 0.94902, 0.72549, 1)
+polygon = PackedVector2Array(2, -1.6, 7, 0, 2, 1.6, -1, 0)
 
 [node name="Form" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_geschoss")

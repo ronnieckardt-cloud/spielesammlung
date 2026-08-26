@@ -7,13 +7,14 @@ Moderner 2D-Arena-Brawler in Godot 4 mit GDScript.
 > `arena-brawler-mini/` — kein gemeinsamer Code, keine gemeinsamen Abhängigkeiten.
 > Es liegt nur im selben Repository.
 
-Stand: **spielbare Runde mit Charakterauswahl und Aufwertungen**. Arena,
-Spieler, Bewegung, Schießen, drei Charaktervarianten mit eigenen Figuren, ein
-Verfolger-Gegner, ein Wellensystem und eine Kartenauswahl nach jeder
-geschafften Welle stehen — man wählt vor jeder Runde erst einen Charakter auf
-einem eigenen Bildschirm, spielt dann von Anfang bis Game-Over, wird dabei
-stärker, und ein Neustart führt sauber zurück zur Auswahl. Touch-Bedienung
-kommt später.
+Stand: **spielbare Runde mit Charakterauswahl, drei Gegnertypen und
+Aufwertungen**. Arena, Spieler, Bewegung, Schießen, drei Charaktervarianten
+mit eigenen Figuren, drei Gegnertypen (Verfolger, Panzer-Verfolger, Flink),
+ein Wellensystem mit steigender Typenmischung und eine Kartenauswahl nach
+jeder geschafften Welle stehen — man wählt vor jeder Runde erst einen
+Charakter auf einem eigenen Bildschirm, spielt dann von Anfang bis Game-Over,
+wird dabei stärker, und ein Neustart führt sauber zurück zur Auswahl.
+Touch-Bedienung kommt später.
 
 ## Öffnen und starten
 
@@ -59,29 +60,32 @@ arena-brawler-godot/
 │   └── spielstand.gd        gewählter Charakter + Bestleistung, speichert nach user://
 ├── scenes/
 │   ├── main.tscn            Hauptszene: Arena + Spieler + Wellenleiter + Kamera + Kopfzeile + Rundenende + Charakterauswahl
-│   ├── arena.tscn           Boden, Rand, Wände
-│   ├── geschoss.tscn
+│   ├── arena.tscn           Boden (mit Verlauf), Raster, Rand (außen + innen + Eckmarken), Wände
+│   ├── geschoss.tscn        Schweif + Bild + Kern
 │   ├── pruefen.tscn         Prüfszene (nicht Teil des Spiels)
 │   ├── musterblatt.tscn     gibt die Figuren als JSON aus (Werkzeug)
 │   └── rundenprobe.tscn     spielt eine Runde mehrere Sekunden durch (Werkzeug)
 ├── characters/
 │   └── spieler.tscn
 ├── enemies/
-│   ├── gegner.tscn
+│   ├── gegner.tscn          Form + Anzeige (Formanzeige) + Beruehrung, alle drei Typen
 │   └── gegner.gd
 ├── scripts/
 │   ├── gemeinsam/
 │   │   ├── bewegung.gd      reine Rechnung, ohne Node und ohne Uhr
-│   │   ├── gestalt.gd       die Vielecke der drei Figuren, ebenso rein
-│   │   └── figur.gd         zeichnet sie — der einzige Knoten dafür
+│   │   ├── gestalt.gd       die Vielecke der drei Charaktere, ebenso rein
+│   │   ├── gegnergestalt.gd die Vielecke der drei Gegnertypen, ebenso rein
+│   │   ├── formanzeige.gd   zeichnet eine Teileliste — der einzige Knoten dafür, Charaktere **und** Gegner
+│   │   └── figur.gd         `Formanzeige` + Charakter-Startwert (`@export charakter_id`) für den Spieler
 │   ├── spieler/
 │   │   ├── spieler.gd
 │   │   └── geschoss.gd
 │   ├── welt/
 │   │   ├── main.gd
 │   │   ├── arena.gd
-│   │   ├── wellen.gd           Steigerung über die Wellen, reine Rechnung
+│   │   ├── wellen.gd           Steigerung über die Wellen + Typenmischung, reine Rechnung
 │   │   ├── wellenleiter.gd     spawnt Gegner, meldet geschaffte Wellen
+│   │   ├── gegnertypen.gd      die drei Gegnertypen (reine Daten), das Gegenstück zu `charaktere.gd`
 │   │   ├── aufwertungen.gd     die fünf Karten, reine Rechnung
 │   │   └── rundenende.gd       Neustart-Erkennung, siehe „Pause" unten
 │   ├── pruefen.gd
@@ -247,17 +251,83 @@ Spiel — und dann sieht man beim Prüfen einen Fehler nicht, der da ist.
 
 ## Gegner, Wellen und Kampf
 
-**Der Gegner ist bewusst der einfachste denkbare Verfolger.** `enemies/gegner.gd`
-kennt keine Wegfindung und kein Ausweichen — er läuft in jedem Bild geradewegs
-auf sein Ziel zu. Die Richtung dafür kommt aus `Bewegung.richtung_zu` (reine
-Funktion, genau wie beim Spieler): eine Richtung von A nach B, auf Länge 1
-gebracht. Alles, was den Gegner zu einem Gegner macht — Trefferfläche, Ebenen,
-Berührung, Tod — steht in `gegner.gd` selbst; für einen so kleinen Umfang lohnt
-sich keine eigene `Gestalt`/`Figur`-Trennung wie beim Spieler. Die Figur ist
-zweckmäßig, nicht ambitioniert: ein achtzackiger dunkelroter Stern (Silhouette)
-mit hellerem rotem Kern, eigens gewählt, um auf den ersten Blick „Gegner"
-statt „Spielfigur" zu sagen — spitz und warnfarben gegen die klaren
-geometrischen Formen der Charaktere.
+**Alle Gegnertypen laufen gleich — nur Tempo, Leben, Trefferfläche und
+Aussehen unterscheiden sich.** `enemies/gegner.gd` kennt keine Wegfindung und
+kein Ausweichen — jeder Typ läuft in jedem Bild geradewegs auf sein Ziel zu.
+Die Richtung dafür kommt aus `Bewegung.richtung_zu` (reine Funktion, genau wie
+beim Spieler): eine Richtung von A nach B, auf Länge 1 gebracht. Was einen
+Gegner zu einem Gegner macht — Trefferfläche, Ebenen, Berührung, Tod — steht
+in `gegner.gd` selbst.
+
+**Drei Gegnertypen, dieselbe Trennung wie bei den Charakteren.**
+`gegnertypen.gd` (reine Daten, das Gegenstück zu `charaktere.gd`) und
+`gegnergestalt.gd` (reine Geometrie, das Gegenstück zu `gestalt.gd`) liefern
+Werte und Umriss; `Gegner.einrichten(art, tempo_faktor)` wendet beides an.
+Gezeichnet wird über **denselben** Knoten wie beim Spieler
+(`Formanzeige.zeigen_teile(...)`, siehe „Wie die Figuren aufgebaut sind" oben)
+— keine zweite Zeichenlogik, nur eine zweite Geometrie-Quelle:
+
+| Typ | Leben | Tempo | Trefferfläche | ab Welle | Silhouette |
+|---|---|---|---|---|---|
+| Verfolger | 1 | 95 | 12 | 1 | Stern, acht Zacken (unverändert) |
+| Panzer-Verfolger | 3 | 72 | 17 | 4 | breites, kaum verjüngtes Achteck mit Seitenplatten |
+| Flink | 1 | 112 | 9 | 7 | schlank, länger als breit, zwei Widerhaken am Bug |
+
+Deckt man alle drei komplett schwarz ab, muss man sie trotzdem
+auseinanderhalten — dieselbe Anforderung wie bei den Charakteren, siehe „Wie
+die Figuren aufgebaut sind". Farblich bleiben alle drei in der
+Rot-/Orange-Familie (klar „Gegner", nie mit einem Charakter zu verwechseln),
+aber deutlich unterscheidbar: der Verfolger dunkelrot, der Panzer rostorange,
+der Flinke ein schärferes, helleres Rot-Orange. Ein Test prüft für jede
+Gegnerfarbe einen deutlich höheren Mindestabstand zum Arenaboden als bei den
+Charakteren — „hoher Kontrast" war für Gegner ausdrücklich gefordert, nicht
+nur „verschwindet nicht".
+
+**Der Panzer-Verfolger ist der eigentliche Anlass: Vorher hatte „Stärkere
+Kugeln" nie eine sichtbare Wirkung.** Der einzige Gegnertyp hielt genau einen
+Treffer aus — jeder Schaden, ob 1 oder 6, tötete beim ersten Schuss, die Karte
+war also rein kosmetisch wählbar. Gegen die 3 Leben des Panzers sieht man den
+Unterschied jetzt direkt in den nötigen Treffern: ohne die Karte drei
+Schüsse, mit zwei Stapeln nur noch einer. Ein Test rechnet genau das nach.
+
+**Die Mischung kommt aus einem gewichteten Lostopf, reine Rechnung in
+`wellen.gd`.** `Wellen.gegnertyp_gewichte_fuer_welle(welle)` sagt, welche
+Typen ab welcher Welle mit welchem Gewicht im Topf liegen (Panzer ab Welle 4,
+Flink ab Welle 7, der Verfolger bleibt immer dabei — sonst wäre es ab einer
+Welle ein Austauschen statt eines Steigerns). `Wellen.gegnertyp_auswaehlen(gewichte,
+t)` zieht daraus, würfelt aber selbst nicht: `t` kommt vom Aufrufer
+(`Wellenleiter`, mit echtem `randf()`), die Funktion rechnet nur nach — genau
+dieselbe Aufteilung wie bei `punkt_am_rand`, und aus demselben Grund: So
+lässt sich die Verteilung für feste `t`-Werte durchprüfen, ohne echten Zufall
+im Test zu brauchen.
+
+**Balance: Der langsamste Charakter muss dem schnellsten Gegner immer noch
+entkommen können.** Bei maximaler Wellensteigerung (`Wellen.MAX_TEMPO_FAKTOR`)
+kommt der schnellste Typ (Flink) auf 112 × 1,6 ≈ 179 — der Tank, der
+langsamste Charakter, läuft mit 215 immer noch klar davon. Ein Test sichert
+genau diesen Abstand ab, nicht nur für den aktuellen Flink-Wert, sondern als
+Invariante: Würde ein künftiger Gegnertyp diesen Rand unterschreiten, schlägt
+die Prüfung an, bevor eine Welle unspielbar wird.
+
+**Eine Ressourcen-Falle, die zwei gleichzeitige Gegnertypen erst zeigen.**
+`preload("res://enemies/gegner.tscn")` teilt sich standardmäßig **eine**
+`CircleShape2D`-Ressource über alle Instanzen — `_form.shape.radius = art.radius`
+in `einrichten()` hätte ohne Gegenmaßnahme also die Trefferfläche **aller**
+gleichzeitig existierenden Gegner geändert, nicht nur die des gerade
+eingerichteten. Behoben mit `resource_local_to_scene = true` an beiden
+`CircleShape2D`-Sub-Ressourcen in `gegner.tscn`: Jede Instanz bekommt dadurch
+ihre eigene Kopie. Der Fehler wäre im Spiel erst ab der Panzer-Welle
+aufgefallen, wenn wirklich zwei Typen gleichzeitig unterwegs sind — ein
+eigener Test spawnt deshalb zwei Gegner verschiedenen Typs nebeneinander und
+prüft, dass ihre Trefferflächen getrennt bleiben.
+
+**Treffer und Tod sind nicht mehr dieselbe Anzeige.** Ein Treffer, der nicht
+tötet, blitzt kurz hell auf (`_aufblitzen()`, ~90 ms) — ohne diese Rückmeldung
+sah ein Schuss auf den 3-Leben-Panzer aus, als hätte er gar nicht getroffen.
+Ein tödlicher Treffer bekommt einen eigenen, deutlicheren Ablauf: erst ein
+kurzer, hellerer Blitz, dann Ausblenden und Wachsen gleichzeitig (mit
+Kubik-Ease statt linear) — dieselbe Grundidee wie vorher, nur klarer vom
+bloßen Ankratzen unterscheidbar.
 
 **Berührung wird jeden Schritt neu geprüft, nicht nur beim ersten Kontakt.**
 Ein `Area2D`-Kind (`Beruehrung`, Ebene der Spielfigur im Zielraster) meldet in
@@ -272,13 +342,12 @@ Geschoss ruft `schaden_nehmen(1)` auf jedem Körper auf, den es trifft, egal ob
 das der Spieler oder ein Gegner ist — `Gegner.schaden_nehmen` hat also absichtlich
 dieselbe Form wie beim Spieler.
 
-**Tod ist ein kurzes Aufblitzen, kein lautloses Verschwinden.** Ein Treffer, der
-tötet, entfernt den Gegner **sofort** aus der Gruppe `"gegner"` (darüber zählt
-der Wellenleiter „noch da") und feuert `gestorben`, aber der Knoten selbst
-bleibt noch `STERBE_DAUER` (180 ms) stehen, blendet aus und wächst leicht, bevor
-er sich wirklich entfernt. Zählung und Anzeige sind damit bewusst getrennt: Der
-Wellenleiter darf die nächste Welle vorbereiten, während der letzte Treffer
-gerade noch zu sehen ist.
+**Zählung und Anzeige sind bewusst getrennt.** Ein tödlicher Treffer entfernt
+den Gegner **sofort** aus der Gruppe `"gegner"` (darüber zählt der
+Wellenleiter „noch da") und feuert `gestorben`, aber der Knoten selbst bleibt
+noch `STERBE_BLITZ_DAUER + STERBE_DAUER` (rund 270 ms) stehen und spielt seine
+Sterbe-Animation ab, siehe oben. Der Wellenleiter darf die nächste Welle
+vorbereiten, während der letzte Treffer gerade noch zu sehen ist.
 
 **Der Wellenleiter startet nicht von selbst.** Als Kind von `Main` liefe sein
 eigenes `_ready()` **vor** dem von `Main` — Godot ruft `_ready()` von unten
@@ -442,22 +511,66 @@ Karte an) und gibt jedes Ereignis mit Zeitstempel aus:
 godot --headless --path . scenes/rundenprobe.tscn
 ```
 
+## Arena, Geschosse und Rückmeldung
+
+Feinschliff-Runde: Der Befund war „wirkt noch flach" — nicht an einer
+einzelnen Stelle, sondern am Boden, an den Wänden, am Geschoss und an der
+Unverwundbarkeit gleichzeitig. Vier kleine, unabhängige Griffe, alle ohne
+Shader und ohne Bilddatei:
+
+- **Der Boden war eine einzige flache Fläche.** `arena.gd` gibt ihm jetzt
+  denselben diagonalen Licht-oben-links-Verlauf wie jede Figur im Spiel
+  (`Polygon2D.vertex_colors`, dieselbe Konvention wie `Formanzeige.LICHT`)
+  und ein dünnes, sehr blasses Liniengitter (`Raster`, 96 Einheiten Abstand)
+  — die Fläche liest sich jetzt als Boden mit Maßstab, nicht als Farbfeld.
+- **Rand und Wände waren eine einzelne Linie.** Dazugekommen sind eine
+  zweite, kühlere Linie ein Stück innerhalb (`RandInnen`) und vier nach innen
+  zeigende „L"-Eckmarken (`Ecken`) — derselbe Kniff wie ein Kamera- oder
+  Ziel-Sucher, der die Grenze markiert, ohne die ganze Kante nachzuzeichnen.
+  Alle drei (Raster, `RandInnen`, Eckmarken) entstehen wie die Wände aus der
+  Arena-`groesse` heraus, nicht von Hand in der Szene gesetzt.
+- **Das Geschoss war eine einzelne flache Pfeilform.** `geschoss.tscn`
+  bekam einen helleren `Kern` (glühender Kopf) und einen halbdurchsichtigen
+  `Schweif` dahinter — beide ziehen die Charakterfarbe automatisch nach
+  (`starten()` setzt jetzt drei Farben statt einer), keine feste zweite
+  Farbe, die aus dem Ruder laufen könnte.
+- **Die Spieler-Unverwundbarkeit hatte gar keine Anzeige.** `ist_unverwundbar()`
+  war reine Rechnung ohne Rückmeldung — ein verschenkter Treffer während der
+  Schutzzeit sah aus wie ein Fehler, nicht wie eine Regel. `Spieler._blinken_aktualisieren()`
+  blendet die Anzeige jetzt im Wechsel ab, solange die Schutzzeit läuft
+  (`BLINK_TAKT` 90 ms) — kein Tween, sondern direkt aus derselben Uhr
+  gerechnet, die auch `_unverwundbar_bis` trägt, also kein eigener Zustand,
+  der beim nächsten Treffer zurückgesetzt werden müsste.
+
 ## Prüfungen
 
 ```bash
 godot --headless --path . scenes/pruefen.tscn
 ```
 
-126 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
-`aufwertungen.gd`, die Charakterdaten, die Umrisse aus `gestalt.gd`, der
-Spielstand, der Gegner und der Wellenablauf jeweils für sich allein, dass
-Aufwertungen wirklich am Spieler wirken (und die geteilte `Variante`
-unangetastet lassen), dass ein Geschoss seinen Schaden weiterreicht — und
-eine **Rauchprobe an den echten Szenen**, die auch die Pause-Verdrahtung
-prüft (`Oberflaeche` ALWAYS, `Main` bewusst nicht). Die Rauchprobe ist
-bewusst dabei: Die häufigste Art, ein Godot-Projekt kaputtzumachen, ist ein
-Knotenpfad, der nicht mehr stimmt. Reine Rechnung zu prüfen fängt das nicht;
-ein Start mit leerer Szene fällt sonst erst beim Spielen auf.
+153 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
+`aufwertungen.gd`, die Charakter- und Gegnerdaten, die Umrisse aus
+`gestalt.gd` und `gegnergestalt.gd`, der Spielstand, der Gegner und der
+Wellenablauf jeweils für sich allein, dass Aufwertungen wirklich am Spieler
+wirken (und die geteilte `Variante` unangetastet lassen), dass ein Geschoss
+seinen Schaden weiterreicht — und eine **Rauchprobe an den echten Szenen**,
+die auch die Pause-Verdrahtung prüft (`Oberflaeche` ALWAYS, `Main` bewusst
+nicht). Die Rauchprobe ist bewusst dabei: Die häufigste Art, ein
+Godot-Projekt kaputtzumachen, ist ein Knotenpfad, der nicht mehr stimmt.
+Reine Rechnung zu prüfen fängt das nicht; ein Start mit leerer Szene fällt
+sonst erst beim Spielen auf.
+
+Dazugekommen mit den drei Gegnertypen: dass Panzer-Verfolger und Flink sich
+in Leben, Tempo und Silhouette wirklich vom Verfolger unterscheiden, dass der
+Lostopf (`gegnertyp_gewichte_fuer_welle`/`gegnertyp_auswaehlen`) ab den
+richtigen Wellen die richtigen Typen mit den richtigen Anteilen liefert, dass
+sich in einer späten Welle tatsächlich mehrere Typen gleichzeitig spawnen
+lassen, dass „Stärkere Kugeln" die nötigen Treffer gegen den Panzer-Verfolger
+messbar senkt, die Balance-Invariante (langsamster Charakter entkommt dem
+schnellsten Gegner bei maximaler Wellensteigerung), der hohe Farbkontrast
+jeder Gegnerfarbe zum Arenaboden — und die `resource_local_to_scene`-Falle:
+zwei gleichzeitige Gegner unterschiedlichen Typs müssen getrennte
+Trefferflächen behalten, siehe „Gegner, Wellen und Kampf" oben.
 
 Zur Rauchprobe gehört seit der Charakterauswahl ein eigener Ablauf: Beim
 bloßen Laden von `main.tscn` steht die Auswahl da, der Baum ist pausiert und
@@ -486,7 +599,12 @@ Autoloads braucht — die richtet Godot nur für eine laufende Szene ein.
 
 ## Was als Nächstes fehlt
 
-Touch-Bedienung, Ton, weitere Gegnertypen (bisher nur der eine Verfolger —
-der Grund, warum „Stärkere Kugeln" noch keine sichtbare Wirkung hat, siehe
-oben). Alles bewusst noch nicht gebaut: Erst sollte eine ganze Runde mit
-echter Steigerung und einem Einstieg davor stehen.
+Touch-Bedienung, Ton. Beides bewusst noch nicht gebaut: Erst sollte eine
+ganze Runde mit echter Steigerung, einem Einstieg davor und einem Gegenüber,
+das nicht nach drei Wellen langweilig wird, stehen.
+
+Denkbare nächste Ausbaustufen für die Gegner selbst: ein Fernkämpfer (bisher
+läuft jeder Typ nur geradewegs auf sein Ziel zu, kein einziger schießt
+zurück), ein eigenes Modul für Gegner-Geschosse (`Geschoss.gd` kennt bisher
+nur den Spieler als Absender), und ein spürbares Boss-Ereignis in größeren
+Abständen statt einer reinen Typenmischung.

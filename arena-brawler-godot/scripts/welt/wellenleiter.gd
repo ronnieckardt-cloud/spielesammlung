@@ -81,14 +81,20 @@ func _naechste_welle_starten() -> void:
 	welle += 1
 	var anzahl := Wellen.gegner_fuer_welle(welle)
 	var tempo_faktor := Wellen.tempo_faktor_fuer_welle(welle)
+	var gewichte := Wellen.gegnertyp_gewichte_fuer_welle(welle)
 
 	for _i in anzahl:
 		var punkt := Wellen.punkt_am_rand(_arena_flaeche, randf(), SPAWN_ABSTAND)
+		var art := Gegnertypen.nach_id(Wellen.gegnertyp_auswaehlen(gewichte, randf()))
+
 		var g: Gegner = GEGNER.instantiate()
 		g.ziel = _spieler
-		g.tempo_faktor = tempo_faktor
 		g.gestorben.connect(_gegner_gestorben)
 		_eltern.add_child(g)
+		# Erst nach add_child: einrichten() braucht die @onready-Felder des
+		# Gegners (Kollisionsform, Anzeige), die gibt es erst, sobald der
+		# Knoten im Baum hängt.
+		g.einrichten(art, tempo_faktor)
 		g.global_position = punkt
 
 	welle_gestartet.emit(welle)

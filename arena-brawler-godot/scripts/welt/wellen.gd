@@ -24,12 +24,59 @@ const TEMPO_JE_WELLE := 0.06
 const MAX_TEMPO_FAKTOR := 1.6
 
 
+## Ab welcher Welle sich ein zäherer Typ einmischt, und mit welchem Gewicht
+## er dann neben dem Verfolger im Lostopf liegt. Der Verfolger bleibt immer
+## dabei (`VERFOLGER_GEWICHT`) — selbst in einer sehr späten Welle soll nicht
+## ausschließlich der zäheste Typ kommen, sonst wäre das ein Austauschen,
+## kein Steigern mehr.
+const PANZER_AB_WELLE := 4
+const PANZER_GEWICHT := 2
+const FLINK_AB_WELLE := 7
+const FLINK_GEWICHT := 2
+const VERFOLGER_GEWICHT := 3
+
+
 static func gegner_fuer_welle(welle: int) -> int:
 	return mini(MAX_ANZAHL, GRUND_ANZAHL + (welle - 1) * ANZAHL_JE_WELLE)
 
 
 static func tempo_faktor_fuer_welle(welle: int) -> float:
 	return minf(MAX_TEMPO_FAKTOR, GRUND_TEMPO_FAKTOR + (welle - 1) * TEMPO_JE_WELLE)
+
+
+## Welche Gegnertypen ab dieser Welle im Lostopf liegen, mit ihrem Gewicht
+## darin (`StringName` → `int`). Reine Rechnung — der eigentliche Wurf
+## (welcher der verfügbaren Typen wird's diesmal) bleibt beim Aufrufer, siehe
+## `gegnertyp_auswaehlen`.
+static func gegnertyp_gewichte_fuer_welle(welle: int) -> Dictionary:
+	var gewichte := {Gegnertypen.VERFOLGER: VERFOLGER_GEWICHT}
+	if welle >= PANZER_AB_WELLE:
+		gewichte[Gegnertypen.PANZER] = PANZER_GEWICHT
+	if welle >= FLINK_AB_WELLE:
+		gewichte[Gegnertypen.FLINK] = FLINK_GEWICHT
+	return gewichte
+
+
+## Einen Typ aus den Gewichten ziehen. `t` liegt in `[0, 1)` und kommt vom
+## Aufrufer (dort steckt der echte Zufall, `randf()`) — diese Funktion würfelt
+## selbst nicht, sie rechnet nur nach, genau wie `punkt_am_rand` es mit dem
+## Rand tut. Godot-Dictionaries behalten die Einfügereihenfolge, dieselben
+## Gewichte ergeben bei demselben `t` deshalb immer denselben Typ.
+static func gegnertyp_auswaehlen(gewichte: Dictionary, t: float) -> StringName:
+	var gesamt := 0
+	for gewicht in gewichte.values():
+		gesamt += int(gewicht)
+	if gesamt <= 0:
+		return Gegnertypen.VERFOLGER
+
+	var schwelle := clampf(t, 0.0, 0.999999) * gesamt
+	var summe := 0
+	for id in gewichte:
+		summe += int(gewichte[id])
+		if schwelle < summe:
+			return id
+
+	return Gegnertypen.VERFOLGER
 
 
 ## Ein Punkt auf dem Rand der Arena, `rand` nach innen versetzt (sonst steckt

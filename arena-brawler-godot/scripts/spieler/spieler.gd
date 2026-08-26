@@ -21,6 +21,14 @@ const GESCHOSS := preload("res://scenes/geschoss.tscn")
 ## `spieler.tscn` — beide zusammen ändern, sonst steckt die Figur in der Wand.
 const RADIUS := 16.0
 
+## Wie schnell die Figur während der Unverwundbarkeit blinkt, und wie blass
+## der dunkle Takt ist. Kein Tween: Die Unverwundbarkeit selbst läuft schon
+## über einen Zeitpunkt (`_unverwundbar_bis`), ein zweiter, unabhängiger Takt
+## aus derselben Uhr braucht keinen eigenen Zustand, der beim nächsten
+## Treffer erst zurückgesetzt werden müsste.
+const BLINK_TAKT := 0.09
+const BLINK_DECKUNG := 0.35
+
 @export var charakter_id: StringName = &"ausgewogen"
 
 var variante: Charaktere.Variante
@@ -89,6 +97,21 @@ func _physics_process(delta: float) -> void:
 		var naechste := Charaktere.naechste(charakter_id)
 		Spielstand.charakter_setzen(naechste.id)
 		uebernehmen(naechste)
+
+	_blinken_aktualisieren()
+
+
+## Sichtbares Blinken während der Unverwundbarkeit — vorher gab es dafür gar
+## keine Anzeige, `ist_unverwundbar()` war reine Rechnung ohne Rückmeldung.
+## Ohne sie sieht ein verschenkter Treffer während der Schutzzeit wie ein
+## Fehler aus, nicht wie eine Regel.
+func _blinken_aktualisieren() -> void:
+	if not ist_unverwundbar():
+		_anzeige.modulate.a = 1.0
+		return
+
+	var takt := int(Time.get_ticks_msec() / 1000.0 / BLINK_TAKT)
+	_anzeige.modulate.a = BLINK_DECKUNG if takt % 2 == 0 else 1.0
 
 
 func _schiessen(richtung: Vector2) -> void:
