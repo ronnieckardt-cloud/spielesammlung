@@ -141,13 +141,25 @@ nicht gibt:
 
 Alle drei sind aus demselben Baukasten gebaut — Schatten, Stiefel, Rumpf,
 Rücken- und Brustplatte, Arme mit Handschuh, Schulterstücke, Waffe, Helm,
-Visier —, unterscheiden sich aber in Proportion und Farbverteilung:
+Visier —, unterscheiden sich aber in Proportion und Farbverteilung. Zweite
+Überarbeitungsrunde: schärfere, asymmetrischere Silhouetten statt der
+anfänglich eher rundlichen Fassung.
 
 | | halbe Breite | Merkmal |
 |---|---|---|
-| Ausgewogen | 17,5 | symmetrisch, weiße Brustplatte, blaue Schulterstücke |
-| Schnell | 15,0 | vorn spitz, wehender Schal nach hinten, orange Finnen |
-| Tank | 20,5 | breite Schulterstücke mit Nieten, grau in der Mitte, grün außen |
+| Ausgewogen | 18,0 | V-Taper von der Brust zur Hüfte, klingenförmige Schulterstücke, dickerer Brust-Kontraststreifen |
+| Schnell | 14,8 | schlankerer, gestreckterer Rumpf, weit vorgezogener Keil, zwei gestaffelte Streamer statt einem Schal |
+| Tank | 21,2 | sechseckige Schulterplatten mit je zwei Nieten, grüner Saum verbindet Schulter und Brust |
+
+Der Sprinter ist jetzt deutlich schmaler als vorher (15,0 → 14,8 wirkt gleich,
+aber der Rumpf selbst ist um 7 % schlanker — die Differenz steckt in der
+Schulterflosse, die enger am Körper liegt statt weit auszuladen), das
+Bollwerk entsprechend breiter (20,5 → 21,2, knapp unter der 21,6-Grenze aus
+der Trefferflächen-Prüfung unten). Der Abstand zwischen allen dreien ist
+absichtlich groß: Ein Blick auf den Umriss allein soll reichen, um zu sagen,
+welcher der drei gerade auf dem Feld steht — auch bei kleiner Darstellung und
+aus jedem Drehwinkel, das ist der Grund für die beiden Prüfungen zu Länge und
+Breite weiter unten.
 
 Drei Sachen, die im Bild nicht auffallen und deshalb geprüft werden:
 

@@ -148,101 +148,122 @@ static func _schatten(radius: float, versatz: float, deckung: float) -> Teil:
 
 # ── Die drei Figuren ────────────────────────────────────────────────────────
 
-## Ausgewogen — der Wächter. Symmetrisch und kompakt: Was von oben „aufrecht"
-## heißt, ist ein Umriss, der nach vorn und hinten gleich weit reicht.
-## Halbe Breite 17,5 — die Mitte zwischen Sprinter und Bollwerk.
+## Ausgewogen — der Wächter. Symmetrisch, aber nicht mehr tonnenförmig: Der
+## Rumpf verjüngt sich sichtbar von der breiten Brust zur schmalen Hüfte — von
+## oben das Gegenstück zu einer V-Form in der Seitenansicht. Halbe Breite 18 —
+## die Mitte zwischen Sprinter und Bollwerk, mit Abstand zu beiden.
 static func _ausgewogen(a: Charaktere.Anstrich) -> Array[Teil]:
 	var t: Array[Teil] = []
-	t.append(_schatten(16.5, 4.0, 0.28))
+	t.append(_schatten(17.0, 4.0, 0.28))
 
-	_paar(t, _kapsel(Vector2(-6, 9), 4.0, Vector2(-6.5, 15.5), 3.4), a.dunkel, 1.6, a.kontur)
+	_paar(t, _kapsel(Vector2(-6, 9.5), 4.2, Vector2(-6.5, 16.5), 3.6), a.dunkel, 1.8, a.kontur)
+
+	# Rumpf: breit an der Brust (y ≈ −13), schmal an der Hüfte (y ≈ 10) —
+	# derselbe Umriss wie vorher, nur mit dem Gewicht spürbar nach vorn
+	# verschoben statt gleichmäßig rund.
+	t.append(Teil.new(PackedVector2Array([
+		Vector2(-13.5, -10.5), Vector2(-15, -2), Vector2(-10, 9.5),
+		Vector2(0, 12.5), Vector2(10, 9.5), Vector2(15, -2),
+		Vector2(13.5, -10.5), Vector2(6.5, -13.5), Vector2(-6.5, -13.5),
+	]), a.panzer, 2.2, a.kontur))
 
 	t.append(Teil.new(PackedVector2Array([
-		Vector2(-12, -10), Vector2(-13.5, -1), Vector2(-11, 11), Vector2(0, 14),
-		Vector2(11, 11), Vector2(13.5, -1), Vector2(12, -10),
-		Vector2(6, -13), Vector2(-6, -13),
-	]), a.panzer, 2.0, a.kontur))
+		Vector2(-8, 3), Vector2(8, 3), Vector2(9, 12), Vector2(-9, 12),
+	]), a.platte, 1.9, a.kontur))
 
+	# Brustplatte: größer als vorher und mit geradem, breitem Oberrand — die
+	# Fläche, die den Blau/Weiß-Kontrast tragen soll, war zuvor zu klein, um
+	# ihn wirklich zu zeigen.
 	t.append(Teil.new(PackedVector2Array([
-		Vector2(-8.5, 3.5), Vector2(8.5, 3.5), Vector2(9.5, 12), Vector2(-9.5, 12),
-	]), a.platte, 1.8, a.kontur))
+		Vector2(-10.5, -13), Vector2(10.5, -13), Vector2(12, -3),
+		Vector2(7.5, 2.5), Vector2(-7.5, 2.5), Vector2(-12, -3),
+	]), a.brust, 2.0, a.kontur))
 
-	t.append(Teil.new(PackedVector2Array([
-		Vector2(-9.5, -12), Vector2(9.5, -12), Vector2(11, -3),
-		Vector2(7, 2), Vector2(-7, 2), Vector2(-11, -3),
-	]), a.brust, 1.8, a.kontur))
+	# Die Streifen liegen auf der weißen Brustplatte und sind deshalb blau,
+	# nicht in der Leuchtfarbe: Hellcyan auf Weiß ist kein Streifen mehr.
+	# Dicker und enger an der Mitte als vorher — ein Rennstreifen, keine Naht.
+	_paar(t, _kapsel(Vector2(-9.5, -10.5), 1.7, Vector2(-7.8, -1), 1.6), a.platte, 0.0, a.kontur)
 
-	# Die beiden Streifen liegen auf der weißen Brustplatte und sind deshalb
-	# blau, nicht in der Leuchtfarbe: Hellcyan auf Weiß ist kein Streifen mehr.
-	_paar(t, _kapsel(Vector2(-8.6, -9), 1.3, Vector2(-7.2, -1), 1.3), a.platte, 0.0, a.kontur)
+	_paar(t, _kapsel(Vector2(-13.5, -1), 4.6, Vector2(-11, -13), 3.7), a.panzer, 2.0, a.kontur)
+	_paar(t, _kreis(Vector2(-11, -13), 3.5, 12), a.dunkel, 1.5, a.kontur)
 
-	_paar(t, _kapsel(Vector2(-12.5, -1), 4.4, Vector2(-10, -12.5), 3.5), a.panzer, 1.8, a.kontur)
-	_paar(t, _kreis(Vector2(-10, -12.5), 3.4, 12), a.dunkel, 1.4, a.kontur)
-
+	# Schulterklinge: nach vorn-außen geschwungen statt rundlich — dieselbe
+	# Fünfeck-Grundform, aber mit dem Ausleger weiter nach vorn gezogen, damit
+	# sie wie eine Klinge und nicht wie ein Polster wirkt.
 	_paar(t, PackedVector2Array([
-		Vector2(-11, -11.5), Vector2(-16, -8), Vector2(-17.5, 0.5),
-		Vector2(-12, 3.5), Vector2(-10.5, -2),
-	]), a.platte, 2.0, a.kontur)
+		Vector2(-12, -12.5), Vector2(-17.5, -8.5), Vector2(-18, 0.5),
+		Vector2(-12.5, 4), Vector2(-11, -2.5),
+	]), a.platte, 2.2, a.kontur)
 
-	t.append(Teil.new(_kapsel(Vector2(6.5, -6.5), 3.2, Vector2(8, -14), 2.8), a.dunkel, 1.6, a.kontur))
-	t.append(Teil.new(_kapsel(Vector2(8, -14), 2.2, Vector2(8.5, -20), 1.8), a.dunkel, 1.4, a.kontur))
+	t.append(Teil.new(_kapsel(Vector2(7, -7), 3.4, Vector2(8.5, -15.5), 3.0), a.dunkel, 1.8, a.kontur))
+	t.append(Teil.new(_kapsel(Vector2(8.5, -15.5), 2.3, Vector2(9, -22), 1.9), a.dunkel, 1.6, a.kontur))
 
-	t.append(Teil.new(_kreis(Vector2(0, -3.5), 6.2), a.helm, 1.9, a.kontur))
+	t.append(Teil.new(_kreis(Vector2(0, -4), 6.8), a.helm, 2.1, a.kontur))
 	t.append(Teil.new(PackedVector2Array([
-		Vector2(-4.4, -6.6), Vector2(4.4, -6.6), Vector2(3.2, -10.8), Vector2(-3.2, -10.8),
-	]), a.leuchten, 1.4, a.kontur))
+		Vector2(-4.8, -7.2), Vector2(4.8, -7.2), Vector2(3.4, -11.8), Vector2(-3.4, -11.8),
+	]), a.leuchten, 1.6, a.kontur))
 
 	return t
 
 
 ## Schnell — der Sprinter. „Nach vorn gebeugt" heißt von oben: lang und vorn
-## spitz. Halbe Breite nur 15, dafür reicht er mit wehendem Schal bis y = +21 —
-## die einzige der drei, die deutlich länger als breit ist.
+## spitz. Halbe Breite nur 14 — schmaler als vorher, dafür reicht er mit
+## wehenden Streamern bis y = +25. Die einzige der drei, die deutlich länger
+## als breit ist, und mit Abstand die schmalste — genau das soll man ihr schon
+## an der Silhouette ansehen, nicht erst am Tempo merken.
 static func _schnell(a: Charaktere.Anstrich) -> Array[Teil]:
 	var t: Array[Teil] = []
-	t.append(_schatten(14.5, 4.0, 0.26))
+	t.append(_schatten(13.5, 4.0, 0.26))
 
-	# Der Schal liegt ganz hinten und zeigt nach hinten weg. Er ist das
-	# Tempo-Merkmal der Figur: Ein Umriss, der hinten ausläuft, sieht auch im
-	# Stand nach Bewegung aus.
+	# Zwei Streamer statt einem: ein langer äußerer in der Schulterfarbe, ein
+	# kürzerer innerer in der Leuchtfarbe darüber — das liest sich als
+	# aufgefächertes Band im Wind, nicht als einzelner starrer Lappen.
 	_paar(t, PackedVector2Array([
-		Vector2(-3.5, 6.5), Vector2(-8, 7.5), Vector2(-12, 21), Vector2(-7.5, 19),
-	]), a.platte, 1.6, a.kontur)
-
-	_paar(t, _kapsel(Vector2(-5, 8.5), 3.3, Vector2(-5, 15), 2.7), a.dunkel, 1.5, a.kontur)
-
-	t.append(Teil.new(PackedVector2Array([
-		Vector2(-9, -13), Vector2(-11, -3), Vector2(-9, 10), Vector2(0, 13),
-		Vector2(9, 10), Vector2(11, -3), Vector2(9, -13),
-		Vector2(4, -16), Vector2(-4, -16),
-	]), a.panzer, 1.9, a.kontur))
-
-	t.append(Teil.new(PackedVector2Array([
-		Vector2(-6.5, 4), Vector2(6.5, 4), Vector2(7, 11), Vector2(-7, 11),
-	]), a.dunkel, 1.6, a.kontur))
-
-	# Keil statt Platte: Die Spitze zeigt nach vorn und sagt schon im Stand,
-	# wohin die Figur schaut. Ein Winkel (Chevron) wäre schöner, wäre aber
-	# konkav — siehe oben.
-	t.append(Teil.new(PackedVector2Array([
-		Vector2(0, -16.5), Vector2(8.5, -6), Vector2(0, -1.5), Vector2(-8.5, -6),
-	]), a.brust, 1.8, a.kontur))
-
-	_paar(t, _kapsel(Vector2(-9.3, -8), 1.3, Vector2(-8, 5), 1.3), a.leuchten, 0.0, a.kontur)
-
-	_paar(t, _kapsel(Vector2(-10.5, -2), 3.8, Vector2(-8, -12), 3.0), a.panzer, 1.7, a.kontur)
-	_paar(t, _kreis(Vector2(-8, -12), 2.9, 12), a.dunkel, 1.3, a.kontur)
-
+		Vector2(-3.5, 7), Vector2(-7, 8), Vector2(-12.5, 25), Vector2(-8, 21.5),
+	]), a.platte, 1.7, a.kontur)
 	_paar(t, PackedVector2Array([
-		Vector2(-9, -11), Vector2(-14.5, -6.5), Vector2(-15, 1), Vector2(-10.5, 2),
-	]), a.platte, 1.8, a.kontur)
+		Vector2(-3, 7.5), Vector2(-5.5, 8.5), Vector2(-8, 19), Vector2(-5.8, 17),
+	]), a.leuchten, 0.0, a.kontur)
 
-	t.append(Teil.new(_kapsel(Vector2(6, -8), 2.6, Vector2(7, -15.5), 2.2), a.dunkel, 1.5, a.kontur))
+	_paar(t, _kapsel(Vector2(-4.5, 8.5), 3.0, Vector2(-4.5, 15), 2.4), a.dunkel, 1.5, a.kontur)
 
-	t.append(Teil.new(_kreis(Vector2(0, -5), 5.6), a.helm, 1.8, a.kontur))
+	# Rumpf: um rund 7 % schmaler als vorher (die Zahl, an der die Halbbreite
+	# hängt) und etwas länger — schlanker und gestreckter statt breit-kompakt.
 	t.append(Teil.new(PackedVector2Array([
-		Vector2(-3.8, -7.4), Vector2(3.8, -7.4), Vector2(2.6, -11.2), Vector2(-2.6, -11.2),
-	]), a.leuchten, 1.3, a.kontur))
+		Vector2(-8.4, -13), Vector2(-10.2, -3), Vector2(-8.4, 10),
+		Vector2(0, 13.5), Vector2(8.4, 10), Vector2(10.2, -3),
+		Vector2(8.4, -13), Vector2(3.7, -16.5), Vector2(-3.7, -16.5),
+	]), a.panzer, 2.0, a.kontur))
+
+	t.append(Teil.new(PackedVector2Array([
+		Vector2(-6, 4), Vector2(6, 4), Vector2(6.5, 11), Vector2(-6.5, 11),
+	]), a.dunkel, 1.7, a.kontur))
+
+	# Keil statt Platte, jetzt merklich weiter vorgezogen: Die Spitze zeigt
+	# nach vorn und sagt schon im Stand, wohin die Figur schaut. Ein Winkel
+	# (Chevron) wäre schöner, wäre aber konkav — siehe oben.
+	t.append(Teil.new(PackedVector2Array([
+		Vector2(0, -19), Vector2(9, -6.5), Vector2(0, -1), Vector2(-9, -6.5),
+	]), a.brust, 1.9, a.kontur))
+
+	_paar(t, _kapsel(Vector2(-8.6, -8), 1.4, Vector2(-7.4, 5), 1.4), a.leuchten, 0.0, a.kontur)
+
+	_paar(t, _kapsel(Vector2(-9.8, -2), 3.4, Vector2(-7.6, -11.5), 2.7), a.panzer, 1.8, a.kontur)
+	_paar(t, _kreis(Vector2(-7.6, -11.5), 2.6, 12), a.dunkel, 1.4, a.kontur)
+
+	# Schulterflosse: weiter nach hinten-außen geschwungen als vorher — ein
+	# nach hinten gezogenes Blatt liest sich als Fahrtwind, nicht als Polster.
+	_paar(t, PackedVector2Array([
+		Vector2(-8.5, -10.5), Vector2(-13.5, -5.5), Vector2(-14.8, 3),
+		Vector2(-10, 3.5), Vector2(-9, -2),
+	]), a.platte, 1.9, a.kontur)
+
+	t.append(Teil.new(_kapsel(Vector2(5.5, -8), 2.5, Vector2(6.5, -16.5), 2.1), a.dunkel, 1.6, a.kontur))
+
+	t.append(Teil.new(_kreis(Vector2(0, -5.5), 5.4), a.helm, 1.9, a.kontur))
+	t.append(Teil.new(PackedVector2Array([
+		Vector2(-3.8, -7.8), Vector2(3.8, -7.8), Vector2(2.6, -11.8), Vector2(-2.6, -11.8),
+	]), a.leuchten, 1.4, a.kontur))
 
 	return t
 
@@ -253,44 +274,59 @@ static func _schnell(a: Charaktere.Anstrich) -> Array[Teil]:
 ## seltener getroffen, als man erwartet, nie öfter.
 static func _tank(a: Charaktere.Anstrich) -> Array[Teil]:
 	var t: Array[Teil] = []
-	t.append(_schatten(18.5, 3.0, 0.30))
+	t.append(_schatten(19.0, 3.0, 0.30))
 
-	_paar(t, _kapsel(Vector2(-7.5, 8), 4.8, Vector2(-8, 14), 4.0), a.dunkel, 1.8, a.kontur)
+	# Stiefel: rund 15 % dicker als bei den anderen beiden — schwere Stiefel
+	# statt einer verkleinerten Kopie derselben Kapsel.
+	_paar(t, _kapsel(Vector2(-8, 8), 5.4, Vector2(-8.5, 14), 4.5), a.dunkel, 2.0, a.kontur)
+
+	# Rumpf: rund 8 % breiter, dafür oben und unten etwas gestaucht —
+	# gedrungener statt nur größer skaliert. Genau das ist der Unterschied
+	# zwischen „massiv" und „einfach hochskaliert".
+	t.append(Teil.new(PackedVector2Array([
+		Vector2(-15, -8.5), Vector2(-17.5, 0), Vector2(-14, 9.5),
+		Vector2(0, 12), Vector2(14, 9.5), Vector2(17.5, 0),
+		Vector2(15, -8.5), Vector2(7.5, -11), Vector2(-7.5, -11),
+	]), a.panzer, 2.4, a.kontur))
 
 	t.append(Teil.new(PackedVector2Array([
-		Vector2(-14, -9), Vector2(-16, 0), Vector2(-13, 10), Vector2(0, 13),
-		Vector2(13, 10), Vector2(16, 0), Vector2(14, -9),
-		Vector2(7, -12), Vector2(-7, -12),
-	]), a.panzer, 2.2, a.kontur))
+		Vector2(-11.5, 3), Vector2(11.5, 3), Vector2(12.5, 11.5), Vector2(-12.5, 11.5),
+	]), a.platte, 1.9, a.kontur))
 
 	t.append(Teil.new(PackedVector2Array([
-		Vector2(-11, 3), Vector2(11, 3), Vector2(12, 11.5), Vector2(-12, 11.5),
-	]), a.platte, 1.8, a.kontur))
+		Vector2(-12, -10.5), Vector2(12, -10.5), Vector2(14, -1.5),
+		Vector2(8.5, 3), Vector2(-8.5, 3), Vector2(-14, -1.5),
+	]), a.brust, 2.1, a.kontur))
 
+	# Grüner Saum am unteren Rand der Brustplatte: bindet das Schulter-Grün
+	# in die Mitte ein, ohne die Brust selbst grün zu färben — Schulter und
+	# Brust bleiben zwei getrennte Flächen, nur der Rand verbindet sie.
 	t.append(Teil.new(PackedVector2Array([
-		Vector2(-11.5, -11), Vector2(11.5, -11), Vector2(13.5, -2),
-		Vector2(8, 3), Vector2(-8, 3), Vector2(-13.5, -2),
-	]), a.brust, 2.0, a.kontur))
+		Vector2(-8.5, 2.2), Vector2(8.5, 2.2), Vector2(9.3, 4.6), Vector2(-9.3, 4.6),
+	]), a.platte, 1.5, a.kontur))
 
-	_paar(t, _kapsel(Vector2(-10.5, -8.5), 1.5, Vector2(-9, -1), 1.5), a.leuchten, 0.0, a.kontur)
+	_paar(t, _kapsel(Vector2(-11, -8), 1.7, Vector2(-9.3, -0.5), 1.7), a.leuchten, 0.0, a.kontur)
 
-	_paar(t, _kapsel(Vector2(-14.5, 1), 5.2, Vector2(-12, -11), 4.2), a.panzer, 2.0, a.kontur)
-	_paar(t, _kreis(Vector2(-12, -11), 4.0, 12), a.dunkel, 1.5, a.kontur)
+	_paar(t, _kapsel(Vector2(-15.5, 1.5), 5.8, Vector2(-13, -10.5), 4.7), a.panzer, 2.2, a.kontur)
+	_paar(t, _kreis(Vector2(-13, -10.5), 4.4, 12), a.dunkel, 1.6, a.kontur)
 
+	# Schulterplatte: sechseckig statt fünfeckig — eine zusätzliche Kante
+	# macht sie eckiger, gepanzerter, weniger wie ein rundes Polster.
 	_paar(t, PackedVector2Array([
-		Vector2(-12, -11.5), Vector2(-19.5, -8), Vector2(-20.5, 1.5),
-		Vector2(-13.5, 5), Vector2(-11, -1),
-	]), a.platte, 2.2, a.kontur)
+		Vector2(-13, -11), Vector2(-18.5, -9), Vector2(-21, -3),
+		Vector2(-20.5, 3), Vector2(-14, 5.5), Vector2(-12, -1.5),
+	]), a.platte, 2.4, a.kontur)
 
-	# Nieten auf den Schulterstücken. Kleinteile ohne Umriss — bei 1,7 Pixel
-	# Radius wäre ein 2-Pixel-Rand nichts als Rand.
-	_paar(t, _kreis(Vector2(-16.2, -4), 1.7, 10), a.dunkel, 0.0, a.kontur)
+	# Zwei Nieten je Schulterplatte statt einer — bei der jetzt größeren
+	# Fläche wirkte eine einzelne verloren.
+	_paar(t, _kreis(Vector2(-17.5, -5), 1.8, 10), a.dunkel, 0.0, a.kontur)
+	_paar(t, _kreis(Vector2(-16.5, 1), 1.8, 10), a.dunkel, 0.0, a.kontur)
 
-	t.append(Teil.new(_kapsel(Vector2(7, -7), 3.7, Vector2(8, -16), 3.2), a.dunkel, 1.8, a.kontur))
+	t.append(Teil.new(_kapsel(Vector2(7.5, -6.5), 4.0, Vector2(8.5, -16), 3.5), a.dunkel, 2.0, a.kontur))
 
-	t.append(Teil.new(_kreis(Vector2(0, -3), 6.6), a.helm, 2.0, a.kontur))
+	t.append(Teil.new(_kreis(Vector2(0, -2.5), 7.0), a.helm, 2.2, a.kontur))
 	t.append(Teil.new(PackedVector2Array([
-		Vector2(-5, -5.6), Vector2(5, -5.6), Vector2(4, -10), Vector2(-4, -10),
-	]), a.leuchten, 1.4, a.kontur))
+		Vector2(-5.4, -5), Vector2(5.4, -5), Vector2(4.3, -9.8), Vector2(-4.3, -9.8),
+	]), a.leuchten, 1.6, a.kontur))
 
 	return t
