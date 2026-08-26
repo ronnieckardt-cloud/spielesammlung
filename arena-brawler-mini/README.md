@@ -31,9 +31,20 @@ der `CLAUDE.md` der Spielesammlung).
 - Bewegen: WASD oder Pfeiltasten
 - Schießen: Leertaste (zusätzlich zum Auto-Feuer)
 
+## Regeln
+
+- Der Spieler hat **5 Lebenspunkte**, angezeigt als Herzen oben rechts. Ein
+  verbrauchtes Herz bleibt als Umriss stehen, statt zu verschwinden — so
+  sieht man, wie viel man hatte.
+- Ein Gegner hält **2 Treffer** aus. Der erste lässt ihn aufblitzen und
+  zurückweichen, der zweite erledigt ihn.
+- Eine Berührung kostet **1 Lebenspunkt**, danach ist der Spieler 900 ms
+  unverwundbar und blinkt. Ohne diese Pause wäre man nach einer einzigen
+  Berührung sofort tot, weil die Kollision in jedem Bild erneut auslöst.
+- Bei 0 Lebenspunkten: Game Over, Tippen startet neu.
+
 ## Status
 
-Grundgerüst – Prototyp Phase 1
+Prototyp Phase 2 – Lebenspunkte, Game-Over und Neustart stehen.
 
-Offen für spätere Ausbaustufen: Lebenspunkte, Game-Over, Wellen, Ton.
-`takeDamage()` ist bei Spieler und Gegner bewusst noch ein Platzhalter.
+Offen für spätere Ausbaustufen: Wellen, Punktestand, Ton, mehr Gegnerarten.

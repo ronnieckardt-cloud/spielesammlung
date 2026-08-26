@@ -15,4 +15,6 @@ const config = {
   scene: [GameScene],
 };
 
-new Phaser.Game(config);
+// Am Fenster hinterlegt, damit sich der laufende Stand von außen ansehen lässt:
+// aus der Safari-Konsole beim Debuggen am iPad und aus dem Browser-Test heraus.
+window.spiel = new Phaser.Game(config);

@@ -14,6 +14,7 @@ class Stick {
     this.totzone = totzone;
 
     this.zeigerId = null;
+    this.abgeschaltet = false;
     this.richtung = { x: 0, y: 0 };
 
     // Sichtbarer Teil: äußerer Ring als Fassung, innerer Punkt als Griff.
@@ -40,7 +41,7 @@ class Stick {
   }
 
   beiAufsetzen(zeiger) {
-    if (this.zeigerId !== null) return;
+    if (this.abgeschaltet || this.zeigerId !== null) return;
 
     this.zeigerId = zeiger.id;
     this.fassung.setPosition(zeiger.x, zeiger.y);
@@ -85,7 +86,20 @@ class Stick {
   }
 
   get istAktiv() {
-    return this.zeigerId !== null;
+    return !this.abgeschaltet && this.zeigerId !== null;
+  }
+
+  /**
+   * Steuerung stilllegen, ohne die Listener abzuräumen — beim Game Over soll
+   * die nächste Berührung den Neustart auslösen und nicht noch einen Stick
+   * unter dem Overlay aufblenden lassen.
+   */
+  abschalten() {
+    this.abgeschaltet = true;
+    this.zeigerId = null;
+    this.richtung = { x: 0, y: 0 };
+    this.fassung.setVisible(false);
+    this.griff.setVisible(false);
   }
 
   aufraeumen() {

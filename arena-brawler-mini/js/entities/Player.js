@@ -6,6 +6,15 @@ class Player {
     this.naechsterSchussAb = 0;
     this.blickrichtung = { x: 1, y: 0 };
 
+    this.maxLebenspunkte = 5;
+    this.lebenspunkte = this.maxLebenspunkte;
+
+    // Kurze Unverwundbarkeit nach einem Treffer. Ohne sie liegt der Spieler
+    // nach einer Berührung noch im Gegner und verliert bei 60 Bildern je
+    // Sekunde alle fünf Leben, bevor er den Finger bewegen kann.
+    this.unverwundbarMs = 900;
+    this.unverwundbarBis = 0;
+
     // Reichweite des Auto-Feuers. Ohne Grenze schießt der Spieler quer über
     // die ganze Arena und trifft Gegner, die er noch gar nicht gesehen hat.
     this.feuerReichweite = 460;
@@ -116,7 +125,7 @@ class Player {
     let besteEntfernung = this.feuerReichweite;
 
     gegnerListe.forEach((gegner) => {
-      if (!gegner.sprite.active) return;
+      if (gegner.tot || !gegner.sprite.active) return;
       const entfernung = Math.hypot(
         gegner.sprite.x - this.sprite.x,
         gegner.sprite.y - this.sprite.y,
@@ -148,10 +157,41 @@ class Player {
     });
   }
 
-  // Platzhalter: Lebenspunkte/Game-Over folgen in einer späteren Ausbaustufe.
-  // Bis dahin nur eine kurze rote Rückmeldung, damit ein Treffer sichtbar ist.
+  get istUnverwundbar() {
+    return this.scene.time.now < this.unverwundbarBis;
+  }
+
   takeDamage() {
-    this.sprite.setTintFill(0xff0000);
-    this.scene.time.delayedCall(120, () => this.sprite.clearTint());
+    if (this.istUnverwundbar || this.lebenspunkte <= 0) return;
+
+    this.lebenspunkte -= 1;
+    this.unverwundbarBis = this.scene.time.now + this.unverwundbarMs;
+
+    this.sprite.setTintFill(0xffffff);
+    this.scene.time.delayedCall(110, () => {
+      if (this.sprite.active) this.sprite.clearTint();
+    });
+
+    this.blinken();
+    this.scene.spielerWurdeGetroffen(this.lebenspunkte);
+  }
+
+  /**
+   * Blinken während der Unverwundbarkeit — über die Deckkraft in einem engen
+   * Band (1 bis 0,45), nicht über An/Aus. Zwei Durchgänge in 900 ms sind rund
+   * 2,2 Hz; das ist ein kurzes Ereignis, kein Dauerpuls, und betrifft nur eine
+   * 32-Pixel-Figur statt einer ganzen Fläche.
+   */
+  blinken() {
+    this.scene.tweens.add({
+      targets: this.sprite,
+      alpha: { from: 1, to: 0.45 },
+      duration: this.unverwundbarMs / 4,
+      yoyo: true,
+      repeat: 1,
+      onComplete: () => {
+        if (this.sprite.active) this.sprite.setAlpha(1);
+      },
+    });
   }
 }
