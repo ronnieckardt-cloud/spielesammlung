@@ -78,6 +78,27 @@ eigenständige Prototypen im selben Repository, aber **nicht Teil dieser
 Sammlung** — kein Eintrag in `src/core/registry.ts`, kein gemeinsamer Code,
 keine gemeinsame Bestenliste. Näheres in ihren eigenen `README.md`.
 
-`arena-brawler-mini/` ist zusätzlich unverändert nach `public/arena-brawler/`
-gespiegelt und dadurch auf der ausgelieferten Netlify-Seite unter
-`/arena-brawler/` als eigene, rein statische Seite erreichbar.
+Beide sind zusätzlich als fertig gebaute, rein statische Seiten auf der
+ausgelieferten Netlify-Seite erreichbar:
+
+| URL | Prototyp | Technik |
+|---|---|---|
+| **`/arena-brawler/`** | Arena Brawler Mini | Phaser 3, unverändert nach `public/arena-brawler/` gespiegelt |
+| **`/arena-brawler-godot/`** | Arena Brawler (Godot) | Godot 4, HTML5/WebAssembly-Export nach `public/arena-brawler-godot/` — siehe `arena-brawler-godot/README.md`, Abschnitt „Web-Export (HTML5)" |
+
+Beide über die Startseite erreichbar (Reiter „Mehr" → „Arena Brawler
+(Godot)" bzw. „Arena Brawler (Mini / Phaser)", klar als Prototyp
+gekennzeichnet, öffnet dieselbe Adresse als echten Link) oder direkt über
+ihre URL. Die Links liegen bewusst nur in `shell/MehrSeite.tsx` als normale
+`<a href="…">` — kein Eintrag in `src/core/registry.ts`, kein
+`GameApi`-Wrapper, kein Ordner unter `src/games/`.
+
+Der Godot-Export wird **nicht** automatisch beim Installieren der App
+vorab in den Offline-Speicher geladen (anders als der deutlich kleinere
+Phaser-Prototyp) — sein `index.wasm` allein ist rund 35 MB, das würde jedem
+Besuch der Sammlung ungefragt einen Download in dieser Größenordnung
+aufbürden, ganz gleich ob Arena Brawler je geöffnet wird. Nach dem ersten
+echten Besuch der Seite ist sie trotzdem offline verfügbar — das
+übernimmt derselbe allgemeine „erst Speicher, dann Netz"-Mechanismus in
+`public/sw.js`, der für jede Datei dieser Herkunft gilt, ganz ohne
+Sonderfall.

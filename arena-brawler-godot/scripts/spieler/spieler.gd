@@ -77,6 +77,16 @@ func _physics_process(delta: float) -> void:
 		Input.is_action_pressed(&"runter"),
 	)
 
+	# Der Stick liefert eine echte analoge Richtung (Teiltempo unter 70 %
+	# Ausschlag) — das würde beim Umweg über die vier Tasten-Aktionen
+	# verlorengehen, deshalb kommt er über einen eigenen Kanal
+	# (`Eingabe.stick_richtung`, siehe dessen Kommentar) statt über
+	# InputMap. Die Taste gewinnt, wenn beide gleichzeitig etwas liefern —
+	# das passiert nur beim Testen am Rechner mit sichtbarem Touch-Layer,
+	# nie im echten Spiel auf einem einzelnen Gerät.
+	if richtung == Vector2.ZERO:
+		richtung = Eingabe.stick_richtung
+
 	velocity = richtung * effektives_tempo()
 	move_and_slide()
 

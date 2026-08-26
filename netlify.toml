@@ -20,6 +20,19 @@
   to = "/arena-brawler/:splat"
   status = 200
 
+# Arena Brawler (Godot 4, eigenständiger Web-Export, siehe
+# arena-brawler-godot/README.md, gebaut nach public/arena-brawler-godot/) —
+# dieselbe Regel wie beim Phaser-Prototyp oben: eigene statische Dateien
+# unter /arena-brawler-godot/*, kein Teil der React-SPA, kein force=true.
+# Keine Cross-Origin-Opener/Embedder-Policy-Header nötig: Der Web-Export
+# läuft bewusst ohne Threads (siehe export_presets.cfg), die dafür nötigen
+# COOP/COEP-Header hätten sonst potenziell die restliche Sammlung gestört —
+# ohne Threads braucht keine einzige Adresse einen Zusatz-Header.
+[[redirects]]
+  from = "/arena-brawler-godot/*"
+  to = "/arena-brawler-godot/:splat"
+  status = 200
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

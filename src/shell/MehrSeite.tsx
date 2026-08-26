@@ -46,6 +46,57 @@ function Zeile({
   );
 }
 
+/**
+ * Wie `Zeile`, aber ein echter Link statt eines Knopfs, der nur die Ansicht
+ * innerhalb dieser App wechselt.
+ *
+ * Arena Brawler ist absichtlich kein `GameApi`-Spiel — kein Eintrag in
+ * `registry.ts`, kein Wrapper, `src/games/` bleibt unangetastet. Es gibt ihn
+ * als zwei eigenständige Prototypen, beide mit eigener `index.html` und
+ * eigenem Bau, keiner Teil dieser React-App: der Phaser-Prototyp unter
+ * `/arena-brawler/` (siehe `arena-brawler-mini/README.md`, gespiegelt nach
+ * `public/arena-brawler/`) und der Godot-Web-Export unter
+ * `/arena-brawler-godot/` (siehe `arena-brawler-godot/README.md`, Abschnitt
+ * „Web-Export"). Ein `<a>` mit echtem `href` navigiert deshalb die **ganze
+ * Seite** dorthin, statt nur intern die Ansicht zu wechseln — genau das ist
+ * hier richtig, nicht unabsichtlich einfacher gebaut. Bewusst ohne
+ * `target="_blank"`: In einer installierten Startbildschirm-App auf iOS ist
+ * ein neuer Tab unzuverlässig, eine normale Navigation funktioniert dort
+ * wie im Browser auch immer gleich, und der Zurück-Knopf/die Wisch-Geste
+ * bringt zuverlässig hierher zurück.
+ */
+function ZeileLink({
+  symbol,
+  titel,
+  hinweis,
+  href,
+}: {
+  symbol: ReactNode;
+  titel: string;
+  hinweis?: string;
+  href: string;
+}) {
+  return (
+    <li>
+      <a
+        href={href}
+        className="druckbar flex min-h-14 w-full items-center gap-3.5 rounded-2xl border border-white/18 bg-white/10 px-4 py-3 text-left backdrop-blur-sm"
+      >
+        <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center text-2xl">
+          {symbol}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold text-white">{titel}</span>
+          {hinweis && <span className="block truncate text-xs text-white/70">{hinweis}</span>}
+        </span>
+        <span aria-hidden="true" className="shrink-0 text-lg text-white/55">
+          ›
+        </span>
+      </a>
+    </li>
+  );
+}
+
 export function MehrSeite({
   konto,
   onKonto,
@@ -97,6 +148,18 @@ export function MehrSeite({
           onKlick={onDuelle}
         />
         <Zeile symbol="⚙️" titel="Einstellungen" hinweis="Ton und Bewegung" onKlick={onEinstellungen} />
+        <ZeileLink
+          symbol="🕹️"
+          titel="Arena Brawler (Godot)"
+          hinweis="Prototyp · volle Godot-Fassung · öffnet eine eigene Seite"
+          href="/arena-brawler-godot/"
+        />
+        <ZeileLink
+          symbol="🕹️"
+          titel="Arena Brawler (Mini / Phaser)"
+          hinweis="Prototyp · leichtere Fassung · öffnet eine eigene Seite"
+          href="/arena-brawler/"
+        />
       </ul>
 
       <p className="mt-5 text-center text-xs text-white/55">Läuft auch ohne Internet.</p>

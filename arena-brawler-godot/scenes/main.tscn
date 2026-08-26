@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://bqarena0main"]
+[gd_scene load_steps=18 format=3 uid="uid://bqarena0main"]
 
 [ext_resource type="Script" path="res://scripts/welt/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://bqarena0arena" path="res://scenes/arena.tscn" id="2_arena"]
@@ -8,6 +8,109 @@
 [ext_resource type="Script" path="res://ui/aufwertungsauswahl.gd" id="6_aufwertungsauswahl"]
 [ext_resource type="Script" path="res://ui/charakterauswahl.gd" id="7_charakterauswahl"]
 [ext_resource type="Script" path="res://scripts/gemeinsam/figur.gd" id="8_figur"]
+[ext_resource type="Script" path="res://ui/touchsteuerung.gd" id="9_touchsteuerung"]
+[ext_resource type="Script" path="res://ui/stick.gd" id="10_stick"]
+[ext_resource type="Script" path="res://ui/feuerknopf.gd" id="11_feuerknopf"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_kopfzeile"]
+bg_color = Color(0.101961, 0.113725, 0.164706, 0.75)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+shadow_color = Color(0, 0, 0, 0.25)
+shadow_size = 6
+content_margin_left = 16.0
+content_margin_right = 16.0
+content_margin_top = 6.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_meldung"]
+bg_color = Color(0.101961, 0.113725, 0.164706, 0.88)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.55, 0.75, 1.0, 0.5)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+shadow_color = Color(0, 0, 0, 0.3)
+shadow_size = 10
+content_margin_left = 24.0
+content_margin_right = 24.0
+content_margin_top = 10.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_karte"]
+bg_color = Color(0.117647, 0.129412, 0.184314, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.42, 0.5, 0.72, 0.55)
+corner_radius_top_left = 22
+corner_radius_top_right = 22
+corner_radius_bottom_right = 22
+corner_radius_bottom_left = 22
+shadow_color = Color(0, 0, 0, 0.35)
+shadow_size = 14
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_aufwertungskarte"]
+bg_color = Color(0.145098, 0.156863, 0.219608, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.35, 0.4, 0.56, 0.6)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+shadow_color = Color(0, 0, 0, 0.3)
+shadow_size = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_aufwertungskarte_aktiv"]
+bg_color = Color(0.176471, 0.192157, 0.266667, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.55, 0.75, 1.0, 0.85)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+shadow_color = Color(0, 0, 0, 0.35)
+shadow_size = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_marke"]
+bg_color = Color(0.62, 0.86, 0.6, 0.92)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_top = 4.0
+content_margin_bottom = 4.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_feuer_normal"]
+bg_color = Color(0.85, 0.22, 0.16, 0.72)
+corner_radius_top_left = 70
+corner_radius_top_right = 70
+corner_radius_bottom_right = 70
+corner_radius_bottom_left = 70
+shadow_color = Color(0, 0, 0, 0.35)
+shadow_size = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_feuer_pressed"]
+bg_color = Color(1.0, 0.35, 0.22, 0.92)
+corner_radius_top_left = 70
+corner_radius_top_right = 70
+corner_radius_bottom_right = 70
+corner_radius_bottom_left = 70
+shadow_color = Color(0, 0, 0, 0.2)
+shadow_size = 4
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -24,28 +127,70 @@ position_smoothing_speed = 6.0
 [node name="Wellenleiter" type="Node" parent="."]
 script = ExtResource("4_wellenleiter")
 
+[node name="Touchsteuerung" type="CanvasLayer" parent="."]
+layer = 0
+script = ExtResource("9_touchsteuerung")
+
+[node name="Stick" type="Control" parent="Touchsteuerung"]
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 0.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -244.0
+offset_right = 244.0
+offset_bottom = -24.0
+mouse_filter = 2
+script = ExtResource("10_stick")
+
+[node name="Feuerknopf" type="Button" parent="Touchsteuerung"]
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -164.0
+offset_top = -164.0
+offset_right = -24.0
+offset_bottom = -24.0
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.94, 0.9, 0.95)
+theme_override_font_sizes/font_size = 20
+theme_override_styles/normal = SubResource("StyleBoxFlat_feuer_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_feuer_normal")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_feuer_pressed")
+text = "Feuer"
+script = ExtResource("11_feuerknopf")
+
 [node name="Oberflaeche" type="CanvasLayer" parent="."]
 process_mode = 3
 
 [node name="Kopfzeile" type="Label" parent="Oberflaeche"]
 offset_left = 20.0
 offset_top = 14.0
-offset_right = 1130.0
-offset_bottom = 44.0
-theme_override_colors/font_color = Color(0.878431, 0.905882, 0.976471, 1)
-theme_override_font_sizes/font_size = 18
+offset_right = 480.0
+offset_bottom = 50.0
+theme_override_colors/font_color = Color(0.92, 0.94, 1, 1)
+theme_override_font_sizes/font_size = 19
+theme_override_constants/outline_size = 3
+theme_override_colors/font_outline_color = Color(0.043137, 0.047059, 0.070588, 0.85)
+theme_override_styles/normal = SubResource("StyleBoxFlat_kopfzeile")
+vertical_alignment = 1
 text = "Arena Brawler"
 
 [node name="Wellenmeldung" type="Label" parent="Oberflaeche"]
 visible = false
 mouse_filter = 2
-anchor_right = 1.0
+anchor_left = 0.24
+anchor_right = 0.76
 anchor_top = 0.32
 anchor_bottom = 0.32
-offset_top = -30.0
-offset_bottom = 30.0
+offset_top = -34.0
+offset_bottom = 34.0
 theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
 theme_override_font_sizes/font_size = 34
+theme_override_constants/outline_size = 6
+theme_override_colors/font_outline_color = Color(0.043137, 0.047059, 0.070588, 0.9)
+theme_override_styles/normal = SubResource("StyleBoxFlat_meldung")
 horizontal_alignment = 1
 vertical_alignment = 1
 text = "Welle 1 geschafft!"
@@ -63,14 +208,61 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0.043137, 0.047059, 0.070588, 0.82)
 
-[node name="Text" type="Label" parent="Oberflaeche/Rundenende"]
-anchor_right = 1.0
-anchor_bottom = 1.0
-theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
-theme_override_font_sizes/font_size = 26
+[node name="Karte" type="Panel" parent="Oberflaeche/Rundenende"]
+mouse_filter = 2
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -260.0
+offset_top = -180.0
+offset_right = 260.0
+offset_bottom = 180.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_karte")
+
+[node name="Headline" type="Label" parent="Oberflaeche/Rundenende/Karte"]
+mouse_filter = 2
+offset_left = 20.0
+offset_top = 26.0
+offset_right = 500.0
+offset_bottom = 80.0
+theme_override_colors/font_color = Color(0.945098, 0.768627, 0.058824, 1)
+theme_override_font_sizes/font_size = 40
 horizontal_alignment = 1
-vertical_alignment = 1
 text = "Vorbei"
+
+[node name="Stats" type="Label" parent="Oberflaeche/Rundenende/Karte"]
+mouse_filter = 2
+offset_left = 20.0
+offset_top = 100.0
+offset_right = 500.0
+offset_bottom = 134.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
+text = "0 Punkte · Welle 0"
+
+[node name="Rekord" type="Label" parent="Oberflaeche/Rundenende/Karte"]
+mouse_filter = 2
+offset_left = 20.0
+offset_top = 146.0
+offset_right = 500.0
+offset_bottom = 178.0
+theme_override_colors/font_color = Color(0.55, 0.75, 1.0, 1)
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+text = "Noch kein Lauf gewertet"
+
+[node name="Hinweis" type="Label" parent="Oberflaeche/Rundenende/Karte"]
+mouse_filter = 2
+offset_left = 20.0
+offset_top = 302.0
+offset_right = 500.0
+offset_bottom = 334.0
+theme_override_colors/font_color = Color(0.65, 0.68, 0.78, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+text = "Taste oder Bildschirm antippen"
 
 [node name="Aufwertungsauswahl" type="CanvasLayer" parent="Oberflaeche"]
 script = ExtResource("6_aufwertungsauswahl")
@@ -88,6 +280,8 @@ offset_top = 64.0
 offset_bottom = 104.0
 theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
 theme_override_font_sizes/font_size = 26
+theme_override_constants/outline_size = 4
+theme_override_colors/font_outline_color = Color(0.043137, 0.047059, 0.070588, 0.85)
 horizontal_alignment = 1
 text = "Aufwertung wählen"
 
@@ -96,27 +290,111 @@ offset_left = 64.0
 offset_top = 160.0
 offset_right = 384.0
 offset_bottom = 560.0
-theme_override_font_sizes/font_size = 21
+focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxFlat_aufwertungskarte")
+theme_override_styles/hover = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_aufwertungskarte")
+text = ""
+
+[node name="Titel" type="Label" parent="Oberflaeche/Aufwertungsauswahl/Karte1"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 32.0
+offset_bottom = 92.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 23
+horizontal_alignment = 1
+vertical_alignment = 1
 autowrap_mode = 3
 text = "Karte 1"
+
+[node name="Beschreibung" type="Label" parent="Oberflaeche/Aufwertungsauswahl/Karte1"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 112.0
+offset_right = -16.0
+offset_bottom = 220.0
+theme_override_colors/font_color = Color(0.72, 0.75, 0.86, 1)
+theme_override_font_sizes/font_size = 17
+horizontal_alignment = 1
+autowrap_mode = 3
+text = ""
 
 [node name="Karte2" type="Button" parent="Oberflaeche/Aufwertungsauswahl"]
 offset_left = 416.0
 offset_top = 160.0
 offset_right = 736.0
 offset_bottom = 560.0
-theme_override_font_sizes/font_size = 21
+focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxFlat_aufwertungskarte")
+theme_override_styles/hover = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_aufwertungskarte")
+text = ""
+
+[node name="Titel" type="Label" parent="Oberflaeche/Aufwertungsauswahl/Karte2"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 32.0
+offset_bottom = 92.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 23
+horizontal_alignment = 1
+vertical_alignment = 1
 autowrap_mode = 3
 text = "Karte 2"
+
+[node name="Beschreibung" type="Label" parent="Oberflaeche/Aufwertungsauswahl/Karte2"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 112.0
+offset_right = -16.0
+offset_bottom = 220.0
+theme_override_colors/font_color = Color(0.72, 0.75, 0.86, 1)
+theme_override_font_sizes/font_size = 17
+horizontal_alignment = 1
+autowrap_mode = 3
+text = ""
 
 [node name="Karte3" type="Button" parent="Oberflaeche/Aufwertungsauswahl"]
 offset_left = 768.0
 offset_top = 160.0
 offset_right = 1088.0
 offset_bottom = 560.0
-theme_override_font_sizes/font_size = 21
+focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxFlat_aufwertungskarte")
+theme_override_styles/hover = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_aufwertungskarte")
+text = ""
+
+[node name="Titel" type="Label" parent="Oberflaeche/Aufwertungsauswahl/Karte3"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 32.0
+offset_bottom = 92.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 23
+horizontal_alignment = 1
+vertical_alignment = 1
 autowrap_mode = 3
 text = "Karte 3"
+
+[node name="Beschreibung" type="Label" parent="Oberflaeche/Aufwertungsauswahl/Karte3"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 112.0
+offset_right = -16.0
+offset_bottom = 220.0
+theme_override_colors/font_color = Color(0.72, 0.75, 0.86, 1)
+theme_override_font_sizes/font_size = 17
+horizontal_alignment = 1
+autowrap_mode = 3
+text = ""
 
 [node name="Hinweis" type="Label" parent="Oberflaeche/Aufwertungsauswahl"]
 mouse_filter = 2
@@ -144,6 +422,8 @@ offset_top = 36.0
 offset_bottom = 72.0
 theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
 theme_override_font_sizes/font_size = 26
+theme_override_constants/outline_size = 4
+theme_override_colors/font_outline_color = Color(0.043137, 0.047059, 0.070588, 0.85)
 horizontal_alignment = 1
 text = "Charakter wählen"
 
@@ -162,6 +442,10 @@ offset_left = 64.0
 offset_top = 118.0
 offset_right = 384.0
 offset_bottom = 588.0
+focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxFlat_aufwertungskarte")
+theme_override_styles/hover = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
 text = ""
 
 [node name="Figur" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteAusgewogen"]
@@ -193,12 +477,15 @@ text = "5 Leben · Tempo 260 · Schuss 0.25s"
 [node name="Marke" type="Label" parent="Oberflaeche/Charakterauswahl/KarteAusgewogen"]
 visible = false
 mouse_filter = 2
-offset_right = 320.0
-offset_top = 432.0
-offset_bottom = 456.0
-theme_override_colors/font_color = Color(0.62, 0.86, 0.6, 1)
+offset_left = 24.0
+offset_right = 296.0
+offset_top = 436.0
+offset_bottom = 464.0
+theme_override_colors/font_color = Color(0.1, 0.25, 0.12, 1)
 theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_marke")
 horizontal_alignment = 1
+vertical_alignment = 1
 text = "★ Zuletzt gespielt"
 
 [node name="KarteSchnell" type="Button" parent="Oberflaeche/Charakterauswahl"]
@@ -206,6 +493,10 @@ offset_left = 416.0
 offset_top = 118.0
 offset_right = 736.0
 offset_bottom = 588.0
+focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxFlat_aufwertungskarte")
+theme_override_styles/hover = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
 text = ""
 
 [node name="Figur" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteSchnell"]
@@ -237,12 +528,15 @@ text = "4 Leben · Tempo 355 · Schuss 0.22s"
 [node name="Marke" type="Label" parent="Oberflaeche/Charakterauswahl/KarteSchnell"]
 visible = false
 mouse_filter = 2
-offset_right = 320.0
-offset_top = 432.0
-offset_bottom = 456.0
-theme_override_colors/font_color = Color(0.62, 0.86, 0.6, 1)
+offset_left = 24.0
+offset_right = 296.0
+offset_top = 436.0
+offset_bottom = 464.0
+theme_override_colors/font_color = Color(0.1, 0.25, 0.12, 1)
 theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_marke")
 horizontal_alignment = 1
+vertical_alignment = 1
 text = "★ Zuletzt gespielt"
 
 [node name="KarteTank" type="Button" parent="Oberflaeche/Charakterauswahl"]
@@ -250,6 +544,10 @@ offset_left = 768.0
 offset_top = 118.0
 offset_right = 1088.0
 offset_bottom = 588.0
+focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxFlat_aufwertungskarte")
+theme_override_styles/hover = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
 text = ""
 
 [node name="Figur" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteTank"]
@@ -281,12 +579,15 @@ text = "7 Leben · Tempo 215 · Schuss 0.30s"
 [node name="Marke" type="Label" parent="Oberflaeche/Charakterauswahl/KarteTank"]
 visible = false
 mouse_filter = 2
-offset_right = 320.0
-offset_top = 432.0
-offset_bottom = 456.0
-theme_override_colors/font_color = Color(0.62, 0.86, 0.6, 1)
+offset_left = 24.0
+offset_right = 296.0
+offset_top = 436.0
+offset_bottom = 464.0
+theme_override_colors/font_color = Color(0.1, 0.25, 0.12, 1)
 theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_marke")
 horizontal_alignment = 1
+vertical_alignment = 1
 text = "★ Zuletzt gespielt"
 
 [node name="Hinweis" type="Label" parent="Oberflaeche/Charakterauswahl"]
