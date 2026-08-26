@@ -30,9 +30,8 @@ var arena: Rect2 = Rect2(Vector2.ZERO, Vector2(1152, 648))
 var _naechster_schuss: float = 0.0
 var _unverwundbar_bis: float = 0.0
 
-@onready var _koerper: Polygon2D = $Anzeige/Koerper
-@onready var _akzent: Polygon2D = $Anzeige/Akzent
 @onready var _anzeige: Node2D = $Anzeige
+@onready var _figur: Figur = $Anzeige/Figur
 
 
 func _ready() -> void:
@@ -49,8 +48,10 @@ func uebernehmen(neue: Charaktere.Variante) -> void:
 	charakter_id = neue.id
 	leben = neue.leben
 
-	_koerper.color = neue.farbe
-	_akzent.color = neue.akzent
+	# Das Aussehen kommt vollständig aus der Variante — hier steht keine Farbe
+	# und keine Form. Sonst gälte für einen Wert der Charakter und für den
+	# nächsten die alte Zahl, derselbe Fehler wie bei den Startwerten.
+	_figur.zeigen(neue)
 
 
 func _physics_process(delta: float) -> void:

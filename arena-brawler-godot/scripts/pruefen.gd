@@ -17,6 +17,7 @@ var _berichte: Array[String] = []
 func _ready() -> void:
 	_pruefe_bewegung()
 	_pruefe_charaktere()
+	_pruefe_gestalt()
 	_pruefe_spielstand()
 	_pruefe_szenen()
 
@@ -102,6 +103,95 @@ func _pruefe_charaktere() -> void:
 	_pruefe("naechste nach tank faengt vorne an", Charaktere.naechste(&"tank").id, &"ausgewogen")
 
 
+## Die gezeichneten Figuren. Was hier geprüft wird, sieht man im Bild **nicht**
+## oder erst, wenn es zu spät ist: ob ein Vieleck konvex ist, ob die drei
+## Umrisse sich wirklich unterscheiden, ob eine Figur heimlich viel größer
+## geworden ist als ihre Trefferfläche.
+func _pruefe_gestalt() -> void:
+	var halbe_breiten := {}
+
+	for v in Charaktere.liste:
+		var teile := Gestalt.teile(v)
+		_pruefe_wahr("%s: Figur hat genug Teile" % v.id, teile.size() >= 12)
+
+		var duenn := 0
+		var krumm := 0
+		for teil in teile:
+			if teil.punkte.size() < 3:
+				duenn += 1
+			elif not _ist_konvex(teil.punkte):
+				krumm += 1
+
+		_pruefe("%s: kein Teil unter drei Punkten" % v.id, duenn, 0)
+
+		# Ein konkaves Vieleck malt seinen Umriss quer durch die eigene
+		# Fläche — im Kleinen sieht das nach einem Kratzer aus, nicht nach
+		# einem Fehler. Deshalb geprüft und nicht angeschaut.
+		_pruefe("%s: jedes Teil ist konvex" % v.id, krumm, 0)
+
+		var kasten := Gestalt.abmessungen(v)
+		var halb := maxf(absf(kasten.position.x), absf(kasten.end.x))
+		halbe_breiten[v.id] = halb
+
+		# Die Figur darf breiter aussehen als ihre Trefferfläche (das ist die
+		# verzeihende Richtung), aber nicht beliebig: Sonst weicht man
+		# Geschossen aus, die einen nie getroffen hätten, und das Spiel
+		# fühlt sich unehrlich an.
+		_pruefe_wahr("%s: nicht breiter als das 1,35-fache der Trefferflaeche" % v.id,
+			halb <= Spieler.RADIUS * 1.35)
+
+		# `abmessungen` überspringt Teil 0 als Schatten. Das stimmt nur,
+		# solange der Schatten wirklich vorn steht — schöbe jemand ein Teil
+		# davor, würde ab da der Schatten mitgemessen und ein Körperteil
+		# nicht. Der Schatten ist das einzige durchsichtige Teil, daran ist
+		# er zu erkennen.
+		var durchsichtige := 0
+		for i in teile.size():
+			if teile[i].farbe.a < 1.0:
+				durchsichtige += 1
+		_pruefe("%s: genau ein durchsichtiges Teil" % v.id, durchsichtige, 1)
+		_pruefe_wahr("%s: und das ist der Schatten an Stelle 0" % v.id,
+			teile[0].farbe.a < 1.0)
+
+	# Die drei müssen sich im Umriss unterscheiden, sonst ist die Wahl Deko —
+	# dieselbe Anforderung wie bei den Startwerten weiter oben.
+	_pruefe_wahr("Sprinter ist schmaler als der Ausgewogene",
+		halbe_breiten[&"ausgewogen"] - halbe_breiten[&"schnell"] >= 2.0)
+	_pruefe_wahr("Bollwerk ist breiter als der Ausgewogene",
+		halbe_breiten[&"tank"] - halbe_breiten[&"ausgewogen"] >= 2.0)
+
+	# Und in der Form, nicht nur in der Breite: Der Sprinter ist von oben
+	# länger als breit, das Bollwerk breiter als lang.
+	var schmal := Gestalt.abmessungen(Charaktere.nach_id(&"schnell"))
+	var breit := Gestalt.abmessungen(Charaktere.nach_id(&"tank"))
+	_pruefe_wahr("Sprinter ist laenger als breit", schmal.size.y > schmal.size.x * 1.2)
+	_pruefe_wahr("Bollwerk ist breiter als lang", breit.size.x > breit.size.y)
+
+
+## Alle Kreuzprodukte aufeinanderfolgender Kanten müssen dasselbe Vorzeichen
+## haben. Fast gerade Ecken (Kreise, Kapseln) rutschen sonst zufällig auf die
+## falsche Seite, deshalb die kleine Schwelle.
+func _ist_konvex(punkte: PackedVector2Array) -> bool:
+	var anzahl := punkte.size()
+	var vorzeichen := 0
+
+	for i in anzahl:
+		var a := punkte[i]
+		var b := punkte[(i + 1) % anzahl]
+		var c := punkte[(i + 2) % anzahl]
+		var kreuz := (b - a).cross(c - b)
+
+		if absf(kreuz) < 0.0001:
+			continue
+		var dieses := 1 if kreuz > 0.0 else -1
+		if vorzeichen == 0:
+			vorzeichen = dieses
+		elif dieses != vorzeichen:
+			return false
+
+	return true
+
+
 func _pruefe_spielstand() -> void:
 	var punkte_vorher := Spielstand.beste_punkte
 	var welle_vorher := Spielstand.beste_welle
@@ -163,10 +253,32 @@ func _pruefe_szenen() -> void:
 	_pruefe("Geschoss sucht nur Gegner", geschoss.collision_mask, 4)
 	geschoss.free()
 
+	# Die Figur hängt an der Anzeige und nicht am Körper: Ein gedrehter
+	# Kollisionskörper macht aus einem sauberen Kreis eine wackelige Form.
+	var figur: Node = haupt.get_node_or_null("Spieler/Anzeige/Figur")
+	_pruefe_wahr("Spieler hat eine Figur unter der Anzeige", figur != null)
+	_pruefe_wahr("die Figur zeichnet etwas", figur != null and figur.teile_anzahl() > 0)
+
+	# Der eigentliche Grund für diese Prüfung: Im Phaser-Prototyp war der
+	# Anzug einmal fast so dunkel wie der Boden, und die Figur verschwand
+	# darauf. Der Bodenwert wird deshalb aus der Arena **gelesen** — stünde er
+	# hier noch einmal, prüfte er sich gegen sich selbst.
+	var boden: Color = arena.get_node("Boden").color
+	var zu_nah := 0
+	for v in Charaktere.liste:
+		for farbe in [v.anstrich.panzer, v.anstrich.platte, v.anstrich.brust]:
+			var abstand := Vector3(
+				farbe.r - boden.r, farbe.g - boden.g, farbe.b - boden.b).length()
+			if abstand < 0.12:
+				zu_nah += 1
+	_pruefe("keine Flaechenfarbe verschwindet im Arenaboden", zu_nah, 0)
+
 	# Charakter wechseln muss wirklich alle Werte mitziehen, nicht nur die Farbe
 	var vorher: float = spieler.variante.tempo
 	spieler.uebernehmen(Charaktere.nach_id(&"tank"))
 	_pruefe_wahr("Charakterwechsel zieht Tempo und Leben mit",
 		spieler.variante.tempo != vorher and spieler.leben == 7)
+	_pruefe_wahr("und die Figur wechselt mit",
+		figur != null and figur.charakter_id == &"tank")
 
 	haupt.queue_free()

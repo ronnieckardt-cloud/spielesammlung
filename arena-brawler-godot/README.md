@@ -8,8 +8,8 @@ Moderner 2D-Arena-Brawler in Godot 4 mit GDScript.
 > Es liegt nur im selben Repository.
 
 Stand: **Fundament**. Arena, Spieler, Bewegung, Schießen und drei
-Charaktervarianten stehen. Wellen, Aufwertungen, Gegner und Oberfläche kommen
-später — erst soll das Fundament stabil sein.
+Charaktervarianten mit eigenen Figuren stehen. Wellen, Aufwertungen, Gegner und
+Oberfläche kommen später — erst soll das Fundament stabil sein.
 
 ## Öffnen und starten
 
@@ -53,19 +53,23 @@ arena-brawler-godot/
 │   ├── main.tscn            Hauptszene: Arena + Spieler + Kamera + Kopfzeile
 │   ├── arena.tscn           Boden, Rand, Wände
 │   ├── geschoss.tscn
-│   └── pruefen.tscn         Prüfszene (nicht Teil des Spiels)
+│   ├── pruefen.tscn         Prüfszene (nicht Teil des Spiels)
+│   └── musterblatt.tscn     gibt die Figuren als JSON aus (Werkzeug)
 ├── characters/
 │   └── spieler.tscn
 ├── scripts/
 │   ├── gemeinsam/
-│   │   └── bewegung.gd      reine Rechnung, ohne Node und ohne Uhr
+│   │   ├── bewegung.gd      reine Rechnung, ohne Node und ohne Uhr
+│   │   ├── gestalt.gd       die Vielecke der drei Figuren, ebenso rein
+│   │   └── figur.gd         zeichnet sie — der einzige Knoten dafür
 │   ├── spieler/
 │   │   ├── spieler.gd
 │   │   └── geschoss.gd
 │   ├── welt/
 │   │   ├── main.gd
 │   │   └── arena.gd
-│   └── pruefen.gd
+│   ├── pruefen.gd
+│   └── musterblatt.gd
 ├── enemies/               (noch leer)
 ├── ui/                    (noch leer)
 └── assets/
@@ -97,8 +101,6 @@ React-Komponente) und im Phaser-Prototyp (`wellen.js` neben der Szene).
 
 ## Charaktere
 
-Vorerst nur unterschiedliche Startwerte, wie vorgegeben.
-
 | | Leben | Tempo | Schusspause | Reichweite | Unverwundbar |
 |---|---|---|---|---|---|
 | Ausgewogen | 5 | 260 | 0,25 s | 460 | 0,9 s |
@@ -117,14 +119,71 @@ auf, nicht beim Lesen.
 `Variante` ist eine eigene Klasse und kein `Dictionary`: Ein Tippfehler im
 Feldnamen fliegt so beim Start auf statt still `null` zu liefern.
 
+## Wie die Figuren aufgebaut sind
+
+Alles im Code gezeichnet, **keine einzige Bilddatei**. `gestalt.gd` liefert je
+Variante eine Liste von Teilen (Vieleck + Fläche + Umriss), `figur.gd` malt sie
+in einem `_draw()`. Dieselbe Trennung wie bei der Bewegung, mit demselben
+Gewinn: Der Umriss lässt sich durchrechnen, ohne dass etwas läuft, und ein
+Auswahlbildschirm kann später dieselbe Figur zeigen, ohne einen Spieler zu bauen.
+
+**Blick von oben — vorn ist −Y.** Das ist die Entscheidung, an der alles hängt:
+`spieler.gd` dreht die Anzeige auf `richtung.angle() + PI/2`, bei Drehung 0
+schaut die Figur also nach oben. Vorlagen aus der Seitenansicht müssen deshalb
+übersetzt werden, sonst zeichnet man ein Bild, das es aus dieser Kamera gar
+nicht gibt:
+
+| Seitenansicht | von oben |
+|---|---|
+| aufrechte Haltung | kompakter, symmetrischer Umriss |
+| nach vorn gebeugt | lang und vorn spitz |
+| breite Schultern | echte Breite in X, Schulterstücke außen |
+
+Alle drei sind aus demselben Baukasten gebaut — Schatten, Stiefel, Rumpf,
+Rücken- und Brustplatte, Arme mit Handschuh, Schulterstücke, Waffe, Helm,
+Visier —, unterscheiden sich aber in Proportion und Farbverteilung:
+
+| | halbe Breite | Merkmal |
+|---|---|---|
+| Ausgewogen | 17,5 | symmetrisch, weiße Brustplatte, blaue Schulterstücke |
+| Schnell | 15,0 | vorn spitz, wehender Schal nach hinten, orange Finnen |
+| Tank | 20,5 | breite Schulterstücke mit Nieten, grau in der Mitte, grün außen |
+
+Drei Sachen, die im Bild nicht auffallen und deshalb geprüft werden:
+
+- **Jedes Teil ist konvex.** Ein konkaves Vieleck malt seinen Umriss quer durch
+  die eigene Fläche; im Kleinen liest sich das als Kratzer, nicht als Fehler.
+- **Keine Figur ist breiter als das 1,35-fache der Trefferfläche.** Größer
+  aussehen als man zählt ist die verzeihende Richtung — man weicht Geschossen
+  aus, die einen ohnehin verfehlt hätten. Beliebig größer wird daraus aber ein
+  Spiel, das sich unehrlich anfühlt.
+- **Keine Flächenfarbe verschwindet im Arenaboden.** Der Bodenwert wird für die
+  Prüfung aus `arena.tscn` gelesen, nicht noch einmal hingeschrieben. Der Anlass
+  ist echt: Im Phaser-Prototyp nebenan war der Anzug einmal fast so dunkel wie
+  der Boden, und die Figur war schlicht weg. Deshalb ist „Schwarz/Orange" hier
+  ein Anthrazit-Anzug — das Schwarz steckt in Umriss und Kleinteilen, wo es
+  Kanten setzt statt Flächen.
+
+Ansehen kann man sie ohne Editor so:
+
+```bash
+godot --headless --path . scenes/musterblatt.tscn
+```
+
+Das gibt die Vielecke als JSON aus; ein Betrachter draußen macht ein Bild
+daraus. Wichtig dabei: Die Geometrie kommt aus `Gestalt` selbst. Ein
+Vorschaubild, das die Formen nachbaut, zeigt irgendwann etwas anderes als das
+Spiel — und dann sieht man beim Prüfen einen Fehler nicht, der da ist.
+
 ## Prüfungen
 
 ```bash
 godot --headless --path . scenes/pruefen.tscn
 ```
 
-36 Prüfungen: die reine Rechnung in `bewegung.gd`, die Charakterdaten, der
-Spielstand — und eine **Rauchprobe an den echten Szenen**. Die ist bewusst
+62 Prüfungen: die reine Rechnung in `bewegung.gd`, die Charakterdaten, die
+Umrisse aus `gestalt.gd`, der Spielstand — und eine **Rauchprobe an den echten
+Szenen**. Die ist bewusst
 dabei: Die häufigste Art, ein Godot-Projekt kaputtzumachen, ist ein Knotenpfad,
 der nicht mehr stimmt. Reine Rechnung zu prüfen fängt das nicht; ein Start mit
 leerer Szene fällt sonst erst beim Spielen auf.
@@ -134,5 +193,7 @@ Autoloads braucht — die richtet Godot nur für eine laufende Szene ein.
 
 ## Was als Nächstes fehlt
 
-Gegner, Wellen, Aufwertungen, Auswahlbildschirm, Touch-Bedienung, Ton, echte
-Grafik. Alles bewusst noch nicht gebaut: erst das stabile Fundament.
+Gegner, Wellen, Aufwertungen, Auswahlbildschirm, Touch-Bedienung, Ton. Alles
+bewusst noch nicht gebaut: erst das stabile Fundament. Der Auswahlbildschirm
+braucht dafür nichts Neues mehr — `Figur` lässt sich dort einfach hinstellen
+und über `scale` größer ziehen.
