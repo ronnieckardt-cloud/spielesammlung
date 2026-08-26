@@ -28,6 +28,7 @@ signal gewaehlt(charakter_id: StringName)
 ## Eine Karte je Variante, in derselben Reihenfolge wie `Charaktere.liste`.
 @onready var _karten: Array[Button] = [$KarteAusgewogen, $KarteSchnell, $KarteTank]
 @onready var _rekord_zeile: Label = $Rekord
+@onready var _tonknopf: Button = $Tonknopf
 
 
 func _ready() -> void:
@@ -48,6 +49,8 @@ func _ready() -> void:
 
 		karte.pressed.connect(_bei_druck.bind(variante.id))
 
+	_tonknopf.pressed.connect(_ton_umschalten)
+
 
 ## Von `main.gd` aufgerufen, bevor die Auswahl sichtbar wird — auch nach
 ## einem Neustart wieder, deshalb hier und nicht nur einmalig in `_ready()`:
@@ -67,12 +70,30 @@ func zeigen() -> void:
 			_karten[i].remove_theme_stylebox_override("normal")
 
 	_rekord_zeile.text = Spielstand.rekord_zeile()
+	_tonknopf_aktualisieren()
 	visible = true
 
 
 func _bei_druck(charakter_id: StringName) -> void:
+	Ton.abspielen(&"ui_klick")
 	visible = false
 	gewaehlt.emit(charakter_id)
+
+
+## Einziger Ort mit einem Ein/Aus-Schalter für Ton — auf dieser Karte, weil
+## `zeigen()` sie vor **jeder** Runde neu einblendet (kein separater
+## Einstellungs-Bildschirm nötig, siehe Aufgabenstellung „nicht
+## überkomplizieren"). Absichtlich kein Klick-Ton beim Ausschalten: Die
+## Stille selbst ist die Rückmeldung, dass es jetzt aus ist.
+func _ton_umschalten() -> void:
+	Ton.an_setzen(not Ton.an)
+	_tonknopf_aktualisieren()
+	if Ton.an:
+		Ton.abspielen(&"ui_klick")
+
+
+func _tonknopf_aktualisieren() -> void:
+	_tonknopf.text = "🔊" if Ton.an else "🔇"
 
 
 ## Ein eigener, kräftigerer Rahmen für die zuletzt gespielte Karte — als

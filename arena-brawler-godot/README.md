@@ -7,8 +7,8 @@ Moderner 2D-Arena-Brawler in Godot 4 mit GDScript.
 > `arena-brawler-mini/` — kein gemeinsamer Code, keine gemeinsamen Abhängigkeiten.
 > Es liegt nur im selben Repository.
 
-Stand: **spielbare Runde mit Charakterauswahl, drei Gegnertypen, Aufwertungen
-und Touch-Bedienung**. Arena, Spieler, Bewegung, Schießen, drei
+Stand: **spielbare Runde mit Charakterauswahl, drei Gegnertypen, Aufwertungen,
+Touch-Bedienung und Ton**. Arena, Spieler, Bewegung, Schießen, drei
 Charaktervarianten mit eigenen Figuren, drei Gegnertypen (Verfolger,
 Panzer-Verfolger, Flink), ein Wellensystem mit steigender Typenmischung und
 eine Kartenauswahl nach jeder geschafften Welle stehen — man wählt vor jeder
@@ -16,7 +16,10 @@ Runde erst einen Charakter auf einem eigenen Bildschirm, spielt dann von
 Anfang bis Game-Over, wird dabei stärker, und ein Neustart führt sauber
 zurück zur Auswahl. Bedienbar mit Tastatur **und** Touch (virtueller Stick
 + Feuerknopf), die Oberfläche durchgehend mit Karten, Rahmen und Rückmeldung
-statt flacher Textzeilen.
+statt flacher Textzeilen. Acht kurze, selbst im Code erzeugte Toneffekte
+(Schuss, Treffer, Tod, Schaden, Welle, Aufwertung, Game Over, Tipp) lassen
+sich über einen Knopf auf der Charakterauswahl abschalten — siehe „Ton"
+weiter unten.
 
 ## Öffnen und starten
 
@@ -607,13 +610,62 @@ Verschwindet der Knopf mitten im Halten (Neustart bei gehaltenem Finger),
 gibt `_exit_tree()` die Aktion frei — sonst bliebe „schiessen" global hängen
 und die nächste Runde schösse von allein.
 
+## Ton
+
+Acht kurze Effekte, alle im Code erzeugt (`autoload/ton.gd`) — keine
+Audiodateien, kein Addon, kein Sample von Dritten. Dieselbe Idee wie
+`sfx.ts` in der React-Spielesammlung nebenan: ein Sinus- oder Rechteckton
+mit Tonhöhenverlauf und weicher Hüllkurve, teils mit Rauschen gemischt,
+direkt als `AudioStreamWAV`-Puffer geschrieben. Jeder Effekt entsteht genau
+einmal, beim Start des Autoloads, und wird danach nur noch abgespielt —
+keine Ladezeit während des Spiels, kein Netz nötig.
+
+| Effekt | Wann |
+|---|---|
+| `schuss` | Bei jedem abgefeuerten Schuss (Taste, Klick oder Feuerknopf) |
+| `gegner_treffer` | Ein Treffer, der einen Gegner nicht sofort tötet |
+| `gegner_tod` | Ein Gegner stirbt |
+| `spieler_schaden` | Der Spieler nimmt Schaden — eigene, härtere Klangfarbe (Rechteck statt Sinus), damit sich das nie wie ein gewöhnlicher Gegnertreffer anhört |
+| `welle_geschafft` | Eine Welle ist geschafft (drei aufsteigende Töne) |
+| `aufwertung_gewaehlt` | Eine Aufwertungskarte wird angetippt |
+| `game_over` | Die Runde endet — kurz absteigend, unter 350 ms, bewusst nicht dramatisch lang |
+| `ui_klick` | Eine Charakterkarte wird angetippt (kein Pflichteffekt, aber billig genug für den gleichen Baustein) |
+
+**Keine Musik-Schleife** — spart Größe und die Frage, ob ein selbst
+komponierter Loop zufällig einem bekannten Spiel ähnelt. Jeder Effekt ist
+unter einer Viertelsekunde und klingt einzeln für sich, nicht als Teil einer
+Melodie.
+
+**`ALWAYS`, aus demselben Grund wie `Eingabe`.** Die Wellenmeldung, die
+Aufwertungskarten und der Rundenende-Bildschirm lösen ihre Töne genau in
+den Momenten aus, in denen die Runde pausiert ist (`Oberflaeche` hat selbst
+`ALWAYS`, siehe `main.gd`) — ein `AudioStreamPlayer` mit dem sonst ererbten
+`PAUSABLE` würde in genau diesen Momenten verstummen. Spielinterne Töne
+(Schuss, Treffer, Tod, Schaden) lösen dagegen nie während einer Pause aus,
+weil der auslösende Code selbst (Spieler, Gegner) unter `Main` hängt und
+dort mitpausiert — die Runde ist während einer Pause also von sich aus
+bereits stumm, ganz ohne Sonderfall dafür.
+
+**Ein kleiner Pool statt eines einzigen `AudioStreamPlayer`** (sechs
+Stück, reihum benutzt) — zwei Treffer im selben Bild sollen beide hörbar
+sein, nicht der zweite den ersten abwürgen.
+
+**An/Aus statt Lautstärkeregler.** Gespeichert wie die Bestleistung
+(`ConfigFile`, eigener kleiner Speicherort `user://ton.cfg` statt eines
+Feldes in `Spielstand`, das mit „Charakter + Rekord" nichts zu tun hat).
+Der Schalter sitzt als 🔊/🔇-Knopf oben rechts auf der Charakterauswahl —
+die erscheint vor jeder einzelnen Runde, ein eigener Einstellungs-Bildschirm
+für nur diesen einen Schalter wäre mehr, als die Aufgabe wert ist. Kein
+Klickton beim Ausschalten (die Stille selbst ist die Rückmeldung), aber
+einer beim Wiedereinschalten.
+
 ## Prüfungen
 
 ```bash
 godot --headless --path . scenes/pruefen.tscn
 ```
 
-168 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
+180 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
 `aufwertungen.gd`, die Charakter- und Gegnerdaten, die Umrisse aus
 `gestalt.gd` und `gegnergestalt.gd`, der Spielstand, der Gegner und der
 Wellenablauf jeweils für sich allein, dass Aufwertungen wirklich am Spieler
@@ -675,6 +727,23 @@ bleibt ausgeblendet, solange entweder kein Touch erkannt ist oder gerade
 pausiert wird (`Eingabe.touch_verfuegbar` wird dafür extra erzwungen und
 am Ende wieder zurückgesetzt, sonst bliebe sie im Testlauf ohnehin
 unsichtbar — kein echter Touchscreen hier).
+
+Dazugekommen mit dem Ton: dass jeder der acht Effekte einen echten,
+nicht-leeren Klangpuffer erzeugt, dass ein unbekannter Name nicht abstürzt,
+und dass die An/Aus-Einstellung ein erneutes Laden übersteht (dieselbe
+`ConfigFile`-Prüfung wie beim Spielstand). Wie ein Effekt klingt, lässt sich
+im Kopflos-Modus nicht prüfen — es gibt dort keinen echten Audiotreiber. Aus
+demselben Grund erzeugt jedes `AudioStreamPlayer.play()` in dieser Umgebung
+ein `AudioStreamPlaybackWAV`, das nie „fertig" meldet (die Dummy-Ausgabe
+verarbeitet nichts) und deshalb bis zum Prozessende bestehen bleibt —
+sichtbar als dieselbe Art „ObjectDB instances leaked at exit", die schon
+beim `SceneTreeTimer` oben auftaucht. `Ton._exit_tree()` gibt seine eigenen
+Referenzen trotzdem sauber frei (Pool-Player stoppen, Zwischenspeicher
+leeren) — das ist die richtige Hygiene für ein echtes Beenden, ändert an
+der Kopflos-Meldung selbst aber nichts, weil die verbliebenen Wiedergabe-
+Objekte woanders (im Audio-Server) hängen, nicht in `Ton` selbst. Im
+echten Spiel im Browser tritt das nicht auf: Dort läuft ein echter
+Audio-Ausgang, der jede beendete Wiedergabe laufend selbst aufräumt.
 
 ## Web-Export (HTML5)
 

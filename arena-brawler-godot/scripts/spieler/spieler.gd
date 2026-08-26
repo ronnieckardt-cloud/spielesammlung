@@ -129,6 +129,7 @@ func _schiessen(richtung: Vector2) -> void:
 	if jetzt < _naechster_schuss:
 		return
 	_naechster_schuss = jetzt + effektive_schuss_pause()
+	Ton.abspielen(&"schuss")
 
 	var flug := richtung if richtung != Vector2.ZERO else Vector2.from_angle(_anzeige.rotation - PI / 2.0)
 
@@ -186,6 +187,7 @@ func schaden_nehmen(menge: int = 1) -> void:
 
 	leben -= menge
 	_unverwundbar_bis = Time.get_ticks_msec() / 1000.0 + variante.unverwundbar
+	Ton.abspielen(&"spieler_schaden")
 
 	getroffen.emit(leben)
 	if leben <= 0:

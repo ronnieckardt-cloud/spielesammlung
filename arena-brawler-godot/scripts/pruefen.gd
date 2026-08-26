@@ -41,6 +41,7 @@ func _ready() -> void:
 	_pruefe_stick()
 	_pruefe_feuerknopf()
 	_pruefe_touch_bewegung()
+	_pruefe_ton()
 
 	var durchgefallen := _berichte.filter(func(z: String) -> bool: return z.begins_with("FEHL"))
 	for zeile in _berichte:
@@ -925,3 +926,33 @@ func _pruefe_touch_bewegung() -> void:
 	Input.action_release(&"links")
 	Eingabe.stick_richtung = Vector2.ZERO
 	spieler.queue_free()
+
+
+## Der Ton-Autoload: Kein Audiotreiber im Kopflos-Modus, also lässt sich nicht
+## prüfen, wie ein Effekt klingt — was zählt: jeder Effekt erzeugt einen
+## echten, nicht-leeren Puffer, ein unbekannter Name stürzt nicht ab, und die
+## An/Aus-Einstellung übersteht ein erneutes Laden (dieselbe Prüfung wie bei
+## `Spielstand`).
+func _pruefe_ton() -> void:
+	for name in Ton.EFFEKTE:
+		Ton.abspielen(name)
+		var stream: AudioStreamWAV = Ton._cache.get(name)
+		_pruefe_wahr("Effekt '%s' hat einen echten Klangpuffer" % name,
+			stream != null and stream.data.size() > 0)
+
+	# Ein unbekannter Name darf nicht abstürzen, sondern soll still nichts tun.
+	Ton.abspielen(&"gibtsnicht")
+
+	var an_vorher := Ton.an
+
+	Ton.an_setzen(false)
+	_pruefe("Aus wirkt sofort", Ton.an, false)
+	Ton.laden()
+	_pruefe("und bleibt beim Neuladen erhalten", Ton.an, false)
+
+	Ton.an_setzen(true)
+	_pruefe("An wirkt sofort", Ton.an, true)
+	Ton.laden()
+	_pruefe("und bleibt ebenfalls beim Neuladen erhalten", Ton.an, true)
+
+	Ton.an_setzen(an_vorher)

@@ -57,5 +57,6 @@ func _bei_druck(index: int) -> void:
 		return
 
 	var art_id := _angebotene_arten[index].id
+	Ton.abspielen(&"aufwertung_gewaehlt")
 	visible = false
 	gewaehlt.emit(art_id)

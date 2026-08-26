@@ -121,6 +121,8 @@ func schaden_nehmen(menge: int = 1) -> void:
 ## (mehrere Treffer nötig, ohne Rückmeldung sähe ein Schuss aus, als wäre er
 ## wirkungslos verpufft).
 func _aufblitzen() -> void:
+	Ton.abspielen(&"gegner_treffer")
+
 	if _blitz_tween != null and _blitz_tween.is_valid():
 		_blitz_tween.kill()
 
@@ -132,6 +134,7 @@ func _aufblitzen() -> void:
 
 func _sterben() -> void:
 	_stirbt = true
+	Ton.abspielen(&"gegner_tod")
 	# Sofort aus der Gruppe raus, nicht erst nach dem Aufblitzen: Der
 	# Wellenleiter zählt „noch da" über die Gruppe, und der Treffer, nicht das
 	# Verblassen, ist der Moment, der zählt.
