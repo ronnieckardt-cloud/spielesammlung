@@ -58,6 +58,13 @@ func zeigen() -> void:
 	for i in _karten.size():
 		var markiert: bool = Charaktere.liste[i].id == aktuelle_id
 		_karten[i].get_node("Marke").visible = markiert
+		# Nicht nur das kleine Abzeichen, auch der ganze Kartenrahmen hebt
+		# die zuletzt gespielte Karte hervor — leichter zu sehen als eine
+		# einzelne Textzeile unten in der Karte.
+		if markiert:
+			_karten[i].add_theme_stylebox_override("normal", _markierter_stil())
+		else:
+			_karten[i].remove_theme_stylebox_override("normal")
 
 	_rekord_zeile.text = Spielstand.rekord_zeile()
 	visible = true
@@ -66,3 +73,22 @@ func zeigen() -> void:
 func _bei_druck(charakter_id: StringName) -> void:
 	visible = false
 	gewaehlt.emit(charakter_id)
+
+
+## Ein eigener, kräftigerer Rahmen für die zuletzt gespielte Karte — als
+## Programmcode statt eines zweiten SubResource in `main.tscn`, weil sich
+## eine benannte SubResource von hier aus nicht ansprechen lässt (ihre ID
+## gilt nur innerhalb derselben `.tscn`-Datei). Bei jedem `zeigen()` neu
+## gebaut statt zwischengespeichert: Drei kleine `StyleBoxFlat`-Objekte
+## kosten nichts, ein zusätzliches statisches Feld nur für den Cache wäre
+## mehr Zustand, als das hier wert ist. Dieselbe grüne Farbe wie das
+## Abzeichen darunter — beide sollen als **eine** Aussage gelesen werden.
+func _markierter_stil() -> StyleBoxFlat:
+	var stil := StyleBoxFlat.new()
+	stil.bg_color = Color(0.176471, 0.211765, 0.180392, 0.96)
+	stil.set_border_width_all(3)
+	stil.border_color = Color(0.62, 0.86, 0.6, 0.9)
+	stil.set_corner_radius_all(20)
+	stil.shadow_color = Color(0.4, 0.8, 0.4, 0.22)
+	stil.shadow_size = 14
+	return stil

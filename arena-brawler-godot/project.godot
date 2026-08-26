@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 Spielstand="*res://autoload/spielstand.gd"
 Charaktere="*res://autoload/charaktere.gd"
+Eingabe="*res://autoload/eingabe.gd"
 
 [display]
 

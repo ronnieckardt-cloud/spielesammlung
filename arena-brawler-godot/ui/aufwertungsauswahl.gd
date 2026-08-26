@@ -38,7 +38,12 @@ func zeigen(spieler: Spieler) -> void:
 	for i in _karten.size():
 		if i < _angebotene_arten.size():
 			var art := _angebotene_arten[i]
-			_karten[i].text = "%s\n\n%s" % [art.titel, art.beschreibung]
+			# Zwei eigene Labels statt eines einzigen Button-Texts: Nur so
+			# lässt sich der Titel größer/fett und die Beschreibung kleiner/
+			# gedämpft setzen — ein reiner `Button.text` kennt nur eine
+			# einzige Schriftgröße für den ganzen Block.
+			_karten[i].get_node("Titel").text = art.titel
+			_karten[i].get_node("Beschreibung").text = art.beschreibung
 			_karten[i].visible = true
 			_karten[i].disabled = false
 		else:

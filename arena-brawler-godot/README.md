@@ -7,14 +7,16 @@ Moderner 2D-Arena-Brawler in Godot 4 mit GDScript.
 > `arena-brawler-mini/` — kein gemeinsamer Code, keine gemeinsamen Abhängigkeiten.
 > Es liegt nur im selben Repository.
 
-Stand: **spielbare Runde mit Charakterauswahl, drei Gegnertypen und
-Aufwertungen**. Arena, Spieler, Bewegung, Schießen, drei Charaktervarianten
-mit eigenen Figuren, drei Gegnertypen (Verfolger, Panzer-Verfolger, Flink),
-ein Wellensystem mit steigender Typenmischung und eine Kartenauswahl nach
-jeder geschafften Welle stehen — man wählt vor jeder Runde erst einen
-Charakter auf einem eigenen Bildschirm, spielt dann von Anfang bis Game-Over,
-wird dabei stärker, und ein Neustart führt sauber zurück zur Auswahl.
-Touch-Bedienung kommt später.
+Stand: **spielbare Runde mit Charakterauswahl, drei Gegnertypen, Aufwertungen
+und Touch-Bedienung**. Arena, Spieler, Bewegung, Schießen, drei
+Charaktervarianten mit eigenen Figuren, drei Gegnertypen (Verfolger,
+Panzer-Verfolger, Flink), ein Wellensystem mit steigender Typenmischung und
+eine Kartenauswahl nach jeder geschafften Welle stehen — man wählt vor jeder
+Runde erst einen Charakter auf einem eigenen Bildschirm, spielt dann von
+Anfang bis Game-Over, wird dabei stärker, und ein Neustart führt sauber
+zurück zur Auswahl. Bedienbar mit Tastatur **und** Touch (virtueller Stick
++ Feuerknopf), die Oberfläche durchgehend mit Karten, Rahmen und Rückmeldung
+statt flacher Textzeilen.
 
 ## Öffnen und starten
 
@@ -37,17 +39,16 @@ godot --headless --path . scenes/pruefen.tscn # lässt die Prüfungen laufen
 
 | | |
 |---|---|
-| Bewegen | WASD oder Pfeiltasten |
-| Schießen | Leertaste (gedrückt halten geht) |
+| Bewegen | WASD/Pfeiltasten **oder** virtueller Stick links unten |
+| Schießen | Leertaste **oder** Feuerknopf rechts unten (beides: gedrückt halten = Dauerfeuer) |
 | Charakter wechseln | Tab |
 | Charakter wählen (vor Rundenstart) | Karte antippen/anklicken |
 
 Tab bleibt der schnelle Wechsel mitten in der Runde, ist aber nicht mehr der
 Hauptweg — der ist jetzt die Auswahl vor dem Start, siehe unten.
 
-Touch ist vorbereitet, aber noch nicht angeschlossen: `Bewegung.richtung_aus_stick`
-rechnet den Ausschlag eines virtuellen Sticks bereits um und ist geprüft — es
-fehlt nur die Bedienoberfläche dazu.
+Touch und Tastatur laufen nebeneinander her, nicht als zwei getrennte
+Betriebsarten — siehe „Touch-Steuerung" weiter unten.
 
 ## Ordner
 
@@ -57,9 +58,10 @@ arena-brawler-godot/
 ├── icon.svg
 ├── autoload/              global, immer da
 │   ├── charaktere.gd        die drei Varianten (reine Daten)
-│   └── spielstand.gd        gewählter Charakter + Bestleistung, speichert nach user://
+│   ├── spielstand.gd        gewählter Charakter + Bestleistung, speichert nach user://
+│   └── eingabe.gd           Touch-Stick-Richtung, Touch-Erkennung (siehe „Touch-Steuerung")
 ├── scenes/
-│   ├── main.tscn            Hauptszene: Arena + Spieler + Wellenleiter + Kamera + Kopfzeile + Rundenende + Charakterauswahl
+│   ├── main.tscn            Hauptszene: Arena + Spieler + Wellenleiter + Kamera + Touchsteuerung + Kopfzeile + Rundenende + Charakterauswahl
 │   ├── arena.tscn           Boden (mit Verlauf), Raster, Rand (außen + innen + Eckmarken), Wände
 │   ├── geschoss.tscn        Schweif + Bild + Kern
 │   ├── pruefen.tscn         Prüfszene (nicht Teil des Spiels)
@@ -93,7 +95,10 @@ arena-brawler-godot/
 │   └── rundenprobe.gd
 ├── ui/
 │   ├── aufwertungsauswahl.gd   die drei Karten nach einer Welle
-│   └── charakterauswahl.gd     die drei Karten vor dem Rundenstart
+│   ├── charakterauswahl.gd     die drei Karten vor dem Rundenstart
+│   ├── touchsteuerung.gd       Container für Stick + Feuerknopf, Sichtbarkeit nach Touch/Pause
+│   ├── stick.gd                der virtuelle Bewegungs-Stick
+│   └── feuerknopf.gd           der Touch-Feuerknopf
 └── assets/
     ├── sprites/  audio/  fonts/   (noch leer)
 ```
@@ -542,13 +547,73 @@ Shader und ohne Bilddatei:
   gerechnet, die auch `_unverwundbar_bis` trägt, also kein eigener Zustand,
   der beim nächsten Treffer zurückgesetzt werden müsste.
 
+## Touch-Steuerung
+
+Virtueller Stick links unten, Feuerknopf rechts unten — beide fest
+positioniert, nicht dort, wo der Finger zuerst aufsetzt (anders als beim
+Phaser-Prototyp nebenan, hier ausdrücklich so gewünscht).
+
+**Nur sichtbar, wenn Touch tatsächlich infrage kommt.** `autoload/eingabe.gd`
+prüft beim Start `DisplayServer.is_touchscreen_available()` und hört danach
+auf die allererste echte Berührung (`InputEventScreenTouch`), falls die
+Plattformabfrage einmal danebenliegt — auf einem Gerät mit Tastatur und Maus
+bleibt die Steuerung dadurch unsichtbar und stört nicht. `ui/touchsteuerung.gd`
+(ein `CanvasLayer`, Geschwisterknoten von `Oberflaeche`) fasst diese
+Sichtbarkeit mit der Pause zusammen: sichtbar nur, wenn Touch erkannt **und**
+gerade nichts pausiert ist.
+
+**Die Pause-Kopplung läuft genau umgekehrt zu `Oberflaeche`.** `Oberflaeche`
+braucht `ALWAYS`, damit Aufwertungskarten & Co. *während* der Pause noch
+reagieren (siehe „Wie die Pause wirklich funktioniert" unten). Stick und
+Feuerknopf sollen während Auswahl, Aufwertungen und Game-Over dagegen
+ausdrücklich **nicht** reagieren — `Touchsteuerung` bekommt deshalb bewusst
+kein `ALWAYS` und blendet sich zusätzlich sichtbar aus. `main.gd` hat dafür
+jetzt genau eine Stelle, die `get_tree().paused` setzt: `_pause_setzen()`
+setzt beides im selben Zug, statt fünf einzelne Zuweisungen zu pflegen, von
+denen man beim nächsten Pause-Zustand leicht eine vergisst, mit der
+Touch-Steuerung nachzuziehen.
+
+**Der Stick ist kein `Bewegung.richtung_aus_stick`-Test mit Bildschirm
+drumherum, sondern reine Eingabe-Verdrahtung.** Die eigentliche Rechnung
+stand schon vorher fertig und geprüft da (siehe Steuerung oben); `ui/stick.gd`
+liefert ihr nur den Versatz von der Basis-Mitte zur Berührung. Bewusst
+`_input()` statt `_gui_input()`: Ein Control bekommt `_gui_input` nur,
+solange der Finger innerhalb der eigenen Fläche bleibt, ein Stick muss aber
+weit über seine sichtbare Basis hinaus gezogen werden können. Der Preis
+dafür: Der Knoten muss sein Aktivierungsfeld selbst nachrechnen (welcher
+Finger hat innerhalb von `AKTIVIERUNGS_RADIUS` um die Basis-Mitte
+aufgesetzt) — genau das verhindert auch, dass der Stick eine Berührung
+stiehlt, die eigentlich dem weit entfernten Feuerknopf gilt.
+
+**`Eingabe.stick_richtung` ist ein eigener Kanal, kein Umweg über
+InputMap.** Der Stick liefert eine echte analoge Richtung (Teiltempo unter
+70 % Ausschlag, siehe `Bewegung.richtung_aus_stick`) — das ließe sich nicht
+verlustfrei auf die vier festen Tasten-Aktionen abbilden. Ein Autoload statt
+eines Knotenpfads: `Touchsteuerung` hängt unter `Main`, `Spieler` ist ihr
+Geschwisterknoten, ein direkter Pfad zwischen beiden würde `main.tscn`
+zwingen, von beiden Seiten zu wissen. `Spieler._physics_process` liest den
+Kanal nur, wenn keine Taste gedrückt ist — die Tastatur behält also den
+Vorrang, ein Test sichert das ab.
+
+**Der Feuerknopf bekommt dagegen keinen eigenen Kanal — er braucht keinen.**
+„Gedrückt halten = Dauerfeuer" statt Auto-Feuer ohne Halten war die
+bewusste Entscheidung, aus einem einfachen Grund: `ui/feuerknopf.gd` spielt
+dafür einfach die bestehende `"schiessen"`-InputMap-Aktion nach
+(`Input.action_press`/`action_release`) — `Spieler._physics_process` fragt
+ohnehin nur `Input.is_action_pressed(&"schiessen")` ab und weiß nicht, ob
+das von der Leertaste oder vom Knopf kommt. Tastatur und Touch verhalten
+sich dadurch garantiert identisch, ohne eine zweite Feuerlogik zu pflegen.
+Verschwindet der Knopf mitten im Halten (Neustart bei gehaltenem Finger),
+gibt `_exit_tree()` die Aktion frei — sonst bliebe „schiessen" global hängen
+und die nächste Runde schösse von allein.
+
 ## Prüfungen
 
 ```bash
 godot --headless --path . scenes/pruefen.tscn
 ```
 
-153 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
+168 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
 `aufwertungen.gd`, die Charakter- und Gegnerdaten, die Umrisse aus
 `gestalt.gd` und `gegnergestalt.gd`, der Spielstand, der Gegner und der
 Wellenablauf jeweils für sich allein, dass Aufwertungen wirklich am Spieler
@@ -597,11 +662,25 @@ von vornherein, statt es hinterher aufzuräumen.
 Die Prüfszene läuft als eigene Szene und nicht über `--script`, weil sie die
 Autoloads braucht — die richtet Godot nur für eine laufende Szene ein.
 
+Dazugekommen mit der Touch-Steuerung: dass `Eingabe.touch_verfuegbar` nur
+beim Übergang falsch → wahr `touch_erkannt` meldet, dass Ziehen und
+Loslassen am Stick wirklich `Eingabe.stick_richtung` setzen und eine
+Berührung weit außerhalb der Basis ihn nicht greift, dass der Feuerknopf die
+`"schiessen"`-Aktion hält/freigibt (und beim Verschwinden mitten im Halten
+sauber freigibt), dass der Stick den Spieler bewegt, wenn keine Taste
+gedrückt ist — und dass die Taste trotzdem Vorrang behält, wenn beide
+gleichzeitig etwas liefern. Dazu in der Rauchprobe: `Touchsteuerung` hängt
+mit Stick und Feuerknopf in der Hauptszene, ist **nicht** `ALWAYS`, und
+bleibt ausgeblendet, solange entweder kein Touch erkannt ist oder gerade
+pausiert wird (`Eingabe.touch_verfuegbar` wird dafür extra erzwungen und
+am Ende wieder zurückgesetzt, sonst bliebe sie im Testlauf ohnehin
+unsichtbar — kein echter Touchscreen hier).
+
 ## Was als Nächstes fehlt
 
-Touch-Bedienung, Ton. Beides bewusst noch nicht gebaut: Erst sollte eine
-ganze Runde mit echter Steigerung, einem Einstieg davor und einem Gegenüber,
-das nicht nach drei Wellen langweilig wird, stehen.
+Ton. Bewusst noch nicht gebaut: Erst sollte eine ganze Runde mit echter
+Steigerung, einem Einstieg davor, einem Gegenüber, das nicht nach drei
+Wellen langweilig wird, und einer richtig bedienbaren Oberfläche stehen.
 
 Denkbare nächste Ausbaustufen für die Gegner selbst: ein Fernkämpfer (bisher
 läuft jeder Typ nur geradewegs auf sein Ziel zu, kein einziger schießt

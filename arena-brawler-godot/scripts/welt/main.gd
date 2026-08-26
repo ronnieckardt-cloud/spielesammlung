@@ -18,6 +18,13 @@ extends Node2D
 ## wo nötig: `await`s auf ein Signal oder einen Timer werden von der
 ## Signalquelle wachgerufen, nicht von einem eigenen `_process` — dafür
 ## braucht `Main` selbst also gar kein `ALWAYS`.
+##
+## **`Touchsteuerung` (Stick, Feuerknopf) liegt genau umgekehrt: bewusst
+## nicht unter `Oberflaeche`, sondern als eigener Geschwisterknoten ohne
+## `ALWAYS`.** Sie soll während der Pause ja gerade **nicht** reagieren.
+## `_pause_setzen()` ist deshalb der einzige Ort, der `get_tree().paused`
+## setzt — er blendet die Touch-Steuerung im selben Zug aus, sonst stünde
+## sie sichtbar, aber tot da.
 
 ## Wie lange „Welle X geschafft!" steht, bevor die Karten kommen.
 const WELLENMELDUNG_DAUER := 1.3
@@ -29,9 +36,11 @@ const WELLENMELDUNG_DAUER := 1.3
 @onready var _kopfzeile: Label = $Oberflaeche/Kopfzeile
 @onready var _wellenmeldung: Label = $Oberflaeche/Wellenmeldung
 @onready var _rundenende: Rundenende = $Oberflaeche/Rundenende
-@onready var _rundenende_text: Label = $Oberflaeche/Rundenende/Text
+@onready var _rundenende_stats: Label = $Oberflaeche/Rundenende/Karte/Stats
+@onready var _rundenende_rekord: Label = $Oberflaeche/Rundenende/Karte/Rekord
 @onready var _aufwertungsauswahl: Aufwertungsauswahl = $Oberflaeche/Aufwertungsauswahl
 @onready var _charakterauswahl: Charakterauswahl = $Oberflaeche/Charakterauswahl
+@onready var _touchsteuerung: Touchsteuerung = $Touchsteuerung
 
 var _vorbei := false
 var _flaeche: Rect2
@@ -59,6 +68,7 @@ func _ready() -> void:
 
 	_wellenleiter.welle_gestartet.connect(_kopfzeile_setzen.unbind(1))
 	_wellenleiter.welle_geschafft.connect(_welle_geschafft)
+	_wellenleiter.punkte_geaendert.connect(_kopfzeile_setzen.unbind(1))
 	_aufwertungsauswahl.gewaehlt.connect(_aufwertung_gewaehlt)
 	_rundenende.neustart_angefordert.connect(_neustart)
 	_charakterauswahl.gewaehlt.connect(_charakter_gewaehlt)
@@ -70,11 +80,24 @@ func _ready() -> void:
 	# dahin bleibt alles andere (Wellenleiter, Gegner, Schüsse) stehen,
 	# genau wie zwischen zwei Wellen bei der Aufwertungsauswahl.
 	_charakterauswahl.zeigen()
-	get_tree().paused = true
+	_pause_setzen(true)
 
 
 func _kopfzeile_setzen() -> void:
-	_kopfzeile.text = "Leben: %d    Welle: %d" % [_spieler.leben, _wellenleiter.welle]
+	_kopfzeile.text = "Leben %d  ·  Welle %d  ·  %d Punkte" % [
+		_spieler.leben, _wellenleiter.welle, _wellenleiter.punkte,
+	]
+
+
+## Einziger Ort, der `get_tree().paused` setzt — der Touch-Steuerung muss
+## dabei jedes Mal mitgeteilt werden, sonst bleibt Stick/Feuerknopf sichtbar
+## stehen, obwohl sie während der Pause gar nicht mehr reagieren (siehe
+## `Touchsteuerung`). Ein eigener Helfer statt fünf einzelner Zuweisungen,
+## die man beim nächsten Pause-Zustand leicht vergisst, eine davon
+## nachzuziehen.
+func _pause_setzen(pausiert: bool) -> void:
+	get_tree().paused = pausiert
+	_touchsteuerung.pause_setzen(pausiert)
 
 
 ## Von `Charakterauswahl.gewaehlt` aufgerufen — wendet die Wahl an und startet
@@ -88,7 +111,7 @@ func _charakter_gewaehlt(charakter_id: StringName) -> void:
 	_spieler.uebernehmen(Spielstand.charakter())
 	_kopfzeile_setzen()
 
-	get_tree().paused = false
+	_pause_setzen(false)
 	_wellenleiter.starten(_flaeche, _spieler, self)
 
 
@@ -101,7 +124,7 @@ func _welle_geschafft(welle: int) -> void:
 	if _vorbei:
 		return
 
-	get_tree().paused = true
+	_pause_setzen(true)
 
 	_wellenmeldung.text = "Welle %d geschafft!" % welle
 	_wellenmeldung.visible = true
@@ -117,12 +140,12 @@ func _aufwertung_gewaehlt(art_id: StringName) -> void:
 	_spieler.aufwertung_anwenden(art_id)
 	_kopfzeile_setzen()
 
-	get_tree().paused = false
+	_pause_setzen(false)
 	_wellenleiter.naechste_welle_erzwingen()
 
 
 func _neustart() -> void:
-	get_tree().paused = false
+	_pause_setzen(false)
 	get_tree().reload_current_scene()
 
 
@@ -135,13 +158,10 @@ func _runde_beenden() -> void:
 	_wellenmeldung.visible = false
 
 	var rekord := Spielstand.runde_melden(_wellenleiter.punkte, _wellenleiter.welle)
-	_rundenende_text.text = "Vorbei\n\n%d Punkte · Welle %d\n%s\n\nTaste oder Bildschirm antippen" % [
-		_wellenleiter.punkte,
-		_wellenleiter.welle,
-		"🏆 Neuer Rekord!" if rekord else Spielstand.rekord_zeile(),
-	]
+	_rundenende_stats.text = "%d Punkte · Welle %d" % [_wellenleiter.punkte, _wellenleiter.welle]
+	_rundenende_rekord.text = "🏆 Neuer Rekord!" if rekord else Spielstand.rekord_zeile()
 	_rundenende.visible = true
 
 	# Friert Spieler, Gegner, Geschosse und den Wellenleiter mit einer
 	# einzigen Zeile ein, statt jedes System einzeln anzuhalten.
-	get_tree().paused = true
+	_pause_setzen(true)

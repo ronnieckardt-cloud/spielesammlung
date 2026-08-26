@@ -17,6 +17,10 @@ var _berichte: Array[String] = []
 ## dort, warum das kein lokaler Wert sein kann.
 var _letzte_gemeldete_welle := -1
 
+## Nur für den `Eingabe.touch_erkannt`-Test — dieselbe Begründung: Eine
+## Lambda fängt äußere lokale Variablen wertweise, nicht per Referenz.
+var _meldungen_zaehler := 0
+
 
 func _ready() -> void:
 	_pruefe_bewegung()
@@ -33,6 +37,10 @@ func _ready() -> void:
 	_pruefe_gegnertyp_mischung()
 	_pruefe_geschoss_schaden()
 	_pruefe_aufwertungen_am_spieler()
+	_pruefe_eingabe_touch_erkennung()
+	_pruefe_stick()
+	_pruefe_feuerknopf()
+	_pruefe_touch_bewegung()
 
 	var durchgefallen := _berichte.filter(func(z: String) -> bool: return z.begins_with("FEHL"))
 	for zeile in _berichte:
@@ -462,6 +470,36 @@ func _pruefe_szenen() -> void:
 	_pruefe_wahr("Rundenende meldet Neustart-Anfragen ueber ein Signal",
 		rundenende != null and rundenende.has_signal(&"neustart_angefordert"))
 
+	# Die Touch-Steuerung liegt genau umgekehrt zu Oberflaeche: keine ALWAYS,
+	# sie soll während der Pause ja gerade **nicht** reagieren (siehe deren
+	# eigener Kommentar). `Eingabe.touch_verfuegbar` wird für diesen
+	# Abschnitt erzwungen, sonst bliebe die Steuerung im Test-Umfeld ohnehin
+	# unsichtbar (kein echter Touchscreen hier) und die Pause-Kopplung ließe
+	# sich gar nicht beobachten — am Ende zurückgesetzt, damit spätere
+	# Prüfungen nichts davon merken.
+	var touch_vorher := Eingabe.touch_verfuegbar
+	var touchsteuerung: Touchsteuerung = haupt.get_node_or_null("Touchsteuerung")
+	_pruefe_wahr("Hauptszene hat eine Touchsteuerung mit Stick und Feuerknopf",
+		touchsteuerung != null
+		and touchsteuerung.has_node("Stick")
+		and touchsteuerung.has_node("Feuerknopf"))
+	_pruefe_wahr("sie ist nicht ALWAYS -- sonst reagierte sie waehrend der Pause weiter",
+		touchsteuerung != null and touchsteuerung.process_mode != Node.PROCESS_MODE_ALWAYS)
+
+	if touchsteuerung != null:
+		Eingabe.touch_verfuegbar = true
+		touchsteuerung.pause_setzen(true)
+		_pruefe_wahr("waehrend einer Pause bleibt sie ausgeblendet", not touchsteuerung.visible)
+		touchsteuerung.pause_setzen(false)
+		_pruefe_wahr("ausserhalb einer Pause -- bei erkanntem Touch -- ist sie sichtbar",
+			touchsteuerung.visible)
+
+		Eingabe.touch_verfuegbar = false
+		touchsteuerung.pause_setzen(false)
+		_pruefe_wahr("ohne erkannten Touch bleibt sie ausgeblendet, auch ausserhalb der Pause",
+			not touchsteuerung.visible)
+	Eingabe.touch_verfuegbar = touch_vorher
+
 	# `.free()` statt `queue_free()`: `haupt` trägt noch drei lebendige,
 	# gruppierte Gegner. `queue_free()` wirkt erst am Ende des Bildes — bis
 	# dahin stünden sie in `_pruefe_wellenleiter_ablauf` weiter in der
@@ -777,4 +815,113 @@ func _pruefe_aufwertungen_am_spieler() -> void:
 			hat_leben_karte = true
 	_pruefe_wahr("volles Leben bietet die Leben-Karte nicht mehr an", not hat_leben_karte)
 
+	spieler.queue_free()
+
+
+## `Eingabe.touch_verfuegbar` ist ein Setter mit eigener Logik (nur beim
+## Übergang von falsch auf wahr wird `touch_erkannt` gemeldet) -- reine
+## Zustandsprüfung, kein Node nötig.
+func _pruefe_eingabe_touch_erkennung() -> void:
+	var vorher := Eingabe.touch_verfuegbar
+	Eingabe.touch_verfuegbar = false
+
+	_meldungen_zaehler = 0
+	var verbindung := func() -> void: _meldungen_zaehler += 1
+	Eingabe.touch_erkannt.connect(verbindung)
+
+	Eingabe.touch_verfuegbar = true
+	_pruefe("der Uebergang falsch -> wahr meldet touch_erkannt genau einmal", _meldungen_zaehler, 1)
+
+	Eingabe.touch_verfuegbar = true
+	_pruefe("ein zweites Mal wahr meldet nichts erneut", _meldungen_zaehler, 1)
+
+	Eingabe.touch_erkannt.disconnect(verbindung)
+	Eingabe.touch_verfuegbar = vorher
+
+
+## Der virtuelle Stick für sich allein: Ziehen und Loslassen wirken direkt
+## auf `Eingabe.stick_richtung`. `_greifen`/`_loslassen` werden hier direkt
+## aufgerufen statt über echte `InputEvent`s -- derselbe Griff wie bei
+## `Aufwertungsauswahl._bei_druck` oder `Charakterauswahl._bei_druck`, ein
+## Antippen auslösen, ohne die echte Eingabe-Pipeline zu brauchen.
+func _pruefe_stick() -> void:
+	var stick := Stick.new()
+	add_child(stick)
+	stick.size = Vector2(220, 220)
+	stick.visible = true
+
+	Eingabe.stick_richtung = Vector2.ZERO
+	stick._greifen(stick.global_position + stick.size / 2.0 + Vector2(50, 0))
+	_pruefe_wahr("Ziehen nach rechts ergibt eine Richtung nach rechts",
+		Eingabe.stick_richtung.x > 0.0)
+
+	stick._loslassen()
+	_pruefe("Loslassen setzt die Richtung zurueck", Eingabe.stick_richtung, Vector2.ZERO)
+
+	# Eine Berührung weit außerhalb der Basis darf den Stick nicht greifen --
+	# sonst könnte ein Tipp irgendwo auf dem Feuerknopf versehentlich auch
+	# den Stick auslösen ("Nicht mit dem Stick kollidieren").
+	var weit_weg := InputEventScreenTouch.new()
+	weit_weg.index = 0
+	weit_weg.pressed = true
+	weit_weg.position = stick.global_position + stick.size / 2.0 + Vector2(500, 0)
+	stick._input(weit_weg)
+	_pruefe("eine Beruehrung weit ausserhalb greift den Stick nicht",
+		Eingabe.stick_richtung, Vector2.ZERO)
+
+	stick.free()
+	Eingabe.stick_richtung = Vector2.ZERO
+
+
+## Der Touch-Feuerknopf: hält/lässt die bestehende "schiessen"-Aktion nach,
+## statt eine eigene Feuerlogik zu haben -- genau das wird hier geprüft,
+## nicht irgendein eigener Zustand am Knopf selbst.
+func _pruefe_feuerknopf() -> void:
+	Input.action_release(&"schiessen")
+
+	var knopf := Feuerknopf.new()
+	add_child(knopf)
+
+	knopf.button_down.emit()
+	_pruefe_wahr("Feuerknopf haelt die Aktion 'schiessen', solange er gedrueckt bleibt",
+		Input.is_action_pressed(&"schiessen"))
+
+	knopf.button_up.emit()
+	_pruefe_wahr("und laesst wieder los, sobald der Finger sich hebt",
+		not Input.is_action_pressed(&"schiessen"))
+
+	# Verschwindet der Knopf mitten im Halten (Neustart waehrend gehaltenem
+	# Finger), darf "schiessen" nicht global haengen bleiben -- sonst wuerde
+	# die naechste Runde von allein schiessen.
+	knopf.button_down.emit()
+	knopf.free()
+	_pruefe_wahr("verschwindet der Knopf mitten im Halten, wird 'schiessen' trotzdem freigegeben",
+		not Input.is_action_pressed(&"schiessen"))
+
+
+## Die eigentliche Verdrahtung in `Spieler._physics_process`: Ohne gedrückte
+## Taste bewegt der Stick, mit gedrückter Taste gewinnt die Taste --
+## `Bestehende Tastatursteuerung behalten` ist keine Behauptung, sondern
+## hier nachgerechnet.
+func _pruefe_touch_bewegung() -> void:
+	var spieler: Spieler = load("res://characters/spieler.tscn").instantiate()
+	add_child(spieler)
+	spieler.arena = Rect2(Vector2.ZERO, Vector2(1152, 648))
+	spieler.global_position = Vector2(576, 324)
+
+	Input.action_release(&"rechts")
+	Input.action_release(&"links")
+	Eingabe.stick_richtung = Vector2.RIGHT
+	spieler._physics_process(0.016)
+	_pruefe_wahr("der Stick bewegt den Spieler, wenn keine Taste gedrueckt ist",
+		spieler.velocity.x > 0.0)
+
+	Input.action_press(&"links")
+	Eingabe.stick_richtung = Vector2.RIGHT
+	spieler._physics_process(0.016)
+	_pruefe_wahr("die Taste hat weiterhin Vorrang vor dem Stick",
+		spieler.velocity.x < 0.0)
+
+	Input.action_release(&"links")
+	Eingabe.stick_richtung = Vector2.ZERO
 	spieler.queue_free()
