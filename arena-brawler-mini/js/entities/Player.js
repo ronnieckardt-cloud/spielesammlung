@@ -1,29 +1,39 @@
 class Player {
-  constructor(scene, x, y) {
+  /**
+   * Sämtliche Startwerte kommen aus dem Charakter (`charaktere.js`), keiner
+   * ist hier noch einmal fest verdrahtet. Sonst gälte für einen Wert der
+   * gewählte Charakter und für den nächsten weiter die alte Zahl — und das
+   * fiele erst beim Spielen auf, nicht beim Lesen.
+   */
+  constructor(scene, x, y, charakter = Charaktere.standard()) {
     this.scene = scene;
-    this.geschwindigkeit = 200;
-    this.schussVerzoegerungMs = 250;
+    this.charakter = charakter;
+
+    const werte = charakter.werte;
+
+    this.geschwindigkeit = werte.tempo;
+    this.schussVerzoegerungMs = werte.schussVerzoegerungMs;
     this.naechsterSchussAb = 0;
     this.blickrichtung = { x: 1, y: 0 };
 
-    this.maxLebenspunkte = 5;
+    this.maxLebenspunkte = werte.leben;
     this.lebenspunkte = this.maxLebenspunkte;
 
     // Schaden je Geschoss. Wird über die Aufwertung „Stärkere Kugeln" erhöht;
     // ein Gegner hält zwei Treffer aus.
-    this.schaden = 1;
+    this.schaden = werte.schaden;
 
     // Kurze Unverwundbarkeit nach einem Treffer. Ohne sie liegt der Spieler
     // nach einer Berührung noch im Gegner und verliert bei 60 Bildern je
-    // Sekunde alle fünf Leben, bevor er den Finger bewegen kann.
-    this.unverwundbarMs = 900;
+    // Sekunde alle Leben, bevor er den Finger bewegen kann.
+    this.unverwundbarMs = werte.unverwundbarMs;
     this.unverwundbarBis = 0;
 
     // Reichweite des Auto-Feuers. Ohne Grenze schießt der Spieler quer über
     // die ganze Arena und trifft Gegner, die er noch gar nicht gesehen hat.
-    this.feuerReichweite = 460;
+    this.feuerReichweite = werte.reichweite;
 
-    this.sprite = scene.physics.add.sprite(x, y, Player.erzeugeTextur(scene));
+    this.sprite = scene.physics.add.sprite(x, y, Player.erzeugeTextur(scene, charakter));
     this.sprite.setCollideWorldBounds(true);
     this.sprite.setData('instanz', this);
 
@@ -43,12 +53,17 @@ class Player {
     this.leertaste = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
   }
 
-  // Erzeugt einmalig ein blaues Rechteck als Platzhalter-Textur für den Spieler
-  static erzeugeTextur(scene) {
-    const schluessel = 'spieler-textur';
+  /**
+   * Platzhalter-Textur in der Farbe des Charakters. Je Charakter eine eigene
+   * Textur, damit man auf dem Feld sieht, wen man spielt — der Schlüssel trägt
+   * die Kennung, sonst bekäme der zweite Charakter die Farbe des ersten
+   * (`textures.exists` wäre ja erfüllt).
+   */
+  static erzeugeTextur(scene, charakter = Charaktere.standard()) {
+    const schluessel = `spieler-${charakter.id}`;
     if (!scene.textures.exists(schluessel)) {
       const grafik = scene.add.graphics();
-      grafik.fillStyle(0x2e86de, 1);
+      grafik.fillStyle(charakter.farbe, 1);
       grafik.fillRect(0, 0, 32, 32);
       grafik.generateTexture(schluessel, 32, 32);
       grafik.destroy();

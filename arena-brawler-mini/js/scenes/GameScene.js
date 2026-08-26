@@ -30,10 +30,55 @@ class GameScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, this.scale.width, this.scale.height);
 
-    this.player = new Player(this, 120, this.scale.height / 2);
-
+    this.player = null;
     this.enemies = [];
     this.enemyGroup = this.physics.add.group();
+
+    this.add.text(16, 16, 'Arena Brawler Mini – Prototype', {
+      fontFamily: 'sans-serif',
+      fontSize: '18px',
+      color: '#ffffff',
+    });
+
+    this.charakterWaehlen();
+  }
+
+  /**
+   * Charakterwahl vor dem Start — auch nach jedem Game Over wieder.
+   *
+   * Die Alternative wäre, denselben Charakter direkt neu zu starten. Dagegen
+   * spricht: Der Prototyp hat keinen Menüknopf, mit dem man zurück zur Wahl
+   * käme. Wer einmal „Tank" getippt hat, bliebe für immer beim Tank — und
+   * damit wäre der ganze Sinn dreier Charaktere weg. Der Weg kostet einen
+   * Tipp auf einem Bildschirm, den man ohnehin gerade liest.
+   *
+   * Damit schnelles Weiterspielen trotzdem schnell bleibt, ist der zuletzt
+   * gespielte Charakter markiert: Man sucht ihn nicht, man sieht ihn.
+   */
+  charakterWaehlen() {
+    this.auswahlLaeuft = true;
+
+    const zuletzt = this.registry.get('letzterCharakter') || null;
+
+    this.auswahl = new Auswahl(this, {
+      ueberschrift: 'Wer soll kämpfen?',
+      karten: Charaktere.LISTE.map((c) => ({
+        id: c.id, titel: c.name, wirkung: c.staerke, farbe: c.farbe, charakter: c,
+      })),
+      zeichen: (scene, karte, y) => Charaktere.zeichen(scene, karte.charakter, y),
+      fusszeile: (karte) => (karte.id === zuletzt
+        ? `Zuletzt gespielt · ${Charaktere.werteZeile(karte.charakter)}`
+        : Charaktere.werteZeile(karte.charakter)),
+      hervorgehoben: zuletzt,
+      beiWahl: (karte) => this.rundeStarten(karte.charakter),
+    });
+  }
+
+  rundeStarten(charakter) {
+    this.charakter = charakter;
+    this.registry.set('letzterCharakter', charakter.id);
+
+    this.player = new Player(this, 120, this.scale.height / 2, charakter);
 
     // Spieler-Geschosse treffen Gegner
     this.physics.add.overlap(this.player.bullets, this.enemyGroup, (kugel, gegnerSprite) => {
@@ -49,14 +94,11 @@ class GameScene extends Phaser.Scene {
       this.player.takeDamage();
     });
 
-    this.add.text(16, 16, 'Arena Brawler Mini – Prototype', {
-      fontFamily: 'sans-serif',
-      fontSize: '18px',
-      color: '#ffffff',
-    });
-
     this.kopfanzeige = new Kopfanzeige(this);
     this.lebensanzeige = new Lebensanzeige(this, this.player.maxLebenspunkte);
+
+    this.auswahlLaeuft = false;
+    this.auswahl = null;
 
     this.hinweisAnzeigen();
     this.naechsteWelle();
@@ -166,13 +208,19 @@ class GameScene extends Phaser.Scene {
     this.player.sprite.body.setVelocity(0, 0);
     this.player.stick.abschalten();
 
-    this.auswahl = new Auswahl(this, karten, (karte) => {
-      this.aufwertungNehmen(karte);
+    this.auswahl = new Auswahl(this, {
+      ueberschrift: 'Wähle eine Aufwertung',
+      karten,
+      zeichen: (scene, karte, y) => Aufwertungen.zeichen(scene, karte, y),
+      fusszeile: (karte) => `Stufe ${(this.stufen[karte.id] || 0) + 1} von ${karte.maxStufe}`,
+      beiWahl: (karte) => {
+        this.aufwertungNehmen(karte);
 
-      this.auswahlLaeuft = false;
-      this.auswahl = null;
-      this.player.stick.anschalten();
-      this.naechsteWelle();
+        this.auswahlLaeuft = false;
+        this.auswahl = null;
+        this.player.stick.anschalten();
+        this.naechsteWelle();
+      },
     });
   }
 
@@ -254,7 +302,8 @@ class GameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    if (this.vorbei) return;
+    // Vor der Charakterwahl gibt es noch keinen Spieler und keine Kopfzeile.
+    if (this.vorbei || !this.player) return;
 
     // Die Punktzahl darf weiterlaufen, während die Karten stehen — sie holt
     // nur den schon verdienten Stand ein, das ist keine Spielhandlung.

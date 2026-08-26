@@ -31,17 +31,46 @@ der `CLAUDE.md` der Spielesammlung).
 - Bewegen: WASD oder Pfeiltasten
 - Schießen: Leertaste (zusätzlich zum Auto-Feuer)
 
+## Charaktere
+
+Vor jeder Runde wählt man einen von dreien. Die Werte gelten für die ganze
+Runde; die Wellen-Aufwertungen rechnen darauf **auf**, ersetzen sie also
+nicht — „Mehr Tempo" macht den Schnellen schneller als den Tank.
+
+| | Leben | Tempo | Schusspause | Reichweite | Unverwundbar |
+|---|---|---|---|---|---|
+| Ausgewogen | 5 | 200 | 250 ms | 460 | 900 ms |
+| Schnell | 4 | 275 | 215 ms | 380 | 900 ms |
+| Tank | 7 | 165 | 300 ms | 460 | 1300 ms |
+
+Der Tank bekommt eine **längere** Unverwundbarkeit, nicht wie ursprünglich
+angedacht eine kürzere: Eine kürzere wäre für ihn ein Nachteil und das genaue
+Gegenteil seiner Rolle. Wer viel einsteckt, soll nach einem Treffer auch Zeit
+haben, sich aus dem Getümmel zu lösen.
+
+Auch der langsamste Charakter läuft mit 165 noch klar schneller als der
+schnellste Gegner (100, gedeckelt) — sonst wäre der Tank ab Welle 10 nicht
+schwer, sondern unspielbar. Ein Test sichert diesen Abstand ab.
+
+**Nach dem Game Over geht es zurück zur Charakterwahl**, nicht direkt in
+dieselbe Runde. Der Prototyp hat keinen Menüknopf, mit dem man zurück zur Wahl
+käme; wer einmal „Tank" getippt hat, bliebe sonst für immer beim Tank, und der
+ganze Sinn dreier Charaktere wäre weg. Damit schnelles Weiterspielen trotzdem
+schnell bleibt, ist der zuletzt gespielte Charakter markiert — man sucht ihn
+nicht, man sieht ihn.
+
 ## Regeln
 
-- Der Spieler hat **5 Lebenspunkte**, angezeigt als Herzen oben rechts. Ein
-  verbrauchtes Herz bleibt als Umriss stehen, statt zu verschwinden — so
-  sieht man, wie viel man hatte.
+- Die Lebenspunkte kommen vom Charakter (4 bis 7) und stehen als Herzen oben
+  rechts. Ein verbrauchtes Herz bleibt als Umriss stehen, statt zu
+  verschwinden — so sieht man, wie viel man hatte.
 - Ein Gegner hält **2 Treffer** aus. Der erste lässt ihn aufblitzen und
   zurückweichen, der zweite erledigt ihn. Jeder besiegte Gegner gibt
   **100 Punkte**.
-- Eine Berührung kostet **1 Lebenspunkt**, danach ist der Spieler 900 ms
-  unverwundbar und blinkt. Ohne diese Pause wäre man nach einer einzigen
-  Berührung sofort tot, weil die Kollision in jedem Bild erneut auslöst.
+- Eine Berührung kostet **1 Lebenspunkt**, danach ist der Spieler kurz
+  unverwundbar und blinkt (900 ms, beim Tank 1300). Ohne diese Pause wäre man
+  nach einer einzigen Berührung sofort tot, weil die Kollision in jedem Bild
+  erneut auslöst.
 - Bei 0 Lebenspunkten: Game Over mit Punktestand und erreichter Welle,
   Tippen startet neu.
 
@@ -71,13 +100,18 @@ Nach jeder geschafften Welle stehen drei Karten zur Wahl; die Runde ist
 solange pausiert. Die Boni stapeln sich über die Runde und werden beim
 Neustart wieder zurückgesetzt — sie gelten für die Runde, nicht für das Gerät.
 
-| Karte | Wirkung | Stufen |
-|---|---|---|
-| +1 Leben | Ein Herz mehr, sofort aufgefüllt | 3 (5 → 8) |
-| Schnellere Schüsse | Pause zwischen Schüssen −35 ms | 4 (250 → 110 ms) |
-| Mehr Tempo | Spieler läuft +18 schneller | 5 (200 → 290) |
-| Stärkere Kugeln | Ein Treffer erledigt einen Gegner | 1 |
-| Größere Reichweite | Auto-Feuer greift +90 weiter | 4 (460 → 820) |
+| Karte | Wirkung je Stufe | Stufen | Grenze |
+|---|---|---|---|
+| +1 Leben | ein Herz mehr, sofort aufgefüllt | 3 | — |
+| Schnellere Schüsse | Schusspause −35 ms | 4 | 110 ms |
+| Mehr Tempo | +18 Tempo | 5 | 290 |
+| Stärkere Kugeln | ein Treffer erledigt einen Gegner | 1 | — |
+| Größere Reichweite | +90 Reichweite | 4 | 820 |
+
+Die Werte sind **Zuschläge auf die Charakterwerte**, keine festen Zielwerte:
+Der Tank startet bei Tempo 165 und kommt mit „Mehr Tempo" auf 183. Die Grenze
+in der letzten Spalte gilt dabei für alle gleich — der Schnelle steht schon bei
+275 und landet mit einer Stufe deshalb auf 290 statt auf 293.
 
 „Stärkere Kugeln" hat bewusst nur eine Stufe: Ein Gegner hält zwei Treffer
 aus, mehr als zwei Schaden wäre also wirkungslos — und eine Karte, die nichts
@@ -91,7 +125,7 @@ stand da eine Karte, die nichts tat" ist sonst nicht nachvollziehbar.
 
 ## Status
 
-Prototyp Phase 4 – Wellen, Aufwertungen, Punktestand, Lebenspunkte,
+Prototyp Phase 5 – Charaktere, Wellen, Aufwertungen, Punktestand, Lebenspunkte,
 Game-Over und Neustart.
 
 Offen für spätere Ausbaustufen: Ton, mehr Gegnerarten, Bestenliste.

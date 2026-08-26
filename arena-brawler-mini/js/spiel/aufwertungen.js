@@ -73,6 +73,50 @@ const Aufwertungen = {
     return Aufwertungen.LISTE.find((a) => a.id === id) || null;
   },
 
+  /**
+   * Einfaches Zeichen je Aufwertung — Form, nicht nur Farbe.
+   *
+   * Steht hier und nicht in `Auswahl`: Der Auswahlbildschirm ist für Karten
+   * jeder Art zuständig und soll nicht wissen, wie eine Aufwertung aussieht.
+   */
+  zeichen(scene, karte, y) {
+    if (karte.id === 'leben') {
+      const bild = scene.add.image(0, y, Lebensanzeige.erzeugeTextur(scene, true));
+      bild.setDisplaySize(46, 46);
+      return bild;
+    }
+
+    const g = scene.add.graphics();
+    g.fillStyle(karte.farbe, 1);
+    g.lineStyle(4, karte.farbe, 1);
+
+    if (karte.id === 'schuss') {
+      // Drei Kugeln in einer Reihe = schnelle Folge
+      [-22, 0, 22].forEach((dx) => g.fillCircle(dx, y, 7));
+    } else if (karte.id === 'tempo') {
+      // Doppelter Winkel nach rechts
+      [-10, 10].forEach((dx) => {
+        g.beginPath();
+        g.moveTo(dx - 8, y - 14);
+        g.lineTo(dx + 8, y);
+        g.lineTo(dx - 8, y + 14);
+        g.strokePath();
+      });
+    } else if (karte.id === 'schaden') {
+      // Eine große Kugel neben einer kleinen = mehr Wumms
+      g.fillCircle(-16, y, 6);
+      g.fillCircle(12, y, 16);
+    } else {
+      // Reichweite: Ringe, die nach außen größer werden
+      [9, 17, 25].forEach((r, i) => {
+        g.lineStyle(3, karte.farbe, 1 - i * 0.28);
+        g.strokeCircle(0, y, r);
+      });
+    }
+
+    return g;
+  },
+
   /** Alles, was noch nicht ausgereizt ist. */
   verfuegbare(stufen) {
     return Aufwertungen.LISTE.filter((a) => (stufen[a.id] || 0) < a.maxStufe);

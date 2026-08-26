@@ -1,14 +1,32 @@
 /**
- * Auswahlbildschirm nach einer geschafften Welle: drei Karten zum Antippen.
+ * Auswahlbildschirm mit antippbaren Karten — benutzt für die Charakterwahl vor
+ * der Runde und für die Aufwertungen nach jeder Welle.
  *
- * Die Karten sind bewusst groß (240 × 250 auf 960 × 540). Auf einem iPad ist
- * eine Trefffläche unter etwa 44 Punkten für einen Kinderdaumen zu klein, und
- * hier hängt an einem Fehltipp die ganze restliche Runde.
+ * Bewusst **ein** Baustein für beides: Die beiden Bildschirme unterscheiden
+ * sich nur in Überschrift, Zeichen und Fußzeile. Zwei fast gleiche Klassen
+ * nebeneinander driften auseinander, sobald jemand nur eine davon anfasst —
+ * und dann sitzt die Trefffläche auf dem einen Bildschirm anders als auf dem
+ * anderen.
+ *
+ * Die Karten sind groß (240 × 270 auf 960 × 540). Auf einem iPad ist eine
+ * Trefffläche unter etwa 44 Punkten für einen Kinderdaumen zu klein, und hier
+ * hängt an einem Fehltipp die ganze restliche Runde.
  */
 class Auswahl {
-  constructor(scene, karten, beiWahl) {
+  /**
+   * @param {object} plan
+   *   ueberschrift  Text über den Karten
+   *   karten        [{ id, titel, wirkung, farbe }]
+   *   zeichen       (scene, karte, y) => GameObject — das Symbol der Karte
+   *   fusszeile     (karte) => string
+   *   hervorgehoben id der Karte, die zusätzlich markiert wird (optional)
+   *   marke         Text für diese Markierung (optional)
+   *   beiWahl       (karte) => void
+   */
+  constructor(scene, plan) {
     this.scene = scene;
-    this.beiWahl = beiWahl;
+    this.plan = plan;
+    this.beiWahl = plan.beiWahl;
     this.gewaehlt = false;
     this.teile = [];
 
@@ -25,23 +43,24 @@ class Auswahl {
     schleier.setInteractive();
     this.teile.push(schleier);
 
-    const ueberschrift = scene.add.text(breite / 2, 74, 'Wähle eine Aufwertung', {
+    const ueberschrift = scene.add.text(breite / 2, 74, plan.ueberschrift, {
       fontFamily: 'sans-serif', fontSize: '32px', color: '#ffffff', fontStyle: 'bold',
     });
     ueberschrift.setOrigin(0.5).setDepth(1801);
     this.teile.push(ueberschrift);
 
     const kartenBreite = 240;
-    // 270 statt 250: „Schnellere Schüsse" bricht zweizeilig um, und bei der
-    // knapperen Höhe stieß die zweite Zeile fast an die Beschreibung darunter.
-    const kartenHoehe = 270;
+    // Zweimal gewachsen, beide Male wegen umbrechender Texte: erst 250 → 270,
+    // weil „Schnellere Schüsse" zweizeilig an die Beschreibung stieß, dann
+    // 270 → 300, weil die Werte-Zeile der Charaktere unten aus der Karte lief.
+    const kartenHoehe = 300;
     const abstand = 28;
-    const gesamt = karten.length * kartenBreite + (karten.length - 1) * abstand;
+    const gesamt = plan.karten.length * kartenBreite + (plan.karten.length - 1) * abstand;
     const startX = (breite - gesamt) / 2 + kartenBreite / 2;
 
-    karten.forEach((karte, i) => {
+    plan.karten.forEach((karte, i) => {
       const x = startX + i * (kartenBreite + abstand);
-      this.karteBauen(karte, x, hoehe / 2 + 16, kartenBreite, kartenHoehe, i);
+      this.karteBauen(karte, x, hoehe / 2 + 16, kartenBreite, kartenHoehe);
     });
 
     // Einblenden mit leichtem Versatz: Die Karten kommen nacheinander, nicht
@@ -52,15 +71,16 @@ class Auswahl {
     });
   }
 
-  karteBauen(karte, x, y, breite, hoehe, index) {
+  karteBauen(karte, x, y, breite, hoehe) {
     const scene = this.scene;
+    const hervor = this.plan.hervorgehoben === karte.id;
     const behaelter = scene.add.container(x, y);
     behaelter.setDepth(1801);
 
     const grafik = scene.add.graphics();
     grafik.fillStyle(0x1b2340, 1);
     grafik.fillRoundedRect(-breite / 2, -hoehe / 2, breite, hoehe, 18);
-    grafik.lineStyle(3, karte.farbe, 1);
+    grafik.lineStyle(hervor ? 5 : 3, karte.farbe, 1);
     grafik.strokeRoundedRect(-breite / 2, -hoehe / 2, breite, hoehe, 18);
     behaelter.add(grafik);
 
@@ -71,7 +91,7 @@ class Auswahl {
     band.fillRoundedRect(-breite / 2 + 18, -hoehe / 2 + 14, breite - 36, 6, 3);
     behaelter.add(band);
 
-    behaelter.add(this.zeichenBauen(karte, -hoehe / 2 + 72));
+    behaelter.add(this.plan.zeichen(scene, karte, -hoehe / 2 + 72));
 
     // Der Titel wächst um seine eigene Mitte (origin y = 0.5), nicht nach
     // unten: Sonst schiebt sich eine zweite Zeile in die Beschreibung darunter,
@@ -97,12 +117,18 @@ class Auswahl {
     wirkung.setOrigin(0.5, 0);
     behaelter.add(wirkung);
 
-    const stufe = this.scene.stufen[karte.id] || 0;
-    const stufeText = scene.add.text(0, hoehe / 2 - 30, `Stufe ${stufe + 1} von ${karte.maxStufe}`, {
-      fontFamily: 'sans-serif', fontSize: '13px', color: '#6b76a3',
+    // Platz für bis zu drei Zeilen: „Zuletzt gespielt · 7 Leben · gemächlich"
+    // bricht auf einem schmalen Gerät mehrfach um, und was unten aus der Karte
+    // läuft, liest sich als kaputtes Layout.
+    const fusszeile = scene.add.text(0, hoehe / 2 - 64, this.plan.fusszeile(karte), {
+      fontFamily: 'sans-serif',
+      fontSize: '13px',
+      color: hervor ? '#c8d0f0' : '#6b76a3',
+      align: 'center',
+      wordWrap: { width: breite - 24 },
     });
-    stufeText.setOrigin(0.5, 0);
-    behaelter.add(stufeText);
+    fusszeile.setOrigin(0.5, 0);
+    behaelter.add(fusszeile);
 
     behaelter.setSize(breite, hoehe);
     behaelter.setInteractive(
@@ -128,47 +154,6 @@ class Auswahl {
 
     this.teile.push(behaelter);
     return behaelter;
-  }
-
-  /** Ein einfaches Zeichen je Aufwertung — Form, nicht nur Farbe. */
-  zeichenBauen(karte, y) {
-    const scene = this.scene;
-
-    if (karte.id === 'leben') {
-      const bild = scene.add.image(0, y, Lebensanzeige.erzeugeTextur(scene, true));
-      bild.setDisplaySize(46, 46);
-      return bild;
-    }
-
-    const g = scene.add.graphics();
-    g.fillStyle(karte.farbe, 1);
-    g.lineStyle(4, karte.farbe, 1);
-
-    if (karte.id === 'schuss') {
-      // Drei Kugeln in einer Reihe = schnelle Folge
-      [-22, 0, 22].forEach((dx) => g.fillCircle(dx, y, 7));
-    } else if (karte.id === 'tempo') {
-      // Doppelter Winkel nach rechts
-      [-10, 10].forEach((dx) => {
-        g.beginPath();
-        g.moveTo(dx - 8, y - 14);
-        g.lineTo(dx + 8, y);
-        g.lineTo(dx - 8, y + 14);
-        g.strokePath();
-      });
-    } else if (karte.id === 'schaden') {
-      // Eine große Kugel neben einer kleinen = mehr Wumms
-      g.fillCircle(-16, y, 6);
-      g.fillCircle(12, y, 16);
-    } else {
-      // Reichweite: Ringe, die nach außen größer werden
-      [9, 17, 25].forEach((r, i) => {
-        g.lineStyle(3, karte.farbe, 1 - i * 0.28);
-        g.strokeCircle(0, y, r);
-      });
-    }
-
-    return g;
   }
 
   schliessen(karte) {
