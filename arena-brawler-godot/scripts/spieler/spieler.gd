@@ -30,6 +30,13 @@ var arena: Rect2 = Rect2(Vector2.ZERO, Vector2(1152, 648))
 var _naechster_schuss: float = 0.0
 var _unverwundbar_bis: float = 0.0
 
+## Stapel je Aufwertungsart (`Aufwertungen.FEUERRATE` usw.) — nur die vier
+## wiederholbaren, Leben läuft nicht darüber (siehe `Aufwertungen`). Startet
+## bei jeder neuen Instanz leer: Ein „Nochmal" nach Game-Over mountet den
+## Spieler über `reload_current_scene()` komplett neu, genau das setzt alle
+## Boni zurück — hier muss nichts eigens aufgeräumt werden.
+var _aufwertungen: Dictionary = {}
+
 @onready var _anzeige: Node2D = $Anzeige
 @onready var _figur: Figur = $Anzeige/Figur
 
@@ -62,7 +69,7 @@ func _physics_process(delta: float) -> void:
 		Input.is_action_pressed(&"runter"),
 	)
 
-	velocity = richtung * variante.tempo
+	velocity = richtung * effektives_tempo()
 	move_and_slide()
 
 	# Zusätzlich zur Kollision mit den Wänden: Bei sehr hohem Tempo kann ein
@@ -88,16 +95,52 @@ func _schiessen(richtung: Vector2) -> void:
 	var jetzt := Time.get_ticks_msec() / 1000.0
 	if jetzt < _naechster_schuss:
 		return
-	_naechster_schuss = jetzt + variante.schuss_pause
+	_naechster_schuss = jetzt + effektive_schuss_pause()
 
 	var flug := richtung if richtung != Vector2.ZERO else Vector2.from_angle(_anzeige.rotation - PI / 2.0)
 
 	var geschoss := GESCHOSS.instantiate()
 	geschoss.global_position = global_position
-	geschoss.starten(flug, variante.reichweite, variante.farbe)
+	geschoss.starten(flug, effektive_reichweite(), variante.farbe, effektiver_schaden())
 	# An den Elternknoten hängen, nicht an den Spieler: Ein Geschoss soll
 	# stehenbleiben, wo es ist, und nicht mitwandern, wenn der Spieler läuft.
 	get_parent().add_child(geschoss)
+
+
+## Eine gewählte Aufwertungskarte anwenden. Leben wirkt sofort und direkt auf
+## den laufenden Wert (gedeckelt); die vier anderen erhöhen nur ihren
+## Stapelzähler — die eigentliche Wirkung lesen `effektives_tempo()` &
+## Geschwister bei jedem Aufruf frisch daraus ab, es gibt also keinen
+## zweiten Ort, an dem „das aktuelle Tempo" stehen könnte.
+func aufwertung_anwenden(art_id: StringName) -> void:
+	if art_id == Aufwertungen.LEBEN:
+		leben = mini(Aufwertungen.LEBEN_MAX, leben + Aufwertungen.LEBEN_SCHRITT)
+		return
+
+	var bisher: int = _aufwertungen.get(art_id, 0)
+	_aufwertungen[art_id] = Aufwertungen.naechster_stapel(bisher, art_id)
+
+
+## Welche Karten dem Spieler gerade angeboten werden dürften — reicht die
+## eigenen Stapel und das aktuelle Leben nur weiter an `Aufwertungen`.
+func verfuegbare_aufwertungen() -> Array[Aufwertungen.Art]:
+	return Aufwertungen.verfuegbare_arten(_aufwertungen, leben)
+
+
+func effektives_tempo() -> float:
+	return variante.tempo * Aufwertungen.tempo_faktor(_aufwertungen.get(Aufwertungen.TEMPO, 0))
+
+
+func effektive_schuss_pause() -> float:
+	return variante.schuss_pause * Aufwertungen.feuerrate_faktor(_aufwertungen.get(Aufwertungen.FEUERRATE, 0))
+
+
+func effektive_reichweite() -> float:
+	return variante.reichweite * Aufwertungen.reichweite_faktor(_aufwertungen.get(Aufwertungen.REICHWEITE, 0))
+
+
+func effektiver_schaden() -> int:
+	return Aufwertungen.schaden(_aufwertungen.get(Aufwertungen.SCHADEN, 0))
 
 
 func ist_unverwundbar() -> bool:

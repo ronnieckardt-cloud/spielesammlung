@@ -1,9 +1,11 @@
-[gd_scene load_steps=5 format=3 uid="uid://bqarena0main"]
+[gd_scene load_steps=7 format=3 uid="uid://bqarena0main"]
 
 [ext_resource type="Script" path="res://scripts/welt/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://bqarena0arena" path="res://scenes/arena.tscn" id="2_arena"]
 [ext_resource type="PackedScene" uid="uid://bqarena0spieler" path="res://characters/spieler.tscn" id="3_spieler"]
 [ext_resource type="Script" path="res://scripts/welt/wellenleiter.gd" id="4_wellenleiter"]
+[ext_resource type="Script" path="res://scripts/welt/rundenende.gd" id="5_rundenende"]
+[ext_resource type="Script" path="res://ui/aufwertungsauswahl.gd" id="6_aufwertungsauswahl"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -21,6 +23,7 @@ position_smoothing_speed = 6.0
 script = ExtResource("4_wellenleiter")
 
 [node name="Oberflaeche" type="CanvasLayer" parent="."]
+process_mode = 3
 
 [node name="Kopfzeile" type="Label" parent="Oberflaeche"]
 offset_left = 20.0
@@ -31,11 +34,26 @@ theme_override_colors/font_color = Color(0.878431, 0.905882, 0.976471, 1)
 theme_override_font_sizes/font_size = 18
 text = "Arena Brawler"
 
+[node name="Wellenmeldung" type="Label" parent="Oberflaeche"]
+visible = false
+mouse_filter = 2
+anchor_right = 1.0
+anchor_top = 0.32
+anchor_bottom = 0.32
+offset_top = -30.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 34
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "Welle 1 geschafft!"
+
 [node name="Rundenende" type="Control" parent="Oberflaeche"]
 visible = false
 mouse_filter = 2
 anchor_right = 1.0
 anchor_bottom = 1.0
+script = ExtResource("5_rundenende")
 
 [node name="Hintergrund" type="ColorRect" parent="Oberflaeche/Rundenende"]
 mouse_filter = 2
@@ -51,3 +69,59 @@ theme_override_font_sizes/font_size = 26
 horizontal_alignment = 1
 vertical_alignment = 1
 text = "Vorbei"
+
+[node name="Aufwertungsauswahl" type="CanvasLayer" parent="Oberflaeche"]
+script = ExtResource("6_aufwertungsauswahl")
+
+[node name="Hintergrund" type="ColorRect" parent="Oberflaeche/Aufwertungsauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.043137, 0.047059, 0.070588, 0.88)
+
+[node name="Titel" type="Label" parent="Oberflaeche/Aufwertungsauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 64.0
+offset_bottom = 104.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+text = "Aufwertung wählen"
+
+[node name="Karte1" type="Button" parent="Oberflaeche/Aufwertungsauswahl"]
+offset_left = 64.0
+offset_top = 160.0
+offset_right = 384.0
+offset_bottom = 560.0
+theme_override_font_sizes/font_size = 21
+autowrap_mode = 3
+text = "Karte 1"
+
+[node name="Karte2" type="Button" parent="Oberflaeche/Aufwertungsauswahl"]
+offset_left = 416.0
+offset_top = 160.0
+offset_right = 736.0
+offset_bottom = 560.0
+theme_override_font_sizes/font_size = 21
+autowrap_mode = 3
+text = "Karte 2"
+
+[node name="Karte3" type="Button" parent="Oberflaeche/Aufwertungsauswahl"]
+offset_left = 768.0
+offset_top = 160.0
+offset_right = 1088.0
+offset_bottom = 560.0
+theme_override_font_sizes/font_size = 21
+autowrap_mode = 3
+text = "Karte 3"
+
+[node name="Hinweis" type="Label" parent="Oberflaeche/Aufwertungsauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 578.0
+offset_bottom = 610.0
+theme_override_colors/font_color = Color(0.65, 0.68, 0.78, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+text = "Karte antippen zum Wählen"

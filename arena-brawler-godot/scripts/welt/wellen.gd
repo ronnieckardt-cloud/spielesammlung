@@ -23,10 +23,6 @@ const GRUND_TEMPO_FAKTOR := 1.0
 const TEMPO_JE_WELLE := 0.06
 const MAX_TEMPO_FAKTOR := 1.6
 
-## Pause zwischen zwei Wellen in Sekunden — kurz genug, um nicht zu warten,
-## lang genug, um zu merken „geschafft, gleich geht's weiter".
-const PAUSE_ZWISCHEN_WELLEN := 2.0
-
 
 static func gegner_fuer_welle(welle: int) -> int:
 	return mini(MAX_ANZAHL, GRUND_ANZAHL + (welle - 1) * ANZAHL_JE_WELLE)

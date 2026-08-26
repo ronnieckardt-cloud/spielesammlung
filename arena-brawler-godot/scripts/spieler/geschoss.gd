@@ -14,13 +14,17 @@ const TEMPO := 620.0
 var _richtung := Vector2.RIGHT
 var _reichweite := 460.0
 var _geflogen := 0.0
+var _schaden := 1
 
 @onready var _bild: Polygon2D = $Bild
 
 
-func starten(richtung: Vector2, reichweite: float, farbe: Color) -> void:
+## `schaden` mit Standardwert 1, damit ein Aufruf ohne den Parameter (etwa
+## aus einem älteren Test) weiterhin das alte Verhalten bekommt.
+func starten(richtung: Vector2, reichweite: float, farbe: Color, schaden: int = 1) -> void:
 	_richtung = richtung.normalized() if richtung != Vector2.ZERO else Vector2.RIGHT
 	_reichweite = reichweite
+	_schaden = schaden
 	rotation = _richtung.angle()
 
 	# Die Farbe kommt vom Charakter: Man soll sehen, dass das der eigene Schuss
@@ -46,5 +50,5 @@ func _physics_process(delta: float) -> void:
 func _on_body_entered(koerper: Node2D) -> void:
 	# Der Treffer selbst gehört dem Getroffenen — hier wird nur weitergereicht.
 	if koerper.has_method(&"schaden_nehmen"):
-		koerper.schaden_nehmen(1)
+		koerper.schaden_nehmen(_schaden)
 	queue_free()

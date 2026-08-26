@@ -7,11 +7,12 @@ Moderner 2D-Arena-Brawler in Godot 4 mit GDScript.
 > `arena-brawler-mini/` — kein gemeinsamer Code, keine gemeinsamen Abhängigkeiten.
 > Es liegt nur im selben Repository.
 
-Stand: **erste spielbare Runde**. Arena, Spieler, Bewegung, Schießen, drei
-Charaktervarianten mit eigenen Figuren, ein Verfolger-Gegner und ein
-Wellensystem stehen — man kann eine Runde von Anfang bis Game-Over
-durchspielen. Aufwertungen, Auswahlbildschirm und Touch-Bedienung kommen
-später.
+Stand: **spielbare Runde mit Aufwertungen**. Arena, Spieler, Bewegung,
+Schießen, drei Charaktervarianten mit eigenen Figuren, ein Verfolger-Gegner,
+ein Wellensystem und eine Kartenauswahl nach jeder geschafften Welle stehen —
+man kann eine Runde von Anfang bis Game-Over durchspielen, dabei stärker
+werden, und alles setzt sich beim Neustart sauber zurück. Auswahlbildschirm
+und Touch-Bedienung kommen später.
 
 ## Öffnen und starten
 
@@ -74,12 +75,15 @@ arena-brawler-godot/
 │   ├── welt/
 │   │   ├── main.gd
 │   │   ├── arena.gd
-│   │   ├── wellen.gd        Steigerung über die Wellen, reine Rechnung
-│   │   └── wellenleiter.gd  spawnt Gegner, wartet, startet die nächste Welle
+│   │   ├── wellen.gd           Steigerung über die Wellen, reine Rechnung
+│   │   ├── wellenleiter.gd     spawnt Gegner, meldet geschaffte Wellen
+│   │   ├── aufwertungen.gd     die fünf Karten, reine Rechnung
+│   │   └── rundenende.gd       Neustart-Erkennung, siehe „Pause" unten
 │   ├── pruefen.gd
 │   ├── musterblatt.gd
 │   └── rundenprobe.gd
-├── ui/                    (noch leer)
+├── ui/
+│   └── aufwertungsauswahl.gd   die drei Karten nach einer Welle
 └── assets/
     ├── sprites/  audio/  fonts/   (noch leer)
 ```
@@ -278,7 +282,7 @@ selbst alles andere aufgebaut hat. Wie viele Gegner eine Welle hat und wie
 schnell sie laufen, steht **reingerechnet** in `wellen.gd`
 (`Wellen.gegner_fuer_welle`, `Wellen.tempo_faktor_fuer_welle`, beide mit
 Deckel) — der Wellenleiter selbst kennt nur die Uhr: warten, bis die Gruppe
-`"gegner"` leer ist, kurze Pause, nächste Welle.
+`"gegner"` leer ist, dann `welle_geschafft` melden.
 
 **Gegner spawnen am eingerückten Rand der Arena, nicht im Feld.**
 `Wellen.punkt_am_rand(flaeche, t, rand)` ist ebenfalls reine Rechnung: `t`
@@ -287,25 +291,101 @@ dass niemand halb in der Wand steckt. Der Zufall bleibt draußen — der
 Wellenleiter würfelt `t`, die Funktion rechnet nur nach, und lässt sich damit
 für 40 Werte auf einmal durchprüfen, ohne dass eine Szene läuft.
 
-**Game-Over friert mit einer einzigen Zeile ein.** `get_tree().paused = true`
-hält Spieler, Gegner, Geschosse und den Wellenleiter gleichzeitig an, statt
-jedes System einzeln zu stoppen. Damit trotzdem noch etwas auf den Neustart
-reagiert, bekommt `Main` selbst `process_mode = PROCESS_MODE_ALWAYS` — nur
-diese eine Datei läuft während der Pause weiter, und ihr `_unhandled_input`
-nimmt Taste, Maus oder Bildschirmberührung entgegen und lädt die Szene neu
-(`reload_current_scene()`, nachdem `paused` wieder auf `false` steht). Die
-Rundenende-Fläche selbst bekommt `mouse_filter = 2` (Ignorieren) — ein
-`Control` blockiert Mausklicks sonst standardmäßig, bevor sie `Main` überhaupt
-erreichen.
-
 **Punkte und Welle laufen in dieselbe Bestenliste ein wie schon vorbereitet**:
 Am Rundenende ruft `main.gd` `Spielstand.runde_melden(punkte, welle)` auf —
 dieselbe Funktion, die vorher schon existierte, nur jetzt zum ersten Mal mit
 echten Werten aus einer echten Runde gefüttert.
 
+## Aufwertungen
+
+Nach jeder geschafften Welle: kurze Meldung, dann genau drei Karten, dann
+weiter — Spieler, Gegner und Geschosse stehen währenddessen **vollständig**
+still.
+
+**Fünf Arten, reingerechnet in `aufwertungen.gd`** (`Aufwertungen.alle_arten()`):
++1 Leben (Deckel 8), schnellere Schüsse, mehr Tempo, stärkere Kugeln, größere
+Reichweite. Vier davon stapeln als Faktor **je Stapel**, nicht insgesamt —
+fünf Stapel Feuerrate multiplizieren die Schusspause fünfmal mit 0,88, nicht
+einmal mit 0,12. Jede weitere Stufe bringt spürbar etwas, aber mit sinkendem
+Grenznutzen statt eines plötzlichen Sprungs am Ende. Leben ist der
+Sonderfall: Es läuft nicht über einen Stapelzähler, seine Grenze hängt am
+**aktuellen** Leben — eine volle Anzeige bietet die Karte nicht mehr an, ganz
+gleich wie oft sie vorher schon gewählt wurde.
+
+**Nie eine Karte, die nichts mehr bewirken würde.**
+`Aufwertungen.verfuegbare_arten(stapel, aktuelles_leben)` lässt jede
+ausgereizte Art aus dem Angebot fallen; `Aufwertungsauswahl.zeigen()` mischt
+diese Liste und zeigt bis zu drei — sind schon fast alle Arten ausgereizt,
+erscheinen entsprechend weniger, nie eine doppelt und nie eine wirkungslose.
+
+**Die Wirkung sitzt an *effektiven* Werten auf dem Spieler, nicht an
+`variante` selbst.** `Charaktere.Variante`-Objekte sind über alle Runden
+und Charaktere hinweg geteilt (`Charaktere.liste`) — sie zu verändern würde
+jede künftige Runde mit demselben Charakter verfälschen, auch nach einem
+Neustart. `Spieler` hält deshalb einen eigenen `_aufwertungen`-Zähler je
+stapelbarer Art und rechnet `effektives_tempo()`, `effektive_schuss_pause()`,
+`effektive_reichweite()`, `effektiver_schaden()` bei jedem Aufruf frisch aus
+`variante` **plus** diesem Zähler — `_physics_process` und `_schiessen`
+benutzen ausschließlich diese vier, nirgends mehr `variante.tempo` direkt.
+Leben wirkt dagegen sofort und direkt auf `spieler.leben`.
+
+**Zurücksetzen kostet keine einzige Zeile Code.** `reload_current_scene()`
+baut den Spieler komplett neu auf — sein `_aufwertungen`-Zähler startet damit
+automatisch wieder leer, genau wie `Wellenleiter.welle`/`.punkte` das schon
+vorher taten. Es gibt keinen zweiten Ort, an dem der alte Stand stehen
+bliebe.
+
+**Geschoss reicht seinen Schaden weiter, statt fest 1 zu nehmen** — die ganze
+Verbindung zur „Stärkere Kugeln"-Karte. `Spieler._schiessen` übergibt
+`effektiver_schaden()` an `Geschoss.starten(...)`, das Geschoss ruft
+`schaden_nehmen(_schaden)` auf allem, was es trifft. *Ehrlich gesagt hat das
+gegen den einzigen bestehenden Gegnertyp noch keine sichtbare Wirkung* — der
+Verfolger hat genau 1 Leben und stirbt auch an einem einzigen Grundschuss.
+Die Karte ist korrekt verdrahtet und geprüft (siehe unten), wartet aber auf
+einen zäheren Gegner, um wirklich etwas zu bringen. Bewusst nicht als Bug
+verschwiegen, sondern hier festgehalten.
+
+### Wie die Pause wirklich funktioniert — und wie sie beim ersten Versuch nicht funktioniert hätte
+
+**`Main` selbst bekommt kein `PROCESS_MODE_ALWAYS`.** Der naheliegende erste
+Ansatz — Main auf ALWAYS setzen, damit während `get_tree().paused = true`
+noch etwas auf Eingaben reagiert — wurde gebaut, empirisch geprüft und
+verworfen: Ein `process_mode` mit dem Wert `INHERIT` (der Standard für jeden
+neuen Knoten) reicht bis zum **nächsten Vorfahren mit einem gesetzten Wert**
+durch. Wäre `Main` ALWAYS, erbten **alle** seine Kinder das mit — Spieler,
+Gegner, Geschosse eingeschlossen, weil die alle als direkte Kinder von `Main`
+im Baum hängen. Mit einer eigens dafür gebauten Testszene nachgemessen:
+Ein Knoten mit `ALWAYS` und ein Enkelkind mit dem Standardwert `INHERIT`
+zählten während einer Pause exakt gleich oft ihren eigenen `_process()` —
+das Enkelkind lief ungebremst mit.
+
+Die Lösung liegt eine Ebene höher als das Problem: `Oberflaeche`
+(`CanvasLayer`, Geschwisterknoten von `Arena`/`Spieler`/`Wellenleiter`, nicht
+deren Vorfahre) bekommt `process_mode = ALWAYS`. Ihre Kinder sind
+ausschließlich Anzeige-Flächen (Kopfzeile, Wellenmeldung, Rundenende,
+Aufwertungsauswahl) — keine einzige Spielfigur hängt dort, das Erben ist
+also folgenlos. Zwei Stellen brauchten deshalb ein eigenes kleines Skript,
+das vorher in `main.gd` steckte:
+
+- **`rundenende.gd`** erkennt Antippen/Klicken/Tastendruck nur noch selbst
+  (`_unhandled_input`) und meldet es über ein Signal
+  (`neustart_angefordert`) — `main.gd` selbst braucht dafür kein `ALWAYS`
+  mehr.
+- **`aufwertungsauswahl.gd`** liegt ebenfalls unter `Oberflaeche` und kann
+  darum während der Pause echte `Button.pressed`-Signale entgegennehmen.
+
+`main.gd` selbst braucht trotzdem **kein** `ALWAYS`, obwohl es
+`get_tree().paused = true` setzt und danach noch `await`et: Ein
+`SceneTreeTimer` (`get_tree().create_timer(...)`) läuft standardmäßig auch
+während der Pause weiter (`process_always` ist dort `true`), und ein
+`await` auf ein Signal wird von der **Signalquelle** wachgerufen, nicht vom
+`process_mode` des wartenden Knotens. Auch das wurde an derselben Testszene
+nachgemessen, bevor es in den echten Code kam.
+
 Ansehen kann man eine ganze Runde ohne Editor so — die Probe steuert den
 Spieler selbst (er zielt auf den jeweils nächsten Gegner und schießt
-durchgehend) und gibt jedes Ereignis mit Zeitstempel aus:
+durchgehend, und tippt nach jeder geschafften Welle die erste angebotene
+Karte an) und gibt jedes Ereignis mit Zeitstempel aus:
 
 ```bash
 godot --headless --path . scenes/rundenprobe.tscn
@@ -317,20 +397,35 @@ godot --headless --path . scenes/rundenprobe.tscn
 godot --headless --path . scenes/pruefen.tscn
 ```
 
-85 Prüfungen: die reine Rechnung in `bewegung.gd` und `wellen.gd`, die
-Charakterdaten, die Umrisse aus `gestalt.gd`, der Spielstand, der Gegner für
-sich allein — und eine **Rauchprobe an den echten Szenen**. Die ist bewusst
-dabei: Die häufigste Art, ein Godot-Projekt kaputtzumachen, ist ein Knotenpfad,
-der nicht mehr stimmt. Reine Rechnung zu prüfen fängt das nicht; ein Start mit
-leerer Szene fällt sonst erst beim Spielen auf.
+116 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
+`aufwertungen.gd`, die Charakterdaten, die Umrisse aus `gestalt.gd`, der
+Spielstand, der Gegner und der Wellenablauf jeweils für sich allein, dass
+Aufwertungen wirklich am Spieler wirken (und die geteilte `Variante`
+unangetastet lassen), dass ein Geschoss seinen Schaden weiterreicht — und
+eine **Rauchprobe an den echten Szenen**, die auch die Pause-Verdrahtung
+prüft (`Oberflaeche` ALWAYS, `Main` bewusst nicht). Die Rauchprobe ist
+bewusst dabei: Die häufigste Art, ein Godot-Projekt kaputtzumachen, ist ein
+Knotenpfad, der nicht mehr stimmt. Reine Rechnung zu prüfen fängt das nicht;
+ein Start mit leerer Szene fällt sonst erst beim Spielen auf.
+
+Der Wellenablauf-Test läuft dabei **nicht** über die geladene `haupt`-Instanz
+aus der Rauchprobe, sondern über einen eigenen, isolierten Wellenleiter ohne
+`main.gd` drumherum — ein echter Fund beim Bauen, kein vorausschauendes
+Design: Die `haupt`-Instanz hat ihr eigenes `main.gd` am
+`welle_geschafft`-Signal hängen, ein manueller `_process()`-Aufruf zum Testen
+löste also ungefragt den echten Pause-Ablauf mit aus (samt einem
+`SceneTreeTimer`, der nie zu Ende lief, weil der Test gleich danach beendete
+— sichtbar als „ObjectDB instances leaked at exit"). Isoliert vermeidet das
+von vornherein, statt es hinterher aufzuräumen.
 
 Die Prüfszene läuft als eigene Szene und nicht über `--script`, weil sie die
 Autoloads braucht — die richtet Godot nur für eine laufende Szene ein.
 
 ## Was als Nächstes fehlt
 
-Aufwertungen nach jeder Welle, ein Auswahlbildschirm vor dem Start,
-Touch-Bedienung, Ton, weitere Gegnertypen (bisher nur der eine Verfolger).
-Alles bewusst noch nicht gebaut: Erst sollte eine ganze Runde von Anfang bis
-Game-Over stehen. Der Auswahlbildschirm braucht dafür nichts Neues mehr —
+Ein Auswahlbildschirm vor dem Start, Touch-Bedienung, Ton, weitere
+Gegnertypen (bisher nur der eine Verfolger — der Grund, warum „Stärkere
+Kugeln" noch keine sichtbare Wirkung hat, siehe oben). Alles bewusst noch
+nicht gebaut: Erst sollte eine ganze Runde mit echter Steigerung stehen. Der
+Auswahlbildschirm braucht dafür nichts Neues mehr —
 `Figur` lässt sich dort einfach hinstellen und über `scale` größer ziehen.

@@ -1,16 +1,24 @@
 class_name Wellenleiter
 extends Node
-## Steuert den Wellenablauf: spawnt Gegner, wartet, bis alle tot sind, startet
-## die nächste. Wie viele Gegner und wie schnell — das steht in `Wellen`
-## (reine Funktionen); hier steht nur die Uhr und das Zusammenspiel mit der
-## Szene.
+## Steuert den Wellenablauf: spawnt Gegner, wartet, bis alle tot sind, meldet
+## „Welle geschafft" und wartet dann auf ein äußeres Startsignal für die
+## nächste. Wie viele Gegner und wie schnell — das steht in `Wellen` (reine
+## Funktionen); hier steht nur die Uhr und das Zusammenspiel mit der Szene.
 ##
 ## **Startet nicht von selbst.** Ein Node unter `Main` bekäme sein `_ready()`
 ## vor dem von `Main` selbst (Godot ruft `_ready()` von unten nach oben auf) —
 ## `arena`/`spieler` wären in dem Moment noch nicht gesetzt. `Main` ruft
 ## deshalb `starten()` explizit auf, nachdem es beides selbst aufgebaut hat.
+##
+## **Schaltet nach einer geschafften Welle ebenfalls nicht von selbst weiter.**
+## Früher lief hier eine feste Pause von zwei Sekunden ab; jetzt übernimmt die
+## Aufwertungsauswahl in `main.gd` diese Pause (Meldung, dann drei Karten,
+## dann Wahl) — die Dauer hängt jetzt davon ab, wie lange jemand zum Wählen
+## braucht, nicht mehr von einer festen Zahl. `Main` ruft deshalb
+## `naechste_welle_erzwingen()` auf, sobald die Wahl getroffen ist.
 
 signal welle_gestartet(welle: int)
+signal welle_geschafft(welle: int)
 signal punkte_geaendert(punkte: int)
 
 const GEGNER := preload("res://enemies/gegner.tscn")
@@ -27,7 +35,7 @@ var _arena_flaeche: Rect2
 var _spieler: Node2D
 var _eltern: Node
 var _laeuft := false
-var _pause_rest: float = 0.0
+var _wartet_auf_naechste := false
 
 
 ## `eltern` ist der Knoten, unter dem gespawnte Gegner landen — nicht `self`:
@@ -49,18 +57,24 @@ func anhalten() -> void:
 	_laeuft = false
 
 
-func _process(delta: float) -> void:
+## Von `Main` aufgerufen, nachdem die „Welle geschafft"-Meldung und die
+## Aufwertungsauswahl durch sind. Kein automatischer Weg dorthin: Der Spieler
+## soll so lange wählen dürfen, wie er möchte, nicht so lange, wie eine feste
+## Uhr erlaubt.
+func naechste_welle_erzwingen() -> void:
 	if not _laeuft:
 		return
+	_wartet_auf_naechste = false
+	_naechste_welle_starten()
 
-	if _pause_rest > 0.0:
-		_pause_rest -= delta
-		if _pause_rest <= 0.0 and _laeuft:
-			_naechste_welle_starten()
+
+func _process(_delta: float) -> void:
+	if not _laeuft or _wartet_auf_naechste:
 		return
 
 	if get_tree().get_nodes_in_group(&"gegner").is_empty():
-		_pause_rest = Wellen.PAUSE_ZWISCHEN_WELLEN
+		_wartet_auf_naechste = true
+		welle_geschafft.emit(welle)
 
 
 func _naechste_welle_starten() -> void:
