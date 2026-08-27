@@ -55,6 +55,7 @@ func _ready() -> void:
 	_pruefe_auto_ziel_und_feuer()
 	_pruefe_eingabe_touch_erkennung()
 	_pruefe_stick()
+	_pruefe_stick_unter_touchsteuerung()
 	_pruefe_feuerknopf()
 	_pruefe_touch_bewegung()
 	_pruefe_ton()
@@ -1333,6 +1334,7 @@ func _pruefe_stick() -> void:
 
 	stick._loslassen()
 	_pruefe("Loslassen setzt die Richtung zurueck", Eingabe.stick_richtung, Vector2.ZERO)
+	_pruefe("und der interne Finger ist wieder frei", stick._finger, -1)
 
 	# Eine Berührung weit außerhalb der Basis darf den Stick nicht greifen --
 	# sonst könnte ein Tipp irgendwo auf dem Feuerknopf versehentlich auch
@@ -1345,7 +1347,118 @@ func _pruefe_stick() -> void:
 	_pruefe("eine Beruehrung weit ausserhalb greift den Stick nicht",
 		Eingabe.stick_richtung, Vector2.ZERO)
 
+	# Der eigentliche Fund hinter "Stick bleibt hängen": ein echter Griff über
+	# `_input()` (nicht nur `_greifen()` direkt aufgerufen), dann verschwindet
+	# der Stick mitten im Halten -- genau das passiert bei jeder Pause
+	# (main.gd/Touchsteuerung, siehe die eigene Prüfung dafür unten). Der
+	# Finger geht dabei nie hoch, meldet also nie ein eigenes Loslass-Ereignis.
+	var griff := InputEventScreenTouch.new()
+	griff.index = 3
+	griff.pressed = true
+	griff.position = stick.global_position + stick.size / 2.0 + Vector2(40, 0)
+	stick._input(griff)
+	_pruefe("ein echter Griff meldet sich am internen Finger an", stick._finger, 3)
+	_pruefe_wahr("und liefert eine echte Richtung", Eingabe.stick_richtung != Vector2.ZERO)
+
+	stick.visible = false
+	_pruefe("unsichtbar werden gibt den liegen gebliebenen Finger sofort frei",
+		stick._finger, -1)
+	_pruefe("und die Richtung steht wieder auf Null, ganz ohne eigenes Loslass-Ereignis",
+		Eingabe.stick_richtung, Vector2.ZERO)
+
+	# Kommt der reale Finger doch noch mit einem verspäteten Loslassen an
+	# (derselbe Index wie eben), darf das nichts mehr kaputtmachen -- er
+	# gehört ja längst keinem gegriffenen Finger mehr.
+	var spaetes_loslassen := InputEventScreenTouch.new()
+	spaetes_loslassen.index = 3
+	spaetes_loslassen.pressed = false
+	stick._input(spaetes_loslassen)
+	_pruefe("ein verspaetetes Loslassen nach der Freigabe bleibt folgenlos",
+		Eingabe.stick_richtung, Vector2.ZERO)
+
+	# Während der Stick unsichtbar ist (Pause), darf sich niemand neu
+	# einklinken -- sonst ließe sich der Stick im Pausenmenü "cheaten".
+	var griff_waehrend_pause := InputEventScreenTouch.new()
+	griff_waehrend_pause.index = 5
+	griff_waehrend_pause.pressed = true
+	griff_waehrend_pause.position = stick.global_position + stick.size / 2.0 + Vector2(30, 0)
+	stick._input(griff_waehrend_pause)
+	_pruefe("waehrend der Stick unsichtbar ist, greift kein neuer Finger",
+		stick._finger, -1)
+
+	# Nach der Pause (wieder sichtbar) muss sich der Stick sofort neu greifen
+	# lassen -- das ist der eigentliche Kern von "Stick bleibt hängen": ohne
+	# den Fix wäre `_finger` hier immer noch auf 3 belegt (siehe oben), und
+	# jeder neue Griff schlüge an `_finger == -1` fehl.
+	stick.visible = true
+	var neuer_griff := InputEventScreenTouch.new()
+	neuer_griff.index = 7
+	neuer_griff.pressed = true
+	neuer_griff.position = stick.global_position + stick.size / 2.0 + Vector2(20, 0)
+	stick._input(neuer_griff)
+	_pruefe("nach der Pause laesst sich der Stick sofort wieder greifen",
+		stick._finger, 7)
+
+	# Ein zweiter Finger innerhalb des Aktivierungsradius darf einen bereits
+	# gegriffenen Stick nicht übernehmen -- sonst könnte ein zweiter,
+	# versehentlicher Tipp die Richtung mitten im Zug verändern.
+	var zweiter_finger := InputEventScreenTouch.new()
+	zweiter_finger.index = 9
+	zweiter_finger.pressed = true
+	zweiter_finger.position = stick.global_position + stick.size / 2.0 + Vector2(-10, 5)
+	stick._input(zweiter_finger)
+	_pruefe("ein zweiter Finger stiehlt den Griff nicht", stick._finger, 7)
+
 	stick.free()
+	Eingabe.stick_richtung = Vector2.ZERO
+
+
+## Derselbe Fund wie oben, jetzt aber über die echte Verdrahtung aus
+## `main.tscn` nachgebaut: Der Stick hängt dort unter `Touchsteuerung`, nicht
+## direkt unter der Wurzel. Das prüft, dass `NOTIFICATION_VISIBILITY_CHANGED`
+## wirklich auch dann feuert, wenn nicht der Stick selbst, sondern ein
+## Vorfahre unsichtbar wird -- genau der Weg, über den `main.gd` bei jeder
+## Pause (Aufwertung, Wellenmeldung, Charakterauswahl, Game-Over) den Stick
+## ausblendet.
+func _pruefe_stick_unter_touchsteuerung() -> void:
+	var touchsteuerung := Touchsteuerung.new()
+	add_child(touchsteuerung)
+
+	var stick := Stick.new()
+	touchsteuerung.add_child(stick)
+	stick.size = Vector2(220, 220)
+
+	var touch_vorher := Eingabe.touch_verfuegbar
+	Eingabe.touch_verfuegbar = true
+	touchsteuerung.pause_setzen(false)
+	_pruefe_wahr("Stick ist sichtbar, wenn Touch erkannt und nicht pausiert ist",
+		stick.is_visible_in_tree())
+
+	var griff := InputEventScreenTouch.new()
+	griff.index = 2
+	griff.pressed = true
+	griff.position = stick.global_position + stick.size / 2.0 + Vector2(40, 0)
+	stick._input(griff)
+	_pruefe("der Stick greift wie erwartet", stick._finger, 2)
+
+	# Genau das, was main.gd bei jeder Pause auslöst.
+	touchsteuerung.pause_setzen(true)
+	_pruefe_wahr("die Pause blendet den Stick aus", not stick.is_visible_in_tree())
+	_pruefe("...und gibt den liegen gebliebenen Finger frei, ganz ohne eigenes Touch-Ereignis",
+		stick._finger, -1)
+	_pruefe("Eingabe.stick_richtung steht wieder auf Null", Eingabe.stick_richtung, Vector2.ZERO)
+
+	touchsteuerung.pause_setzen(false)
+	var neuer_griff := InputEventScreenTouch.new()
+	neuer_griff.index = 4
+	neuer_griff.pressed = true
+	neuer_griff.position = stick.global_position + stick.size / 2.0 + Vector2(20, 0)
+	stick._input(neuer_griff)
+	_pruefe("nach der Pause laesst sich unter Touchsteuerung erneut greifen",
+		stick._finger, 4)
+
+	touchsteuerung.free()
+	Eingabe.touch_verfuegbar = touch_vorher
 	Eingabe.stick_richtung = Vector2.ZERO
 
 
