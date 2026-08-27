@@ -1024,6 +1024,66 @@ Verschwindet der Knopf mitten im Halten (Neustart bei gehaltenem Finger),
 gibt `_exit_tree()` die Aktion frei — sonst bliebe „schiessen" global hängen
 und die nächste Runde schösse von allein.
 
+### Der hängende Stick — ein echter Bug, kein Geschmacksurteil
+
+Gemeldet von Ronni, auf dem echten iPad: Nach einer Weile — oder nach
+bestimmten Aktionen — ließ sich die Figur nicht mehr steuern. Auto-Ziel und
+Auto-Feuer räumten unbeirrt weiter Gegner ab (die hängen gar nicht am
+Stick), nur Bewegen ging nicht mehr. **Ursache in einem Satz:** `_input()`
+warf ganz oben `if not is_visible_in_tree(): return` vor die Tür und
+verwarf damit während jeder Pause (Aufwertung, Wellenmeldung,
+Charakterauswahl, Game-Over) nicht nur neue Berührungen, sondern auch das
+Loslassen eines bereits gegriffenen Fingers — blieb der Daumen ausgerechnet
+während einer Pause auf dem Stick liegen (der häufigste Fall: Die
+Aufwertungskarten erscheinen, man hält instinktiv still) oder ging er genau
+in diesem Moment hoch, kam nie ein Loslass-Ereignis an. `_finger` blieb für
+immer belegt, und jeder künftige, echte Griff scheiterte an `_finger == -1`
+weiter unten in `_input()` — für immer, bis zum nächsten Neustart.
+
+**Die Lösung trennt zwei Fälle, die vorher denselben Wächter teilten.** Ein
+**neuer** Griff braucht weiterhin Sichtbarkeit (sonst ließe sich der Stick
+mitten in einer Pause „cheaten"), ein **Loslassen** läuft jetzt immer durch,
+unsichtbar oder nicht. Das allein reicht aber nicht: Bleibt der Finger die
+ganze Pause über unbewegt liegen, kommt überhaupt kein Touch-Ereignis mehr
+an, egal wie großzügig `_input()` gefasst ist. Der eigentliche Fix sitzt
+deshalb in `_notification(NOTIFICATION_VISIBILITY_CHANGED)`: Godot feuert
+diese Benachrichtigung synchron in dem Moment, in dem sich die **im Baum
+wirksame** Sichtbarkeit ändert — auch dann, wenn nicht der Stick selbst,
+sondern ein Vorfahre (`Touchsteuerung`, bei jeder Pause) unsichtbar wird.
+Ein noch gegriffener Finger wird darüber sofort freigegeben, ganz ohne auf
+ein Ereignis zu warten, das vielleicht nie kommt.
+`NOTIFICATION_APPLICATION_FOCUS_OUT` fängt denselben Fehler zusätzlich für
+den selteneren Fall ab, dass das Gerät mitten im Halten in den Hintergrund
+wechselt (Sperrbildschirm, App-Wechsel) — der Stick bleibt dabei sichtbar,
+es kommt aber ebenfalls kein Loslass-Ereignis mehr an. `_exit_tree()`
+(Neustart) räumt jetzt über dasselbe `_loslassen()` auf statt nur eine
+einzelne Zeile direkt zu setzen — eine Aufräumstelle für alle vier
+Abbruchwege (Loslassen, Pause, Fokusverlust, Neustart), nicht vier
+verschiedene mit demselben Ziel.
+
+**Andere verdächtige Stellen geprüft, nichts gefunden.** `autoload/eingabe.gd`
+selbst braucht keine Änderung — `stick_richtung` hat mit dem Stick als
+einzigem Schreiber genau einen Weg, unsauber zu bleiben, und der ist jetzt
+geschlossen. `main.gd._karte_gewechselt()` (Kartenwechsel,
+Spieler-aus-Hindernis-Schieben) rührt weder Touch-Zustand noch Eingabe an.
+Der Feuerknopf sitzt weit außerhalb von `AKTIVIERUNGS_RADIUS` und wird nie
+vom Stick mitgegriffen (siehe oben) — kein Hinweis auf gestohlene Finger
+zwischen beiden.
+
+**Sieben neue Prüfungen sichern genau die Reihenfolge ab, die den Fehler
+ausgelöst hat**, nicht nur den Endzustand: ein echter Griff über `_input()`
+(nicht `_greifen()` direkt), dann unsichtbar werden **mit noch belegtem
+Finger**, dann prüfen, dass sowohl der interne Finger als auch
+`Eingabe.stick_richtung` sofort — ganz ohne eigenes Loslass-Ereignis — wieder
+frei sind. Dazu: Ein verspätetes Loslassen nach der Freigabe bleibt
+folgenlos, während der Pause greift kein neuer Finger, nach der Pause
+lässt sich sofort neu greifen, und ein zweiter Finger stiehlt einen
+bestehenden Griff nicht. Eine zusätzliche Prüfung baut die echte
+Verdrahtung aus `main.tscn` nach (Stick als Kind von `Touchsteuerung`,
+`pause_setzen()` statt direkter Sichtbarkeits-Zuweisung) — sie beweist, dass
+die Benachrichtigung wirklich auch beim Ausblenden durch einen **Vorfahren**
+feuert, nicht nur bei der eigenen `visible`-Zuweisung.
+
 ## Ton
 
 Acht kurze Effekte, alle im Code erzeugt (`autoload/ton.gd`) — keine
@@ -1079,7 +1139,7 @@ einer beim Wiedereinschalten.
 godot --headless --path . scenes/pruefen.tscn
 ```
 
-248 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
+263 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
 `aufwertungen.gd`, die Charakter- und Gegnerdaten, die Umrisse aus
 `gestalt.gd` und `gegnergestalt.gd`, der Spielstand, der Gegner und der
 Wellenablauf jeweils für sich allein, dass Aufwertungen wirklich am Spieler
