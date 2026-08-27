@@ -36,7 +36,7 @@ func _ready() -> void:
 	_pruefe_wellen()
 	_pruefe_aufwertungen()
 	_pruefe_spielstand()
-	_pruefe_szenen()
+	await _pruefe_szenen()
 	_pruefe_wellenleiter_ablauf()
 	_pruefe_gegner()
 	_pruefe_gegnertypen()
@@ -375,6 +375,17 @@ func _pruefe_szenen() -> void:
 	# Ebene 2 = Spieler, 3 = Gegner, 4 = Spielergeschoss (siehe project.godot).
 	_pruefe("Spieler liegt auf der Spielerebene", spieler.collision_layer, 2)
 
+	# Regressionsschutz fuer den optischen Umbau der Charakterauswahl: Der
+	# Auftrag verlangt ausdruecklich unveraenderte Hitboxen. `Spieler.RADIUS`
+	# UND die tatsaechliche Kollisionsform in `spieler.tscn` muessen beide
+	# beim dokumentierten Wert bleiben -- eine Konstante allein kann sich vom
+	# tatsaechlich geladenen `CollisionShape2D` entkoppeln, ohne dass es
+	# irgendwo auffiele.
+	var spieler_form: CollisionShape2D = spieler.get_node("Form")
+	_pruefe("Spieler.RADIUS ist unveraendert", Spieler.RADIUS, 16.0)
+	_pruefe("die geladene Kollisionsform passt dazu",
+		(spieler_form.shape as CircleShape2D).radius, Spieler.RADIUS)
+
 	var geschoss: Node = load("res://scenes/geschoss.tscn").instantiate()
 	_pruefe("Geschoss liegt auf der Geschossebene", geschoss.collision_layer, 8)
 	# Ebene 5 = Hindernis kam mit den Arena-Hindernissen dazu: Ein Schuss
@@ -451,10 +462,57 @@ func _pruefe_szenen() -> void:
 	_pruefe("Spieler erbt den Pause-Modus, kein eigenes ALWAYS",
 		spieler.process_mode, Node.PROCESS_MODE_INHERIT)
 
+	# Karten-Text darf die Karte nie optisch verlassen -- geprueft gegen die
+	# tatsaechliche, gezeichnete Kartenbreite (`Button.size`, aus den festen
+	# `.tscn`-Offsets), nicht gegen die Bounds eines Labels oder Containers,
+	# der sich dem Text anpassen und das Problem dadurch verstecken koennte.
+	# `ThemeDB.fallback_font` misst echte Glyphenbreiten, auch kopflos ohne
+	# laufendes Fenster -- kein Nachbau der Schriftmetrik von Hand noetig.
+	var schrift := ThemeDB.fallback_font
+	var text_zu_breit := 0
+	for karten_name in ["KarteAusgewogen", "KarteSchnell", "KarteTank"]:
+		var karte: Button = charakterauswahl.get_node(karten_name)
+		var kartenbreite: float = karte.size.x
+		for label_name in ["Name", "Werte"]:
+			var label: Label = karte.get_node(label_name)
+			var breite := schrift.get_string_size(
+				label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size(&"font_size")).x
+			# 24 Pixel Sicherheitsabstand -- derselbe Rand, den die Werte-
+			# und Name-Labels selbst schon zur Kartenkante einhalten.
+			if breite > kartenbreite - 24.0:
+				text_zu_breit += 1
+	_pruefe("kein Karten-Text ueberragt die gezeichnete Kartenbreite", text_zu_breit, 0)
+
+	# Derselbe Gedanke fuer den großen Titel: Er ist zentriert ueber die
+	# volle Bildschirmbreite gespannt (`AuswahlAtmo.GROESSE.x`, dieselbe
+	# Konstante wie der Atmosphaeren-Hintergrund) -- geprueft wird die
+	# tatsaechliche Textbreite bei der im Knoten gesetzten Schriftgroesse.
+	var titel: Label = charakterauswahl.get_node("Titel")
+	var titel_breite := schrift.get_string_size(
+		titel.text, HORIZONTAL_ALIGNMENT_LEFT, -1, titel.get_theme_font_size(&"font_size")).x
+	_pruefe_wahr("der Titel passt in die Bildschirmbreite",
+		titel_breite < AuswahlAtmo.GROESSE.x - 40.0)
+
+	# Die optische Ausstattung der Auswahl ist wirklich verdrahtet, nicht nur
+	# als Datei angelegt -- eine fehlende Knotenverknuepfung faellt sonst erst
+	# beim Spielen auf, genau die Rauchproben-Idee von weiter unten.
+	var ausstattung_vollstaendig := charakterauswahl.has_node("Atmosphaere")
+	for karten_name in ["KarteAusgewogen", "KarteSchnell", "KarteTank"]:
+		var karte: Node = charakterauswahl.get_node(karten_name)
+		ausstattung_vollstaendig = ausstattung_vollstaendig \
+			and karte.has_node("Glanz") and karte.has_node("Burst")
+	_pruefe_wahr("Atmosphaere, Lichtkante und Funkenregen sind an jeder Karte verdrahtet",
+		ausstattung_vollstaendig)
+
 	# Karte "Schnell" antippen — absichtlich nicht der Standard
 	# ("ausgewogen"), sonst zeigte die nächste Prüfung auch bei einem
-	# Fehler zufällig den richtigen Wert.
-	charakterauswahl._bei_druck(&"schnell")
+	# Fehler zufällig den richtigen Wert. `await`, nicht nur aufrufen: Seit
+	# der optischen Überarbeitung spielt `_bei_druck` erst eine kurze
+	# Auswahl-Rückmeldung (Feder, Leuchten, Funken) ab, bevor es den
+	# Charakter wirklich setzt und die Welle startet — ohne `await` liefen
+	# die Prüfungen direkt danach gegen den alten Stand, Bruchteile einer
+	# Sekunde zu früh.
+	await charakterauswahl._bei_druck(&"schnell")
 	_pruefe("die Wahl setzt den Charakter im Spielstand", Spielstand.charakter_id, &"schnell")
 	_pruefe_wahr("und am Spieler selbst", spieler.variante.id == &"schnell")
 	_pruefe_wahr("die Auswahl verschwindet nach der Wahl", not charakterauswahl.visible)

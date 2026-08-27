@@ -118,6 +118,8 @@ arena-brawler-godot/
 ├── ui/
 │   ├── aufwertungsauswahl.gd   die drei Karten nach einer Welle
 │   ├── charakterauswahl.gd     die drei Karten vor dem Rundenstart
+│   ├── auswahl_atmo.gd         Hintergrund-Atmosphäre der Charakterauswahl (Verlauf, Lichtkegel, Raster, Vignette)
+│   ├── karten_glanz.gd         die „Lichtkante" jeder Charakterkarte (Streifen + Eckwinkel)
 │   ├── touchsteuerung.gd       Container für Stick + Feuerknopf, Sichtbarkeit nach Touch/Pause
 │   ├── stick.gd                der virtuelle Bewegungs-Stick
 │   └── feuerknopf.gd           der Touch-Feuerknopf
@@ -802,6 +804,135 @@ Karte an) und gibt jedes Ereignis mit Zeitstempel aus:
 godot --headless --path . scenes/rundenprobe.tscn
 ```
 
+### Optische Überarbeitung: von der Editor-Platzhalter-Fläche zum Titelbildschirm
+
+Befund: Karten und Figuren standen technisch richtig da, aber auf einer
+flachen, einfarbigen Fläche (`ColorRect`) — kein Titel, kein Bewegtbild,
+keine Rückmeldung beim Antippen. Genau das war die Priorität dieser Runde,
+mit derselben Vorgabe wie überall im Projekt: nur Godot-Bordmittel
+(`Polygon2D`, `StyleBoxFlat`, `Tween`, `CPUParticles2D`, leichtes `_draw()`),
+kein Shader, kein Bild, keine geänderte Hitbox.
+
+**Der Hintergrund (`ui/auswahl_atmo.gd`, ein reines `Node2D` mit `_draw()`)**
+ersetzt die alte `ColorRect` durch vier gestapelte Schichten, in
+Zeichenreihenfolge:
+
+1. Ein diagonaler Vier-Ecken-Verlauf über `draw_polygon` mit einer Farbe je
+   Eckpunkt — dieselbe Technik wie `Arena`s Boden (`vertex_colors`), nur von
+   Hand nachgebaut, weil ein `Node2D` kein `Polygon2D`-Kind mit eigenem
+   Farbfeld ist. Dunkles Indigo oben, ein Hauch Violett unten: eine
+   Stadion-bei-Nacht-Stimmung statt einer Fläche, die mit einer Spielfigur
+   verwechselt werden könnte.
+2. Zwei weiche „Lichtkegel" wie Flutlicht — keine echte Unschärfe (dafür
+   bräuchte es einen Shader), sondern sieben konzentrische Kreise von außen
+   (großer Radius, kaum sichtbar) nach innen (kleiner Radius, kräftiger),
+   dieselbe Ring-Näherung an einen Gauß-Verlauf, mit der die
+   React-Spielesammlung ihre Deko-Flecken über CSS-`blur` erreicht, nur hier
+   ohne CSS. Bewusst **nicht** exakt symmetrisch positioniert (verschiedene
+   Radien, verschiedene Farbtöne links/rechts) — ein perfekt gespiegeltes
+   Muster liest sich als Deko-Vorlage, nicht als Licht.
+3. Ein sehr blasses, langsam wanderndes Raster (`_versatz` läuft mit
+   3,2 Pixel je Sekunde, ein voller Durchlauf bei 96 Pixeln Linienabstand
+   dauert 30 Sekunden) — „sehr langsame Bewegung erlaubt" aus dem Auftrag,
+   spürbar lebendig, aber keine Deko, die vom Titel oder den Karten ablenkt.
+   **Rechnet und zeichnet nur, solange die Auswahl wirklich sichtbar ist**
+   (`is_visible_in_tree()`), sonst liefe das Raster während der ganzen
+   restlichen Runde unbemerkt im Hintergrund weiter.
+4. Eine leichte Vignette an den vier Bildecken — dieselbe Ring-Technik wie
+   die Lichtkegel, nur dunkel und an den Ecken verankert statt an der Mitte.
+   Bei 420 Pixeln Radius auf 1152×648 überlappen sich benachbarte Ecken
+   nicht, die Mitte bleibt klar.
+
+**Titel „ARENA BRAWLER" plus Unterzeile „Wähle deinen Kämpfer".** Vorher
+stand dort nur „Charakter wählen" bei 26 Pixel Schrift. Jetzt 40 Pixel,
+golden (dieselbe Farbe wie die Game-Over-Überschrift, damit Titel und
+Rundenende als **eine** Bildsprache gelesen werden), mit Kontur **und**
+Schatten (`font_outline_color`/`font_shadow_color`) — ohne beides säße die
+helle Schrift auf dem Verlauf ohne Halt. Titelzeile, Unterzeile und
+Rekordzeile mussten sich dafür den bisherigen Platz vor den Karten neu
+teilen (6–104 Pixel statt 36–100) — die Karten selbst behalten ihre alte
+Position (ab 118 Pixel), das Layout wird also nicht angefasst.
+
+**Die Karten haben jetzt echte Tiefe statt der von den Aufwertungskarten
+mitbenutzten Fläche.** Zwei eigene `StyleBoxFlat`-Ressourcen
+(`StyleBoxFlat_charakterkarte`/`_charakterkarte_aktiv`) mit dickerem Rand (3
+statt 2 Pixel), größeren Ecken (26 statt 20) und einem deutlich kräftigeren,
+nach unten versetzten Schatten (`shadow_size` 22/26 statt 10/12,
+`shadow_offset` (0, 8)) — bewusst **eigene** Ressourcen statt einer
+Änderung an `StyleBoxFlat_aufwertungskarte`, damit die Aufwertungskarten
+zwischen den Wellen unangetastet bleiben, siehe „Was als Nächstes fehlt".
+Dazu ein neuer Knoten `Glanz` (`ui/karten_glanz.gd`) als erstes Kind jeder
+Karte: ein heller Streifen nah der Oberkante, an beiden Enden über
+`draw_polyline_colors` ausgeblendet, plus zwei kleine „L"-Eckwinkel oben —
+dieselbe Sprache wie `Arena`s `RandInnen`/`Ecken`, nur auf Kartengröße
+herunterskaliert. Das verbindet die Auswahl optisch mit der Arena selbst,
+statt eine zweite, unabhängige Bildsprache zu erfinden.
+
+**„Zuletzt gespielt" bleibt eigens hervorgehoben**, jetzt an dieselbe Tiefe
+angepasst: `_markierter_stil()` in `charakterauswahl.gd` baut seine eigene
+`StyleBoxFlat` mit derselben Randbreite (3), denselben Ecken (26) und einem
+grünen Schatten in vergleichbarer Stärke (24) — sonst wirkte die markierte
+Karte nach dem Umbau der anderen drei plötzlich flacher statt hervorgehoben.
+
+**Antippen fühlt sich jetzt nach einer echten Auswahl an, nicht nach einem
+stummen Bildschirmwechsel.** `_bei_druck()` sperrt zuerst alle drei Karten
+(`disabled = true`, sonst könnte ein hastiger zweiter Tipp mitten in der
+Animation die Wahl noch ändern), dann laufen drei unabhängige `Tween`s
+gleichzeitig: Die angetippte Karte federt kurz ein und zurück
+(`TRANS_BACK`/`EASE_OUT`, aus ihrer **Mitte** — `pivot_offset` wird dafür in
+`_ready()` einmal auf die halbe Kartengröße gesetzt, sonst würde ein
+`Control` von seiner Standard-Ecke oben links aus skalieren und sichtbar
+wandern), die Figur leuchtet kurz auf (`modulate` nach hell und zurück) und
+dreht sich einmal leicht (`rotation` um 16° und zurück), und ein
+`CPUParticles2D`-Knoten „Burst" (18 Teilchen, `one_shot`, `explosiveness=1`,
+voller Radialwinkel über `spread=180`) platzt in der **Charakterfarbe**
+(`variante.farbe`, erst unmittelbar vor `restart()` gesetzt) aus der Mitte
+der Figur. Alle drei Tweens laufen mit `TWEEN_PAUSE_PROCESS`, nicht dem
+Standard — `main.gd` hat den Baum in genau diesem Moment pausiert (siehe
+oben), ohne die explizite Einstellung bliebe die ganze Rückmeldung mitten in
+der Bewegung hängen.
+
+**Figuren stehen nicht mehr starr da.** `_atmen_starten()` legt für jede
+Karte einen endlos laufenden `Tween` an (`set_loops()` ohne Argument),
+der die Figur zwischen 98,5 % und 101,5 % ihrer eigenen Basisgröße pulsieren
+lässt — 3,4 Sekunden je vollem Zyklus, deutlich unter jeder Grenze für
+auffälliges Blinken. Die Basisgröße wird bei jedem Kartenaufbau aus
+`figur.scale` selbst gelesen (`4 × 4` aus `main.tscn`), nicht noch einmal
+fest hingeschrieben — dieselbe Vorsicht wie bei den Werten-Labels weiter
+oben.
+
+**Die verzögerte Auswahl hat `_bei_druck()` zu einer echten Koroutine
+gemacht — mit einer direkten Folge für die Prüfungen.** Vorher setzte ein
+Antippen sofort `visible = false` und feuerte `gewaehlt`; jetzt liegt dazwischen
+`await get_tree().create_timer(AUSWAHL_ANIMATION_DAUER).timeout` (0,42 s).
+`scripts/pruefen.gd` rief `charakterauswahl._bei_druck(...)` bisher ohne
+`await` auf und prüfte den Zustand direkt danach — nach dem Umbau liefen
+diese Prüfungen gegen den **alten** Stand, Sekundenbruchteile zu früh, und
+wären fälschlich durchgefallen. Behoben, indem sowohl `_pruefe_szenen()`
+selbst als auch `_ready()` (das sie aufruft) jetzt `await`en — GDScript
+reicht das Warten sauber durch, solange jede Zwischenstufe selbst `await`
+enthält. `scripts/rundenprobe.gd` musste dagegen **nicht** angefasst werden:
+Es ruft `_bei_druck()` absichtlich ohne `await` auf (ein „Antippen und
+weitermachen", genau wie ein echter Tipp auf dem Bildschirm keine Antwort
+abwartet) — die Koroutine läuft im Hintergrund weiter und setzt den
+Charakter, sobald ihre eigene Verzögerung um ist; die Simulation zeigt das
+im Log als eine kurze Pause vor „Welle 1 gestartet".
+
+**Drei eigene Prüfungen wachen jetzt über genau die Punkte, die der Auftrag
+nennt.** Erstens ein Regressionsschutz für die Hitbox: `Spieler.RADIUS`
+**und** die tatsächlich geladene `CollisionShape2D` in `spieler.tscn` müssen
+beide beim dokumentierten Wert (16) bleiben — eine Konstante allein könnte
+sich vom geladenen Kollisionskörper entkoppeln, ohne dass es auffiele.
+Zweitens: Kein Karten-Text darf die gezeichnete Kartenbreite überragen —
+geprüft mit `ThemeDB.fallback_font.get_string_size(...)` gegen die
+**tatsächliche** `Button.size.x`, nicht gegen die Bounds eines Labels oder
+Containers, der sich dem Text anpassen und das Problem dadurch verstecken
+könnte (genau die Falle, vor der der Auftrag ausdrücklich warnt). Drittens
+dieselbe Messung für den Titel gegen die volle Bildschirmbreite
+(`AuswahlAtmo.GROESSE.x`, dieselbe Konstante wie der Hintergrund selbst).
+Godots Schriftmessung funktioniert auch kopflos, ohne laufendes Fenster —
+kein Nachbau der Schriftmetrik von Hand nötig.
+
 ## Arena, Geschosse und Rückmeldung
 
 Feinschliff-Runde: Der Befund war „wirkt noch flach" — nicht an einer
@@ -948,7 +1079,7 @@ einer beim Wiedereinschalten.
 godot --headless --path . scenes/pruefen.tscn
 ```
 
-243 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
+248 Prüfungen: die reine Rechnung in `bewegung.gd`, `wellen.gd` und
 `aufwertungen.gd`, die Charakter- und Gegnerdaten, die Umrisse aus
 `gestalt.gd` und `gegnergestalt.gd`, der Spielstand, der Gegner und der
 Wellenablauf jeweils für sich allein, dass Aufwertungen wirklich am Spieler
