@@ -11,6 +11,8 @@
 [ext_resource type="Script" path="res://ui/touchsteuerung.gd" id="9_touchsteuerung"]
 [ext_resource type="Script" path="res://ui/stick.gd" id="10_stick"]
 [ext_resource type="Script" path="res://ui/feuerknopf.gd" id="11_feuerknopf"]
+[ext_resource type="Script" path="res://ui/auswahl_atmo.gd" id="12_auswahl_atmo"]
+[ext_resource type="Script" path="res://ui/karten_glanz.gd" id="13_karten_glanz"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_kopfzeile"]
 bg_color = Color(0.101961, 0.113725, 0.164706, 0.75)
@@ -84,6 +86,36 @@ corner_radius_bottom_right = 20
 corner_radius_bottom_left = 20
 shadow_color = Color(0, 0, 0, 0.35)
 shadow_size = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_charakterkarte"]
+bg_color = Color(0.098039, 0.109804, 0.164706, 0.97)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.4, 0.46, 0.66, 0.65)
+corner_radius_top_left = 26
+corner_radius_top_right = 26
+corner_radius_bottom_right = 26
+corner_radius_bottom_left = 26
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 22
+shadow_offset = Vector2(0, 8)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_charakterkarte_aktiv"]
+bg_color = Color(0.133333, 0.145098, 0.211765, 0.98)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.62, 0.78, 1.0, 0.9)
+corner_radius_top_left = 26
+corner_radius_top_right = 26
+corner_radius_bottom_right = 26
+corner_radius_bottom_left = 26
+shadow_color = Color(0.3, 0.5, 0.9, 0.3)
+shadow_size = 26
+shadow_offset = Vector2(0, 8)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_marke"]
 bg_color = Color(0.62, 0.86, 0.6, 0.92)
@@ -429,31 +461,45 @@ text = "Karte antippen zum Wählen"
 [node name="Charakterauswahl" type="CanvasLayer" parent="Oberflaeche"]
 script = ExtResource("7_charakterauswahl")
 
-[node name="Hintergrund" type="ColorRect" parent="Oberflaeche/Charakterauswahl"]
-mouse_filter = 2
-anchor_right = 1.0
-anchor_bottom = 1.0
-color = Color(0.043137, 0.047059, 0.070588, 1)
+[node name="Atmosphaere" type="Node2D" parent="Oberflaeche/Charakterauswahl"]
+script = ExtResource("12_auswahl_atmo")
 
 [node name="Titel" type="Label" parent="Oberflaeche/Charakterauswahl"]
 mouse_filter = 2
 anchor_right = 1.0
-offset_top = 36.0
-offset_bottom = 72.0
-theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
-theme_override_font_sizes/font_size = 26
-theme_override_constants/outline_size = 4
+offset_top = 6.0
+offset_bottom = 54.0
+theme_override_colors/font_color = Color(0.945098, 0.768627, 0.219608, 1)
+theme_override_font_sizes/font_size = 40
+theme_override_constants/outline_size = 6
+theme_override_colors/font_outline_color = Color(0.043137, 0.047059, 0.070588, 0.9)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 3
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.55)
+horizontal_alignment = 1
+text = "ARENA BRAWLER"
+
+[node name="Untertitel" type="Label" parent="Oberflaeche/Charakterauswahl"]
+mouse_filter = 2
+anchor_right = 1.0
+offset_top = 54.0
+offset_bottom = 78.0
+theme_override_colors/font_color = Color(0.86, 0.88, 0.96, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_constants/outline_size = 3
 theme_override_colors/font_outline_color = Color(0.043137, 0.047059, 0.070588, 0.85)
 horizontal_alignment = 1
-text = "Charakter wählen"
+text = "Wähle deinen Kämpfer"
 
 [node name="Rekord" type="Label" parent="Oberflaeche/Charakterauswahl"]
 mouse_filter = 2
 anchor_right = 1.0
-offset_top = 76.0
-offset_bottom = 100.0
-theme_override_colors/font_color = Color(0.65, 0.68, 0.78, 1)
-theme_override_font_sizes/font_size = 15
+offset_top = 82.0
+offset_bottom = 104.0
+theme_override_colors/font_color = Color(0.68, 0.74, 0.88, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_constants/outline_size = 2
+theme_override_colors/font_outline_color = Color(0.043137, 0.047059, 0.070588, 0.85)
 horizontal_alignment = 1
 text = "Noch kein Lauf gewertet"
 
@@ -473,16 +519,36 @@ offset_top = 118.0
 offset_right = 384.0
 offset_bottom = 588.0
 focus_mode = 0
-theme_override_styles/normal = SubResource("StyleBoxFlat_aufwertungskarte")
-theme_override_styles/hover = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/normal = SubResource("StyleBoxFlat_charakterkarte")
+theme_override_styles/hover = SubResource("StyleBoxFlat_charakterkarte_aktiv")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_charakterkarte_aktiv")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_charakterkarte")
 text = ""
+
+[node name="Glanz" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteAusgewogen"]
+script = ExtResource("13_karten_glanz")
 
 [node name="Figur" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteAusgewogen"]
 position = Vector2(160, 200)
 scale = Vector2(4, 4)
 script = ExtResource("8_figur")
 charakter_id = &"ausgewogen"
+
+[node name="Burst" type="CPUParticles2D" parent="Oberflaeche/Charakterauswahl/KarteAusgewogen"]
+position = Vector2(160, 205)
+emitting = false
+amount = 18
+lifetime = 0.5
+one_shot = true
+explosiveness = 1.0
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, 70)
+initial_velocity_min = 70.0
+initial_velocity_max = 170.0
+scale_amount_min = 3.0
+scale_amount_max = 6.0
+color = Color(1, 1, 1, 1)
 
 [node name="Name" type="Label" parent="Oberflaeche/Charakterauswahl/KarteAusgewogen"]
 mouse_filter = 2
@@ -524,16 +590,36 @@ offset_top = 118.0
 offset_right = 736.0
 offset_bottom = 588.0
 focus_mode = 0
-theme_override_styles/normal = SubResource("StyleBoxFlat_aufwertungskarte")
-theme_override_styles/hover = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/normal = SubResource("StyleBoxFlat_charakterkarte")
+theme_override_styles/hover = SubResource("StyleBoxFlat_charakterkarte_aktiv")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_charakterkarte_aktiv")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_charakterkarte")
 text = ""
+
+[node name="Glanz" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteSchnell"]
+script = ExtResource("13_karten_glanz")
 
 [node name="Figur" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteSchnell"]
 position = Vector2(160, 200)
 scale = Vector2(4, 4)
 script = ExtResource("8_figur")
 charakter_id = &"schnell"
+
+[node name="Burst" type="CPUParticles2D" parent="Oberflaeche/Charakterauswahl/KarteSchnell"]
+position = Vector2(160, 205)
+emitting = false
+amount = 18
+lifetime = 0.5
+one_shot = true
+explosiveness = 1.0
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, 70)
+initial_velocity_min = 70.0
+initial_velocity_max = 170.0
+scale_amount_min = 3.0
+scale_amount_max = 6.0
+color = Color(1, 1, 1, 1)
 
 [node name="Name" type="Label" parent="Oberflaeche/Charakterauswahl/KarteSchnell"]
 mouse_filter = 2
@@ -575,16 +661,36 @@ offset_top = 118.0
 offset_right = 1088.0
 offset_bottom = 588.0
 focus_mode = 0
-theme_override_styles/normal = SubResource("StyleBoxFlat_aufwertungskarte")
-theme_override_styles/hover = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_aufwertungskarte_aktiv")
+theme_override_styles/normal = SubResource("StyleBoxFlat_charakterkarte")
+theme_override_styles/hover = SubResource("StyleBoxFlat_charakterkarte_aktiv")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_charakterkarte_aktiv")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_charakterkarte")
 text = ""
+
+[node name="Glanz" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteTank"]
+script = ExtResource("13_karten_glanz")
 
 [node name="Figur" type="Node2D" parent="Oberflaeche/Charakterauswahl/KarteTank"]
 position = Vector2(160, 200)
 scale = Vector2(4, 4)
 script = ExtResource("8_figur")
 charakter_id = &"tank"
+
+[node name="Burst" type="CPUParticles2D" parent="Oberflaeche/Charakterauswahl/KarteTank"]
+position = Vector2(160, 205)
+emitting = false
+amount = 18
+lifetime = 0.5
+one_shot = true
+explosiveness = 1.0
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, 70)
+initial_velocity_min = 70.0
+initial_velocity_max = 170.0
+scale_amount_min = 3.0
+scale_amount_max = 6.0
+color = Color(1, 1, 1, 1)
 
 [node name="Name" type="Label" parent="Oberflaeche/Charakterauswahl/KarteTank"]
 mouse_filter = 2
