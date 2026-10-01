@@ -74,7 +74,13 @@ export type Hindernisart =
   /** Hoch, unten offen — drunter durchrutschen. */
   | 'balken'
   /** Von oben bis unten dicht — nur die Spur wechseln hilft. */
-  | 'mauer';
+  | 'mauer'
+  /**
+   * Ein Loch in der Straße — nur **in der Luft** darüber hinweg. Ab der
+   * zweiten Zone (siehe `ZONEN_LAENGE`). `z` ist der Anfang, die Länge steht
+   * in `LUECKE_LAENGE`.
+   */
+  | 'luecke';
 
 export type Hindernis = {
   art: Hindernisart;
@@ -82,9 +88,26 @@ export type Hindernis = {
   spur: number;
   /** Wo es steht, in Metern. */
   z: number;
+  /**
+   * `nah`: Die Figur war auf Höhe dieses Hindernisses und ist heil
+   * durchgekommen — zählt beim Verschwinden als **gemeistert** (Kombo,
+   * Missionen). `beruehrt`: Es hat getroffen; zählt nie. Fehlt das Feld,
+   * ist die Figur gar nicht erst in die Nähe gekommen.
+   */
+  status?: 'nah' | 'beruehrt';
 };
 
-export type Muenze = { spur: number; z: number; /** Höhe über dem Boden. */ y: number };
+/** Länge einer Lücke in Metern. Kurz genug für einen normalen Sprung bei jedem Tempo. */
+export const LUECKE_LAENGE = 3.4;
+
+export type Muenze = {
+  spur: number;
+  z: number;
+  /** Höhe über dem Boden. */
+  y: number;
+  /** Seitliche Position, sobald der Magnet die Münze heranzieht; sonst die Spurmitte. */
+  x?: number;
+};
 
 /**
  * Ein Schub — Rückmeldung: „ich will 'n paar Sachen einsammeln, zum
@@ -97,7 +120,7 @@ export type Muenze = { spur: number; z: number; /** Höhe über dem Boden. */ y:
  * sich gegenseitig nicht ab — wer alle drei einsammelt, hat alle drei
  * gleichzeitig aktiv.
  */
-export type Schubart = 'turbo' | 'sprung' | 'doppel';
+export type Schubart = 'turbo' | 'sprung' | 'doppel' | 'schild' | 'magnet';
 export type Schub = { art: Schubart; spur: number; z: number };
 
 /** Wie viel schneller man mit Turbo unterwegs ist. */
@@ -106,6 +129,27 @@ export const TURBO_FAKTOR = 1.55;
 export const TURBO_DAUER = 4;
 export const SPRUNGSCHUB_DAUER = 6;
 export const DOPPEL_DAUER = 5;
+/** Der Magnet zieht Münzen aller Spuren heran, solange er wirkt. */
+export const MAGNET_DAUER = 7;
+/** Bis in welche Entfernung voraus der Magnet Münzen heranzieht, in Metern. */
+export const MAGNET_REICHWEITE = 7;
+
+/**
+ * **Stolpern statt Sofort-Aus.** Der erste Zusammenstoß wirft die Figur nur
+ * aus dem Tritt: kurze Schonzeit, Tempoeinbruch, und ein Zeitfenster
+ * (`STOLPER_FENSTER`), in dem der **nächste** Zusammenstoß das Ende ist.
+ * Wer sich fängt und ein paar Sekunden sauber läuft, ist wieder bei null.
+ * Das macht das Spiel verzeihender *und* spannender: Plötzlich gibt es einen
+ * Zustand „knapp davor", in dem jedes Hindernis zählt.
+ */
+export const STOLPER_FENSTER = 9;
+export const SCHONZEIT = 1.3;
+/** So langsam ist man direkt nach dem Stolpern, gemessen am normalen Tempo. */
+const STOLPER_TEMPO = 0.55;
+
+/** Wie lang eine Zone ist, in Metern — danach wechseln Himmel, Licht und Schwierigkeit. */
+export const ZONEN_LAENGE = 600;
+export const ZONEN = ['Innenstadt', 'Abendrot', 'Nacht', 'Neonviertel'] as const;
 /**
  * Wie viel eine Münze mit aktivem Doppler wert ist, statt der zehn aus
  * `punkte()`. Nicht die Münzenzahl selbst verdoppeln — die zählt auch in
@@ -131,6 +175,43 @@ const SCHUB_CHANCE = 0.22;
  * aussieht, wie er sich anfühlen soll.
  */
 const SPRUNGSCHUB_KRAFT_FAKTOR = 1.35;
+
+/**
+ * Was die Missionen zählen. Alles lässt sich aus Zählern ableiten, die der
+ * Lauf ohnehin führt — keine Mission braucht eine eigene Rechnung.
+ */
+export type Missionsart = 'muenzen' | 'huerden' | 'balken' | 'luecken' | 'mauern' | 'schuebe' | 'meter';
+
+/** `start` ist der Zählerstand beim Anlegen — Fortschritt = Zähler − start. */
+export type Mission = { art: Missionsart; ziel: number; start: number };
+
+const MISSIONSARTEN: readonly Missionsart[] = [
+  'muenzen',
+  'huerden',
+  'balken',
+  'luecken',
+  'mauern',
+  'schuebe',
+  'meter',
+];
+const MISSION_BASIS: Record<Missionsart, number> = {
+  muenzen: 25,
+  huerden: 5,
+  balken: 5,
+  luecken: 3,
+  mauern: 6,
+  schuebe: 3,
+  meter: 400,
+};
+export const MISSION_NAMEN: Record<Missionsart, (ziel: number) => string> = {
+  muenzen: (z) => `Sammle ${z} Münzen`,
+  huerden: (z) => `Spring über ${z} Hürden`,
+  balken: (z) => `Rutsch unter ${z} Schildern durch`,
+  luecken: (z) => `Spring über ${z} Lücken`,
+  mauern: (z) => `Weich ${z} Containern knapp aus`,
+  schuebe: (z) => `Hol ${z} Extras`,
+  meter: (z) => `Lauf ${z} Meter`,
+};
 
 export type Lauf = {
   /** Zurückgelegte Strecke in Metern. */
@@ -168,6 +249,32 @@ export type Lauf = {
   doppelRest: number;
   /** Bonuspunkte aus Münzen, die mit aktivem Doppler eingesammelt wurden. */
   doppelPunkte: number;
+  /** Restliche Sekunden Magnet; 0 = aus. */
+  magnetRest: number;
+  /** Ein Schild fängt den nächsten Zusammenstoß ab — ohne Stolpern, ohne Folgen. */
+  schild: boolean;
+  /** Restliches Zeitfenster, in dem der nächste Zusammenstoß das Ende ist; 0 = Luft. */
+  stolperRest: number;
+  /** Restliche Schonzeit nach einem Treffer — in der Zeit zählt nichts. */
+  schonRest: number;
+  /** Wie oft schon gestolpert wurde (für die Anzeige). */
+  stolperZahl: number;
+  /** Gemeisterte Hindernisse in Folge — ein Treffer setzt sie auf null. */
+  kombo: number;
+  /** Bonuspunkte aus der Kombo. Wird nie geleert. */
+  komboPunkte: number;
+  huerdenGesprungen: number;
+  balkenUnterquert: number;
+  lueckenGesprungen: number;
+  mauernUmfahren: number;
+  /** Die drei laufenden Missionen. Eine erledigte wird sofort ersetzt. */
+  missionen: readonly Mission[];
+  /** Wie viele Missionen in diesem Lauf schon geschafft wurden. */
+  missionZahl: number;
+  /** Bonuspunkte aus erledigten Missionen. Wird nie geleert. */
+  missionPunkte: number;
+  /** Die zuletzt erledigte Mission — die Anzeige blendet sie kurz ein. */
+  letzteMission: Mission | null;
   /** Bis zu welchem Abschnitt schon erzeugt wurde. */
   erzeugtBis: number;
   vorbei: boolean;
@@ -222,6 +329,66 @@ export function istPassierbar(hindernisse: readonly Hindernis[]): boolean {
   return true;
 }
 
+/** In welcher Zone der Strecke man ist (0 bis 3, danach von vorn mit schwererem Inhalt). */
+export function zoneBei(strecke: number): number {
+  return Math.floor(Math.max(0, strecke) / ZONEN_LAENGE);
+}
+
+/** Der Name der Zone — die Bilder wiederholen sich nach vier Zonen, die Schwierigkeit nicht. */
+export function zonenName(zone: number): string {
+  return ZONEN[zone % ZONEN.length]!;
+}
+
+/** Wie viel ein gemeistertes Hindernis wert ist, in Abhängigkeit von der Serie. */
+export function komboFaktor(kombo: number): number {
+  return Math.min(5, 1 + Math.floor(kombo / 4));
+}
+const KOMBO_BASIS = 5;
+
+function zaehler(lauf: Lauf, art: Missionsart): number {
+  switch (art) {
+    case 'muenzen':
+      return lauf.muenzenZahl;
+    case 'huerden':
+      return lauf.huerdenGesprungen;
+    case 'balken':
+      return lauf.balkenUnterquert;
+    case 'luecken':
+      return lauf.lueckenGesprungen;
+    case 'mauern':
+      return lauf.mauernUmfahren;
+    case 'schuebe':
+      return lauf.schubZahl;
+    default:
+      return Math.floor(lauf.strecke);
+  }
+}
+
+/** Wie weit eine Mission schon ist, 0 bis `ziel`. */
+export function missionFortschritt(lauf: Lauf, m: Mission): number {
+  return Math.max(0, Math.min(m.ziel, zaehler(lauf, m.art) - m.start));
+}
+
+/** Was eine erledigte Mission einbringt — steigt mit jeder geschafften Dreierrunde. */
+export function missionsLohn(missionZahl: number): number {
+  return 100 + 50 * Math.floor(missionZahl / 3);
+}
+
+/**
+ * Die nächste Mission, allein aus Saat und laufender Nummer — gleicher Lauf,
+ * gleiche Aufgaben. `ausser` hält die beiden anderen Plätze: Man soll nie
+ * dieselbe Aufgabe doppelt sehen.
+ */
+function neueMission(lauf: Lauf, nummer: number, ausser: readonly Missionsart[]): Mission {
+  const frei = MISSIONSARTEN.filter((a) => !ausser.includes(a));
+  const w = schritt(saatAus('laufen-mission', lauf.saat, nummer));
+  const art = frei[Math.floor(w.wert * frei.length)]!;
+  const runde = Math.floor(lauf.missionZahl / 3);
+  const roh = MISSION_BASIS[art] * (1 + 0.5 * runde);
+  const ziel = art === 'meter' ? Math.round(roh / 50) * 50 : Math.max(1, Math.round(roh));
+  return { art, ziel, start: zaehler(lauf, art) };
+}
+
 /**
  * Erzeugt den Inhalt eines Abschnitts — **allein aus seiner Nummer**.
  *
@@ -246,8 +413,10 @@ export function abschnittErzeugen(
 
   const a = schritt(s);
   s = a.saat;
-  // Wie viele Spuren dieser Abschnitt belegt: 1 oder 2, nie alle drei.
-  const belegt = a.wert < 0.62 ? 1 : 2;
+  // Wie viele Spuren dieser Abschnitt belegt: 1 oder 2, nie alle drei. Mit
+  // jeder Zone wird es dichter (bis höchstens zwei Drittel Doppelbelegung).
+  const stufe = zoneBei(z);
+  const belegt = a.wert < Math.max(0.34, 0.62 - 0.07 * stufe) ? 1 : 2;
 
   const freieSpuren = [0, 1, 2];
   for (let i = 0; i < belegt; i++) {
@@ -260,8 +429,27 @@ export function abschnittErzeugen(
     s = t.saat;
     // Mauern sind seltener — sie erzwingen einen Spurwechsel und sind damit
     // der härteste Fall.
-    const art: Hindernisart = t.wert < 0.42 ? 'huerde' : t.wert < 0.78 ? 'balken' : 'mauer';
+    // Die erste Zone kennt nur die drei Grundformen; ab der zweiten kommen
+    // Lücken dazu, die man nur im Sprung überwindet.
+    const art: Hindernisart =
+      stufe === 0
+        ? t.wert < 0.42
+          ? 'huerde'
+          : t.wert < 0.78
+            ? 'balken'
+            : 'mauer'
+        : t.wert < 0.28
+          ? 'huerde'
+          : t.wert < 0.52
+            ? 'balken'
+            : t.wert < 0.72
+              ? 'luecke'
+              : 'mauer';
     hindernisse.push({ art, spur, z });
+    // Über jeder Lücke schwebt ein Münzbogen — die Belohnung für den Sprung.
+    if (art === 'luecke') {
+      for (let k = 0; k < 4; k++) muenzen.push({ spur, z: z + 0.35 + k * 0.85, y: 1.5 });
+    }
   }
 
   // Auf einer freien Spur eine Münzreihe — die Belohnung fürs Ausweichen
@@ -290,7 +478,8 @@ export function abschnittErzeugen(
       const spur = freieSpuren[Math.floor(p.wert * freieSpuren.length)]!;
       const a = schritt(s);
       s = a.saat;
-      const art: Schubart = a.wert < 1 / 3 ? 'turbo' : a.wert < 2 / 3 ? 'sprung' : 'doppel';
+      const arten: readonly Schubart[] = ['turbo', 'sprung', 'doppel', 'schild', 'magnet'];
+      const art = arten[Math.min(arten.length - 1, Math.floor(a.wert * arten.length))]!;
       schuebe.push({ art, spur, z: z + 10 });
     }
   }
@@ -322,10 +511,34 @@ export function neuesSpiel(saat: number): Lauf {
     sprungRest: 0,
     doppelRest: 0,
     doppelPunkte: 0,
+    magnetRest: 0,
+    schild: false,
+    stolperRest: 0,
+    schonRest: 0,
+    stolperZahl: 0,
+    kombo: 0,
+    komboPunkte: 0,
+    huerdenGesprungen: 0,
+    balkenUnterquert: 0,
+    lueckenGesprungen: 0,
+    mauernUmfahren: 0,
+    missionen: [],
+    missionZahl: 0,
+    missionPunkte: 0,
+    letzteMission: null,
     erzeugtBis: 0,
     vorbei: false,
     saat,
   };
+  // Drei verschiedene Aufgaben zum Start.
+  const arten: Missionsart[] = [];
+  const missionen: Mission[] = [];
+  for (let i = 0; i < 3; i++) {
+    const m = neueMission(lauf, i, arten);
+    arten.push(m.art);
+    missionen.push(m);
+  }
+  lauf = { ...lauf, missionen };
   for (let i = 0; i < VORRAT; i++) lauf = nachschieben(lauf);
   return lauf;
 }
@@ -393,6 +606,15 @@ export function kopfhoehe(lauf: Lauf): number {
  * aktuellen Stand) — dafür der Vorgabewert.
  */
 export function kollision(lauf: Lauf, h: Hindernis, streckeVorher = lauf.strecke): boolean {
+  if (h.art === 'luecke') {
+    // Ein Loch hat eine Länge: Es zählt, solange irgendein Stück des
+    // zurückgelegten Wegs darüberliegt — und nur, wenn man dabei am Boden ist.
+    if (h.z - lauf.strecke > 0) return false;
+    if (h.z + LUECKE_LAENGE - streckeVorher < 0) return false;
+    if (Math.abs(spurX(h.spur) - lauf.x) > SPUR_BREITE / 2 + FIGUR_HALB - 0.3) return false;
+    return lauf.y < 0.3;
+  }
+
   // Tiefe: Das Hindernis ist einen halben Meter dick.
   if (h.z - lauf.strecke > 0.5) return false; // noch davor
   if (h.z - streckeVorher < -0.5) return false; // schon dahinter
@@ -426,6 +648,9 @@ export function kollision(lauf: Lauf, h: Hindernis, streckeVorher = lauf.strecke
   }
 }
 
+/** Wie lange ein abgefangener Treffer (Schild) trotzdem schützt. */
+const SCHILD_SCHONZEIT = 0.8;
+
 /** Ein Zeitschritt in Sekunden. Rein — gleiche Eingabe, gleiches Ergebnis. */
 export function takt(lauf: Lauf, dt: number): Lauf {
   if (lauf.vorbei) return lauf;
@@ -434,7 +659,11 @@ export function takt(lauf: Lauf, dt: number): Lauf {
   // bleibt der Anstieg über die Strecke (`tempoBei`) unverändert, und der
   // Effekt fühlt sich am Anfang des Laufs genauso stark an wie am Ende.
   const tempoGrund = tempoBei(lauf.strecke);
-  const tempo = lauf.turboRest > 0 ? tempoGrund * TURBO_FAKTOR : tempoGrund;
+  let tempo = lauf.turboRest > 0 ? tempoGrund * TURBO_FAKTOR : tempoGrund;
+  // Nach dem Stolpern bricht das Tempo ein und kommt über die Schonzeit zurück.
+  if (lauf.schonRest > 0) {
+    tempo *= STOLPER_TEMPO + (1 - STOLPER_TEMPO) * (1 - Math.min(1, lauf.schonRest / SCHONZEIT));
+  }
   const strecke = lauf.strecke + tempo * dt;
 
   // Spurwechsel gleitet in fester Zeit, unabhängig vom Tempo.
@@ -455,6 +684,9 @@ export function takt(lauf: Lauf, dt: number): Lauf {
   const turboRest = Math.max(0, lauf.turboRest - dt);
   const sprungRest = Math.max(0, lauf.sprungRest - dt);
   const doppelRest = Math.max(0, lauf.doppelRest - dt);
+  const magnetRest = Math.max(0, lauf.magnetRest - dt);
+  const schonRest = Math.max(0, lauf.schonRest - dt);
+  const stolperRest = Math.max(0, lauf.stolperRest - dt);
 
   let zwischen: Lauf = {
     ...lauf,
@@ -467,21 +699,35 @@ export function takt(lauf: Lauf, dt: number): Lauf {
     turboRest,
     sprungRest,
     doppelRest,
+    magnetRest,
+    schonRest,
+    stolperRest,
   };
 
-  // Münzen einsammeln.
+  // Münzen einsammeln — mit Magnet zusätzlich aller Spuren heranziehen.
   let muenzenZahl = lauf.muenzenZahl;
   let doppelPunkte = lauf.doppelPunkte;
-  const muenzen = lauf.muenzen.filter((m) => {
+  const magnetAn = lauf.magnetRest > 0;
+  const muenzen: Muenze[] = [];
+  for (const roh of lauf.muenzen) {
+    let m = roh;
     const dz = m.z - strecke;
-    if (dz < -1) return false; // hinter uns, weg damit
+    if (dz < -1) continue; // hinter uns, weg damit
+    if (magnetAn && dz > -0.5 && dz < MAGNET_REICHWEITE) {
+      const mx0 = m.x ?? spurX(m.spur);
+      const f = Math.min(1, dt * 7);
+      m = { ...m, x: mx0 + (x - mx0) * f, y: m.y + (y + 0.6 - m.y) * f };
+    }
     // Wie bei den Hindernissen der zurückgelegte Abschnitt, nicht der
     // Momentanabstand: Bei 50 ms Zeitschritt und Höchsttempo ist der Schritt
     // 1,1 m lang, das alte Fenster war 1,2 m breit — die Münze wäre bei der
     // nächsten Bildrate-Verschlechterung durchgerutscht, und ein Kind hätte
     // gesehen, wie es mitten durch sie hindurchläuft.
-    if (dz > 0.6 || m.z - lauf.strecke < -0.6) return true;
-    const nah = Math.abs(spurX(m.spur) - x) < SPUR_BREITE / 2;
+    if (dz > 0.6 || m.z - lauf.strecke < -0.6) {
+      muenzen.push(m);
+      continue;
+    }
+    const nah = Math.abs((m.x ?? spurX(m.spur)) - x) < SPUR_BREITE / 2;
     const hoehe = Math.abs(m.y - (y + 0.6)) < 0.9;
     if (nah && hoehe) {
       muenzenZahl += 1;
@@ -489,10 +735,10 @@ export function takt(lauf: Lauf, dt: number): Lauf {
       // `muenzenZahl` und `muenzSerie`), bringt mit aktivem Doppler aber
       // zusätzliche Punkte — siehe `DOPPEL_MUENZ_BONUS`.
       if (doppelRest > 0) doppelPunkte += DOPPEL_MUENZ_BONUS;
-      return false;
+      continue;
     }
-    return true;
-  });
+    muenzen.push(m);
+  }
 
   // Serie: Münzen ohne größere Lücke hintereinander. Siehe `SERIE_ABSTAND`.
   const geholt = muenzenZahl - lauf.muenzenZahl;
@@ -521,18 +767,78 @@ export function takt(lauf: Lauf, dt: number): Lauf {
       schubZahl += 1;
       if (sch.art === 'turbo') zwischen = { ...zwischen, turboRest: TURBO_DAUER };
       else if (sch.art === 'sprung') zwischen = { ...zwischen, sprungRest: SPRUNGSCHUB_DAUER };
-      else zwischen = { ...zwischen, doppelRest: DOPPEL_DAUER };
+      else if (sch.art === 'doppel') zwischen = { ...zwischen, doppelRest: DOPPEL_DAUER };
+      else if (sch.art === 'schild') zwischen = { ...zwischen, schild: true };
+      else zwischen = { ...zwischen, magnetRest: MAGNET_DAUER };
       return false;
     }
     return true;
   });
 
-  // Hindernisse prüfen und Vergangenes wegwerfen.
+  /*
+   * Hindernisse prüfen. Jedes führt ein `status` mit: `nah` heißt, die
+   * Figur war auf seiner Höhe und ist heil durchgekommen — beim Verschwinden
+   * zählt das als gemeistert (Kombo, Missionen). Ein Treffer wirkt nur beim
+   * **ersten** Kontakt und nur außerhalb der Schonzeit.
+   */
+  let schild = zwischen.schild;
+  let schon = zwischen.schonRest;
+  let stolper = zwischen.stolperRest;
+  let stolperZahl = lauf.stolperZahl;
+  let kombo = lauf.kombo;
+  let komboPunkte = lauf.komboPunkte;
+  let huerden = lauf.huerdenGesprungen;
+  let balken = lauf.balkenUnterquert;
+  let luecken = lauf.lueckenGesprungen;
+  let mauern = lauf.mauernUmfahren;
   let vorbei = false;
-  const hindernisse = lauf.hindernisse.filter((h) => {
-    if (kollision(zwischen, h, lauf.strecke)) vorbei = true;
-    return h.z - strecke > -3;
-  });
+  const hindernisse: Hindernis[] = [];
+  for (const h0 of lauf.hindernisse) {
+    let h = h0;
+    const ende = h.art === 'luecke' ? h.z + LUECKE_LAENGE : h.z;
+
+    if (h.status !== 'beruehrt') {
+      const trifft = kollision(zwischen, h, lauf.strecke);
+      if (trifft) {
+        h = { ...h, status: 'beruehrt' };
+        if (schon <= 0) {
+          if (schild) {
+            schild = false;
+            schon = SCHILD_SCHONZEIT;
+          } else if (stolper > 0) {
+            vorbei = true;
+          } else {
+            stolper = STOLPER_FENSTER;
+            schon = SCHONZEIT;
+            kombo = 0;
+            stolperZahl += 1;
+          }
+        }
+      } else if (h.status !== 'nah') {
+        const tief = h.z - strecke <= 0.5 && ende - lauf.strecke >= -0.5;
+        const abstand = Math.abs(spurX(h.spur) - x);
+        const quer = abstand <= SPUR_BREITE / 2 + FIGUR_HALB - 0.3;
+        // Eine Mauer zählt, wenn man **knapp** an ihr vorbei ist: auf der
+        // Nachbarspur, nicht irgendwo am anderen Ende der Straße.
+        const knapp = h.art === 'mauer' ? abstand <= SPUR_BREITE * 1.5 : quer;
+        if (tief && knapp) h = { ...h, status: 'nah' };
+      }
+    }
+
+    if (ende - strecke > -3) {
+      hindernisse.push(h);
+      continue;
+    }
+    // Aus dem Bild gelaufen: Gemeistert, wenn die Figur nah dran war und nie getroffen wurde.
+    if (h.status === 'nah') {
+      komboPunkte += KOMBO_BASIS * komboFaktor(kombo);
+      kombo += 1;
+      if (h.art === 'huerde') huerden += 1;
+      else if (h.art === 'balken') balken += 1;
+      else if (h.art === 'luecke') luecken += 1;
+      else mauern += 1;
+    }
+  }
 
   zwischen = {
     ...zwischen,
@@ -544,8 +850,36 @@ export function takt(lauf: Lauf, dt: number): Lauf {
     schuebe,
     schubZahl,
     hindernisse,
+    schild,
+    schonRest: schon,
+    stolperRest: stolper,
+    stolperZahl,
+    kombo,
+    komboPunkte,
+    huerdenGesprungen: huerden,
+    balkenUnterquert: balken,
+    lueckenGesprungen: luecken,
+    mauernUmfahren: mauern,
     vorbei,
   };
+
+  // Missionen: Eine erledigte wird sofort durch eine neue, etwas größere ersetzt.
+  let missionen = zwischen.missionen;
+  for (let i = 0; i < missionen.length; i++) {
+    const m = missionen[i]!;
+    if (zaehler(zwischen, m.art) - m.start < m.ziel) continue;
+    const lohn = missionsLohn(zwischen.missionZahl);
+    const andere = missionen.filter((_, j) => j !== i).map((e) => e.art);
+    zwischen = {
+      ...zwischen,
+      missionZahl: zwischen.missionZahl + 1,
+      missionPunkte: zwischen.missionPunkte + lohn,
+      letzteMission: m,
+    };
+    const ersatz = neueMission(zwischen, zwischen.missionZahl + 2, [...andere, m.art]);
+    missionen = missionen.map((e, j) => (j === i ? ersatz : e));
+    zwischen = { ...zwischen, missionen };
+  }
 
   // Nachschub, solange nicht genug voraus liegt.
   while (zwischen.erzeugtBis * ABSCHNITT_LAENGE < strecke + VORRAT * ABSCHNITT_LAENGE) {
@@ -567,6 +901,11 @@ export function takt(lauf: Lauf, dt: number): Lauf {
  */
 export function punkte(lauf: Lauf): number {
   return (
-    Math.floor(lauf.strecke) + lauf.muenzenZahl * 10 + lauf.schubZahl * 25 + lauf.doppelPunkte
+    Math.floor(lauf.strecke) +
+    lauf.muenzenZahl * 10 +
+    lauf.schubZahl * 25 +
+    lauf.doppelPunkte +
+    lauf.komboPunkte +
+    lauf.missionPunkte
   );
 }

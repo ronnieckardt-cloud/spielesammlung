@@ -455,6 +455,20 @@ export function himmelTextur(): THREE.Texture {
 }
 
 /**
+ * Malt den Himmelsverlauf neu — für den Zonenwechsel. Die Leinwand ist nur
+ * 4 × 256 Pixel groß, ein Neuzeichnen kostet praktisch nichts.
+ */
+export function himmelMalen(t: THREE.Texture, stops: readonly string[]): void {
+  const leinwand = (t as THREE.CanvasTexture).image as HTMLCanvasElement;
+  const stift = leinwand.getContext('2d')!;
+  const verlauf = stift.createLinearGradient(0, 0, 0, leinwand.height);
+  [0, 0.42, 0.78, 1].forEach((p, i) => verlauf.addColorStop(p, stops[i]!));
+  stift.fillStyle = verlauf;
+  stift.fillRect(0, 0, leinwand.width, leinwand.height);
+  t.needsUpdate = true;
+}
+
+/**
  * Eine Wolke als weiche Ansammlung von Ballen.
  *
  * Wolken sind hier kein Zierrat: Zwischen den Häuserzeilen steht ein breiter

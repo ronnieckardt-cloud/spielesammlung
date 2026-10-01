@@ -1,11 +1,20 @@
 import * as THREE from 'three';
-import { ABSCHNITT_LAENGE, HOEHE_STEHEND, SPUR_BREITE, spurX } from './logik';
+import {
+  ABSCHNITT_LAENGE,
+  HOEHE_STEHEND,
+  LUECKE_LAENGE,
+  SCHONZEIT,
+  SPUR_BREITE,
+  spurX,
+  zoneBei,
+} from './logik';
 import type { Lauf } from './logik';
 import {
   asphaltTextur,
   containerTextur,
   gehwegTextur,
   hauswandTextur,
+  himmelMalen,
   himmelTextur,
   markierungTextur,
   muenzTextur,
@@ -134,6 +143,65 @@ const FARBEN = {
   balken: 0xdc2626,
   mauer: '#d2492a',
 } as const;
+
+/**
+ * Die Stimmung je Zone. Alles ist ein Zielwert, auf den die Szene beim
+ * Zonenwechsel über gut eine Sekunde zuläuft — ein harter Schnitt von Tag
+ * auf Nacht wäre ein ganzflächiger Hell-Dunkel-Wechsel, und der ist im
+ * Projekt tabu.
+ */
+type Stimmung = {
+  himmel: readonly [string, string, string, string];
+  dunst: number;
+  hemiOben: number;
+  hemiUnten: number;
+  hemiStaerke: number;
+  sonne: number;
+  sonneStaerke: number;
+  belichtung: number;
+};
+const STIMMUNGEN: readonly Stimmung[] = [
+  {
+    himmel: ['#1f6fc6', '#5cb0e8', '#a9dcf4', '#e6f5fb'],
+    dunst: 0xbcdff2,
+    hemiOben: 0xdaf0ff,
+    hemiUnten: 0x6d7f90,
+    hemiStaerke: 1.25,
+    sonne: 0xfff2d8,
+    sonneStaerke: 2.5,
+    belichtung: 1.12,
+  },
+  {
+    himmel: ['#3b2a6b', '#b8507c', '#f59e6b', '#ffd9a0'],
+    dunst: 0xf0b48a,
+    hemiOben: 0xffd2b0,
+    hemiUnten: 0x7a5a6a,
+    hemiStaerke: 1.15,
+    sonne: 0xffa860,
+    sonneStaerke: 2.3,
+    belichtung: 1.1,
+  },
+  {
+    himmel: ['#050a1f', '#0e1a44', '#1d2f66', '#34508a'],
+    dunst: 0x1a2a55,
+    hemiOben: 0x7a90d8,
+    hemiUnten: 0x232c48,
+    hemiStaerke: 1.0,
+    sonne: 0xa9bfff,
+    sonneStaerke: 1.2,
+    belichtung: 1.3,
+  },
+  {
+    himmel: ['#14002e', '#4b0f6e', '#b0207f', '#ff5fa2'],
+    dunst: 0x6a1a78,
+    hemiOben: 0xd9a0ff,
+    hemiUnten: 0x2f0f4a,
+    hemiStaerke: 1.1,
+    sonne: 0xff7ad9,
+    sonneStaerke: 1.7,
+    belichtung: 1.25,
+  },
+];
 
 export type Szene = {
   /** Einmal je Bild aufrufen. */
@@ -553,7 +621,8 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   szene.background = himmel;
   // Der Dunst versteckt die Stelle, an der die Welt aufhört, und ist auf den
   // hellen Horizont abgestimmt — sonst sieht man den Übergang.
-  szene.fog = new THREE.Fog(FARBEN.dunst, 48, SICHTWEITE);
+  const nebel = new THREE.Fog(FARBEN.dunst, 48, SICHTWEITE);
+  szene.fog = nebel;
 
   // `near` bewusst nicht 0,1: Näher als einen Meter kommt nichts an die
   // Kamera, und ein zu kleiner Nahwert frisst die Tiefengenauigkeit auf —
@@ -570,7 +639,8 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
    * Körper, egal wie viel Textur darauf liegt. Jetzt liegt die eine
    * Straßenseite im Licht und die andere im Schatten.
    */
-  szene.add(new THREE.HemisphereLight(0xdaf0ff, 0x6d7f90, 1.25));
+  const hemi = new THREE.HemisphereLight(0xdaf0ff, 0x6d7f90, 1.25);
+  szene.add(hemi);
   const sonne = new THREE.DirectionalLight(0xfff2d8, 2.5);
   sonne.position.set(-9, 13, 5);
   szene.add(sonne);
@@ -845,6 +915,9 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     mauer: new THREE.MeshPhongMaterial({ map: containerBild, shininess: 24 }),
     dunkel: new THREE.MeshPhongMaterial({ color: 0x333a45, shininess: 44 }),
     hell: new THREE.MeshPhongMaterial({ color: 0xf1f5f9, shininess: 30 }),
+    // Kein Licht, kein Glanz: Ein Loch darf nie hell werden, auch nachts nicht.
+    loch: new THREE.MeshBasicMaterial({ color: 0x030507 }),
+    lochTiefe: new THREE.MeshBasicMaterial({ color: 0x000000 }),
   };
 
   const breit = SPUR_BREITE * 0.86;
@@ -859,6 +932,9 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     container: new THREE.BoxGeometry(breit, 2.3, 0.85),
     band: new THREE.BoxGeometry(breit + 0.06, 0.12, 0.89),
     tuerkante: new THREE.BoxGeometry(0.09, 2.1, 0.9),
+    loch: new THREE.BoxGeometry(breit + 0.3, 0.07, LUECKE_LAENGE),
+    lochTiefe: new THREE.BoxGeometry(breit - 0.2, 0.02, LUECKE_LAENGE - 0.6),
+    lochKante: new THREE.BoxGeometry(breit + 0.4, 0.1, 0.2),
   };
 
   /*
@@ -925,9 +1001,27 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     }
     gruppe.add(mauer);
 
+    // Lücke: ein dunkles Loch in der Fahrbahn mit Warnkanten an beiden
+    // Enden — flach, aber durch den tiefschwarzen Grund und die Kanten
+    // sofort als „hier ist nichts" lesbar. `z` ist der Anfang, das Loch
+    // liegt davor bis `LUECKE_LAENGE` Meter dahinter.
+    const luecke = new THREE.Group();
+    const loch = new THREE.Mesh(geo.loch, stoffe.loch);
+    loch.position.set(0, 0.04, LUECKE_LAENGE / 2);
+    luecke.add(loch);
+    const tiefe = new THREE.Mesh(geo.lochTiefe, stoffe.lochTiefe);
+    tiefe.position.set(0, 0.075, LUECKE_LAENGE / 2);
+    luecke.add(tiefe);
+    for (const zKante of [0.05, LUECKE_LAENGE - 0.05]) {
+      const kante = new THREE.Mesh(geo.lochKante, stoffe.huerde);
+      kante.position.set(0, 0.08, zKante);
+      luecke.add(kante);
+    }
+    gruppe.add(luecke);
+
     gruppe.visible = false;
     szene.add(gruppe);
-    return { gruppe, huerde, balken, mauer };
+    return { gruppe, huerde, balken, mauer, luecke };
   });
 
   // ---------------------------------------------------------------
@@ -1061,6 +1155,38 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     shininess: 70,
     specular: 0xfce7f3,
   });
+  // Schild: ein Wappen mit spitzem Fuß. Blau — die einzige kalte, helle
+  // Farbe im Bild neben dem Türkis des Sprungschubs, deshalb deutlich
+  // satter und mit weißem Kern.
+  const wappenForm = new THREE.Shape();
+  wappenForm.moveTo(0, 0.3);
+  wappenForm.lineTo(0.22, 0.22);
+  wappenForm.lineTo(0.22, 0.0);
+  wappenForm.lineTo(0.12, -0.18);
+  wappenForm.lineTo(0, -0.3);
+  wappenForm.lineTo(-0.12, -0.18);
+  wappenForm.lineTo(-0.22, 0.0);
+  wappenForm.lineTo(-0.22, 0.22);
+  wappenForm.closePath();
+  const schubSchildGeo = new THREE.ExtrudeGeometry(wappenForm, { depth: 0.1, bevelEnabled: false });
+  schubSchildGeo.translate(0, 0, -0.05);
+  const schubSchildStoff = new THREE.MeshPhongMaterial({
+    color: 0x3b82f6,
+    emissive: 0x15357a,
+    shininess: 80,
+    specular: 0xdbeafe,
+  });
+  // Magnet: ein Hufeisen, Pole unten in Weiß — das bekannte Zeichen, kein Rätsel.
+  const magnetBogenGeo = new THREE.TorusGeometry(0.2, 0.085, 8, 20, Math.PI);
+  const magnetPolGeo = new THREE.BoxGeometry(0.17, 0.14, 0.17);
+  const schubMagnetStoff = new THREE.MeshPhongMaterial({
+    color: 0xef4444,
+    emissive: 0x6b1414,
+    shininess: 70,
+    specular: 0xfee2e2,
+  });
+  const schubMagnetPolStoff = new THREE.MeshPhongMaterial({ color: 0xf1f5f9, shininess: 60 });
+
   const schuebe = Array.from({ length: VORRAT_SCHUEBE }, () => {
     const gruppe = new THREE.Group();
     // Alle drei Formen liegen flach in der x/y-Ebene (wie eine Münze) und
@@ -1071,9 +1197,22 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     gruppe.add(sprung);
     const doppel = new THREE.Mesh(schubDoppelGeo, schubDoppelStoff);
     gruppe.add(doppel);
+    const schild = new THREE.Mesh(schubSchildGeo, schubSchildStoff);
+    gruppe.add(schild);
+    const magnet = new THREE.Group();
+    const bogen = new THREE.Mesh(magnetBogenGeo, schubMagnetStoff);
+    bogen.position.y = 0.0;
+    magnet.add(bogen);
+    for (const seite of [-1, 1]) {
+      const pol = new THREE.Mesh(magnetPolGeo, schubMagnetPolStoff);
+      pol.position.set(seite * 0.2, -0.07, 0);
+      magnet.add(pol);
+    }
+    magnet.position.y = 0.06;
+    gruppe.add(magnet);
     gruppe.visible = false;
     szene.add(gruppe);
-    return { gruppe, turbo, sprung, doppel };
+    return { gruppe, turbo, sprung, doppel, schild, magnet };
   });
 
   // ---------------------------------------------------------------
@@ -1124,6 +1263,70 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   doppelRing.rotation.x = -Math.PI / 2;
   doppelRing.visible = false;
   szene.add(doppelRing);
+
+  // Magnet: ein weiter roter Ring am Boden — zeigt die Reichweite, in der Münzen gezogen werden.
+  const magnetRing = new THREE.Mesh(
+    new THREE.TorusGeometry(2.1, 0.05, 8, 40),
+    new THREE.MeshBasicMaterial({ color: 0xf43f5e, transparent: true, opacity: 0.55 }),
+  );
+  magnetRing.rotation.x = -Math.PI / 2;
+  magnetRing.visible = false;
+  szene.add(magnetRing);
+  // Schild: eine blasse Kugel um die Figur. Halbdurchsichtig und ohne
+  // Tiefenschreiben, damit sie die Figur nicht verdeckt.
+  const schildBlase = new THREE.Mesh(
+    new THREE.SphereGeometry(1.05, 20, 14),
+    new THREE.MeshBasicMaterial({
+      color: 0x60a5fa,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+    }),
+  );
+  schildBlase.visible = false;
+  szene.add(schildBlase);
+
+  /** Die Stimmung, auf die gerade übergeblendet wird — siehe `STIMMUNGEN`. */
+  let zone = 0;
+  const jetzt = {
+    himmel: STIMMUNGEN[0]!.himmel.map((c) => new THREE.Color(c)),
+    dunst: new THREE.Color(STIMMUNGEN[0]!.dunst),
+    hemiOben: new THREE.Color(STIMMUNGEN[0]!.hemiOben),
+    hemiUnten: new THREE.Color(STIMMUNGEN[0]!.hemiUnten),
+    sonne: new THREE.Color(STIMMUNGEN[0]!.sonne),
+    hemiStaerke: STIMMUNGEN[0]!.hemiStaerke,
+    sonneStaerke: STIMMUNGEN[0]!.sonneStaerke,
+    belichtung: STIMMUNGEN[0]!.belichtung,
+  };
+  const ziel = new THREE.Color();
+  const stimmungAnwenden = (dt: number, sofort: boolean) => {
+    const st = STIMMUNGEN[zone % STIMMUNGEN.length]!;
+    // Etwa eine Sekunde bis zur neuen Stimmung; sofort bei „weniger Bewegung".
+    const f = sofort ? 1 : Math.min(1, dt * 1.6);
+    let geaendert = false;
+    st.himmel.forEach((c, i) => {
+      ziel.set(c);
+      const vorher = jetzt.himmel[i]!.getHex();
+      jetzt.himmel[i]!.lerp(ziel, f);
+      if (jetzt.himmel[i]!.getHex() !== vorher) geaendert = true;
+    });
+    jetzt.dunst.lerp(ziel.set(st.dunst), f);
+    jetzt.hemiOben.lerp(ziel.set(st.hemiOben), f);
+    jetzt.hemiUnten.lerp(ziel.set(st.hemiUnten), f);
+    jetzt.sonne.lerp(ziel.set(st.sonne), f);
+    jetzt.hemiStaerke += (st.hemiStaerke - jetzt.hemiStaerke) * f;
+    jetzt.sonneStaerke += (st.sonneStaerke - jetzt.sonneStaerke) * f;
+    jetzt.belichtung += (st.belichtung - jetzt.belichtung) * f;
+
+    nebel.color.copy(jetzt.dunst);
+    hemi.color.copy(jetzt.hemiOben);
+    hemi.groundColor.copy(jetzt.hemiUnten);
+    hemi.intensity = jetzt.hemiStaerke;
+    sonne.color.copy(jetzt.sonne);
+    sonne.intensity = jetzt.sonneStaerke;
+    renderer.toneMappingExposure = jetzt.belichtung;
+    if (geaendert) himmelMalen(himmel, jetzt.himmel.map((c) => `#${c.getHexString()}`));
+  };
 
   let laufzeit = 0;
   /**
@@ -1252,6 +1455,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       koerper.huerde.visible = h.art === 'huerde';
       koerper.balken.visible = h.art === 'balken';
       koerper.mauer.visible = h.art === 'mauer';
+      koerper.luecke.visible = h.art === 'luecke';
     }
     for (let i = nummer; i < hindernisse.length; i++) hindernisse[i]!.gruppe.visible = false;
 
@@ -1289,6 +1493,8 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       koerper.turbo.visible = sch.art === 'turbo';
       koerper.sprung.visible = sch.art === 'sprung';
       koerper.doppel.visible = sch.art === 'doppel';
+      koerper.schild.visible = sch.art === 'schild';
+      koerper.magnet.visible = sch.art === 'magnet';
     }
     for (let i = schubNummer; i < schuebe.length; i++) schuebe[i]!.gruppe.visible = false;
 
@@ -1495,6 +1701,33 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       doppelRing.position.set(fx, 0.05, figurZ);
       doppelRing.scale.set(puls, puls, 1);
     }
+
+    // Magnet und Schild.
+    magnetRing.visible = lauf.magnetRest > 0 && !lauf.vorbei;
+    if (magnetRing.visible) {
+      const puls = 1 + Math.sin(laufzeit * 4) * 0.05;
+      magnetRing.position.set(fx, 0.06, figurZ);
+      magnetRing.scale.set(puls, puls, 1);
+    }
+    schildBlase.visible = lauf.schild && !lauf.vorbei;
+    if (schildBlase.visible) {
+      const puls = 1 + Math.sin(laufzeit * 5) * 0.03;
+      schildBlase.position.set(fx, figurY + 0.9, figurZ);
+      schildBlase.scale.set(puls, puls * 1.1, puls);
+    }
+
+    // Stolpern: kurz nach hinten gelehnt und aus dem Takt, die Schonzeit
+    // klingt über die Dauer ab. Bewusst kein Blinken der Figur — das wäre ein
+    // Dauerflackern, das die Projektregel für Pulse verbietet.
+    if (lauf.schonRest > 0 && !lauf.vorbei) {
+      const k = Math.min(1, lauf.schonRest / SCHONZEIT);
+      figur.gruppe.rotation.x -= 0.45 * k;
+      figur.gruppe.rotation.z += Math.sin(laufzeit * 22) * 0.12 * k;
+    }
+
+    // Zonenwechsel: Himmel, Dunst und Licht laufen auf die neue Stimmung zu.
+    zone = zoneBei(lauf.strecke);
+    stimmungAnwenden(dt, ruhig);
 
     // --- Kamera ---
     // Folgt gedämpft zur Seite; hart mitzuziehen wirkt hektisch, gar nicht

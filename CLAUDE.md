@@ -1580,6 +1580,50 @@ gleichzeitig aktiv sein.
   (`haptik('jubel')`), damit sich ein Schub von einer Münze auch ohne
   Hinsehen unterscheidet.
 
+### Version 2 — vom Reaktionstest zum Spiel mit Entscheidungen
+
+Ronnis Rückmeldung zur ganzen Sammlung: „Das Spiel ist ziemlich einfach."
+Dash City war vorher ein reiner Ausweich-Test: Jeder Treffer beendete den
+Lauf, die Welt sah immer gleich aus, und es gab nichts außer „weiter". Die
+Überarbeitung gibt dem Lauf **Spannungsbögen und Entscheidungen** — ohne dass
+sich an der Steuerung etwas ändert.
+
+- **Stolpern statt sofort Schluss.** Der erste Treffer wirft die Figur nur
+  um (kurzer Tempoverlust, `SCHONZEIT` 1,3 s Unverwundbarkeit). Ein zweiter
+  innerhalb von `STOLPER_FENSTER` (9 s) beendet den Lauf. Ein Treffer wirkt
+  **je Hindernis genau einmal** (`status` 'nah'/'beruehrt'), sonst würde ein
+  einzelner Container in drei Bildern dreimal zuschlagen. Das Fenster ist
+  im Bild sichtbar: roter Rand und ein schrumpfender Balken „Noch ein Treffer
+  = Ende" — Farbe nie als einziges Merkmal.
+- **Zwei neue Schübe**: Schild (fängt einen Treffer ab, ohne zu stolpern) und
+  Magnet (`MAGNET_REICHWEITE` 7 m, Münzen fliegen zur Figur). Beide folgen
+  derselben Regel wie die ersten drei: eigene Silhouette, eigene Farbe,
+  Badge in derselben Farbe.
+- **Lücken in der Straße** (`LUECKE_LAENGE` 3,4 m) — erst ab der zweiten
+  Zone, damit die ersten Meter ruhig bleiben. Eine Lücke liegt wie jedes
+  Hindernis auf **einer** Spur: Man springt hinüber oder wechselt die Spur.
+  Über jeder Lücke schwebt ein Münzbogen als Belohnung fürs Springen. Die
+  Sprungweite reicht bei jedem Tempo (eigener Test über die gemessene
+  Flugzeit).
+- **Vier Zonen** (`ZONEN`, je `ZONEN_LAENGE` 600 m): Innenstadt, Abendrot,
+  Nacht, Neonviertel. Die Stimmung (Himmel, Nebel, Licht) blendet über
+  `stimmungAnwenden` weich um; der Himmel ist eine Textur, die per
+  `himmelMalen` neu gemalt wird, nicht ein Wechsel auf ein anderes Bild.
+- **Kombo**: Jedes gemeisterte Hindernis (durchgekommen, ohne es zu
+  berühren) zählt `KOMBO_BASIS` mal `komboFaktor` (×1 bis ×5, alle vier in
+  Folge eine Stufe mehr) in einen eigenen Topf `komboPunkte`; ein Stolpern
+  setzt die Serie zurück. Der Topf wird nie geleert — dieselbe Regel wie
+  bei `doppelPunkte`.
+- **Missionen**: Drei laufende Aufgaben („Sammle 25 Münzen", „Spring über 3
+  Lücken", …); ist eine geschafft, kommt eine neue und der Lohn wächst
+  (`missionsLohn`). Das gibt dem Lauf kleine Zwischenziele neben dem
+  Rekord. Alles aus der Abschnittsnummer erzeugt, nicht aus der Uhr.
+- **Fairness bleibt Grundlage.** `istPassierbar` gilt unverändert über
+  5000 Abschnitte: Eine Lücke versperrt keine Spur (man kann springen), nur
+  Mauern tun das. Die Hindernisse entstehen weiter nur aus der
+  Abschnittsnummer, derselbe Lauf mit derselben Eingabe bleibt
+  reproduzierbar.
+
 ## Box Push — Besonderheiten
 
 Das erste Spiel, in dem man einen Zug wirklich **verbauen** kann: Kisten
