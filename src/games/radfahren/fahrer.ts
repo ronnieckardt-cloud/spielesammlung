@@ -222,9 +222,31 @@ export function skelettBerechnen(g: FahrerGeo, pose: FahrerPose): Skelett {
   const sitzLehn = (((50 + 14 * gewicht - 7 * hocke) * Math.PI) / 180) as number;
 
   const huefte = lernP(sitz, stehHuefte, stehen);
-  const lehn = lern(sitzLehn, stehLehn, stehen);
-  const rumpf: P = { x: Math.sin(lehn), y: -Math.cos(lehn) };
-  const schulter = plus(huefte, mal(rumpf, torsoLaenge));
+  let lehn = lern(sitzLehn, stehLehn, stehen);
+  let rumpf: P = { x: Math.sin(lehn), y: -Math.cos(lehn) };
+  let schulter = plus(huefte, mal(rumpf, torsoLaenge));
+
+  /*
+   * **Reichweite sichern.** Sitzend ist die Hüfte an den Sattel gebunden, und wer das
+   * Gewicht ganz nach hinten legt, richtet den Rumpf so weit auf, dass die Schulter
+   * 0,9 m vom Griff entfernt liegt — bei 0,66 m Armlänge. Die Hand griff dann ins
+   * Leere, und der Arm zog sich in die Länge. Ein echter Fahrer beugt sich vor, bis er
+   * den Lenker erreicht: Die Schulter wandert auf dem Kreis um die Hüfte (Radius =
+   * Rumpflänge) dorthin, wo ihr Abstand zur Hand die Armlänge nicht überschreitet.
+   * Gefunden hat das ein Test über alle Haltungen, nicht das Hinsehen.
+   */
+  const maxArm = (LAENGEN.oberarm + LAENGEN.unterarm) * m * 0.985;
+  if (laenge(minus(schulter, g.lenker)) > maxArm) {
+    const zurHand = minus(g.lenker, huefte);
+    const hd = laenge(zurHand) || 0.0001;
+    const cosT = begrenzen((hd * hd + torsoLaenge * torsoLaenge - maxArm * maxArm) / (2 * hd * torsoLaenge), -1, 1);
+    const theta = Math.acos(cosT);
+    // Die Schulter liegt **über** der Linie Hüfte → Hand: bei y nach unten also der kleinere Winkel.
+    const phi = Math.atan2(zurHand.y, zurHand.x) - theta;
+    rumpf = { x: Math.cos(phi), y: Math.sin(phi) };
+    lehn = Math.atan2(rumpf.x, -rumpf.y);
+    schulter = plus(huefte, mal(rumpf, torsoLaenge));
+  }
 
   /*
    * Welche der beiden Ellbogenlösungen gilt, entschied vorher ein Vergleich der
@@ -1034,20 +1056,11 @@ export function fahrerVorn(ctx: CanvasRenderingContext2D, g: FahrerGeo, s: Skele
 }
 
 /**
- * Der gestürzte Fahrer: ein schlaffer Körper statt der Haltung auf dem Rad.
- *
- * Wer vom Rad fliegt, hat keine Haltung mehr — Arme und Beine schlagen, der
- * Kopf kippt, und sobald er liegt, fallen sie zur Ruhe. `schlaff` (0 = in der
- * Luft, 1 = liegt) blendet das Schlagen aus. Es gibt **keine zweite
- * Zeichnung**: Dieselben Röhren, derselbe Helm, dieselbe Kleidung wie auf dem
- * Rad, nur mit Gelenken, die frei hängen. Dadurch bleibt es dieselbe Figur —
- * ein Fahrer, der im Sturz plötzlich anders aussähe, wäre ein Bruch.
- *
- * Der Aufrufer hat `ctx` schon in die Hüfte verschoben, gedreht und skaliert;
- * hier ist die Hüfte der Nullpunkt und y zeigt nach unten.
+ * Die Gelenke des gestürzten Fahrers, **ohne** zu zeichnen: Hüfte im Nullpunkt, y nach
+ * unten, Maße mal `m`. Die 2-D-Zeichnung und die 3-D-Szene rechnen beide hierüber —
+ * ein Fahrer, der in zwei Darstellungen verschieden fällt, wäre ein Fehler.
  */
-export function fahrerSturz(ctx: CanvasRenderingContext2D, m: number, zeit: number, schlaff: number) {
-  const g: FahrerGeo = { m, tretlager: { x: 0, y: 0 }, sattel: { x: 0, y: 0 }, lenker: { x: 0, y: 0 } };
+export function sturzSkelett(m: number, zeit: number, schlaff: number): Skelett {
   const a = 1 - 0.85 * begrenzen(schlaff, 0, 1);
   const w = 8.5;
   const huefte: P = { x: 0, y: 0 };
@@ -1087,7 +1100,7 @@ export function fahrerSturz(ctx: CanvasRenderingContext2D, m: number, zeit: numb
     return { ellbogen, hand: armGlied(ellbogen, LAENGEN.unterarm, b1 + 0.5 + 0.4 * Math.sin(zeit * 7.4 + 3) * a) };
   })();
 
-  const s: Skelett = {
+  return {
     huefte,
     schulter,
     kopf,
@@ -1103,6 +1116,25 @@ export function fahrerSturz(ctx: CanvasRenderingContext2D, m: number, zeit: numb
     hand: armNah.hand,
     handFern: armFern.hand,
   };
+}
+
+/**
+ * Der gestürzte Fahrer: ein schlaffer Körper statt der Haltung auf dem Rad.
+ *
+ * Wer vom Rad fliegt, hat keine Haltung mehr — Arme und Beine schlagen, der
+ * Kopf kippt, und sobald er liegt, fallen sie zur Ruhe. `schlaff` (0 = in der
+ * Luft, 1 = liegt) blendet das Schlagen aus. Es gibt **keine zweite
+ * Zeichnung**: Dieselben Röhren, derselbe Helm, dieselbe Kleidung wie auf dem
+ * Rad, nur mit Gelenken, die frei hängen. Dadurch bleibt es dieselbe Figur —
+ * ein Fahrer, der im Sturz plötzlich anders aussähe, wäre ein Bruch.
+ *
+ * Der Aufrufer hat `ctx` schon in die Hüfte verschoben, gedreht und skaliert;
+ * hier ist die Hüfte der Nullpunkt und y zeigt nach unten.
+ */
+export function fahrerSturz(ctx: CanvasRenderingContext2D, m: number, zeit: number, schlaff: number) {
+  const g: FahrerGeo = { m, tretlager: { x: 0, y: 0 }, sattel: { x: 0, y: 0 }, lenker: { x: 0, y: 0 } };
+  const a = 1 - 0.85 * begrenzen(schlaff, 0, 1);
+  const s = sturzSkelett(m, zeit, schlaff);
   const pose: FahrerPose = { stehen: 1, hocke: 0, gewicht: 0, streck: 0, kurbel: 0, wind: 0.8 * a, zeit };
   bein(ctx, g, s, pose, true);
   arm(ctx, g, s, true);

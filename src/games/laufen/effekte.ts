@@ -49,14 +49,14 @@ export type Nachbearbeitung = {
  * Sekunde und würde sofort auf Stufe 0 zurückschalten, und dann wäre von allem
  * hier nichts zu sehen. Auf einem echten Gerät ist der Wert nie gesetzt.
  */
-function startStufe(): Stufe {
-  const wert = (globalThis as { __dashQualitaet?: number }).__dashQualitaet;
+function startStufe(haken: string): Stufe {
+  const wert = (globalThis as Record<string, unknown>)[haken];
   return wert === 0 || wert === 1 || wert === 2 || wert === 3 ? wert : 3;
 }
 
 /** Soll das automatische Zurückschalten laufen? Aus, wenn die Stufe erzwungen ist. */
-function automatisch(): boolean {
-  return (globalThis as { __dashQualitaet?: number }).__dashQualitaet === undefined;
+function automatisch(haken: string): boolean {
+  return (globalThis as Record<string, unknown>)[haken] === undefined;
 }
 
 const GRADE = {
@@ -141,8 +141,13 @@ export function nachbearbeitungBauen(
   kamera: THREE.Camera,
   beiStufe: (stufe: Stufe) => void,
   ruhig: boolean,
+  /**
+   * Name des Prüfhakens, der eine Stufe erzwingt (nur für Bildschirmfotos am Rechner).
+   * Jedes Spiel hat seinen eigenen, damit ein gesetzter Wert nie ein anderes Spiel beeinflusst.
+   */
+  haken = '__dashQualitaet',
 ): Nachbearbeitung {
-  let stufe: Stufe = startStufe();
+  let stufe: Stufe = startStufe(haken);
   let breite = 1;
   let hoehe = 1;
 
@@ -230,7 +235,7 @@ export function nachbearbeitungBauen(
   };
 
   const beobachten = (dt: number) => {
-    if (!automatisch()) return;
+    if (!automatisch(haken)) return;
     if (eingewoehnung > 0) {
       eingewoehnung -= 1;
       return;

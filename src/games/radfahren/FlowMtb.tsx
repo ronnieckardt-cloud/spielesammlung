@@ -52,7 +52,22 @@ import { heldenbildZeichnen, zeichnerBauen } from './zeichnen';
 function HeldenSymbol(_: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    if (ref.current) heldenbildZeichnen(ref.current, 250, 200);
+    const leinwand = ref.current;
+    if (!leinwand) return;
+    // Erst das 2-D-Bild: Es steht sofort da. Die 3-D-Fassung ersetzt es, sobald der Baustein geladen ist.
+    heldenbildZeichnen(leinwand, 250, 200);
+    if (startModus() !== '3d') return;
+    let abgebrochen = false;
+    import('./szene3d')
+      .then((m) => {
+        if (!abgebrochen) m.heldenbild3d(leinwand, 250, 200);
+      })
+      .catch(() => {
+        // Das 2-D-Bild bleibt stehen.
+      });
+    return () => {
+      abgebrochen = true;
+    };
   }, []);
   // Steht anstelle des App-Symbols über dem Titel — es ist die Hauptfigur des
   // Bildschirms, nicht Deko im Hintergrund. Als Deko lag der Spielen-Knopf
@@ -181,6 +196,24 @@ function HinweisZeile({ zeichen, children }: { zeichen: ReactNode; children: Rea
 
 const ANZAHL_MISSIONEN = 3;
 
+/**
+ * Hat der 3-D-Baustein in dieser Sitzung schon einmal versagt? Dann gar nicht erst wieder
+ * versuchen: Jedes „Nochmal" würde sonst erneut laden, scheitern und für einen Augenblick eine
+ * leere Fläche zeigen, bevor die 2-D-Zeichnung übernimmt.
+ */
+let dreiDGescheitert = false;
+
+/**
+ * Womit zuerst gezeichnet wird: mit 3-D, solange es geht. `__mtb2d` (nur für den Rechner) erzwingt
+ * die 2-D-Zeichnung, `__mtb3d` die 3-D-Szene auch dann, wenn sie zuvor gescheitert ist.
+ */
+function startModus(): '3d' | '2d' {
+  const g = globalThis as { __mtb2d?: boolean; __mtb3d?: boolean };
+  if (g.__mtb2d) return '2d';
+  if (g.__mtb3d) return '3d';
+  return dreiDGescheitert ? '2d' : '3d';
+}
+
 export function FlowMtb({
   onScore,
   onGameOver,
@@ -198,9 +231,20 @@ export function FlowMtb({
    */
   const [ausgelaufen, setAusgelaufen] = useState(false);
 
+  /**
+   * Womit gezeichnet wird. Die 3-D-Szene (`szene3d.ts`) wird nachgeladen; schlägt das fehl
+   * — kein WebGL, Kontext verloren —, fällt das Spiel auf die 2-D-Zeichnung zurück. Dieselbe
+   * Physik, dieselbe Steuerung, nur ein anderes Bild.
+   */
+  const [modus, setModus] = useState<'3d' | '2d'>(() => startModus());
+  /** Erst wenn der Zeichner steht, läuft die Uhr — sonst fährt das Rad schon, während noch geladen wird. */
+  const [bereit, setBereit] = useState(false);
+
   const leinwandRef = useRef<HTMLCanvasElement>(null);
   const buehneRef = useRef<HTMLDivElement>(null);
   const zeichnerRef = useRef<Zeichner | null>(null);
+  const ruhigRef = useRef(settings.reducedMotion);
+  ruhigRef.current = settings.reducedMotion;
 
   /**
    * Der Lauf entsteht **beim ersten Zugriff**, nicht bei jedem Rendern —
@@ -211,14 +255,17 @@ export function FlowMtb({
   const laufRef = useRef<Lauf | null>(null);
   const holeLauf = useCallback(() => {
     if (!laufRef.current) {
+      // Nur für Bildschirmfotos am Rechner (auf einem echten Gerät nie gesetzt): feste Strecke
+      // (`saat`), Start vor einer Lücke (`luecke`, `anlauf`) oder an einer Stelle (`x`).
+      const hilfe = (globalThis as { __mtbStart?: { luecke?: number; anlauf?: number; halt?: boolean; saat?: number; x?: number } }).__mtbStart;
       // Jede Runde eine andere Strecke, aber innerhalb der Runde fest.
-      let neu = neuesSpiel(streckenSaat(Date.now() % 100000));
-      // Nur für Bildschirmfotos am Rechner (auf einem echten Gerät nie gesetzt):
-      // setzt das Rad vor eine Lücke, mit Höchsttempo.
-      const hilfe = (globalThis as { __mtbStart?: { luecke: number; anlauf: number; halt?: boolean } }).__mtbStart;
-      const l = hilfe ? neu.gelaende.luecken[hilfe.luecke] : undefined;
-      if (hilfe && l) {
-        const x = l.x0 - hilfe.anlauf;
+      let neu = neuesSpiel(streckenSaat(hilfe?.saat ?? Date.now() % 100000));
+      const l = hilfe && hilfe.luecke !== undefined ? neu.gelaende.luecken[hilfe.luecke] : undefined;
+      if (hilfe && hilfe.x !== undefined) {
+        const x = hilfe.x;
+        neu = { ...neu, x, y: bodenHoehe(neu.gelaende, x), vx: TEMPO_MAX, winkel: bodenWinkel(neu.gelaende, x) };
+      } else if (hilfe && l) {
+        const x = l.x0 - (hilfe.anlauf ?? 0);
         neu = { ...neu, x, y: bodenHoehe(neu.gelaende, x), vx: TEMPO_MAX, winkel: bodenWinkel(neu.gelaende, x) };
       }
       laufRef.current = neu;
@@ -410,25 +457,51 @@ export function FlowMtb({
     const leinwand = leinwandRef.current;
     if (!leinwand) return;
 
-    const zeichner = zeichnerBauen(leinwand);
-    zeichnerRef.current = zeichner;
+    let abgebrochen = false;
+    let aufraeumen: (() => void) | null = null;
+    let zeichner: Zeichner | null = null;
+    setBereit(false);
 
     const messen = () => {
       const eltern = leinwand.parentElement;
-      if (eltern) zeichner.groesseAendern(eltern.clientWidth, eltern.clientHeight);
+      if (eltern && zeichner) zeichner.groesseAendern(eltern.clientWidth, eltern.clientHeight);
     };
-    messen();
+
+    const aufsetzen = async () => {
+      if (modus === '3d') {
+        try {
+          const { szene3dBauen } = await import('./szene3d');
+          if (abgebrochen) return;
+          const szene = szene3dBauen(leinwand, ruhigRef.current);
+          zeichner = szene;
+          aufraeumen = szene.aufraeumen;
+        } catch {
+          // Kein WebGL oder der Baustein ließ sich nicht laden: lieber 2-D als gar kein Bild.
+          dreiDGescheitert = true;
+          if (!abgebrochen) setModus('2d');
+          return;
+        }
+      } else {
+        zeichner = zeichnerBauen(leinwand);
+      }
+      zeichnerRef.current = zeichner;
+      messen();
+      // Ein einzelnes Bild sofort zeichnen, damit nicht kurz eine leere
+      // Fläche steht, bevor die Uhr das erste Mal tickt.
+      zeichner.zeichnen(holeLauf(), 0);
+      anzeigen(holeLauf(), holeLauf());
+      setBereit(true);
+    };
+    void aufsetzen();
     window.addEventListener('resize', messen);
-    // Ein einzelnes Bild sofort zeichnen, damit nicht kurz eine leere
-    // Fläche steht, bevor die Uhr das erste Mal tickt.
-    zeichner.zeichnen(holeLauf(), 0);
-    anzeigen(holeLauf(), holeLauf());
 
     return () => {
+      abgebrochen = true;
       window.removeEventListener('resize', messen);
       zeichnerRef.current = null;
+      aufraeumen?.();
     };
-  }, [gestartet, holeLauf, anzeigen]);
+  }, [gestartet, modus, holeLauf, anzeigen]);
 
   // --- Tastatur ----------------------------------------------------
   useEffect(() => {
@@ -560,6 +633,7 @@ export function FlowMtb({
       // `halt` ist nur für Bildschirmfotos: Die Szene bleibt nach dem ersten Bild stehen.
       running:
         gestartet &&
+        bereit &&
         !ausgelaufen &&
         !(globalThis as { __mtbStart?: { halt?: boolean } }).__mtbStart?.halt,
     },
@@ -625,7 +699,12 @@ export function FlowMtb({
       onPointerUp={buehneLos}
       onPointerCancel={buehneLos}
     >
-      <canvas ref={leinwandRef} className="block size-full" />
+      <canvas key={modus} ref={leinwandRef} className="block size-full" />
+      {!bereit && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center text-sm font-bold text-white/70" role="status">
+          Strecke wird aufgebaut …
+        </div>
+      )}
 
       {/* Oben links: Tempo, Münzen und die drei laufenden Aufgaben. */}
       <div className="pointer-events-none absolute top-0 left-0 flex flex-col items-start gap-1.5 p-3">
