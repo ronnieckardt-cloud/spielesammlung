@@ -116,6 +116,7 @@ func _on_body_entered(koerper: Node2D) -> void:
 		return
 	koerper.powerup_einsammeln(art_id)
 	Ton.abspielen(&"powerup")
+	RingEffekt.erzeugen(get_parent(), global_position, FARBEN.get(art_id, Color.WHITE), 46.0)
 	eingesammelt.emit(art_id, global_position)
 
 	# `call_deferred(&"queue_free")`, nicht `queue_free()` direkt: Godot

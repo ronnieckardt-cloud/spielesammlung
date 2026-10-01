@@ -144,6 +144,29 @@ corner_radius_bottom_left = 70
 shadow_color = Color(0, 0, 0, 0.2)
 shadow_size = 4
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_nochmal"]
+bg_color = Color(1, 0.78, 0.2, 1)
+border_width_bottom = 6
+border_color = Color(0.78, 0.5, 0.08, 1)
+corner_radius_top_left = 36
+corner_radius_top_right = 36
+corner_radius_bottom_right = 36
+corner_radius_bottom_left = 36
+shadow_color = Color(1, 0.7, 0.2, 0.35)
+shadow_size = 16
+shadow_offset = Vector2(0, 4)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_nochmal_gedrueckt"]
+bg_color = Color(1, 0.7, 0.14, 1)
+border_width_bottom = 2
+border_color = Color(0.78, 0.5, 0.08, 1)
+corner_radius_top_left = 36
+corner_radius_top_right = 36
+corner_radius_bottom_right = 36
+corner_radius_bottom_left = 36
+shadow_color = Color(1, 0.7, 0.2, 0.2)
+shadow_size = 8
+
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
 
@@ -275,46 +298,75 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_karte")
 [node name="Headline" type="Label" parent="Oberflaeche/Rundenende/Karte"]
 mouse_filter = 2
 offset_left = 20.0
-offset_top = 26.0
+offset_top = 24.0
 offset_right = 500.0
-offset_bottom = 80.0
-theme_override_colors/font_color = Color(0.945098, 0.768627, 0.058824, 1)
-theme_override_font_sizes/font_size = 40
+offset_bottom = 84.0
+theme_override_colors/font_color = Color(0.945098, 0.768627, 0.219608, 1)
+theme_override_font_sizes/font_size = 46
+theme_override_constants/outline_size = 8
+theme_override_colors/font_outline_color = Color(0.043137, 0.047059, 0.070588, 0.9)
+theme_override_constants/shadow_offset_y = 3
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.55)
 horizontal_alignment = 1
-text = "Vorbei"
+text = "GAME OVER"
+
+[node name="Trenner" type="ColorRect" parent="Oberflaeche/Rundenende/Karte"]
+mouse_filter = 2
+offset_left = 60.0
+offset_top = 92.0
+offset_right = 460.0
+offset_bottom = 94.0
+color = Color(0.55, 0.75, 1.0, 0.3)
+
+[node name="Punkte" type="Label" parent="Oberflaeche/Rundenende/Karte"]
+mouse_filter = 2
+offset_left = 20.0
+offset_top = 102.0
+offset_right = 500.0
+offset_bottom = 170.0
+theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
+theme_override_font_sizes/font_size = 54
+theme_override_constants/outline_size = 6
+theme_override_colors/font_outline_color = Color(0.043137, 0.047059, 0.070588, 0.9)
+horizontal_alignment = 1
+text = "0"
 
 [node name="Stats" type="Label" parent="Oberflaeche/Rundenende/Karte"]
 mouse_filter = 2
 offset_left = 20.0
-offset_top = 100.0
+offset_top = 170.0
 offset_right = 500.0
-offset_bottom = 134.0
-theme_override_colors/font_color = Color(0.960784, 0.968627, 0.988235, 1)
-theme_override_font_sizes/font_size = 24
+offset_bottom = 202.0
+theme_override_colors/font_color = Color(0.72, 0.75, 0.86, 1)
+theme_override_font_sizes/font_size = 20
 horizontal_alignment = 1
-text = "0 Punkte · Welle 0"
+text = "Punkte · Welle 0"
 
 [node name="Rekord" type="Label" parent="Oberflaeche/Rundenende/Karte"]
 mouse_filter = 2
 offset_left = 20.0
-offset_top = 146.0
+offset_top = 208.0
 offset_right = 500.0
-offset_bottom = 178.0
+offset_bottom = 240.0
 theme_override_colors/font_color = Color(0.55, 0.75, 1.0, 1)
 theme_override_font_sizes/font_size = 18
 horizontal_alignment = 1
 text = "Noch kein Lauf gewertet"
 
-[node name="Hinweis" type="Label" parent="Oberflaeche/Rundenende/Karte"]
-mouse_filter = 2
-offset_left = 20.0
-offset_top = 302.0
-offset_right = 500.0
+[node name="Nochmal" type="Button" parent="Oberflaeche/Rundenende/Karte"]
+offset_left = 110.0
+offset_top = 262.0
+offset_right = 410.0
 offset_bottom = 334.0
-theme_override_colors/font_color = Color(0.65, 0.68, 0.78, 1)
-theme_override_font_sizes/font_size = 15
-horizontal_alignment = 1
-text = "Taste oder Bildschirm antippen"
+focus_mode = 0
+theme_override_colors/font_color = Color(0.1, 0.07, 0.02, 1)
+theme_override_colors/font_hover_color = Color(0.1, 0.07, 0.02, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.07, 0.02, 1)
+theme_override_font_sizes/font_size = 28
+theme_override_styles/normal = SubResource("StyleBoxFlat_nochmal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_nochmal")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_nochmal_gedrueckt")
+text = "Nochmal"
 
 [node name="Aufwertungsauswahl" type="CanvasLayer" parent="Oberflaeche"]
 script = ExtResource("6_aufwertungsauswahl")
