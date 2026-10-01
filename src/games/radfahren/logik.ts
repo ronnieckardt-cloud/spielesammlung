@@ -52,6 +52,34 @@ export type Muenze = { x: number; y: number };
 /** Ein Boost-Streifen am Boden: wer drüberfährt, bekommt einen Schub. */
 export type Pad = { x: number; laenge: number };
 
+/**
+ * Eine **Lücke**: eine Rampe, die an einer harten Kante endet, ein Graben, und
+ * auf der anderen Seite ein Landehang.
+ *
+ * Anders als ein Kicker (eine glatte Glocke, auf der man irgendwo abhebt) ist
+ * der Absprung hier **eine Stelle**: die Kante. Dort ist der Boden weg, jeder
+ * hebt ab, und was danach passiert, entscheiden Tempo und Pop — wer zu kurz
+ * kommt, prallt gegen die Wand der Gegenseite oder fällt in den Graben. Das
+ * ist der Teil des Spiels, bei dem man den Absprung wirklich **steuert**.
+ *
+ * Alle Maße sind Meter. Höhen sind über dem übrigen Gelände gemessen, damit
+ * die Lücke auf jeder Bodenwelle gleich aussieht.
+ */
+export type Luecke = {
+  /** Wo die Rampe beginnt. */
+  x0: number;
+  /** Länge der Rampe; sie endet an der Kante. */
+  rampe: number;
+  /** Höhe der Kante. */
+  hoehe: number;
+  /** Breite des Grabens, von der Kante bis zur Gegenseite. */
+  breite: number;
+  /** Höhe der Gegenseite — niedriger (Abwärts), gleich (Eben) oder höher (Hinauf) als die Kante. */
+  hZiel: number;
+  /** Länge des Landehangs, der von der Gegenseite sanft zum Gelände abfällt. */
+  hang: number;
+};
+
 export type Gelaende = {
   wellen: readonly Welle[];
   kicker: readonly Kicker[];
@@ -72,6 +100,8 @@ export type Gelaende = {
    * der Pop.
    */
   absprung: readonly number[];
+  /** Die Lücken. Ohne Lücken ist das Gelände eine reine Glockenlandschaft wie zuvor. */
+  luecken: readonly Luecke[];
 };
 
 /**
@@ -98,6 +128,102 @@ const DOPPEL_BREITE_MIN = 2.4;
 const DOPPEL_BREITE_STREUUNG = 0.8;
 /** Lücke zwischen den beiden Buckeln — großzügig, das ist der ganze Witz. */
 const DOPPEL_LUECKE = 8;
+
+/** So lang ist das ebene Stück vor der Rampe: genug, um nach jeder Landung wieder Höchsttempo zu haben. */
+const LUECKEN_ANLAUF = 28;
+/** So lang bleibt es hinter dem Landehang ruhig, bevor der nächste Abschnitt beginnt. */
+const LUECKEN_AUSLAUF = 14;
+/** Länge des Landehangs hinter der Gegenseite. */
+const LUECKEN_HANG = 7;
+/**
+ * Wie weit unter der Kante der Gegenseite (senkrecht) ein Fahrer **ohne** Pop
+ * am Ende des Grabens ankommen muss — sonst käme bei Rückenwind und Boost auch
+ * ohne Pop jemand hinüber. Und wie weit **darüber** einer mit dem schwächsten
+ * gültigen Pop mindestens sein muss. Zusammen sind das die zwei Zusagen einer
+ * Lücke: Ohne Pop schafft sie keiner, mit Pop schafft sie jeder.
+ */
+const LUECKE_MARGE_KURZ = 0.55;
+const LUECKE_MARGE_DRUEBER = 0.55;
+
+/** Die Höhe einer Flugbahn an einer Stelle, linear zwischen zwei Messpunkten; `null`, wenn die Bahn nicht so weit reicht. */
+function bahnHoehe(bahn: readonly { x: number; y: number }[], x: number): number | null {
+  for (let i = 1; i < bahn.length; i++) {
+    const a = bahn[i - 1]!;
+    const b = bahn[i]!;
+    if (x >= a.x && x <= b.x) return a.y + ((b.y - a.y) * (x - a.x)) / Math.max(1e-9, b.x - a.x);
+  }
+  return null;
+}
+
+/**
+ * Fliegt probeweise auf die Rampe einer Lücke zu und gibt die Flugbahn ab der
+ * Kante zurück. `tippVorKante` ist, wie viele Sekunden vor der Kante der Pop
+ * angetippt wird; `null` heißt: gar nicht.
+ *
+ * Die Probefahrt benutzt **die echte Fahrphysik** (`taktKern`) und nicht eine
+ * zweite Rechnung daneben — sonst wäre jede spätere Änderung an der Physik
+ * ein stilles Auseinanderlaufen von Probe und Spiel. Der Graben ist dabei
+ * absichtlich 60 m breit, damit die Bahn nirgends auf eine Gegenseite trifft;
+ * wo die Gegenseite wirklich liegt, ergibt sich erst aus dieser Bahn.
+ */
+function lueckenFlug(
+  basis: Gelaende,
+  l: Luecke,
+  tippVorKante: number | null,
+): { x: number; y: number }[] {
+  const probe: Gelaende = { ...basis, luecken: [{ ...l, breite: 60 }] };
+  const start = l.x0 - LUECKEN_ANLAUF;
+  let lauf: Lauf = { ...leererLauf(probe, 0), x: start, y: bodenHoehe(probe, start), vx: TEMPO_MAX };
+  const kante = lueckeKante(l);
+  const bahn: { x: number; y: number }[] = [];
+  let tippRest = 0;
+  for (let i = 0; i < 1200 && !lauf.vorbei; i++) {
+    if (tippVorKante !== null && lauf.amBoden && tippRest === 0 && kante - lauf.x <= lauf.vx * tippVorKante) {
+      tippRest = 5;
+    }
+    const hinten = tippRest > 0;
+    if (hinten) tippRest--;
+    lauf = taktKern(lauf, 1 / 60, { gas: true, bremse: false, lehnen: 0, hinten });
+    if (!lauf.amBoden) bahn.push({ x: lauf.x, y: lauf.y });
+    else if (bahn.length > 0) break;
+  }
+  return bahn;
+}
+
+/**
+ * Baut eine Lücke mit der **kleinsten** Breite, bei der beide Zusagen halten:
+ * Ohne Pop kommt man klar zu kurz, mit dem schwächsten gültigen Pop klar
+ * hinüber. Beides wird an der echten Flugbahn gemessen, bei dem Tempo, das
+ * man nach dem ebenen Anlauf immer hat (`TEMPO_MAX`).
+ *
+ * Gibt `null` zurück, wenn es für diese Rampe keine solche Breite gibt — der
+ * Aufrufer baut dann stattdessen eine ruhige Strecke.
+ */
+function lueckeBauen(
+  basis: Gelaende,
+  x0: number,
+  hoehe: number,
+  zielArt: 'abwaerts' | 'eben' | 'hinauf',
+): Luecke | null {
+  // Die Rampe endet mit rund 0,48 Steigung: steil genug für einen echten
+  // Absprung, flach genug, dass man sie auch aus dem Stand noch hochkommt
+  // (`MAX_KICKER_STEIGUNG` liegt bei rund 0,47, die Grenze des Antriebs bei 0,61).
+  const rampe = Math.max(4, (RAMPEN_POTENZ * hoehe) / 0.48);
+  const hZiel = zielArt === 'abwaerts' ? Math.max(0.35, hoehe - 1.0) : zielArt === 'eben' ? hoehe * 0.9 : hoehe + 0.6;
+  const roh: Luecke = { x0, rampe, hoehe, breite: 60, hZiel, hang: LUECKEN_HANG };
+  const kante = lueckeKante(roh);
+  const ohne = lueckenFlug(basis, roh, null);
+  const schwach = lueckenFlug(basis, roh, POP_FENSTER * 0.93);
+  for (let w = 5; w <= 24; w += 0.25) {
+    const ende = kante + w;
+    const oben = grundHoehe(basis, ende) + hZiel;
+    const yOhne = bahnHoehe(ohne, ende);
+    const ySchwach = bahnHoehe(schwach, ende);
+    if (yOhne === null || ySchwach === null) continue;
+    if (oben - yOhne >= LUECKE_MARGE_KURZ && ySchwach - oben >= LUECKE_MARGE_DRUEBER) return { ...roh, breite: w };
+  }
+  return null;
+}
 
 /**
  * Baut das Gelände **allein aus der Saat**.
@@ -145,6 +271,12 @@ export function gelaendeBauen(saat: number, laenge = STRECKE_LAENGE): Gelaende {
   ];
 
   const kicker: Kicker[] = [];
+  const luecken: Luecke[] = [];
+  /** Der Boden, auf dem eine Lücke später liegt — für die Probefahrten beim Bauen. */
+  const probeBasis: Gelaende = { wellen, kicker: [], laenge, muenzen: [], pads: [], absprung: [], luecken: [] };
+  let abschnitt = 0;
+  /** War der vorige Abschnitt eine Lücke? Ein breiter Kicker braucht dann mehr Platz hinter ihr. */
+  let nachLuecke = false;
   // Der erste Sprung kommt sofort nach dem Anlauf — er ist das, was das
   // Spiel ausmacht, und darf nicht erst nach einer halben Minute Rollen
   // auftauchen. Deshalb ist die erste Runde immer eine Kicker-Reihe, erst
@@ -186,27 +318,67 @@ export function gelaendeBauen(saat: number, laenge = STRECKE_LAENGE): Gelaende {
      */
     const wuerfel = naechste();
     const effektiveZone: 'flow' | 'skill' = anteil > 0.8 ? 'skill' : zone;
-    const art: 'ruhig' | 'doppel' | 'kicker' | 'mega' = ersteRunde
+    /*
+     * **Lücken sind gesetzt, nicht nur gewürfelt.** Der zweite Abschnitt ist
+     * immer eine, und im weiteren Verlauf sorgt eine Untergrenze dafür, dass
+     * keine Strecke ohne bleibt: Wer die Lücke nicht springen muss, muss auch
+     * den Absprung nicht steuern — genau das war der Fehler der Fassung davor
+     * (mit reinem Dauergas kamen 24 von 40 Strecken ins Ziel).
+     */
+    const brauchtLuecke =
+      abschnitt === 1 ||
+      (luecken.length < 2 && anteil > 0.5) ||
+      (luecken.length < 3 && anteil > 0.78);
+    const art: 'ruhig' | 'doppel' | 'kicker' | 'mega' | 'luecke' = ersteRunde
       ? 'kicker'
-      : effektiveZone === 'flow'
-        ? // Flow-Zone: viel Rollen und höchstens ein sanfter Doppel-Hubbel,
-          // kaum Kicker-Ketten und nie ein Mega — Tempo halten, nicht fordern.
-          wuerfel < 0.55
-          ? 'ruhig'
-          : wuerfel < 0.85
-            ? 'doppel'
-            : 'kicker'
-        : // Skill-Zone: dicht getaktete Sprünge, Ruhepausen sind selten.
-          wuerfel < 0.08
-          ? 'ruhig'
-          : wuerfel < 0.3
-            ? 'doppel'
-            : wuerfel < 0.55
-              ? 'mega'
-              : 'kicker';
+      : brauchtLuecke
+        ? 'luecke'
+        : effektiveZone === 'flow'
+          ? // Flow-Zone: viel Rollen und höchstens ein sanfter Doppel-Hubbel,
+            // kaum Kicker-Ketten und nie ein Mega — Tempo halten, nicht fordern.
+            wuerfel < 0.4
+            ? 'ruhig'
+            : wuerfel < 0.62
+              ? 'doppel'
+              : wuerfel < 0.8
+                ? 'kicker'
+                : 'luecke'
+          : // Skill-Zone: dicht getaktete Sprünge, Ruhepausen sind selten.
+            wuerfel < 0.05
+            ? 'ruhig'
+            : wuerfel < 0.18
+              ? 'doppel'
+              : wuerfel < 0.4
+                ? 'mega'
+                : wuerfel < 0.72
+                  ? 'kicker'
+                  : 'luecke';
     ersteRunde = false;
+    abschnitt++;
+    const warLuecke = nachLuecke;
+    nachLuecke = art === 'luecke';
 
-    if (art === 'ruhig') {
+    if (art === 'luecke') {
+      // Erst ein ebenes Stück, auf dem man wieder Höchsttempo erreicht, dann
+      // die Rampe, der Graben und der Landehang, danach wieder Ruhe.
+      x += LUECKEN_ANLAUF;
+      const hoehe = 1.0 + naechste() * 0.5 + anteil * 0.4;
+      const w = naechste();
+      const zielArt = w < 0.4 ? 'abwaerts' : w < 0.75 ? 'eben' : 'hinauf';
+      // Rampe, Graben und Landehang brauchen bis zu 40 m — und hinter der
+      // Landung muss noch Platz bis zum Ziel sein. Wer die Ziellinie mitten im
+      // Flug überquert, hätte die Lücke nie springen müssen.
+      const l = x + 40 > laenge - 10 ? null : lueckeBauen(probeBasis, x, hoehe, zielArt);
+      if (l) {
+        luecken.push(l);
+        x = lueckeEnde(l) + l.hang + LUECKEN_AUSLAUF;
+      } else {
+        // Keine passende Breite gefunden (sollte nicht vorkommen, wird
+        // aber im Test über viele Saaten abgesichert): lieber eine ruhige
+        // Strecke als eine Lücke, die nicht zu schaffen ist.
+        x += 12;
+      }
+    } else if (art === 'ruhig') {
       // Erholung: kein einziger Kicker. Genau hier baut man nach einer
       // harten Landung wieder Tempo auf — ohne dieses Gegenstück bräche
       // eine Kette unperfekter Landungen das Tempo immer weiter herunter,
@@ -251,6 +423,9 @@ export function gelaendeBauen(saat: number, laenge = STRECKE_LAENGE): Gelaende {
       const breite = MEGA_BREITE_MIN + naechste() * MEGA_BREITE_STREUUNG + anteil * 5;
       const verhaeltnis = MAX_KICKER_STEIGUNG * (0.88 + naechste() * 0.12);
       const hoehe = breite * verhaeltnis;
+      // Die Flanke einer breiten Glocke reicht gut zwei Breiten weit: Direkt hinter
+      // einer Lücke begänne sie mitten im Landehang.
+      if (warLuecke) x += Math.max(0, 2.4 * breite - LUECKEN_AUSLAUF);
       kicker.push({ x, hoehe, breite });
       // Große Lücke danach — man fliegt weit, der nächste Boden braucht
       // also entsprechend Abstand, sonst landet man mitten im Anstieg.
@@ -293,7 +468,7 @@ export function gelaendeBauen(saat: number, laenge = STRECKE_LAENGE): Gelaende {
     }
   }
 
-  const grund: Gelaende = { wellen, kicker, laenge, muenzen: [], pads: [], absprung: [] };
+  const grund: Gelaende = { wellen, kicker, laenge, muenzen: [], pads: [], absprung: [], luecken };
   return { ...grund, ...inhaltBauen(grund) };
 }
 
@@ -385,9 +560,56 @@ function inhaltBauen(g: Gelaende): { muenzen: Muenze[]; pads: Pad[]; absprung: n
     }
     freiAb = Math.max(freiAb, k.x + k.breite * 2.1);
   }
+
+  /*
+   * --- Lücken ---
+   *
+   * Erst alles wegnehmen, was die Kicker-Schleife in den Bereich einer Lücke
+   * gelegt hat (sie kennt die Lücken nicht, eine Münzreihe quer über einen
+   * Graben wäre Unsinn), und **keinen Boost-Streifen vor einer Lücke**: Er
+   * machte den Pop überflüssig, und die Lücke ist genau dafür da. Dann die
+   * Marke an der Kante und ein Münzbogen auf der Linie eines vollen Pops —
+   * wer ihn trifft, sieht, wie der Sprung gemeint ist.
+   */
+  let sichtbareMuenzen = muenzen;
+  let sichtbarePads = pads;
+  const bogen: Muenze[] = [];
+  for (const l of g.luecken) {
+    const von = l.x0 - 4;
+    const bis = lueckeEnde(l) + l.hang + 2;
+    sichtbareMuenzen = sichtbareMuenzen.filter((m) => m.x < von || m.x > bis);
+    sichtbarePads = sichtbarePads.filter((p) => !(p.x + p.laenge > l.x0 - 45 && p.x < bis));
+    absprung.push(lueckeKante(l));
+    // Wer gelandet ist, bekommt im Auslauf einen Schub — Tempo-Gefühl und Punkte,
+    // kein Risiko: Bis zum nächsten Sprung ist er abgeklungen (siehe oben).
+    // Nur, wenn danach nicht gleich ein Kicker kommt: Die Kicker-Ketten sind auf
+    // Höchsttempo zugeschnitten, ein Schub kurz davor wäre zu viel.
+    const padEnde = bis + 4.5;
+    // Gemessen an der ganzen Glocke (±3 Breiten), nicht an der Anfahrt: Die Flanke
+    // eines breiten Kickers reicht weit, und ein Streifen mitten darin läge schief.
+    const kickerNah = g.kicker.some((k) => k.x - 3 * k.breite < padEnde + 25 && k.x + 3 * k.breite > bis + 1);
+    if (padEnde < g.laenge - 10 && !kickerNah) sichtbarePads = [...sichtbarePads, { x: bis + 1, laenge: 3.5 }];
+    const bahn = lueckenFlug(g, l, 0.1);
+    let weg = 0;
+    let naechste = 1.2;
+    for (let i = 1; i < bahn.length && bahn[i]!.x < lueckeEnde(l) + 3; i++) {
+      // Die Probebahn kennt die echte Gegenseite nicht (der Graben ist dort 60 m
+      // breit) — sobald sie auf deren Höhe heruntergekommen ist, ist der Bogen zu Ende.
+      if (bahn[i]!.x > lueckeEnde(l) && bahn[i]!.y < bodenHoehe(g, bahn[i]!.x) + 0.4) break;
+      weg += Math.hypot(bahn[i]!.x - bahn[i - 1]!.x, bahn[i]!.y - bahn[i - 1]!.y);
+      if (weg >= naechste) {
+        bogen.push({ x: bahn[i]!.x + 0.1, y: bahn[i]!.y + 0.75 });
+        naechste += 1.7;
+      }
+    }
+  }
+  absprung.sort((a, b) => a - b);
+
   return {
-    muenzen: muenzen.filter((m) => m.x > ANLAUF + 3 && m.x < g.laenge - 6),
-    pads,
+    muenzen: [...sichtbareMuenzen, ...bogen]
+      .filter((m) => m.x > ANLAUF + 3 && m.x < g.laenge - 6)
+      .sort((a, b) => a.x - b.x),
+    pads: sichtbarePads,
     absprung,
   };
 }
@@ -418,14 +640,36 @@ function flugBahn(g: Gelaende, k: Kicker, tempo: number): { x: number; y: number
   return beste;
 }
 
+// ---------------------------------------------------------------
+// Lücken im Gelände
+// ---------------------------------------------------------------
+
+/** So tief liegt der Boden eines Grabens (absolut, Meter) — tief genug, dass man es als Abgrund liest. */
+export const GRABEN_BODEN = -7;
 /**
- * Die Bodenhöhe an einer Stelle.
- *
- * Vor `ANLAUF` bewusst genau flach (0), damit der Start immer gleich und
- * ruhig ist. Der Übergang danach wird über `einblenden` weich
- * hochgezogen — ohne das stünde am Ende der Startgeraden eine Stufe.
+ * Wie die Rampe ansteigt: `t^p` mit `t` von 0 bis 1. Ein Wert über 1 heißt, sie
+ * beginnt flach und wird zur Kante hin steiler — der Anstieg ist also kein
+ * Knick im Boden, sondern ein Anlauf, und das Rad legt sich weich hinein.
  */
-export function bodenHoehe(g: Gelaende, x: number): number {
+const RAMPEN_POTENZ = 1.8;
+/** Punkte für jede geschaffte Lücke. */
+export const LUECKEN_PUNKTE = 60;
+
+export const lueckeKante = (l: Luecke) => l.x0 + l.rampe;
+export const lueckeEnde = (l: Luecke) => l.x0 + l.rampe + l.breite;
+
+/** Die Lücke, deren Graben an dieser Stelle liegt — sonst nichts. */
+export function lueckeBei(g: Gelaende, x: number): Luecke | undefined {
+  for (const l of g.luecken) if (x > lueckeKante(l) && x < lueckeEnde(l)) return l;
+  return undefined;
+}
+
+/**
+ * Die Höhe des Geländes **ohne** Lücken: Wellen und Kicker. Die Lücken legen
+ * sich in `bodenHoehe` darüber; die Probefahrten beim Bauen brauchen den
+ * Boden, auf dem die Lücke später liegt.
+ */
+function grundHoehe(g: Gelaende, x: number): number {
   if (x <= ANLAUF) return 0;
   const einblenden = Math.min(1, (x - ANLAUF) / 18);
 
@@ -446,16 +690,60 @@ export function bodenHoehe(g: Gelaende, x: number): number {
 }
 
 /**
+ * Die Bodenhöhe an einer Stelle.
+ *
+ * Vor `ANLAUF` bewusst genau flach (0), damit der Start immer gleich und
+ * ruhig ist. Der Übergang danach wird über `einblenden` weich
+ * hochgezogen — ohne das stünde am Ende der Startgeraden eine Stufe.
+ *
+ * **Im Graben einer Lücke ist der Boden `GRABEN_BODEN`** — und dort springt
+ * die Höhe an der Kante absichtlich, statt weich auszulaufen: Eine Kante ist
+ * eine Kante. Wer sie überquert, hebt ab (siehe `takt`), niemand rollt je
+ * über diese Stelle.
+ */
+export function bodenHoehe(g: Gelaende, x: number): number {
+  let h = grundHoehe(g, x);
+  for (const l of g.luecken) {
+    const kante = lueckeKante(l);
+    const ende = lueckeEnde(l);
+    if (x > kante && x < ende) return GRABEN_BODEN;
+    if (x >= l.x0 && x <= kante) {
+      h += l.hoehe * Math.pow((x - l.x0) / l.rampe, RAMPEN_POTENZ);
+    } else if (x >= ende && x < ende + l.hang) {
+      const u = (x - ende) / l.hang;
+      h += l.hZiel * (1 - u * u * (3 - 2 * u));
+    }
+  }
+  return h;
+}
+
+/**
  * Die Steigung des Bodens an einer Stelle, als Ableitung — **exakt
  * gerechnet, nicht geschätzt.**
  *
  * Ein numerischer Differenzenquotient (`(h(x+ε) − h(x)) / ε`) wäre hier
  * verlockend, aber er rauscht bei kleinem ε und schmiert bei großem. Der
  * Absprungwinkel hängt genau an diesem Wert; ein rauschender Wert heißt
- * ein zufälliger Absprung. Beide Bausteine (Sinus, Gauß-Glocke) haben eine
- * bekannte Ableitung, also nehmen wir die.
+ * ein zufälliger Absprung. Alle Bausteine (Sinus, Gauß-Glocke, Rampe,
+ * Landehang) haben eine bekannte Ableitung, also nehmen wir die.
  */
 export function bodenSteigung(g: Gelaende, x: number): number {
+  let s = grundSteigung(g, x);
+  for (const l of g.luecken) {
+    const kante = lueckeKante(l);
+    const ende = lueckeEnde(l);
+    if (x > kante && x < ende) return 0;
+    if (x >= l.x0 && x <= kante) {
+      s += (l.hoehe * RAMPEN_POTENZ * Math.pow((x - l.x0) / l.rampe, RAMPEN_POTENZ - 1)) / l.rampe;
+    } else if (x >= ende && x < ende + l.hang) {
+      const u = (x - ende) / l.hang;
+      s += (-l.hZiel * 6 * u * (1 - u)) / l.hang;
+    }
+  }
+  return s;
+}
+
+function grundSteigung(g: Gelaende, x: number): number {
   if (x <= ANLAUF) return 0;
   const einblenden = Math.min(1, (x - ANLAUF) / 18);
   const einblendenAbleitung = x - ANLAUF < 18 ? 1 / 18 : 0;
@@ -716,6 +1004,23 @@ export const POP_NACH = 0.15;
 export const POP_SCHUB = 2.6;
 /** Punkte je gelungenem Pop. */
 export const POP_PUNKTE = 30;
+/** Ein Pop in dieser Zeit vor der Kante (Sekunden) hat die volle Stärke. */
+export const POP_VOLL = 0.2;
+
+/**
+ * Wie kräftig ein Pop ist, je nachdem, wie lange vor der Kante er kam
+ * (`druck` = Sekunden seit dem frischen Antippen).
+ *
+ * Wer kurz vor der Kante antippt, bekommt alles; wer am Anfang des Fensters
+ * antippt, bekommt noch drei Viertel. Das ist Timing, das sich lohnt, ohne
+ * dass ein knapp danebengelegener Druck gar nichts bringt — ein Kind tippt
+ * nicht auf die Hundertstelsekunde. Die Lücken sind so gebaut, dass auch der
+ * schwächste gültige Pop noch hinüberträgt (siehe `lueckeBauen`).
+ */
+export function popStaerke(druck: number): number {
+  if (druck <= POP_VOLL) return 1;
+  return Math.max(0.75, 1 - ((druck - POP_VOLL) / (POP_FENSTER - POP_VOLL)) * 0.25);
+}
 
 /** Was bei der letzten Landung passiert ist — nur fürs Anzeigen und Punkte. */
 export type Landung = 'perfekt' | 'gut' | 'hart' | 'sturz';
@@ -785,11 +1090,14 @@ export type Lauf = {
    */
   ueberTempo: number;
   /**
-   * Sekunden, seit „Hinten" frisch gedrückt wurde; −1, solange es nicht
-   * gedrückt ist. Daran hängt der **Pop**: Wer genau an der Kante antippt,
-   * bekommt einen Extra-Schub nach oben (siehe `POP_SCHUB`).
+   * Sekunden, seit „Hinten" zuletzt frisch angetippt wurde (auch wenn es
+   * schon wieder losgelassen ist); −1, wenn das länger als eine Sekunde her
+   * ist. Daran hängt der **Pop**: Wer genau an der Kante antippt, bekommt
+   * einen Extra-Schub nach oben (siehe `POP_SCHUB`).
    */
   druck: number;
+  /** War „Hinten" im vorigen Bild gedrückt? Daran erkennt man den Beginn eines Drucks. */
+  hintenGedrueckt: boolean;
   /** Wie oft der Pop geklappt hat — für Punkte und Missionen. */
   popZahl: number;
   /** Sekunden, die der Pop noch angezeigt wird. */
@@ -800,6 +1108,8 @@ export type Lauf = {
   popX: number;
   /** Alle geschafften Drehungen (Saltos) dieser Fahrt. */
   saltos: number;
+  /** Wie viele Lücken diese Fahrt schon hinter sich hat. */
+  lueckenZahl: number;
   /** Höchstes Tempo dieser Fahrt in km/h. */
   tempoSpitze: number;
   missionen: readonly Mission[];
@@ -818,6 +1128,14 @@ export type Eingabe = {
   bremse: boolean;
   /** −1 = Gewicht nach hinten, +1 = nach vorne, 0 = nichts. */
   lehnen: number;
+  /**
+   * Ob „Hinten" gerade gedrückt ist — **roh**, ohne die weiche Rampe von
+   * `lehnen`. Der Pop hängt daran, nicht an `lehnen`: Ein kurzes Antippen
+   * (60 bis 100 ms) kommt mit der Rampe von 0,1 s Dauer nie über −0,5 und
+   * würde sonst gar nicht zählen. Fehlt der Wert (Tests, Bots), gilt
+   * `lehnen < −0,5`.
+   */
+  hinten?: boolean;
 };
 
 export const KEINE_EINGABE: Eingabe = { gas: false, bremse: false, lehnen: 0 };
@@ -852,11 +1170,13 @@ function leererLauf(gelaende: Gelaende, saat: number): Lauf {
     boost: 0,
     ueberTempo: 0,
     druck: -1,
+    hintenGedrueckt: false,
     popZahl: 0,
     popRest: 0,
     popGenommen: false,
     popX: 0,
     saltos: 0,
+    lueckenZahl: 0,
     tempoSpitze: 0,
     missionen: [],
     missionZahl: 0,
@@ -893,12 +1213,12 @@ export function biomVon(saat: number): number {
 // Missionen
 // ---------------------------------------------------------------
 
-export type Missionsart = 'muenzen' | 'perfekt' | 'salto' | 'tempo' | 'luft' | 'pop';
+export type Missionsart = 'muenzen' | 'perfekt' | 'salto' | 'tempo' | 'luft' | 'pop' | 'luecke';
 
 /** `start` ist der Zählerstand beim Beginn der Mission, damit sie nur zählt, was danach passiert. */
 export type Mission = { art: Missionsart; ziel: number; start: number };
 
-const MISSIONS_ARTEN: readonly Missionsart[] = ['muenzen', 'perfekt', 'salto', 'tempo', 'luft', 'pop'];
+const MISSIONS_ARTEN: readonly Missionsart[] = ['muenzen', 'perfekt', 'salto', 'tempo', 'luft', 'pop', 'luecke'];
 /**
  * Zielwerte der ersten Aufgabe jeder Art und ihr Zuwachs je weiteren drei
  * geschafften Aufgaben. Gemessen am einfachen Bot aus den Fairness-Tests (der
@@ -913,6 +1233,7 @@ const MISSION_BASIS: Record<Missionsart, number> = {
   tempo: 58,
   luft: 8,
   pop: 4,
+  luecke: 2,
 };
 const MISSION_SCHRITT: Record<Missionsart, number> = {
   muenzen: 12,
@@ -921,6 +1242,7 @@ const MISSION_SCHRITT: Record<Missionsart, number> = {
   tempo: 2,
   luft: 3,
   pop: 1,
+  luecke: 1,
 };
 export const MISSION_NAMEN: Record<Missionsart, (ziel: number) => string> = {
   muenzen: (z) => `Sammle ${z} Münzen`,
@@ -929,6 +1251,7 @@ export const MISSION_NAMEN: Record<Missionsart, (ziel: number) => string> = {
   tempo: (z) => `Fahre ${z} km/h`,
   luft: (z) => `Fliege ${z} s in der Luft`,
   pop: (z) => `Pop ${z}× an der Kante`,
+  luecke: (z) => (z === 1 ? 'Springe über 1 Lücke' : `Springe über ${z} Lücken`),
 };
 
 /** Bonuspunkte für die n-te geschaffte Mission — wächst langsam. */
@@ -949,6 +1272,8 @@ export function missionFortschritt(l: Lauf, m: Mission): number {
       return l.luftGesamt - m.start;
     case 'pop':
       return l.popZahl - m.start;
+    case 'luecke':
+      return l.lueckenZahl - m.start;
     case 'tempo':
       return l.tempoSpitze;
   }
@@ -981,7 +1306,9 @@ export function neueMission(l: Lauf, index: number, belegt: readonly Missionsart
             ? l.luftGesamt
             : art === 'pop'
               ? l.popZahl
-              : 0;
+              : art === 'luecke'
+                ? l.lueckenZahl
+                : 0;
   return { art, ziel, start };
 }
 
@@ -1125,13 +1452,34 @@ function taktKern(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
      * `FlowMtb.tsx` liest ihn genau einmal, im selben Bild, in dem
      * `vorbei` wahr wird, bevor dieses Ausrutschen überhaupt beginnt.
      */
-    if (!lauf.gewonnen && lauf.vx !== 0) {
+    if (!lauf.gewonnen && (lauf.vx !== 0 || lauf.vy !== 0)) {
       const x = lauf.x + lauf.vx * dt;
       const vx = lauf.vx - lauf.vx * 3.2 * dt;
+      const boden = bodenHoehe(lauf.gelaende, x);
+      /*
+       * Wer in einen Graben gestürzt ist, **fällt** noch — sonst sprang das Rad
+       * im Moment des Sturzes auf den Grund, und man sähe es nicht fallen.
+       * Auf dem Boden bleibt es wie vorher: das Rad rutscht an der Geländelinie
+       * entlang aus.
+       */
+      let y = lauf.y;
+      let vy = lauf.vy;
+      if (y - boden > 0.05 || vy > 0) {
+        vy -= SCHWERKRAFT * dt;
+        y += vy * dt;
+        if (y <= boden) {
+          y = boden;
+          vy = 0;
+        }
+      } else {
+        y = boden;
+        vy = 0;
+      }
       return {
         ...lauf,
         x,
-        y: bodenHoehe(lauf.gelaende, x),
+        y,
+        vy,
         vx: Math.abs(vx) < 0.05 ? 0 : vx,
         sturzZeit: lauf.sturzZeit + dt,
       };
@@ -1143,24 +1491,67 @@ function taktKern(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
   let { x, y, vx, vy, winkel, drehen, amBoden, luftZeit, flow } = lauf;
 
   // „Hinten" frisch gedrückt? Wer es schon festhält, hat keinen frischen Druck.
+  /*
+   * **`druck` zählt die Zeit seit dem letzten frischen Antippen — auch wenn
+   * der Finger schon wieder oben ist.** Zuerst hing der Pop daran, dass
+   * „Hinten" im Moment des Abhebens noch gedrückt war: Wer kurz antippt und
+   * loslässt (das Natürlichste an einer Kante), bekam gar nichts. Jetzt
+   * zählt der Zeitpunkt des Drückens. „Frisch" ergibt sich von selbst:
+   * Wer die Taste lange gehalten hat, dessen Druck liegt weiter zurück als
+   * `POP_FENSTER`.
+   */
+  const hinten = e.hinten ?? e.lehnen < -0.5;
   let druck = lauf.druck;
-  if (e.lehnen < -0.5) druck = druck < 0 ? 0 : druck + dt;
-  else druck = -1;
+  if (hinten && !lauf.hintenGedrueckt) druck = 0;
+  else if (druck >= 0) druck = druck + dt > 1 ? -1 : druck + dt;
   let popZahl = lauf.popZahl;
   const popRest0 = Math.max(0, lauf.popRest - dt);
   let popRest = popRest0;
   let popGenommen = lauf.popGenommen;
   let popX = lauf.popX;
+  let lueckenZahl = lauf.lueckenZahl;
   // Die Zusatzgeschwindigkeit des Boosts klingt weich ab (siehe `Lauf.ueberTempo`).
   const ueberTempo = lauf.ueberTempo * Math.exp(-BOOST_ABKLINGEN * dt);
   /** Alles, was nach jedem Schritt in den neuen Lauf muss. */
-  const neben = () => ({ druck, popZahl, popRest, popGenommen, popX, ueberTempo });
+  const neben = () => ({ druck, hintenGedrueckt: hinten, popZahl, popRest, popGenommen, popX, ueberTempo, lueckenZahl });
   let luftGesamt = lauf.luftGesamt;
   let letzteLandung = lauf.letzteLandung;
   let perfekte = lauf.perfekte;
   let trickPunkte = lauf.trickPunkte;
   let letzterTrick = lauf.letzterTrick;
   let luftDrehStart = lauf.luftDrehStart;
+
+  /**
+   * Ein Sturz, der nicht beim Aufsetzen entsteht: gegen die Wand der Gegenseite
+   * oder auf den Grund des Grabens. Das Rad behält einen Rest Schwung und
+   * fällt weiter (siehe den `vorbei`-Zweig oben), die Darstellung löst den
+   * Fahrer vom Rad.
+   */
+  const abgestuerzt = (sx: number, sy: number, svx: number, svy: number): Lauf => ({
+    ...lauf,
+    x: sx,
+    y: sy,
+    vx: svx,
+    vy: svy,
+    winkel,
+    drehen,
+    amBoden: false,
+    luftZeit,
+    luftGesamt,
+    letzteLandung: 'sturz',
+    meldungRest: 2,
+    flow: 1,
+    perfekte,
+    trickPunkte,
+    letzterTrick: 0,
+    luftDrehStart,
+    zeit: lauf.zeit + dt,
+    vorbei: true,
+    gewonnen: false,
+    sturzZeit: 0,
+    ...neben(),
+    popGenommen: false,
+  });
 
   if (amBoden) {
     const hangWinkel = bodenWinkel(g, x);
@@ -1198,60 +1589,96 @@ function taktKern(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
     vx = Math.min(TEMPO_MAX + ueberTempo, Math.max(-RUECKROLL_MAX, vx));
 
     x += vx * dt;
-    y = bodenHoehe(g, x);
 
     /*
-     * Das Rad legt sich an den Boden an, statt sofort dessen Winkel
-     * anzunehmen. Der Unterschied ist sichtbar: Ohne Dämpfung ruckt das
-     * Rad bei jeder Bodenwelle in den neuen Winkel; mit Dämpfung rollt es
-     * sichtbar darüber. `ANLEGEN * dt` ist der Anteil, der pro Schritt
-     * aufgeholt wird — bei kleinem dt also mehrere kleine Schritte, das
-     * bleibt framerate-unabhängig.
+     * **Die Kante einer Lücke.** Hinter ihr ist kein Boden mehr: Wer sie
+     * überquert, hebt ab — mit dem Winkel, in dem die Rampe endet, und mit dem
+     * Tempo, das er dort hat. Das ist kein Abheben aus der Krümmung wie bei
+     * einem Kicker (dort entscheidet das Tempo, **wo** man abhebt), sondern
+     * eine feste Stelle. Deshalb steht die Regel hier ausdrücklich und hängt
+     * nicht an der Fliehkraft-Bedingung weiter unten: Die Kante ist ein Sprung
+     * in der Bodenhöhe, und ob ein Bild genau in das schmale Fenster davor
+     * fällt, hinge sonst von der Bildrate ab.
      */
-    const zielWinkel = bodenWinkel(g, x);
-    winkel += winkelKuerzen(zielWinkel - winkel) * Math.min(1, ANLEGEN * dt);
-    drehen = 0;
-
-    /*
-     * **Abheben.** Auf einer Kuppe fällt der Boden weg; solange die
-     * Schwerkraft das Rad schnell genug hinterherzieht, bleibt es unten.
-     * Reicht sie nicht, hebt es ab.
-     *
-     * Die Bedingung dafür ist die **Fliehkraft auf der Kuppe**:
-     *
-     *     Krümmung × Tempo²  >  Schwerkraft
-     *
-     * Das ist dieselbe Rechnung wie bei einer Achterbahn im Looping, nur
-     * andersherum. Sie hat zwei Eigenschaften, die hier entscheidend sind:
-     * Sie hängt **quadratisch** vom Tempo ab — doppeltes Tempo heißt
-     * vierfache Abhebekraft, deshalb fliegt man schnell weit und rollt
-     * langsam nur drüber. Und sie enthält **kein `dt`**.
-     *
-     * Der erste Versuch verglich stattdessen die Höhendifferenz eines
-     * Zeitschritts mit `SCHWERKRAFT * dt * 6`. Das war doppelt falsch: Der
-     * Schwellwert wuchs mit dem Zeitschritt, also hob dieselbe Fahrt bei
-     * 30 Bildern je Sekunde woanders ab als bei 60 — und der Faktor 6 war
-     * frei geraten statt hergeleitet.
-     */
-    const kruemmung = bodenKruemmung(g, x);
-    const winkelJetzt = bodenWinkel(g, x);
-    if (vx > 2 && -kruemmung * vx * vx > SCHWERKRAFT * Math.cos(winkelJetzt)) {
+    const graben = lueckeBei(g, x);
+    if (graben && vx > 0 && lauf.x <= lueckeKante(graben)) {
+      const kante = lueckeKante(graben);
+      const steigungKante = bodenSteigung(g, kante - 1e-4);
+      const winkelKante = Math.atan(steigungKante);
+      // Den kleinen Überstand über die Kante entlang der Rampenlinie nehmen,
+      // statt das Rad zurückzusetzen.
+      y = bodenHoehe(g, kante - 1e-4) + steigungKante * (x - kante);
       amBoden = false;
-      // Beim Abheben zeigt die Geschwindigkeit den Hang entlang.
-      vy = Math.sin(winkelJetzt) * vx;
+      vy = Math.sin(winkelKante) * vx;
       luftZeit = 0;
-      // Merkpunkt für die Drehzählung — siehe „Tricks" unten bei der Landung.
       luftDrehStart = winkel;
-      // Pop: „Hinten" frisch gedrückt, kurz bevor das Rad die Kante verlässt.
-      // `popGenommen` wird erst bei einer echten Landung zurückgesetzt, nicht
-      // bei jedem Hüpferchen auf der Anfahrt — sonst zählte derselbe Druck
-      // mehrfach.
       if (!popGenommen && druck >= 0 && druck <= POP_FENSTER) {
-        vy += POP_SCHUB;
+        vy += POP_SCHUB * popStaerke(druck);
         popZahl += 1;
         popRest = 0.8;
         popGenommen = true;
-        popX = x;
+        popX = kante;
+      }
+    } else if (graben) {
+      // Von der Gegenseite zurückgerollt oder sonst wie hineingeraten:
+      // Im Graben gibt es keinen Boden.
+      return abgestuerzt(x, y, vx * 0.2, 0);
+    } else {
+      y = bodenHoehe(g, x);
+
+      /*
+       * Das Rad legt sich an den Boden an, statt sofort dessen Winkel
+       * anzunehmen. Der Unterschied ist sichtbar: Ohne Dämpfung ruckt das
+       * Rad bei jeder Bodenwelle in den neuen Winkel; mit Dämpfung rollt es
+       * sichtbar darüber. `ANLEGEN * dt` ist der Anteil, der pro Schritt
+       * aufgeholt wird — bei kleinem dt also mehrere kleine Schritte, das
+       * bleibt framerate-unabhängig.
+       */
+      const zielWinkel = bodenWinkel(g, x);
+      winkel += winkelKuerzen(zielWinkel - winkel) * Math.min(1, ANLEGEN * dt);
+      drehen = 0;
+
+      /*
+       * **Abheben.** Auf einer Kuppe fällt der Boden weg; solange die
+       * Schwerkraft das Rad schnell genug hinterherzieht, bleibt es unten.
+       * Reicht sie nicht, hebt es ab.
+       *
+       * Die Bedingung dafür ist die **Fliehkraft auf der Kuppe**:
+       *
+       *     Krümmung × Tempo²  >  Schwerkraft
+       *
+       * Das ist dieselbe Rechnung wie bei einer Achterbahn im Looping, nur
+       * andersherum. Sie hat zwei Eigenschaften, die hier entscheidend sind:
+       * Sie hängt **quadratisch** vom Tempo ab — doppeltes Tempo heißt
+       * vierfache Abhebekraft, deshalb fliegt man schnell weit und rollt
+       * langsam nur drüber. Und sie enthält **kein `dt`**.
+       *
+       * Der erste Versuch verglich stattdessen die Höhendifferenz eines
+       * Zeitschritts mit `SCHWERKRAFT * dt * 6`. Das war doppelt falsch: Der
+       * Schwellwert wuchs mit dem Zeitschritt, also hob dieselbe Fahrt bei
+       * 30 Bildern je Sekunde woanders ab als bei 60 — und der Faktor 6 war
+       * frei geraten statt hergeleitet.
+       */
+      const kruemmung = bodenKruemmung(g, x);
+      const winkelJetzt = bodenWinkel(g, x);
+      if (vx > 2 && -kruemmung * vx * vx > SCHWERKRAFT * Math.cos(winkelJetzt)) {
+        amBoden = false;
+        // Beim Abheben zeigt die Geschwindigkeit den Hang entlang.
+        vy = Math.sin(winkelJetzt) * vx;
+        luftZeit = 0;
+        // Merkpunkt für die Drehzählung — siehe „Tricks" unten bei der Landung.
+        luftDrehStart = winkel;
+        // Pop: „Hinten" frisch gedrückt, kurz bevor das Rad die Kante verlässt.
+        // `popGenommen` wird erst bei einer echten Landung zurückgesetzt, nicht
+        // bei jedem Hüpferchen auf der Anfahrt — sonst zählte derselbe Druck
+        // mehrfach.
+        if (!popGenommen && druck >= 0 && druck <= POP_FENSTER) {
+          vy += POP_SCHUB * popStaerke(druck);
+          popZahl += 1;
+          popRest = 0.8;
+          popGenommen = true;
+          popX = x;
+        }
       }
     }
   } else {
@@ -1280,7 +1707,7 @@ function taktKern(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
     // Ein frischer Druck in den ersten Augenblicken nach dem Abheben zählt
     // noch als Pop — die Kante ist nie auf den Frame genau zu treffen.
     if (!popGenommen && luftZeit <= POP_NACH && druck >= 0 && druck <= luftZeit) {
-      vy += POP_SCHUB * 0.85;
+      vy += POP_SCHUB * 0.85 * popStaerke(druck);
       popZahl += 1;
       popRest = 0.8;
       popGenommen = true;
@@ -1326,7 +1753,41 @@ function taktKern(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
     drehen -= drehen * 1.6 * dt;
     winkel += drehen * dt;
 
+    /*
+     * **Die Gegenseite einer Lücke.** Wer sie unterhalb ihrer Kante erreicht,
+     * prallt gegen die Wand — das ist das „zu kurz" der Lücke. Wer sie
+     * oberhalb erreicht, hat die Lücke geschafft, auch wenn er danach noch
+     * landen muss. Geprüft wird beim **Überschreiten** der Linie, nicht jedes
+     * Bild: Hinter der Kante würde die Bodenhöhe sonst auf die Oberkante
+     * springen und aus einem Aufprall eine Landung machen.
+     */
+    for (const l of g.luecken) {
+      const ende = lueckeEnde(l);
+      if (lauf.x < ende && x >= ende) {
+        if (y < bodenHoehe(g, ende + 1e-6) - 0.05) {
+          return abgestuerzt(ende - 0.1, y, vx * 0.15, Math.min(vy, 0));
+        }
+        lueckenZahl += 1;
+      }
+    }
+
     const boden = bodenHoehe(g, x);
+    /*
+     * Wer im Graben schon so tief ist, dass er die Gegenseite nicht mehr
+     * erreichen kann, ist gestürzt — **jetzt**, nicht erst auf dem Grund. Sonst
+     * fiele man über eine Sekunde lang sieben Meter, ohne dass etwas passiert,
+     * und das Rad schlüge erst ganz unten auf.
+     */
+    const imGraben = lueckeBei(g, x);
+    if (imGraben) {
+      const randUnten = Math.min(
+        bodenHoehe(g, lueckeKante(imGraben) - 1e-4),
+        bodenHoehe(g, lueckeEnde(imGraben) + 1e-6),
+      );
+      if (y < randUnten - 2.5) return abgestuerzt(x, y, vx * 0.5, vy);
+    }
+    // Auf den Grund eines Grabens zu fallen ist nie eine Landung.
+    if (y <= boden && imGraben) return abgestuerzt(x, boden, 0, 0);
     if (y <= boden && luftZeit < LANDUNG_MIN_LUFT) {
       // Nur ein Aufsetzen im Vorbeigehen (siehe `LANDUNG_MIN_LUFT`): Boden-
       // kontakt, aber keine Landung — keine Wertung, kein Flow, kein Schub.
@@ -1528,6 +1989,7 @@ export function punkte(lauf: Lauf): number {
     zielBonus +
     lauf.muenzenZahl * MUENZ_PUNKTE +
     lauf.popZahl * POP_PUNKTE +
+    lauf.lueckenZahl * LUECKEN_PUNKTE +
     lauf.padsGenommen.size * PAD_PUNKTE +
     lauf.missionPunkte
   );

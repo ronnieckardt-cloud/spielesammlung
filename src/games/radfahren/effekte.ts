@@ -1,4 +1,4 @@
-import { bodenHoehe, bodenSteigung } from './logik';
+import { POP_FENSTER, POP_VOLL, TEMPO_MAX, bodenHoehe, bodenSteigung, lueckeBei, lueckeKante } from './logik';
 import type { Lauf } from './logik';
 import { mischen } from './farben';
 import { streu, withAlpha } from './umgebung';
@@ -122,20 +122,96 @@ export function muenzenZeichnen(b: Buehne, lauf: Lauf, sicht: number) {
 // ---------------------------------------------------------------------
 
 /**
- * Drei Pfeile auf dem Boden vor jeder Kante, auf der ein Pop etwas bringt.
- * Sie atmen langsam (0,8 Hz) — genug, um das Auge zu führen, weit unter der
- * 1,7-Hz-Grenze. Passierte Marken verblassen, damit hinter dem Rad nichts
- * herumleuchtet.
+ * Die Absprungmarken: drei Pfeile auf dem Boden vor jeder Kante, auf der ein Pop
+ * etwas bringt. Sie atmen langsam (0,8 Hz) — genug, um das Auge zu führen, weit
+ * unter der 1,7-Hz-Grenze. Passierte Marken verblassen.
+ *
+ * **Vor einer Lücke liegt zusätzlich die Tipp-Zone**: ein leuchtendes Band auf
+ * dem Boden, genau so lang wie das Zeitfenster des Pop bei Höchsttempo
+ * (`POP_FENSTER` mal `TEMPO_MAX`, gut fünf Meter). Der helle Teil vorn ist das
+ * Fenster für den vollen Pop, der blasse davor für den etwas schwächeren. Wer
+ * mit dem Vorderrad in das Band fährt und dann antippt, trifft immer — man
+ * muss nichts schätzen. Eine Regel, die man erraten muss, fühlt sich unfair an.
+ * Solange man sich in der Zone befindet, leuchtet sie stärker.
  */
 export function absprungMarken(b: Buehne, lauf: Lauf, sicht: number) {
   const { ctx, proMeter: m, g, uhr } = b;
   const von = b.kameraX - sicht * 0.6;
   const bis = b.kameraX + sicht * 0.6;
   for (const a of g.absprung) {
-    if (a < von || a - 2.4 > bis) continue;
+    if (a < von || a - 6 > bis) continue;
+    const istLuecke = g.luecken.some((l) => Math.abs(lueckeKante(l) - a) < 0.01);
     const vorbei = a < lauf.x - 1;
     const atmen = 0.65 + 0.35 * Math.sin(uhr * Math.PI * 1.6);
     const alpha = vorbei ? 0.12 : 0.55 + 0.35 * atmen;
+
+    if (istLuecke && !vorbei) {
+      const laengeZone = TEMPO_MAX * POP_FENSTER;
+      const laengeVoll = TEMPO_MAX * POP_VOLL;
+      const imFenster = lauf.amBoden && lauf.x >= a - lauf.vx * POP_FENSTER && lauf.x < a;
+      const staerke = imFenster ? 1 : 0.7 + 0.12 * atmen;
+      /*
+       * Ein **Lichtvorhang** über dem Boden, kein flaches Band: Er steht senkrecht
+       * und ist von weitem zu sehen, auch wenn der Boden dahinter dunkel oder
+       * bunt ist. Hinten blass und niedrig (schwächerer Pop), vorn hell und hoch
+       * (voller Pop), an der Kante am kräftigsten. Jede Spalte hat ihren eigenen
+       * senkrechten Verlauf, damit der Vorhang der Rampe folgt.
+       */
+      const SPALTEN = 22;
+      for (let k = 0; k < SPALTEN; k++) {
+        const t = k / SPALTEN;
+        const dA = laengeZone * (1 - t);
+        const dB = laengeZone * (1 - (k + 1) / SPALTEN);
+        const voll = dA <= laengeVoll;
+        const wxA = a - dA;
+        const wxB = a - dB;
+        const yA = b.by(bodenHoehe(g, wxA));
+        const yB = b.by(bodenHoehe(g, wxB));
+        const hoch = (voll ? 0.5 + 0.9 * (1 - dA / laengeVoll) : 0.28) * m;
+        const alphaUnten = (voll ? 0.55 + 0.3 * (1 - dA / laengeVoll) : 0.3) * staerke;
+        const yMitte = (yA + yB) / 2;
+        const gr = ctx.createLinearGradient(0, yMitte, 0, yMitte - hoch);
+        gr.addColorStop(0, `rgba(255,196,40,${Math.min(0.95, alphaUnten * 1.25).toFixed(3)})`);
+        gr.addColorStop(1, 'rgba(255,196,40,0)');
+        ctx.fillStyle = gr;
+        ctx.beginPath();
+        ctx.moveTo(b.bx(wxA), yA + 0.03 * m);
+        ctx.lineTo(b.bx(wxB), yB + 0.03 * m);
+        ctx.lineTo(b.bx(wxB), yB - hoch);
+        ctx.lineTo(b.bx(wxA), yA - hoch);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // Ein heller Saum am Boden und Marken an Anfang und Beginn des vollen Fensters.
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = `rgba(255,240,170,${(0.85 * staerke).toFixed(3)})`;
+      ctx.lineWidth = Math.max(2, 0.07 * m);
+      ctx.beginPath();
+      for (let k = 0; k <= SPALTEN; k++) {
+        const wx = a - laengeZone * (1 - k / SPALTEN);
+        const px = b.bx(wx);
+        const py = b.by(bodenHoehe(g, wx)) - 0.02 * m;
+        if (k === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      for (const [dist, hoeheLinie, al] of [
+        [laengeZone, 0.5, 0.65],
+        [laengeVoll, 0.9, 0.9],
+      ] as const) {
+        const wx = a - dist;
+        const y = b.by(bodenHoehe(g, wx));
+        ctx.strokeStyle = `rgba(255,240,170,${(al * (imFenster ? 1 : 0.85)).toFixed(3)})`;
+        ctx.lineWidth = Math.max(2, 0.06 * m);
+        ctx.beginPath();
+        ctx.moveTo(b.bx(wx), y + 0.02 * m);
+        ctx.lineTo(b.bx(wx), y - hoeheLinie * m);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     for (let k = 0; k < 3; k++) {
       const wx = a - 0.4 - k * 0.62;
       const steigung = bodenSteigung(g, wx);
@@ -266,6 +342,8 @@ export function schattenZeichnen(b: Buehne, lauf: Lauf, radstand: number, groess
   const alpha = (lauf.amBoden ? 0.34 : 0.3 * (1 - luft * 0.75)) * (b.p.nacht ? 0.7 : 1);
   if (alpha < 0.02) return;
   const wx = lauf.x + 0.28 + hoeheUeber * 0.12;
+  // Über einem Graben fiele der Schatten sieben Meter tiefer — dort zeigt er nichts mehr.
+  if (lueckeBei(g, wx)) return;
   const steigung = bodenSteigung(g, wx);
   const bodenY = bodenHoehe(g, wx);
   const breite = radstand * groesse * (1.15 - luft * 0.35) * m;

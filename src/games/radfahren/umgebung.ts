@@ -1,4 +1,4 @@
-import { bodenHoehe } from './logik';
+import { bodenHoehe, lueckeBei, lueckeEnde, lueckeKante } from './logik';
 import type { Gelaende } from './logik';
 import { mischen } from './farben';
 
@@ -444,6 +444,8 @@ export function wegmarken(b: Buehne, sicht: number) {
   const laenge = b.g.laenge;
   for (let wx = Math.ceil(von / 100) * 100; wx < bis; wx += 100) {
     if (wx <= 0 || wx >= laenge - 20) continue;
+    // Eine Tafel im Graben stünde sieben Meter tiefer im Nichts.
+    if (lueckeBei(b.g, wx) || lueckeBei(b.g, wx - 1.5) || lueckeBei(b.g, wx + 1.5)) continue;
     tafel(b, wx, `${wx} m`);
   }
 }
@@ -486,4 +488,183 @@ export function tor(b: Buehne, wx: number, ziel: boolean) {
   }
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.fillRect(x - breiteT * 0.5, by0 + bh, breiteT, 0.05 * m);
+}
+
+// ---------------------------------------------------------------------
+// Lücken: Graben, Rampe, Warnschild
+// ---------------------------------------------------------------------
+
+/**
+ * Das Dunkel im Graben. Muss **vor** dem Erdkörper gezeichnet werden: Der Boden
+ * deckt nur ab, wo er ist — im Graben läge sonst der Himmel frei, und die
+ * Lücke sähe aus wie ein Fenster ins Blaue.
+ *
+ * Die Oberkante liegt auf der Höhe der **niedrigeren** Seite: Darüber ist
+ * offener Himmel (an der Rampe ragt die Kante höher auf), darunter schaut man
+ * in den Schnitt der Erde.
+ */
+export function grabenZeichnen(b: Buehne, sicht: number) {
+  const { ctx, proMeter: m, g, p, hoehe } = b;
+  const von = b.kameraX - sicht * 0.6;
+  const bis = b.kameraX + sicht * 0.6;
+  for (const l of g.luecken) {
+    const kante = lueckeKante(l);
+    const ende = lueckeEnde(l);
+    if (ende < von || kante > bis) continue;
+    const rand = Math.min(bodenHoehe(g, kante - 1e-4), bodenHoehe(g, ende + 1e-6));
+    const x0 = b.bx(kante);
+    const x1 = b.bx(ende);
+    const yOben = b.by(rand);
+    const unten = Math.max(yOben + 80, hoehe + 20);
+    const gr = ctx.createLinearGradient(0, yOben, 0, unten);
+    gr.addColorStop(0, mischen(p.boden.tief, '#000000', 0.3));
+    gr.addColorStop(0.3, mischen(p.boden.tief, '#000000', 0.62));
+    gr.addColorStop(1, '#030407');
+    ctx.fillStyle = gr;
+    ctx.fillRect(x0, yOben, x1 - x0, unten - yOben);
+
+    // Die Wände werfen Schatten in den Graben: Er wirkt tief, nicht wie eine Fläche.
+    for (const [xw, richtung] of [
+      [x0, 1],
+      [x1, -1],
+    ] as const) {
+      const breiteSchatten = 1.1 * m;
+      const sg = ctx.createLinearGradient(xw, 0, xw + richtung * breiteSchatten, 0);
+      sg.addColorStop(0, 'rgba(0,0,0,0.6)');
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg;
+      ctx.fillRect(Math.min(xw, xw + richtung * breiteSchatten), yOben, breiteSchatten, unten - yOben);
+    }
+
+    // Ein schwacher Lichtstreifen von oben: Dort scheint der Himmel hinein.
+    const lg = ctx.createLinearGradient(0, yOben, 0, yOben + 3 * m);
+    lg.addColorStop(0, withAlpha(p.himmel[3], 0.16));
+    lg.addColorStop(1, withAlpha(p.himmel[3], 0));
+    ctx.fillStyle = lg;
+    ctx.fillRect(x0, yOben, x1 - x0, 3 * m);
+  }
+}
+
+/**
+ * Die Rampe aus Holz und die Kante: Bretter mit Fugen, eine Kappe in
+ * Warnfarben an der Kante, eine helle Lippe an der Gegenseite. Man erkennt eine
+ * Lücke schon an der Rampe, bevor man den Graben sieht.
+ */
+export function rampeZeichnen(b: Buehne, sicht: number) {
+  const { ctx, proMeter: m, g } = b;
+  const von = b.kameraX - sicht * 0.6;
+  const bis = b.kameraX + sicht * 0.6;
+  for (const l of g.luecken) {
+    const kante = lueckeKante(l);
+    const ende = lueckeEnde(l);
+    if (ende + l.hang < von || l.x0 > bis) continue;
+
+    // --- Die Rampe ---
+    const anfang = l.x0 + 0.4;
+    const schritt = Math.max(0.12, 4 / m);
+    const oben: [number, number][] = [];
+    for (let wx = anfang; wx < kante; wx += schritt) oben.push([b.bx(wx), b.by(bodenHoehe(g, wx))]);
+    oben.push([b.bx(kante), b.by(bodenHoehe(g, kante - 1e-4))]);
+    const dicke = 0.2 * m;
+    ctx.beginPath();
+    ctx.moveTo(oben[0]![0], oben[0]![1]);
+    for (const [px, py] of oben) ctx.lineTo(px, py);
+    for (let i = oben.length - 1; i >= 0; i--) ctx.lineTo(oben[i]![0], oben[i]![1] + dicke);
+    ctx.closePath();
+    const holz = ctx.createLinearGradient(0, oben[oben.length - 1]![1], 0, oben[oben.length - 1]![1] + dicke * 3);
+    holz.addColorStop(0, '#d9a465');
+    holz.addColorStop(0.35, '#a8723a');
+    holz.addColorStop(1, '#5a3a1c');
+    ctx.fillStyle = holz;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(40,22,8,0.75)';
+    ctx.lineWidth = Math.max(1, 0.035 * m);
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    // Fugen zwischen den Brettern: alle 0,55 m.
+    ctx.strokeStyle = 'rgba(40,22,8,0.55)';
+    ctx.lineWidth = Math.max(1, 0.025 * m);
+    ctx.beginPath();
+    for (let wx = anfang + 0.35; wx < kante - 0.2; wx += 0.55) {
+      const y = b.by(bodenHoehe(g, wx));
+      ctx.moveTo(b.bx(wx), y);
+      ctx.lineTo(b.bx(wx), y + dicke);
+    }
+    ctx.stroke();
+    // Helle Oberkante: das Licht fällt von links oben auf die Bretter.
+    ctx.strokeStyle = 'rgba(255,236,190,0.7)';
+    ctx.lineWidth = Math.max(1, 0.03 * m);
+    ctx.beginPath();
+    ctx.moveTo(oben[0]![0], oben[0]![1] - 0.01 * m);
+    for (const [px, py] of oben) ctx.lineTo(px, py - 0.01 * m);
+    ctx.stroke();
+
+    // --- Die Kappe an der Kante: schräge Warnstreifen ---
+    const kx = b.bx(kante);
+    const ky = b.by(bodenHoehe(g, kante - 1e-4));
+    const kappeH = 0.42 * m;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(kx - 0.16 * m, ky - 0.03 * m, 0.16 * m, kappeH);
+    ctx.clip();
+    ctx.fillStyle = '#ffc928';
+    ctx.fillRect(kx - 0.16 * m, ky - 0.03 * m, 0.16 * m, kappeH);
+    ctx.strokeStyle = '#1b1b1f';
+    ctx.lineWidth = 0.07 * m;
+    for (let i = -2; i < 6; i++) {
+      ctx.beginPath();
+      ctx.moveTo(kx - 0.3 * m, ky + i * 0.11 * m);
+      ctx.lineTo(kx + 0.1 * m, ky + i * 0.11 * m - 0.4 * m);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(30,18,6,0.8)';
+    ctx.lineWidth = Math.max(1, 0.03 * m);
+    ctx.strokeRect(kx - 0.16 * m, ky - 0.03 * m, 0.16 * m, kappeH);
+
+    // --- Die Gegenseite: eine helle Lippe an der Oberkante der Wand ---
+    const gx = b.bx(ende);
+    const gy = b.by(bodenHoehe(g, ende + 1e-6));
+    ctx.fillStyle = '#e9c88e';
+    ctx.fillRect(gx, gy - 0.03 * m, 0.5 * m, 0.1 * m);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(gx, gy + 0.07 * m, 0.5 * m, 0.04 * m);
+  }
+}
+
+/** Ein Warnschild kurz vor der Rampe: gelbe Raute mit Ausrufezeichen auf einem Pfosten. */
+export function warnschilder(b: Buehne, sicht: number) {
+  const { ctx, proMeter: m, g } = b;
+  const von = b.kameraX - sicht * 0.6;
+  const bis = b.kameraX + sicht * 0.6;
+  for (const l of g.luecken) {
+    const wx = l.x0 - 9;
+    if (wx < von - 2 || wx > bis + 2) continue;
+    const x = b.bx(wx);
+    const y = b.by(bodenHoehe(g, wx)) + 0.02 * m;
+    const pfosten = 1.35 * m;
+    const pg = ctx.createLinearGradient(x - 0.04 * m, 0, x + 0.04 * m, 0);
+    pg.addColorStop(0, '#c9ced6');
+    pg.addColorStop(1, '#6b7380');
+    ctx.fillStyle = pg;
+    ctx.fillRect(x - 0.035 * m, y - pfosten, 0.07 * m, pfosten);
+    const r = 0.42 * m;
+    const cy = y - pfosten - r * 0.55;
+    ctx.save();
+    ctx.translate(x, cy);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillRect(-r * 0.7 + 0.04 * m, -r * 0.7 + 0.04 * m, r * 1.4, r * 1.4);
+    ctx.fillStyle = '#ffc928';
+    ctx.fillRect(-r * 0.7, -r * 0.7, r * 1.4, r * 1.4);
+    ctx.strokeStyle = '#1b1b1f';
+    ctx.lineWidth = Math.max(1.5, 0.05 * m);
+    ctx.strokeRect(-r * 0.58, -r * 0.58, r * 1.16, r * 1.16);
+    ctx.restore();
+    ctx.fillStyle = '#1b1b1f';
+    ctx.font = `900 ${Math.max(10, 0.46 * m)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', x, cy + 0.02 * m);
+  }
 }

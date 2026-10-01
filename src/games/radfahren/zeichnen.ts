@@ -1,4 +1,4 @@
-import { bodenHoehe, bodenSteigung } from './logik';
+import { bodenHoehe, bodenSteigung, lueckeEnde } from './logik';
 import type { Landung, Lauf } from './logik';
 import { fahrerHinten, fahrerSturz, fahrerVorn, skelettBerechnen } from './fahrer';
 import type { FahrerGeo, FahrerPose } from './fahrer';
@@ -7,9 +7,12 @@ import {
   PALETTEN,
   bodenMuster,
   bodenSteine,
+  grabenZeichnen,
   grasZeichnen,
   himmelZeichnen,
+  rampeZeichnen,
   tor,
+  warnschilder,
   wegmarken,
 } from './umgebung';
 import type { Buehne, Palette } from './umgebung';
@@ -195,6 +198,7 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   let bekanntMuenzen = new Set<number>();
   let bekanntPads = new Set<number>();
   let bekanntPops = 0;
+  let bekanntLuecken = 0;
   /** Boost-Anzeige, weich ein- und ausgeblendet (die Logik schaltet hart). */
   let boostAnim = 0;
   /**
@@ -285,6 +289,7 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       bekanntMuenzen = new Set(lauf.geholt);
       bekanntPads = new Set(lauf.padsGenommen);
       bekanntPops = lauf.popZahl;
+      bekanntLuecken = lauf.lueckenZahl;
     } else {
       const folgen = Math.min(1, dt * 5.5);
       kameraX += (zielX - kameraX) * folgen;
@@ -348,6 +353,14 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       teilchen.funken(lauf.popX, bodenHoehe(g, lauf.popX) + 0.1, 9, '#ffd36b', 1);
     }
     bekanntPops = lauf.popZahl;
+    if (lauf.lueckenZahl > bekanntLuecken) {
+      // Über die Lücke: Funken an der Gegenseite, wo man ankommt.
+      const luecke = g.luecken.find((l) => lueckeEnde(l) <= lauf.x + 1.5 && lueckeEnde(l) > lauf.x - 4);
+      const fx = luecke ? lueckeEnde(luecke) + 0.5 : lauf.x;
+      teilchen.funken(fx, lauf.y + 0.4, 14, '#ffe08a', 1.2);
+      teilchen.ring(fx, bodenHoehe(g, fx + 0.5), '#ffe08a');
+    }
+    bekanntLuecken = lauf.lueckenZahl;
 
     // Zurückfedern bzw. Ausklingen.
     federVorn = Math.max(0, federVorn - dt * 3.4);
@@ -394,11 +407,27 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
           aufgeschlagen: false,
           zeit: 0,
         };
-        // Der Aufprall des Rades hat schon Krümel geworfen; der Fahrer
-        // bekommt seinen eigenen, wenn er aufschlägt (siehe unten).
+        // Ein Sturz in der Luft (Wand oder Graben) wirft hier ein paar Brocken
+        // aus der Kante; ein Sturz beim Aufsetzen hat sie schon geworfen.
+        if (!lauf.amBoden) {
+          teilchen.erde(lauf.x, lauf.y, 7, tempo, palette.boden.saum, 1.1);
+          teilchen.staub(lauf.x, lauf.y, 3, mischen(palette.boden.saum, '#ffffff', 0.2));
+          schuettelStaerke = Math.min(1, schuettelStaerke + 0.5);
+        }
       }
       const f = sturzFahrer;
       f.zeit += dt;
+      // Die Wand der Gegenseite hält auch den Fahrer auf: Er prallt davon ab,
+      // statt durch sie hindurch auf die Oberkante zu rutschen.
+      for (const l of g.luecken) {
+        const ende = lueckeEnde(l);
+        const oben = bodenHoehe(g, ende + 1e-6);
+        if (f.x + f.vx * dt >= ende && f.x < ende && f.y < oben - 0.3) {
+          f.x = ende - 0.25;
+          f.vx = -Math.abs(f.vx) * 0.25;
+          f.drehTempo *= 0.6;
+        }
+      }
       f.vy -= 22 * dt;
       f.x += f.vx * dt;
       f.y += f.vy * dt;
@@ -468,12 +497,19 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
      * aus, kahle Erde statt Wiese). `1,3×` Breite deckt sowohl die Anfahrt
      * als auch die Landeseite der Glocke ab, nicht nur den Gipfel.
      */
-    const aufKicker = (wx: number) => g.kicker.some((k) => Math.abs(wx - k.x) < k.breite * 1.3);
+    const aufKicker = (wx: number) =>
+      g.kicker.some((k) => Math.abs(wx - k.x) < k.breite * 1.3) ||
+      // Rampe, Graben und Landehang tragen ebenfalls festgefahrene Erde.
+      g.luecken.some((l) => wx > l.x0 - 0.5 && wx < lueckeEnde(l) + l.hang);
 
+    // Das Dunkel im Graben kommt **vor** den Boden: Der Erdkörper deckt nur ab, wo er ist.
+    grabenZeichnen(buehne, sicht);
     bodenZeichnen(buehne, umriss, aufKicker);
     bodenSteine(buehne, aufKicker, sicht);
     grasBandZeichnen(buehne, umriss, aufKicker);
     grasZeichnen(buehne, aufKicker, sicht);
+    rampeZeichnen(buehne, sicht);
+    warnschilder(buehne, sicht);
 
     // --- Wegmarken: Start, Distanztafeln, Ziel ----------------------
     if (kameraX - sicht * 0.6 < START_TOR_X + 2) tor(buehne, START_TOR_X, false);
@@ -697,15 +733,20 @@ function grasBandZeichnen(
     ctx.lineWidth = Math.max(2, dicke * m);
     ctx.beginPath();
     let offen = false;
+    let letztesY = 0;
     for (const [px, py, wx] of umriss) {
-      if (aufKicker(wx) !== kicker) {
+      // Die Wand eines Grabens ist kein Geländeverlauf: Ein Strich daran entlang
+      // zöge eine helle Linie sieben Meter tief. Dort wird abgesetzt.
+      const wand = offen && Math.abs(py - letztesY) > 1.2 * m;
+      if (aufKicker(wx) !== kicker || wand) {
         if (offen) {
           ctx.stroke();
           ctx.beginPath();
           offen = false;
         }
-        continue;
+        if (aufKicker(wx) !== kicker) continue;
       }
+      letztesY = py;
       if (!offen) {
         ctx.moveTo(px, py + versatz * m);
         offen = true;
