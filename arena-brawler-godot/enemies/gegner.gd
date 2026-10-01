@@ -145,6 +145,7 @@ func _aufblitzen() -> void:
 	if _blitz_tween != null and _blitz_tween.is_valid():
 		_blitz_tween.kill()
 
+	RingEffekt.erzeugen(get_parent(), global_position, Color(1.0, 0.85, 0.5), 22.0)
 	_anzeige.modulate = Color(1, 1, 1, 1)
 	_blitz_tween = create_tween()
 	_blitz_tween.tween_property(_anzeige, "modulate", AUFBLITZ_FARBE, 0.02)
@@ -159,6 +160,7 @@ func _sterben() -> void:
 	# Verblassen, ist der Moment, der zählt.
 	remove_from_group(&"gegner")
 	gestorben.emit(global_position)
+	RingEffekt.erzeugen(get_parent(), global_position, Color(1.0, 0.45, 0.3), 40.0)
 
 	if _blitz_tween != null and _blitz_tween.is_valid():
 		_blitz_tween.kill()

@@ -7,8 +7,13 @@ import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
 import {
   DOPPEL_DAUER,
+  MAGNET_DAUER,
+  MISSION_NAMEN,
   SPRUNGSCHUB_DAUER,
+  STOLPER_FENSTER,
   TURBO_DAUER,
+  komboFaktor,
+  missionFortschritt,
   neuesSpiel,
   punkte,
   rutschen,
@@ -16,6 +21,8 @@ import {
   springen,
   takt,
   tempoBei,
+  zoneBei,
+  zonenName,
 } from './logik';
 import type { Lauf } from './logik';
 import type { Szene } from './szene';
@@ -150,6 +157,17 @@ export function DashCity({
   const sprungBalkenRef = useRef<HTMLDivElement>(null);
   const doppelBadgeRef = useRef<HTMLDivElement>(null);
   const doppelBalkenRef = useRef<HTMLDivElement>(null);
+  const schildBadgeRef = useRef<HTMLDivElement>(null);
+  const magnetBadgeRef = useRef<HTMLDivElement>(null);
+  const magnetBalkenRef = useRef<HTMLDivElement>(null);
+  /** Kombo, Missionen, Gefahr, Zonen-Banner und Meldung — alle direkt ins DOM, wie die Punkte. */
+  const komboRef = useRef<HTMLDivElement>(null);
+  const missionNamenRef = useRef<(HTMLSpanElement | null)[]>([]);
+  const missionBalkenRef = useRef<(HTMLDivElement | null)[]>([]);
+  const gefahrRef = useRef<HTMLDivElement>(null);
+  const gefahrBalkenRef = useRef<HTMLDivElement>(null);
+  const bannerRef = useRef<HTMLDivElement>(null);
+  const meldungRef = useRef<HTMLDivElement>(null);
 
   const eingabe = useCallback((was: 'links' | 'rechts' | 'hoch' | 'runter') => {
     const l = holeLauf();
@@ -270,6 +288,11 @@ export function DashCity({
     let bild = 0;
     let messenAbmelden: (() => void) | null = null;
     let endeUhr = 0;
+    // Die beiden Einblendungen räumt die Aufräumfunktion mit weg: Wer
+    // mitten in einer Meldung „Zurück" drückt, soll keinen Rückruf auf ein
+    // Element bekommen, das es nicht mehr gibt.
+    let bannerUhr = 0;
+    let meldungUhr = 0;
     let letzte = performance.now();
 
     setLaedt(true);
@@ -301,6 +324,24 @@ export function DashCity({
 
         let letztePunkte = -1;
         let letzteMuenzen = -1;
+        const missionSchluessel: string[] = [];
+        let letzteKombo = -1;
+        let letzteZone = 0;
+        /** Blendet einen Text kurz ein und wieder aus — `uhr` ist die laufende Rücknahme. */
+        const einblenden = (
+          el: HTMLDivElement | null,
+          text: string,
+          dauer: number,
+          alteUhr: number,
+        ): number => {
+          if (!el) return 0;
+          window.clearTimeout(alteUhr);
+          el.textContent = text;
+          el.style.opacity = '1';
+          return window.setTimeout(() => {
+            el.style.opacity = '0';
+          }, dauer);
+        };
         let seitMeldung = 0;
         /** Sekunden seit dem Zusammenstoß. */
         let aufprall = 0;
@@ -328,6 +369,41 @@ export function DashCity({
           if (neu.schubZahl > vorher.schubZahl) {
             sfx('stufe');
             haptik('jubel');
+          }
+
+          // Neue Ereignisse: eigener Ton und Stups je Art, damit man sie ohne
+          // Hinsehen unterscheidet.
+          if (neu.stolperZahl > vorher.stolperZahl) {
+            sfx('schlecht');
+            haptik('hart');
+            meldungUhr = einblenden(meldungRef.current, 'Autsch! Gleich noch mal ist Schluss', 1600, meldungUhr);
+          }
+          if (vorher.schild && !neu.schild && !neu.vorbei) {
+            sfx('klick', 7);
+            haptik('gut');
+            meldungUhr = einblenden(meldungRef.current, 'Schild gerettet dich!', 1200, meldungUhr);
+          }
+          if (neu.missionZahl > vorher.missionZahl && neu.letzteMission) {
+            sfx('stufe');
+            haptik('jubel');
+            const m = neu.letzteMission;
+            meldungUhr = einblenden(
+              meldungRef.current,
+              `Mission geschafft: ${MISSION_NAMEN[m.art](m.ziel)}`,
+              2200,
+              meldungUhr,
+            );
+          }
+          const zone = zoneBei(neu.strecke);
+          if (zone !== letzteZone) {
+            letzteZone = zone;
+            sfx('stufe', 4);
+            bannerUhr = einblenden(
+              bannerRef.current,
+              `Zone ${zone + 1} · ${zonenName(zone)}`,
+              2400,
+              bannerUhr,
+            );
           }
 
           szene.zeichnen(neu, dt);
@@ -366,6 +442,48 @@ export function DashCity({
           }
           if (doppelBalkenRef.current) {
             doppelBalkenRef.current.style.width = `${Math.max(0, (neu.doppelRest / DOPPEL_DAUER) * 100).toFixed(0)}%`;
+          }
+
+          if (schildBadgeRef.current) {
+            schildBadgeRef.current.style.opacity = neu.schild ? '1' : '0';
+          }
+          if (magnetBadgeRef.current) {
+            magnetBadgeRef.current.style.opacity = neu.magnetRest > 0 ? '1' : '0';
+          }
+          if (magnetBalkenRef.current) {
+            magnetBalkenRef.current.style.width = `${Math.max(0, (neu.magnetRest / MAGNET_DAUER) * 100).toFixed(0)}%`;
+          }
+
+          // Kombo: erst ab der zweiten Stufe sichtbar, sonst ist es Rauschen.
+          if (neu.kombo !== letzteKombo && komboRef.current) {
+            letzteKombo = neu.kombo;
+            const f = komboFaktor(neu.kombo);
+            komboRef.current.style.opacity = neu.kombo >= 4 ? '1' : '0';
+            komboRef.current.textContent = `Kombo ${neu.kombo} · ×${f}`;
+          }
+
+          // Missionen: Text nur bei Wechsel, Balken jedes Bild (billig).
+          neu.missionen.forEach((m, i) => {
+            const schluessel = `${m.art}:${m.ziel}:${m.start}`;
+            const name = missionNamenRef.current[i];
+            if (name && missionSchluessel[i] !== schluessel) {
+              missionSchluessel[i] = schluessel;
+              name.textContent = MISSION_NAMEN[m.art](m.ziel);
+            }
+            const balken = missionBalkenRef.current[i];
+            if (balken) {
+              balken.style.width = `${((missionFortschritt(neu, m) / m.ziel) * 100).toFixed(0)}%`;
+            }
+          });
+
+          // Gefahr: Solange das Zeitfenster läuft, ist der nächste Treffer das Ende.
+          if (gefahrRef.current) gefahrRef.current.style.opacity = neu.stolperRest > 0 ? '1' : '0';
+          if (gefahrBalkenRef.current) {
+            gefahrBalkenRef.current.style.width = `${Math.max(0, (neu.stolperRest / STOLPER_FENSTER) * 100).toFixed(0)}%`;
+          }
+          // Stiller roter Rand statt Blitz — nur, solange man auf Messers Schneide läuft.
+          if (blitzRef.current && !neu.vorbei && !settings.reducedMotion) {
+            blitzRef.current.style.opacity = neu.stolperRest > 0 ? '0.35' : '0';
           }
 
           // Die Kopfzeile der Hülle braucht den Punktestand auch während des
@@ -437,6 +555,8 @@ export function DashCity({
       // Wer während des Aufpralls „Zurück" drückt, soll nicht eine halbe
       // Sekunde später doch noch den Rundenende-Bildschirm bekommen.
       window.clearTimeout(endeUhr);
+      window.clearTimeout(bannerUhr);
+      window.clearTimeout(meldungUhr);
       messenAbmelden?.();
       szeneRef.current?.aufraeumen();
       szeneRef.current = null;
@@ -495,13 +615,47 @@ export function DashCity({
       )}
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
-        <span
-          ref={punkteRef}
-          className="text-4xl leading-none font-black tabular-nums text-white"
-          style={{ textShadow: '0 2px 0 rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.6)' }}
-        >
-          0
-        </span>
+        <div className="flex flex-col items-start gap-1.5">
+          <span
+            ref={punkteRef}
+            className="text-4xl leading-none font-black tabular-nums text-white"
+            style={{ textShadow: '0 2px 0 rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.6)' }}
+          >
+            0
+          </span>
+          {/* Kombo: erst ab vier Hindernissen in Folge sichtbar (siehe
+              Zeichenschleife), sonst wäre es Rauschen. */}
+          <div
+            ref={komboRef}
+            aria-hidden="true"
+            className="rounded-full bg-fuchsia-500/80 px-2.5 py-0.5 text-xs font-black text-white tabular-nums transition-opacity duration-200"
+            style={{ opacity: 0 }}
+          />
+          {/* Die drei laufenden Missionen. Klein und blass: Sie sollen
+              Ziel geben, nicht ablenken — gelesen wird sie in einer ruhigen
+              Sekunde, nicht mitten im Sprung. */}
+          <ul aria-label="Missionen" className="mt-1 flex w-40 flex-col gap-1">
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="rounded-lg bg-black/35 px-2 py-1 backdrop-blur-sm">
+                <span
+                  ref={(el) => {
+                    missionNamenRef.current[i] = el;
+                  }}
+                  className="block truncate text-[11px] leading-tight font-bold text-white/90"
+                />
+                <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-black/50">
+                  <div
+                    ref={(el) => {
+                      missionBalkenRef.current[i] = el;
+                    }}
+                    className="h-full rounded-full bg-emerald-400"
+                    style={{ width: '0%' }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
         <span className="flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1.5 text-sm font-bold text-amber-300 tabular-nums backdrop-blur-sm">
           <svg viewBox="-10 -10 20 20" className="size-4" aria-hidden="true">
             <circle r={8} fill="#facc15" stroke="#a16207" strokeWidth={2} />
@@ -509,6 +663,22 @@ export function DashCity({
           <span ref={muenzenRef}>0</span>
         </span>
       </div>
+
+      {/* Zonenbanner und Meldungen. Beide liegen immer im Baum und werden
+          nur über `opacity` ein- und ausgeblendet — kein `setState` während
+          des Laufens. */}
+      <div
+        ref={bannerRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[22%] mx-auto w-fit rounded-full bg-black/55 px-4 py-1.5 text-sm font-black tracking-wide text-white uppercase backdrop-blur-sm transition-opacity duration-300"
+        style={{ opacity: 0 }}
+      />
+      <div
+        ref={meldungRef}
+        role="status"
+        className="pointer-events-none absolute inset-x-0 top-[32%] mx-auto w-fit max-w-[85%] rounded-xl bg-black/60 px-4 py-2 text-center text-sm font-bold text-white backdrop-blur-sm transition-opacity duration-200"
+        style={{ opacity: 0 }}
+      />
 
       {/* Die aktiven Schübe. Sie liegen **rechts unter der Münzzahl**, nicht
           in der Mitte: Dort ist der einzige Fleck, auf den beim Laufen
@@ -519,6 +689,23 @@ export function DashCity({
         aria-hidden="true"
         className="pointer-events-none absolute top-14 right-3 flex flex-col items-end gap-1.5"
       >
+        <div
+          ref={schildBadgeRef}
+          className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
+          style={{ opacity: 0 }}
+        >
+          <span className="text-xs font-black text-blue-300">🛡️ Schild</span>
+        </div>
+        <div
+          ref={magnetBadgeRef}
+          className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
+          style={{ opacity: 0 }}
+        >
+          <span className="text-xs font-black text-red-300">🧲 Magnet</span>
+          <div className="h-1 w-16 overflow-hidden rounded-full bg-black/50">
+            <div ref={magnetBalkenRef} className="h-full rounded-full bg-red-400" style={{ width: '0%' }} />
+          </div>
+        </div>
         <div
           ref={turboBadgeRef}
           className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
@@ -548,6 +735,23 @@ export function DashCity({
           <div className="h-1 w-16 overflow-hidden rounded-full bg-black/50">
             <div ref={doppelBalkenRef} className="h-full rounded-full bg-pink-400" style={{ width: '0%' }} />
           </div>
+        </div>
+      </div>
+
+      {/* Gefahr: Nach einem Zusammenstoß läuft ein Zeitfenster, in dem der
+          nächste Treffer das Ende ist. Ein schrumpfender roter Balken sagt
+          das ohne Worte — und der rote Rand am Bildschirm unterstützt es. */}
+      <div
+        ref={gefahrRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-6 mx-auto flex w-56 flex-col items-center gap-0.5 transition-opacity duration-200"
+        style={{ opacity: 0 }}
+      >
+        <span className="text-[11px] font-black tracking-wide whitespace-nowrap text-red-200 uppercase [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
+          Noch ein Treffer = Ende
+        </span>
+        <div className="h-1 w-full overflow-hidden rounded-full bg-black/50">
+          <div ref={gefahrBalkenRef} className="h-full rounded-full bg-red-500" style={{ width: '0%' }} />
         </div>
       </div>
 
@@ -581,19 +785,19 @@ export function DashCity({
               <li>
                 <span aria-hidden="true">↓</span> Runterwischen — rutschen
               </li>
-              <li>
-                <span aria-hidden="true">⚡</span> Einsammeln — schneller
-              </li>
-              {/* Der Pfeil, nicht die blaue Raute: Er zeigt dasselbe
-                  Zeichen wie der Gegenstand auf der Strecke. Rückmeldung:
-                  „ersetz das blaue Zeichen zu dem blauen Pfeil." */}
-              <li>
-                <span aria-hidden="true">⬆️</span> Einsammeln — höher springen
-              </li>
-              <li>
-                <span aria-hidden="true">✳️</span> Einsammeln — doppelte Punkte
-              </li>
             </ul>
+            {/* Die fünf Extras in **einer** Zeile. Der Pfeil, nicht die blaue
+                Raute: Er zeigt dasselbe Zeichen wie der Gegenstand auf der
+                Strecke. Rückmeldung: „ersetz das blaue Zeichen zu dem
+                blauen Pfeil." */}
+            <p className="mt-2 text-sm text-white/90">
+              <span aria-hidden="true">⚡ ⬆️ ✳️ 🛡️ 🧲</span> einsammeln: schneller, höher, ×2,
+              Schild, Magnet
+            </p>
+            <p className="mt-2 text-xs text-white/80">
+              Der erste Treffer wirft dich nur um — der zweite innerhalb von {STOLPER_FENSTER} Sekunden
+              beendet den Lauf. Lücken in der Straße: springen!
+            </p>
             <p className="mt-2 text-xs text-white/60">(Pfeiltasten gehen auch)</p>
           </div>
         </div>

@@ -3,6 +3,15 @@ import { saatAus } from '../../core/rng';
 import {
   ABSCHNITT_LAENGE,
   DOPPEL_DAUER,
+  LUECKE_LAENGE,
+  MAGNET_DAUER,
+  SCHONZEIT,
+  STOLPER_FENSTER,
+  ZONEN_LAENGE,
+  komboFaktor,
+  missionFortschritt,
+  missionsLohn,
+  zoneBei,
   HOEHE_RUTSCHEND,
   SERIE_ABSTAND,
   SPRUNGSCHUB_DAUER,
@@ -29,6 +38,11 @@ import {
 import type { Hindernis, Lauf, Muenze, Schub } from './logik';
 
 const SAAT = saatAus('laufen', 1);
+
+/** Wie oft die Figur schon getroffen wurde — das Stolpern zählt, ein Ende ebenfalls. */
+function trefferZahl(l: Lauf): number {
+  return l.stolperZahl + (l.vorbei ? 1 : 0);
+}
 
 /** Lässt die Zeit in Bildschritten laufen. */
 function laufen(l: Lauf, sekunden: number, beiSchritt?: (l: Lauf) => Lauf, dt = 1 / 60): Lauf {
@@ -194,8 +208,9 @@ describe('Kollision', () => {
     expect(kollision(teststrecke(start + weite), h)).toBe(false);
     expect(kollision(teststrecke(start), h)).toBe(false);
 
-    // Über den zurückgelegten Abschnitt gesehen ist es ein Treffer.
-    expect(takt(teststrecke(start, { hindernisse: [h] }), dt).vorbei).toBe(true);
+    // Über den zurückgelegten Abschnitt gesehen ist es ein Treffer — der erste
+    // lässt die Figur nur stolpern, siehe `STOLPER_FENSTER`.
+    expect(trefferZahl(takt(teststrecke(start, { hindernisse: [h] }), dt))).toBe(1);
   });
 
   it('trifft dieselbe Mauer bei jeder Bildrate', () => {
@@ -206,7 +221,7 @@ describe('Kollision', () => {
         undefined,
         dt,
       );
-      expect(l.vorbei, `Bildschritt ${dt}`).toBe(true);
+      expect(trefferZahl(l), `Bildschritt ${dt}`).toBeGreaterThanOrEqual(1);
     }
   });
 
@@ -541,5 +556,264 @@ describe('Der ganze Lauf', () => {
 
     expect(l.muenzenZahl).toBeGreaterThan(0);
     expect(punkte(l)).toBe(Math.floor(l.strecke) + l.muenzenZahl * 10);
+  });
+});
+
+
+describe('Stolpern statt Sofort-Aus', () => {
+  const mauer = (z: number): Hindernis => ({ art: 'mauer', spur: 1, z });
+
+  it('wirft beim ersten Zusammenstoß nur aus dem Tritt', () => {
+    const l = laufen(teststrecke(100, { hindernisse: [mauer(110)] }), 3);
+    expect(l.vorbei).toBe(false);
+    expect(l.stolperZahl).toBe(1);
+    expect(l.stolperRest).toBeGreaterThan(0);
+  });
+
+  it('bricht beim Stolpern das Tempo ein und holt es danach wieder auf', () => {
+    const frei = takt(teststrecke(100), 1 / 60);
+    const gestolpert = takt({ ...teststrecke(100), schonRest: SCHONZEIT }, 1 / 60);
+    expect(gestolpert.strecke - 100).toBeLessThan((frei.strecke - 100) * 0.7);
+    const spaeter = takt({ ...teststrecke(100), schonRest: 0.01 }, 1 / 60);
+    expect(spaeter.strecke - 100).toBeGreaterThan((frei.strecke - 100) * 0.95);
+  });
+
+  it('beendet den Lauf beim zweiten Zusammenstoß im Zeitfenster', () => {
+    const l = laufen(teststrecke(100, { hindernisse: [mauer(110), mauer(125)] }), 6);
+    expect(l.vorbei).toBe(true);
+  });
+
+  it('verzeiht, wenn nach dem Stolpern genug Zeit vergeht', () => {
+    // Das zweite Hindernis liegt weit hinter dem Ablauf des Fensters.
+    const weit = 100 + tempoBei(100) * (STOLPER_FENSTER + 3);
+    const l = laufen(teststrecke(100, { hindernisse: [mauer(110), mauer(weit)] }), STOLPER_FENSTER + 8);
+    expect(l.vorbei).toBe(false);
+    expect(l.stolperZahl).toBe(2);
+  });
+
+  it('zählt dasselbe Hindernis nur einmal, nicht in jedem Bild', () => {
+    const l = laufen(teststrecke(100, { hindernisse: [mauer(110)] }), 4, undefined, 1 / 120);
+    expect(l.stolperZahl).toBe(1);
+  });
+
+  it('ignoriert Hindernisse in der Schonzeit', () => {
+    const l = laufen(
+      teststrecke(100, { schonRest: SCHONZEIT, hindernisse: [mauer(100.2)] }),
+      0.2,
+    );
+    expect(l.stolperZahl).toBe(0);
+    expect(l.vorbei).toBe(false);
+  });
+
+  it('setzt die Kombo beim Stolpern zurück', () => {
+    const l = laufen(teststrecke(100, { kombo: 9, hindernisse: [mauer(110)] }), 3);
+    expect(l.kombo).toBe(0);
+  });
+});
+
+describe('Schild', () => {
+  const schildLauf = (extra: Partial<Lauf> = {}) =>
+    teststrecke(100, { schild: true, hindernisse: [{ art: 'mauer', spur: 1, z: 110 }], ...extra });
+
+  it('fängt genau einen Zusammenstoß ab, ohne zu stolpern', () => {
+    const l = laufen(schildLauf(), 3);
+    expect(l.schild).toBe(false);
+    expect(l.stolperZahl).toBe(0);
+    expect(l.stolperRest).toBe(0);
+    expect(l.vorbei).toBe(false);
+  });
+
+  it('schützt kein zweites Mal', () => {
+    const l = laufen(
+      schildLauf({
+        hindernisse: [
+          { art: 'mauer', spur: 1, z: 110 },
+          { art: 'mauer', spur: 1, z: 135 },
+        ],
+      }),
+      6,
+    );
+    expect(l.stolperZahl).toBe(1);
+  });
+
+  it('wird eingesammelt wie jeder Schub', () => {
+    const sch: Schub = { art: 'schild', spur: 1, z: 100.5 };
+    const l = takt(teststrecke(100, { schuebe: [sch] }), 1 / 60);
+    expect(l.schild).toBe(true);
+    expect(l.schubZahl).toBe(1);
+  });
+});
+
+describe('Magnet', () => {
+  it('zieht Münzen von anderen Spuren heran und sammelt sie ein', () => {
+    const m: Muenze = { spur: 0, z: 106, y: 1 };
+    const ohne = laufen(teststrecke(100, { muenzen: [m] }), 1.2);
+    const mit = laufen(teststrecke(100, { muenzen: [m], magnetRest: MAGNET_DAUER }), 1.2);
+    expect(ohne.muenzenZahl).toBe(0);
+    expect(mit.muenzenZahl).toBe(1);
+  });
+
+  it('klingt über die Zeit ab', () => {
+    const l = laufen(teststrecke(100, { magnetRest: 0.5 }), 1);
+    expect(l.magnetRest).toBe(0);
+  });
+});
+
+describe('Lücken', () => {
+  const luecke: Hindernis = { art: 'luecke', spur: 1, z: 110 };
+
+  it('treffen, wenn man am Boden darüber läuft', () => {
+    const l = laufen(teststrecke(100, { hindernisse: [luecke] }), 3);
+    expect(trefferZahl(l)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('lassen sich mit einem Sprung überwinden', () => {
+    let l = teststrecke(100, { hindernisse: [luecke] });
+    // So abspringen, dass die ganze Lücke in die Flugzeit fällt.
+    l = laufen(l, 3, (x) => (x.strecke > 109 - tempoBei(100) * 0.25 && x.y === 0 && x.strecke < 111 ? springen(x) : x));
+    expect(trefferZahl(l)).toBe(0);
+    expect(l.lueckenGesprungen).toBe(1);
+  });
+
+  it('lassen sich auf einer anderen Spur ohne Folgen umgehen', () => {
+    const l = laufen(teststrecke(100, { hindernisse: [{ ...luecke, spur: 0 }] }), 3);
+    expect(trefferZahl(l)).toBe(0);
+  });
+
+  it('sind kurz genug, um beim langsamsten Tempo mit einem Sprung überquert zu werden', () => {
+    // Wie lange ein normaler Sprung über 0,3 m bleibt, gemessen — nicht gerechnet.
+    let l = springen(teststrecke(100));
+    let oben = 0;
+    for (let t = 0; t < 2; t += 1 / 240) {
+      l = takt({ ...l, strecke: 100 }, 1 / 240);
+      if (l.y >= 0.3) oben += 1 / 240;
+    }
+    expect(oben * TEMPO_START).toBeGreaterThan(LUECKE_LAENGE + 1);
+  });
+
+  it('erscheinen erst ab der zweiten Zone', () => {
+    let frueh = 0;
+    let spaet = 0;
+    for (let i = 0; i < 3000; i++) {
+      const a = abschnittErzeugen(SAAT, i);
+      const n = a.hindernisse.filter((h) => h.art === 'luecke').length;
+      if (i * ABSCHNITT_LAENGE < ZONEN_LAENGE) frueh += n;
+      else spaet += n;
+    }
+    expect(frueh).toBe(0);
+    expect(spaet).toBeGreaterThan(0);
+  });
+
+  it('bleiben über viele Abschnitte passierbar', () => {
+    for (let i = 0; i < 5000; i++) {
+      expect(istPassierbar(abschnittErzeugen(SAAT, i).hindernisse)).toBe(true);
+    }
+  });
+});
+
+describe('Zonen', () => {
+  it('wechseln alle ZONEN_LAENGE Meter', () => {
+    expect(zoneBei(0)).toBe(0);
+    expect(zoneBei(ZONEN_LAENGE - 1)).toBe(0);
+    expect(zoneBei(ZONEN_LAENGE)).toBe(1);
+    expect(zoneBei(ZONEN_LAENGE * 4.5)).toBe(4);
+  });
+
+  it('machen es dichter: später sind mehr Abschnitte doppelt belegt', () => {
+    const anteil = (ab: number, bis: number) => {
+      let doppelt = 0;
+      let alle = 0;
+      for (let i = ab; i < bis; i++) {
+        const n = abschnittErzeugen(SAAT, i).hindernisse.length;
+        if (n > 0) {
+          alle += 1;
+          if (n === 2) doppelt += 1;
+        }
+      }
+      return doppelt / alle;
+    };
+    const eins = anteil(3, ZONEN_LAENGE / ABSCHNITT_LAENGE);
+    const spaeter = anteil((ZONEN_LAENGE * 4) / ABSCHNITT_LAENGE, (ZONEN_LAENGE * 4) / ABSCHNITT_LAENGE + 600);
+    expect(spaeter).toBeGreaterThan(eins);
+  });
+});
+
+describe('Kombo', () => {
+  it('wächst alle vier gemeisterten Hindernisse um eine Stufe, höchstens auf fünf', () => {
+    expect(komboFaktor(0)).toBe(1);
+    expect(komboFaktor(3)).toBe(1);
+    expect(komboFaktor(4)).toBe(2);
+    expect(komboFaktor(100)).toBe(5);
+  });
+
+  it('zählt ein gemeistertes Hindernis, nicht eines, das gar nicht in der Nähe war', () => {
+    const nah = laufen(
+      teststrecke(100, { hindernisse: [{ art: 'huerde', spur: 1, z: 110 }] }),
+      3,
+      (x) => (x.strecke > 108 && x.y === 0 && x.strecke < 109.5 ? springen(x) : x),
+    );
+    expect(nah.kombo).toBe(1);
+    expect(nah.huerdenGesprungen).toBe(1);
+    expect(nah.komboPunkte).toBe(5);
+
+    const fern = laufen(teststrecke(100, { hindernisse: [{ art: 'huerde', spur: 0, z: 110 }] }), 3);
+    expect(fern.kombo).toBe(0);
+  });
+
+  it('zählt ein getroffenes Hindernis nie als gemeistert', () => {
+    const l = laufen(teststrecke(100, { hindernisse: [{ art: 'mauer', spur: 1, z: 110 }] }), 4);
+    expect(l.kombo).toBe(0);
+    expect(l.mauernUmfahren).toBe(0);
+  });
+
+  it('zählt eine knapp umfahrene Mauer', () => {
+    const l = laufen(teststrecke(100, { hindernisse: [{ art: 'mauer', spur: 2, z: 110 }] }), 3);
+    expect(l.mauernUmfahren).toBe(1);
+  });
+
+  it('geht in die Punkte ein und bleibt erhalten', () => {
+    const a = teststrecke(100, { komboPunkte: 40 });
+    expect(punkte(a)).toBe(punkte({ ...a, komboPunkte: 0 }) + 40);
+  });
+});
+
+describe('Missionen', () => {
+  it('beginnen mit drei verschiedenen Aufgaben', () => {
+    const l = neuesSpiel(SAAT);
+    expect(l.missionen).toHaveLength(3);
+    expect(new Set(l.missionen.map((m) => m.art)).size).toBe(3);
+  });
+
+  it('ergeben bei gleicher Saat dieselben Aufgaben', () => {
+    expect(neuesSpiel(SAAT).missionen).toEqual(neuesSpiel(SAAT).missionen);
+  });
+
+  it('melden Fortschritt aus den Zählern', () => {
+    const l = neuesSpiel(SAAT);
+    const m = { art: 'muenzen' as const, ziel: 10, start: 0 };
+    expect(missionFortschritt({ ...l, muenzenZahl: 4 }, m)).toBe(4);
+    expect(missionFortschritt({ ...l, muenzenZahl: 40 }, m)).toBe(10);
+  });
+
+  it('zahlen bei Erfüllung Punkte und werden sofort ersetzt', () => {
+    const l = neuesSpiel(SAAT);
+    const fast = { art: 'meter' as const, ziel: 50, start: 0 };
+    const vor = teststrecke(49.9, {
+      missionen: [fast, ...l.missionen.slice(1)],
+      muenzen: [],
+    });
+    const nach = takt(vor, 0.1);
+    expect(nach.missionZahl).toBe(1);
+    expect(nach.missionPunkte).toBe(missionsLohn(0));
+    expect(nach.letzteMission).toEqual(fast);
+    expect(nach.missionen).toHaveLength(3);
+    expect(nach.missionen[0]).not.toEqual(fast);
+    expect(new Set(nach.missionen.map((m) => m.art)).size).toBe(3);
+  });
+
+  it('werden mit jeder geschafften Dreierrunde etwas mehr wert', () => {
+    expect(missionsLohn(0)).toBe(100);
+    expect(missionsLohn(2)).toBe(100);
+    expect(missionsLohn(3)).toBeGreaterThan(100);
   });
 });

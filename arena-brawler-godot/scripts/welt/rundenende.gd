@@ -27,3 +27,26 @@ func _unhandled_input(event: InputEvent) -> void:
 	)
 	if getippt:
 		neustart_angefordert.emit()
+
+
+@onready var _karte: Control = $Karte
+@onready var _nochmal: Button = $Karte/Nochmal
+
+
+func _ready() -> void:
+	_nochmal.pressed.connect(neustart_angefordert.emit)
+	visibility_changed.connect(_einblenden)
+	_karte.pivot_offset = _karte.size / 2.0
+
+
+## Die Tafel federt beim Erscheinen kurz auf, statt hart einzuspringen —
+## läuft mit `TWEEN_PAUSE_PROCESS`, weil der Baum zu diesem Zeitpunkt pausiert ist.
+func _einblenden() -> void:
+	if not visible:
+		return
+	_karte.scale = Vector2(0.85, 0.85)
+	_karte.modulate.a = 0.0
+	var t := create_tween().set_parallel(true)
+	t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	t.tween_property(_karte, "scale", Vector2.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	t.tween_property(_karte, "modulate:a", 1.0, 0.2)

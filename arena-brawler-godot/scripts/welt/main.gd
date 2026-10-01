@@ -42,6 +42,7 @@ const POWERUP_MELDUNG_DAUER := 1.1
 @onready var _wellenmeldung: Label = $Oberflaeche/Wellenmeldung
 @onready var _powerup_meldung: Label = $Oberflaeche/PowerupMeldung
 @onready var _rundenende: Rundenende = $Oberflaeche/Rundenende
+@onready var _rundenende_punkte: Label = $Oberflaeche/Rundenende/Karte/Punkte
 @onready var _rundenende_stats: Label = $Oberflaeche/Rundenende/Karte/Stats
 @onready var _rundenende_rekord: Label = $Oberflaeche/Rundenende/Karte/Rekord
 @onready var _aufwertungsauswahl: Aufwertungsauswahl = $Oberflaeche/Aufwertungsauswahl
@@ -199,7 +200,8 @@ func _runde_beenden() -> void:
 	_wellenmeldung.visible = false
 
 	var rekord := Spielstand.runde_melden(_wellenleiter.punkte, _wellenleiter.welle)
-	_rundenende_stats.text = "%d Punkte · Welle %d" % [_wellenleiter.punkte, _wellenleiter.welle]
+	_rundenende_punkte.text = str(_wellenleiter.punkte)
+	_rundenende_stats.text = "Punkte · Welle %d" % _wellenleiter.welle
 	_rundenende_rekord.text = "🏆 Neuer Rekord!" if rekord else Spielstand.rekord_zeile()
 	_rundenende.visible = true
 

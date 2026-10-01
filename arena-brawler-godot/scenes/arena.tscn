@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://bqarena0arena"]
+[gd_scene load_steps=3 format=3 uid="uid://bqarena0arena"]
 
 [ext_resource type="Script" path="res://scripts/welt/arena.gd" id="1_arena"]
+[ext_resource type="Script" path="res://scripts/welt/arena_stimmung.gd" id="2_stimmung"]
 
 [node name="Arena" type="Node2D"]
 script = ExtResource("1_arena")
@@ -8,6 +9,9 @@ script = ExtResource("1_arena")
 [node name="Boden" type="Polygon2D" parent="."]
 color = Color(0.137255, 0.149020, 0.203922, 1)
 polygon = PackedVector2Array(0, 0, 1152, 0, 1152, 648, 0, 648)
+
+[node name="Stimmung" type="Node2D" parent="."]
+script = ExtResource("2_stimmung")
 
 [node name="Raster" type="Node2D" parent="."]
 
