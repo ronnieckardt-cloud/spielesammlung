@@ -117,7 +117,7 @@ const SICHT_SCHNELL = 17.5;
  * geländegängige Übertreibung ganz aufzugeben.
  */
 const RAD_R = 0.42;
-const RADSTAND = 1.18;
+const RADSTAND = 1.3;
 
 /**
  * Wie viel größer Rad und Fahrer **gezeichnet** werden als ihre Maße. Auf einem
@@ -132,6 +132,10 @@ const FAHRZEUG_GROESSE = 1.55;
 
 /** Wo auf der Strecke das Starttor steht — hinter dem Rad, am linken Bildrand. */
 const START_TOR_X = 1.2;
+
+function lernPunkt(a: { x: number; y: number }, b: { x: number; y: number }, t: number) {
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+}
 
 export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   const ctx = leinwand.getContext('2d');
@@ -819,8 +823,8 @@ function radFahrerZeichnen(
   ctx.scale(FAHRZEUG_GROESSE, FAHRZEUG_GROESSE);
 
   const radR = RAD_R * m;
-  const hintenX = -RADSTAND * 0.52 * m;
-  const vornX = RADSTAND * 0.48 * m;
+  const hintenX = -RADSTAND * 0.5 * m;
+  const vornX = RADSTAND * 0.5 * m;
   const nabeY = -radR;
 
   /** Federweg vorn: das Standrohr taucht ein, das Vorderrad rückt hoch. */
@@ -912,118 +916,147 @@ function radFahrerZeichnen(
   // Laufräder
   // ---------------------------------------------------------------
   const laufrad = (rx: number, ry: number) => {
-    // Die Reifenbasis zuerst — die Stollen kommen später obendrauf.
-    // Andersherum (Stollen zuerst) verschluckt die breite Lauffläche eine
-    // innere Stollenreihe komplett, weil sie darüber gezeichnet würde.
-    ctx.strokeStyle = FARBEN.reifen;
-    ctx.lineWidth = radR * 0.22;
-    ctx.beginPath();
-    ctx.arc(rx, ry, radR * 0.87, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Seitenwand: ein schmaler, hellerer Ring zwischen Lauffläche und
-    // Felge — ohne ihn ist der Reifen eine reine Silhouette ohne Flanke.
-    ctx.strokeStyle = mischen(FARBEN.reifen, '#ffffff', 0.3);
-    ctx.lineWidth = Math.max(1, radR * 0.03);
-    ctx.beginPath();
-    ctx.arc(rx, ry, radR * 0.81, 0, Math.PI * 2);
-    ctx.stroke();
-
     /*
-     * Stollenprofil in **zwei** Reihen statt einer: außen größere
-     * Schulterstollen ganz am Rand, innen kleinere, um eine halbe
-     * Teilung versetzte Stollen dazwischen. Ein einzelner Kranz aus
-     * Zacken liest sich eher wie ein Zahnrad als wie ein Reifen — das
-     * Doppelmuster ist, was einen MTB-Reifen von einem glatten Ring
-     * unterscheidet.
+     * Rückmeldung: „die Reifen sind zu grobstollig." Vorher zwei Reihen mit
+     * je sechzehn **Klötzen** von einem Fünftel Radius — das las sich als
+     * Zahnrad, nicht als Reifen. Ein echter Reifen ist ein dicker, glatter
+     * Ring, dessen Profil man erst aus der Nähe als feine, dichte Stollen
+     * erkennt. Deshalb jetzt: ein runder Wulst als Grundkörper (er trägt
+     * die Form), darauf zweiundvierzig **kleine**, leicht schräg stehende
+     * Stollen, die kaum über den Rand ragen, dazu ein Glanzbogen auf der
+     * Lichtseite. Bei einem Handy-Rad von 20 Bildpunkten Radius bleiben
+     * davon nur ein feiner Rand und ein Hauch Glanz — und genau so sieht
+     * ein Reifen von Weitem aus.
      */
+    const wulst = radR * 0.87;
+    // Grundkörper: der dunkle Wulst.
+    ctx.strokeStyle = FARBEN.reifen;
+    ctx.lineWidth = radR * 0.2;
+    ctx.beginPath();
+    ctx.arc(rx, ry, wulst, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Feines Stollenprofil: kleine, schräg stehende Trapeze am Außenrand.
     ctx.save();
     ctx.translate(rx, ry);
     ctx.rotate(radDrehung);
     ctx.fillStyle = FARBEN.profil;
-    const stollen = 16;
-    const stollenReihe = (radius: number, versatz: number, laenge: number, breite: number) => {
-      for (let i = 0; i < stollen; i++) {
-        const w = ((i + versatz) / stollen) * Math.PI * 2;
-        ctx.save();
-        ctx.translate(Math.cos(w) * radius, Math.sin(w) * radius);
-        ctx.rotate(w);
-        ctx.fillRect(-laenge * 0.25, -breite / 2, laenge, breite);
-        ctx.restore();
-      }
-    };
-    // Äußere Reihe: große Schulterstollen, deutlich über die Lauffläche hinaus.
-    stollenReihe(radR * 0.96, 0, radR * 0.21, radR * 0.22);
-    // Innere Reihe: kleinere, versetzte Mittelstollen.
-    stollenReihe(radR * 0.9, 0.5, radR * 0.15, radR * 0.17);
+    const stollen = 42;
+    const innen = radR * 0.945;
+    const aussen = radR * 0.995;
+    const breitInnen = radR * 0.052;
+    const breitAussen = radR * 0.036;
+    const schraege = radR * 0.03;
+    ctx.beginPath();
+    for (let i = 0; i < stollen; i++) {
+      const w = (i / stollen) * Math.PI * 2;
+      const c = Math.cos(w);
+      const s = Math.sin(w);
+      // Tangente (senkrecht zum Radius) für die Breite und die Schräge.
+      const tx = -s;
+      const ty = c;
+      const p = (r: number, q: number) => [c * r + tx * q, s * r + ty * q] as const;
+      const [a0, a1] = p(innen, -breitInnen);
+      const [b0, b1] = p(aussen, -breitAussen + schraege);
+      const [c0, c1] = p(aussen, breitAussen + schraege);
+      const [d0, d1] = p(innen, breitInnen);
+      ctx.moveTo(a0, a1);
+      ctx.lineTo(b0, b1);
+      ctx.lineTo(c0, c1);
+      ctx.lineTo(d0, d1);
+      ctx.closePath();
+    }
+    ctx.fill();
     ctx.restore();
 
-    // Felge.
-    ctx.strokeStyle = FARBEN.felge;
-    ctx.lineWidth = radR * 0.09;
+    // Glanz auf der Lichtseite (oben links) und ein Hauch Schatten
+    // gegenüber — das macht aus einem Ring einen runden Wulst.
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = Math.max(1, radR * 0.05);
     ctx.beginPath();
-    ctx.arc(rx, ry, radR * 0.74, 0, Math.PI * 2);
+    ctx.arc(rx, ry, wulst, Math.PI * 1.02, Math.PI * 1.5);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.arc(rx, ry, wulst, Math.PI * 0.05, Math.PI * 0.5);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+
+    // Felge: schmales Silberband mit dunkler Innenkante.
+    ctx.strokeStyle = FARBEN.felge;
+    ctx.lineWidth = radR * 0.075;
+    ctx.beginPath();
+    ctx.arc(rx, ry, radR * 0.735, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = Math.max(0.6, radR * 0.014);
+    ctx.beginPath();
+    ctx.arc(rx, ry, radR * 0.755, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath();
+    ctx.arc(rx, ry, radR * 0.7, 0, Math.PI * 2);
     ctx.stroke();
 
     /*
-     * Speichen — **versetzt angesetzt, nicht durch die Mitte.**
-     *
-     * Der erste Versuch zog sechs Linien als volle Durchmesser durch die
-     * Nabe. Das liest sich als Stern, nicht als Laufrad, und beim Drehen
-     * passiert optisch fast nichts, weil ein Stern aus Durchmessern
-     * punktsymmetrisch ist. Eine echte Speiche läuft **schräg** von der
-     * Nabe zur Felge; zehn davon, jede um denselben Winkel versetzt,
-     * ergeben das typische Muster.
+     * Speichen — dünn und viele. Vierundzwanzig statt zehn: Ein Laufrad mit
+     * wenigen dicken Linien sieht nach Kinderrad aus, ein Netz aus feinen
+     * Speichen nach Sportgerät. Jede läuft **schräg** von der Nabe zur Felge
+     * (tangentiale Einspeichung); der Versatz an der Nabe ist die Schräge.
      */
     ctx.save();
     ctx.translate(rx, ry);
     ctx.rotate(radDrehung);
-    ctx.strokeStyle = 'rgba(226,231,238,0.8)';
-    ctx.lineWidth = Math.max(0.8, radR * 0.035);
-    const speichen = 10;
+    ctx.strokeStyle = 'rgba(214,221,231,0.62)';
+    ctx.lineWidth = Math.max(0.5, radR * 0.014);
+    const speichen = 24;
     ctx.beginPath();
     for (let i = 0; i < speichen; i++) {
       const w = (i / speichen) * Math.PI * 2;
-      // Der Versatz von 0,3 Radiant an der Nabe ist die Schrägstellung.
-      ctx.moveTo(Math.cos(w + 0.3) * radR * 0.14, Math.sin(w + 0.3) * radR * 0.14);
-      ctx.lineTo(Math.cos(w) * radR * 0.72, Math.sin(w) * radR * 0.72);
+      const richtung = i % 2 === 0 ? 0.42 : -0.42;
+      ctx.moveTo(Math.cos(w + richtung) * radR * 0.13, Math.sin(w + richtung) * radR * 0.13);
+      ctx.lineTo(Math.cos(w) * radR * 0.7, Math.sin(w) * radR * 0.7);
     }
     ctx.stroke();
+
     /*
-     * Bremsscheibe: gefüllt statt nur ein Kreis-Strich, mit Schlitzen —
+     * Bremsscheibe: gefüllt, mit Schlitzen und einem dunklen Innenring —
      * ein reiner Ring liest sich als dünner Reifenaufkleber, keine Scheibe.
      */
-    ctx.fillStyle = '#8a909a';
+    ctx.fillStyle = '#7c828c';
     ctx.beginPath();
-    ctx.arc(0, 0, radR * 0.36, 0, Math.PI * 2);
+    ctx.arc(0, 0, radR * 0.33, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#5c6169';
+    ctx.strokeStyle = '#555a62';
     ctx.lineWidth = Math.max(0.8, radR * 0.02);
     ctx.stroke();
+    ctx.fillStyle = '#9aa0aa';
+    ctx.beginPath();
+    ctx.arc(0, 0, radR * 0.2, 0, Math.PI * 2);
+    ctx.fill();
 
-    const schlitze = 8;
-    ctx.strokeStyle = '#3a3d43';
-    ctx.lineWidth = Math.max(1, radR * 0.035);
+    const schlitze = 6;
+    ctx.strokeStyle = '#41454c';
+    ctx.lineWidth = Math.max(1, radR * 0.04);
     ctx.lineCap = 'round';
     ctx.beginPath();
     for (let i = 0; i < schlitze; i++) {
       const w = (i / schlitze) * Math.PI * 2;
-      ctx.moveTo(Math.cos(w) * radR * 0.16, Math.sin(w) * radR * 0.16);
-      ctx.lineTo(Math.cos(w) * radR * 0.32, Math.sin(w) * radR * 0.32);
+      ctx.moveTo(Math.cos(w) * radR * 0.22, Math.sin(w) * radR * 0.22);
+      ctx.lineTo(Math.cos(w + 0.1) * radR * 0.3, Math.sin(w + 0.1) * radR * 0.3);
     }
     ctx.stroke();
-
-    // Zentrumsloch, wo die Nabe drübersitzt.
-    ctx.fillStyle = FARBEN.profil;
-    ctx.beginPath();
-    ctx.arc(0, 0, radR * 0.1, 0, Math.PI * 2);
-    ctx.fill();
     ctx.restore();
 
     // Nabe.
     ctx.fillStyle = FARBEN.nabe;
     ctx.beginPath();
-    ctx.arc(rx, ry, radR * 0.13, 0, Math.PI * 2);
+    ctx.arc(rx, ry, radR * 0.11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.arc(rx, ry, radR * 0.045, 0, Math.PI * 2);
     ctx.fill();
   };
 
@@ -1036,13 +1069,43 @@ function radFahrerZeichnen(
   // Rahmengeometrie
   // ---------------------------------------------------------------
   /** Das Tretlager — der Punkt, um den der Hinterbau schwingt. */
-  const tretlager = { x: -0.08 * m, y: nabeY - 0.05 * m + wegHinten };
-  /** Oben am Sattelrohr. */
-  const sattel = { x: -0.44 * m, y: tretlager.y - 0.54 * m };
-  /** Steuerkopf — hier sitzt die Gabel. */
-  const steuerkopf = { x: vornX - 0.1 * m, y: tretlager.y - 0.5 * m };
-  /** Oberes Ende der Gabel, knapp unter dem Steuerkopf. */
-  const gabelOben = { x: steuerkopf.x + 0.02 * m, y: steuerkopf.y + 0.06 * m };
+  const tretlager = { x: -0.13 * m, y: nabeY - 0.05 * m + wegHinten };
+  /** Oben am Sattelrohr — dort treffen Oberrohr, Sattelrohr und Sitzstrebe zusammen. */
+  const sattel = { x: -0.49 * m, y: tretlager.y - 0.54 * m };
+  /**
+   * Die Sattelstütze steckt im Sattelrohr und ragt darüber hinaus. Rückmeldung:
+   * „Der Sattel hängt direkt auf der Stange." Vorher saß er unmittelbar auf dem
+   * Knoten, an dem das Oberrohr ansetzt — ein Sattel ohne Stütze, wie auf einem
+   * Spielzeugrad. Länge so gewählt, dass das Bein am untersten Pedalpunkt noch
+   * leicht gebeugt bleibt (mit 0,13 m war es gestreckt und der Fuß verlor das Pedal).
+   */
+  const sattelRichtung = (() => {
+    const dx = sattel.x - tretlager.x;
+    const dy = sattel.y - tretlager.y;
+    const l = Math.hypot(dx, dy) || 1;
+    return { x: dx / l, y: dy / l };
+  })();
+  const stuetzeOben = {
+    x: sattel.x + sattelRichtung.x * 0.115 * m,
+    y: sattel.y + sattelRichtung.y * 0.115 * m,
+  };
+  /** Mitte der Sattelschale. */
+  const sattelMitte = { x: stuetzeOben.x + 0.012 * m, y: stuetzeOben.y - 0.032 * m };
+  /**
+   * Lenkwinkel: Die Gabel steht nicht senkrecht, sondern lehnt oben nach hinten
+   * (hier gut 19° von der Senkrechten). Das ist das Merkmal, an dem man ein
+   * Geländerad erkennt — eine fast senkrechte Gabel (vorher rund 9°) liest sich
+   * als BMX oder Kinderrad, ganz gleich, wie viele Details daran sitzen.
+   */
+  const GABEL_NEIGUNG = 0.34;
+  const gabelAchse = { x: -Math.sin(GABEL_NEIGUNG), y: -Math.cos(GABEL_NEIGUNG) };
+  /** Untere Gabelbrücke: knapp unter dem Steuerrohr. */
+  const gabelOben = { x: vornX - 0.172 * m, y: tretlager.y - 0.44 * m };
+  /** Steuerkopf — das obere Ende des Steuerrohrs, auf der Gabelachse. */
+  const steuerkopf = {
+    x: gabelOben.x + gabelAchse.x * 0.085 * m,
+    y: gabelOben.y + gabelAchse.y * 0.085 * m,
+  };
 
   /*
    * --- Doppelbrücken-Federgabel ---
@@ -1072,7 +1135,10 @@ function radFahrerZeichnen(
     y: nabeVorn + (gabelOben.y - nabeVorn) * 0.46,
   };
   /** Das obere Ende der Standrohre, über dem Steuerkopf. */
-  const standOben = { x: gabelOben.x + 0.02 * m, y: gabelOben.y - gabelOffen * 0.45 };
+  const standOben = {
+    x: gabelOben.x + gabelAchse.x * gabelOffen * 0.47,
+    y: gabelOben.y + gabelAchse.y * gabelOffen * 0.47,
+  };
 
   // Tauchrohr (unten, dick, dunkel).
   rohr(
@@ -1080,8 +1146,8 @@ function radFahrerZeichnen(
     nabeVorn,
     tauchOben.x,
     tauchOben.y,
-    0.075 * m,
-    0.08 * m,
+    0.058 * m,
+    0.064 * m,
     FARBEN.federDunkel,
   );
   // Kleiner Decal-Sticker aufs Tauchrohr — reine Markenzeichen-Anmutung,
@@ -1104,32 +1170,35 @@ function radFahrerZeichnen(
     tauchOben.y,
     standOben.x,
     standOben.y,
-    0.056 * m,
-    0.056 * m,
+    0.04 * m,
+    0.04 * m,
     FARBEN.federHell,
   );
   // Untere Brücke, direkt unter dem Steuerrohr. Etwas massiver als beim
   // ersten Wurf (0,05 m → 0,062 m dick, ±0,085 m → ±0,095 m breit), damit
   // sie klar als eigenes Bauteil auffällt statt als bloße Rohrverdickung.
+  // Die Brücken stehen quer zur Gabelachse, nicht waagerecht — sonst wirkt der
+  // geneigte Gabelkopf, als säße er schief auf den Rohren.
+  const gabelQuer = { x: -gabelAchse.y, y: gabelAchse.x };
   rohr(
-    gabelOben.x - 0.095 * m,
-    gabelOben.y + 0.02 * m,
-    gabelOben.x + 0.095 * m,
-    gabelOben.y + 0.005 * m,
-    0.062 * m,
-    0.062 * m,
-    FARBEN.rahmenDunkel,
+    gabelOben.x - gabelQuer.x * 0.085 * m,
+    gabelOben.y - gabelQuer.y * 0.085 * m,
+    gabelOben.x + gabelQuer.x * 0.085 * m,
+    gabelOben.y + gabelQuer.y * 0.085 * m,
+    0.04 * m,
+    0.04 * m,
+    FARBEN.federDunkel,
   );
   // **Obere Brücke** — das Erkennungsmerkmal der Doppelbrückengabel,
   // ebenfalls etwas kräftiger als zuvor.
   rohr(
-    standOben.x - 0.095 * m,
-    standOben.y + 0.015 * m,
-    standOben.x + 0.095 * m,
-    standOben.y,
-    0.055 * m,
-    0.055 * m,
-    FARBEN.rahmenDunkel,
+    standOben.x - gabelQuer.x * 0.085 * m,
+    standOben.y - gabelQuer.y * 0.085 * m,
+    standOben.x + gabelQuer.x * 0.085 * m,
+    standOben.y + gabelQuer.y * 0.085 * m,
+    0.036 * m,
+    0.036 * m,
+    FARBEN.federDunkel,
   );
 
   // --- Hinterbau: Kettenstrebe und Sitzstrebe ---
@@ -1138,8 +1207,8 @@ function radFahrerZeichnen(
     tretlager.y,
     hintenX,
     nabeHinten,
-    0.055 * m,
-    0.035 * m,
+    0.038 * m,
+    0.024 * m,
     FARBEN.rahmenDunkel,
   );
   const sitzstrebeOben = { x: sattel.x + 0.1 * m, y: sattel.y + 0.2 * m };
@@ -1148,8 +1217,8 @@ function radFahrerZeichnen(
     nabeHinten,
     sitzstrebeOben.x,
     sitzstrebeOben.y,
-    0.032 * m,
-    0.042 * m,
+    0.022 * m,
+    0.03 * m,
     FARBEN.rahmenDunkel,
   );
 
@@ -1255,30 +1324,33 @@ function radFahrerZeichnen(
   }
 
   /*
-   * Der Lenker und der Fahrer-Anteil hinter dem Rahmen. Der Lenker steht hier
-   * schon, weil das Skelett die Griffposition braucht (die Hände liegen
-   * darauf); gezeichnet wird er weiter unten, **über** dem Rahmen.
+   * Lenker: ein kurzer Vorbau nach vorn, darauf ein Lenker, der nach oben und
+   * hinten ansteigt (Riser). Vorher stand dort nur ein Stummel, der senkrecht
+   * aus der oberen Brücke wuchs — ohne Vorbau, ohne Bremshebel, und die Hände
+   * lagen direkt über der Gabel. Das Skelett braucht die Griffposition, deshalb
+   * steht sie hier; gezeichnet wird der Lenker weiter unten, **über** dem Rahmen.
    */
-  const lenker = { x: standOben.x + 0.06 * m, y: standOben.y - 0.16 * m };
+  const klemme = { x: standOben.x + 0.1 * m, y: standOben.y - 0.035 * m };
+  const lenker = { x: klemme.x + 0.03 * m, y: klemme.y - 0.105 * m };
   const geo: FahrerGeo = {
     m,
     tretlager,
-    sattel: { x: sattel.x - 0.02 * m, y: sattel.y - 0.085 * m },
+    sattel: { x: sattelMitte.x, y: sattelMitte.y - 0.05 * m },
     lenker,
   };
   const skelett = skelettBerechnen(geo, pose);
   if (!o.ohneFahrer) fahrerHinten(ctx, geo, skelett, pose);
 
-  // --- Hauptrahmen: Unterrohr, Oberrohr, Sattelrohr ---
-  rohr(
-    tretlager.x,
-    tretlager.y,
-    steuerkopf.x,
-    steuerkopf.y + 0.14 * m,
-    0.07 * m,
-    0.055 * m,
-    FARBEN.rahmen,
-  );
+  /*
+   * --- Hauptrahmen ---
+   * Die Rohre sind deutlich schlanker als in der ersten Fassung (Halbmesser
+   * 5,5 cm am Oberrohr, also ein Rohr von 11 cm Durchmesser). Mit dem
+   * Vergrößerungsfaktor des Rades war das ein Ofenrohr — und genau das hat
+   * dem Rad den Spielzeug-Eindruck gegeben. Jetzt etwa 8 cm am Unterrohr,
+   * 7 cm am Oberrohr, wie bei einem echten Alu-Rahmen.
+   */
+  const unterEnde = { x: gabelOben.x + 0.006 * m, y: gabelOben.y + 0.045 * m };
+  rohr(tretlager.x, tretlager.y, unterEnde.x, unterEnde.y, 0.05 * m, 0.04 * m, FARBEN.rahmen);
   /*
    * Dünner Teal-Akzentstreifen aufs Unterrohr — sitzt auf derselben
    * Lichtseite wie `rohr()`s Glanzband, damit er wie aufgeklebt wirkt
@@ -1287,61 +1359,60 @@ function radFahrerZeichnen(
   {
     const ax = tretlager.x;
     const ay = tretlager.y;
-    const bx = steuerkopf.x;
-    const by = steuerkopf.y + 0.14 * m;
+    const bx = unterEnde.x;
+    const by = unterEnde.y;
     const dx = bx - ax;
     const dy = by - ay;
     const len = Math.hypot(dx, dy) || 1;
     const nx = -dy / len;
     const ny = dx / len;
     const seite = nx * -0.55 + ny * -0.84 >= 0 ? 1 : -1;
-    const off = 0.07 * m * 0.45 * seite;
+    const off = 0.05 * m * 0.45 * seite;
     ctx.strokeStyle = FARBEN.akzent;
-    ctx.lineWidth = Math.max(1.2, 0.07 * m * 0.12);
+    ctx.lineWidth = Math.max(1.2, 0.05 * m * 0.12);
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(ax + nx * off, ay + ny * off);
     ctx.lineTo(bx + nx * off, by + ny * off);
     ctx.stroke();
   }
+  // Oberrohr: setzt in der oberen Hälfte des Steuerrohrs an.
+  const oberEnde = lernPunkt(steuerkopf, gabelOben, 0.3);
+  rohr(sattel.x, sattel.y, oberEnde.x, oberEnde.y, 0.04 * m, 0.037 * m, FARBEN.rahmen);
+
+  // Sattelstütze: steckt im Sattelrohr, ragt darüber hinaus. Sie wird **vor**
+  // dem Sattelrohr gezeichnet, damit dessen Ende sie sauber abschließt.
+  const stuetzeUnten = {
+    x: sattel.x - sattelRichtung.x * 0.05 * m,
+    y: sattel.y - sattelRichtung.y * 0.05 * m,
+  };
+  rohr(stuetzeUnten.x, stuetzeUnten.y, stuetzeOben.x, stuetzeOben.y, 0.021 * m, 0.021 * m, FARBEN.federHell);
+  rohr(tretlager.x, tretlager.y, sattel.x, sattel.y, 0.04 * m, 0.034 * m, FARBEN.rahmen);
+  // Sattelklemme: der dunkle Ring, an dem man die Stütze von weitem erkennt.
   rohr(
-    sattel.x,
-    sattel.y,
-    steuerkopf.x,
-    steuerkopf.y,
-    0.055 * m,
-    0.05 * m,
-    FARBEN.rahmen,
+    sattel.x - sattelRichtung.x * 0.012 * m,
+    sattel.y - sattelRichtung.y * 0.012 * m,
+    sattel.x + sattelRichtung.x * 0.034 * m,
+    sattel.y + sattelRichtung.y * 0.034 * m,
+    0.036 * m,
+    0.036 * m,
+    FARBEN.federDunkel,
   );
-  rohr(
-    tretlager.x,
-    tretlager.y,
-    sattel.x,
-    sattel.y,
-    0.05 * m,
-    0.042 * m,
-    FARBEN.rahmen,
-  );
+
   // Steuerrohr.
-  rohr(
-    steuerkopf.x,
-    steuerkopf.y - 0.02 * m,
-    gabelOben.x,
-    gabelOben.y,
-    0.055 * m,
-    0.05 * m,
-    FARBEN.rahmen,
-  );
+  rohr(steuerkopf.x, steuerkopf.y, gabelOben.x, gabelOben.y, 0.048 * m, 0.046 * m, FARBEN.rahmen);
 
   /*
    * --- Sattel ---
    * Eine erkennbare Sattelform statt einer reinen Ellipse: hinten breiter
    * für die Sitzfläche, mit rundem Heck, vorn spitz zulaufend zur Nase —
-   * die Nase zeigt zum Lenker, wie bei einem echten Sattel.
+   * die Nase zeigt zum Lenker, wie bei einem echten Sattel. Darunter zwei
+   * dünne Gestängebügel, die zur Stütze führen: Sie zeigen, dass der Sattel
+   * **auf** etwas sitzt.
    */
   {
-    const sx = sattel.x - 0.02 * m;
-    const sy = sattel.y - 0.04 * m;
+    const sx = sattelMitte.x;
+    const sy = sattelMitte.y;
     const rot = -0.12;
     const cos = Math.cos(rot);
     const sin = Math.sin(rot);
@@ -1360,6 +1431,18 @@ function radFahrerZeichnen(
     const naseU = pt(0.15 * m, 0.014 * m);
     const naseSpitze = pt(0.19 * m, 0);
 
+    // Gestänge unter der Schale.
+    ctx.strokeStyle = '#9aa1ac';
+    ctx.lineWidth = Math.max(1, 0.012 * m);
+    ctx.lineCap = 'round';
+    const bu = pt(-0.085 * m, 0.04 * m);
+    const nu = pt(0.1 * m, 0.03 * m);
+    ctx.beginPath();
+    ctx.moveTo(bu.x, bu.y);
+    ctx.lineTo(stuetzeOben.x, stuetzeOben.y);
+    ctx.lineTo(nu.x, nu.y);
+    ctx.stroke();
+
     ctx.fillStyle = '#1a1a20';
     ctx.beginPath();
     ctx.moveTo(hintenO.x, hintenO.y);
@@ -1369,44 +1452,122 @@ function radFahrerZeichnen(
     ctx.quadraticCurveTo(mitteO.x, mitteO.y, hintenO.x, hintenO.y);
     ctx.closePath();
     ctx.fill();
+    // Glanzkante oben: eine dünne Linie auf der Lichtseite.
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = Math.max(0.8, 0.01 * m);
+    ctx.beginPath();
+    ctx.moveTo(hintenO.x, hintenO.y);
+    ctx.quadraticCurveTo(mitteO.x, mitteO.y, naseO.x, naseO.y);
+    ctx.stroke();
   }
 
   // --- Lenker und Vorbau ---
   // Der Vorbau sitzt auf der **oberen** Brücke, nicht am Steuerkopf —
   // bei einer Doppelbrückengabel ist das der einzige Platz dafür.
-  rohr(
-    standOben.x,
-    standOben.y - 0.01 * m,
-    lenker.x,
-    lenker.y,
-    0.038 * m,
-    0.032 * m,
-    FARBEN.federDunkel,
-  );
+  rohr(standOben.x, standOben.y - 0.008 * m, klemme.x, klemme.y, 0.034 * m, 0.03 * m, FARBEN.federDunkel);
+  rohr(klemme.x, klemme.y, lenker.x, lenker.y, 0.02 * m, 0.02 * m, '#2d323a');
+  // Klemmschraube am Vorbau.
+  ctx.fillStyle = '#b4bac4';
+  ctx.beginPath();
+  ctx.arc(klemme.x, klemme.y, 0.016 * m, 0, Math.PI * 2);
+  ctx.fill();
+  // Der Griff steht quer zur Blickrichtung — man sieht ihn von der Stirnseite.
   ctx.fillStyle = '#101014';
   ctx.beginPath();
-  ctx.arc(lenker.x, lenker.y, 0.055 * m, 0, Math.PI * 2);
+  ctx.arc(lenker.x, lenker.y, 0.045 * m, 0, Math.PI * 2);
   ctx.fill();
-
-  // --- Antrieb: Kettenblatt, Kurbel, Pedal, Kette ---
-  ctx.fillStyle = '#7a8089';
+  ctx.strokeStyle = '#3b4049';
+  ctx.lineWidth = Math.max(1, 0.01 * m);
   ctx.beginPath();
-  ctx.arc(tretlager.x, tretlager.y, 0.11 * m, 0, Math.PI * 2);
-  ctx.fill();
-  // Kassette am Hinterrad.
-  ctx.fillStyle = '#7a8089';
-  ctx.beginPath();
-  ctx.arc(hintenX, nabeHinten, 0.07 * m, 0, Math.PI * 2);
-  ctx.fill();
-  // Die Kette als zwei Trume zwischen beiden.
-  ctx.strokeStyle = '#4c525b';
-  ctx.lineWidth = Math.max(1, 0.022 * m);
-  ctx.beginPath();
-  ctx.moveTo(tretlager.x, tretlager.y - 0.1 * m);
-  ctx.lineTo(hintenX, nabeHinten - 0.065 * m);
-  ctx.moveTo(tretlager.x, tretlager.y + 0.1 * m);
-  ctx.lineTo(hintenX, nabeHinten + 0.065 * m);
+  ctx.arc(lenker.x, lenker.y, 0.03 * m, 0, Math.PI * 2);
   ctx.stroke();
+  // Bremshebel (zeigt nach vorn) und die Leitung, die an der Gabel hinunterläuft
+  // zur Bremszange am Vorderrad.
+  const hebelEnde = { x: lenker.x + 0.15 * m, y: lenker.y + 0.04 * m };
+  rohr(lenker.x + 0.01 * m, lenker.y + 0.012 * m, hebelEnde.x, hebelEnde.y, 0.012 * m, 0.007 * m, '#c3c9d2');
+  ctx.strokeStyle = '#14161b';
+  ctx.lineWidth = Math.max(1, 0.012 * m);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(lenker.x + 0.035 * m, lenker.y + 0.02 * m);
+  ctx.quadraticCurveTo(
+    standOben.x + 0.17 * m,
+    standOben.y + 0.1 * m,
+    tauchOben.x + 0.075 * m,
+    tauchOben.y + 0.02 * m,
+  );
+  ctx.stroke();
+
+  // --- Antrieb: Kettenblatt, Kassette, Schaltwerk, Kette ---
+  const kassetteR = 0.07 * m;
+  const kettenblattR = 0.115 * m;
+  // Schaltwerk: hängt hinter und unter der Nabe, zwei Leitrollen im Käfig.
+  const rolleOben = { x: hintenX + 0.015 * m, y: nabeHinten + 0.115 * m };
+  const rolleUnten = { x: hintenX - 0.045 * m, y: nabeHinten + 0.195 * m };
+  rohr(hintenX, nabeHinten, rolleOben.x, rolleOben.y, 0.018 * m, 0.016 * m, '#2f343c');
+  rohr(rolleOben.x, rolleOben.y, rolleUnten.x, rolleUnten.y, 0.016 * m, 0.016 * m, '#2f343c');
+
+  // Die Kette: oben gerade, unten über die beiden Leitrollen. Sie wird **vor**
+  // den Zahnkränzen gezeichnet, damit diese ihre Enden sauber überdecken.
+  ctx.strokeStyle = '#3d424b';
+  ctx.lineWidth = Math.max(1, 0.02 * m);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(tretlager.x, tretlager.y - kettenblattR * 0.92);
+  ctx.lineTo(hintenX, nabeHinten - kassetteR * 0.92);
+  ctx.moveTo(tretlager.x, tretlager.y + kettenblattR * 0.92);
+  ctx.lineTo(rolleUnten.x, rolleUnten.y + 0.026 * m);
+  ctx.lineTo(rolleOben.x + 0.026 * m, rolleOben.y);
+  ctx.lineTo(hintenX, nabeHinten + kassetteR * 0.92);
+  ctx.stroke();
+  // Glieder: feine helle Querstriche entlang des oberen Trums — ein glatter
+  // Strich liest sich als Gummiband, nicht als Kette.
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = Math.max(0.6, 0.008 * m);
+  ctx.setLineDash([Math.max(1.5, 0.03 * m), Math.max(1.5, 0.03 * m)]);
+  ctx.beginPath();
+  ctx.moveTo(tretlager.x, tretlager.y - kettenblattR * 0.92);
+  ctx.lineTo(hintenX, nabeHinten - kassetteR * 0.92);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  for (const r of [rolleOben, rolleUnten]) {
+    ctx.fillStyle = '#20242a';
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, 0.028 * m, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#7b828d';
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, 0.012 * m, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Kettenblatt: Scheibe mit Zahnkranz-Andeutung und dunklem Innenring.
+  ctx.fillStyle = '#7a8089';
+  ctx.beginPath();
+  ctx.arc(tretlager.x, tretlager.y, kettenblattR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#4a4f57';
+  ctx.lineWidth = Math.max(0.8, 0.012 * m);
+  ctx.stroke();
+  ctx.fillStyle = '#585e67';
+  ctx.beginPath();
+  ctx.arc(tretlager.x, tretlager.y, kettenblattR * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+  // Kassette am Hinterrad: gestufte Ringe.
+  ctx.fillStyle = '#7a8089';
+  ctx.beginPath();
+  ctx.arc(hintenX, nabeHinten, kassetteR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#5f656e';
+  ctx.beginPath();
+  ctx.arc(hintenX, nabeHinten, kassetteR * 0.66, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#8e949e';
+  ctx.beginPath();
+  ctx.arc(hintenX, nabeHinten, kassetteR * 0.34, 0, Math.PI * 2);
+  ctx.fill();
 
   /*
    * Die Kurbel dreht sich mit dem Tempo — mit deutlich kleinerem Faktor

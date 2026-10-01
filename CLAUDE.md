@@ -3584,8 +3584,9 @@ hier **eine Stelle**.
   `LUECKEN_PUNKTE` je Lücke.
 
 **Wie der Absprung gesteuert wird — und was ich verworfen habe.**
-Entschieden: **Einmal „Hinten" antippen, kurz bevor die Kante kommt.** Dazu der
-Anlauf, der das Tempo liefert. Warum so:
+Entschieden: **Einmal „Hinten" antippen, kurz bevor die Kante kommt.** (Seit
+Version 4 ist der Hauptweg ein Wisch nach oben, „Hinten" antippen geht weiter —
+siehe dort.) Dazu der Anlauf, der das Tempo liefert. Warum so:
 
 - Der Pop existierte schon (Version 2) und hängt an einem Knopf, der am Boden
   sonst nichts tut — kein dritter Knopf, kein zweiter Finger (Gas als Knopf war
@@ -3664,6 +3665,104 @@ halt? }` setzt das Rad mit Höchsttempo vor eine Lücke (`halt` hält die Szene
 nach dem ersten Bild an).
 
 Service-Worker-Version v83 → v84.
+
+### Version 4 — Rad und Fahrer richtig herum, Absprung per Wisch
+
+Ronnis Rückmeldung zur Version 3, wörtlich: „Optisch deutlich besser. Der
+Fahrer und das Fahrrad ist noch nicht [so weit] … die Arme sind verbogen, die
+sind verkehrt rum irgendwie. Der Sattel hängt direkt auf der Stange, und die
+Reifen sind zu grobstollig. Es sieht alles nicht so professionell aus. Und an
+der Steuerung muss man noch arbeiten — vielleicht sollte man einfach nur
+swipen nach oben, dass er abspringt."
+
+**Die Arme waren kein Zeichenfehler, sondern ein Maßfehler des Rades.** Der
+Griff lag nur rund 0,4 m vor und unter der Schulter, der Arm ist 0,66 m lang.
+Die Differenz musste als Knick in den Ellbogen, der sprang weit vor die Hand,
+und der Unterarm lief rückwärts zum Griff — „verkehrt rum". Dazu kam, dass
+die Wahl zwischen den beiden Ellbogenlösungen an einem y-Vergleich hing
+(`a.y <= b.y`): Liegt die Hand fast senkrecht unter der Schulter, sind beide
+y-Werte nahezu gleich, und das Gelenk konnte von Bild zu Bild umspringen.
+Drei Änderungen:
+
+- **Der Radstand wird länger gezeichnet** (`RADSTAND` 1,18 → 1,3, Tretlager und
+  Sattelrohr entsprechend nach hinten). Reine Optik — die Physik rechnet mit
+  einem Punkt. Ein echtes Downhill-Rad hat bei diesem Raddurchmesser 0,2 m
+  mehr Abstand zwischen Tretlager und Griff, als das Rad vorher hatte; erst
+  mit dem fehlte der Platz für einen gestreckten Arm überhaupt.
+- **Die Stehhaltung wird vom Lenker aus gebaut** (`skelettBerechnen`): erst die
+  Schulter relativ zur Hand (hinter und über dem Griff, Arm gut 90 Prozent
+  gestreckt), dann die Hüfte so, dass der Rumpf seine Länge behält, zuletzt der
+  Neigungswinkel aus beidem. Vorher stand die Hüfte fest und der Rumpf kippte um
+  einen festen Winkel — wohin die Schulter dabei fiel, ergab sich von selbst.
+  Die Knie bleiben dabei deutlich gebeugt (gestreckte Beine wirkten wie Stelzen).
+  *Merksatz:* Bei einer Figur mit zwei festen Ankerpunkten (Pedal, Griff) vom
+  schwierigeren Anker aus rechnen — der leichtere (die Hüfte) darf nachgeben.
+- **Der Ellbogen wählt seine Seite nach der Richtung Schulter → Hand**, nicht
+  nach y: Immer die Seite „vorn-oben" (Normale `(dy, −dx)`). Das ist stabil,
+  auch wenn die Hand genau unter der Schulter liegt.
+
+**Das Rad:**
+
+- **Sattelstütze** (Rückmeldung „der Sattel hängt direkt auf der Stange"): Das
+  Sattelrohr ragt 3 cm über den Knoten, darüber eine silberne Stütze von 11,5 cm
+  mit dunkler Klemme, darauf der Sattel mit zwei Gestängebügeln. Länger ging
+  nicht (13 cm): Das Bein war am untersten Pedalpunkt gestreckt, und der Fuß
+  verlor das Pedal. *Beim Anheben einer Sitzhöhe immer die Beinlänge am
+  tiefsten Pedalpunkt gegenrechnen.*
+- **Flacher Lenkwinkel** (`GABEL_NEIGUNG` 0,34 rad, gut 19° von der Senkrechten,
+  vorher rund 9°): Eine fast senkrechte Gabel liest sich als BMX oder Kinderrad,
+  ganz gleich, wie viele Details daran sitzen. Die Gabelbrücken stehen quer zur
+  Achse, nicht waagerecht; Brücken und Standrohre sind schlanker und dunkel.
+- **Schlankere Rohre.** Oberrohr vorher 11 cm Durchmesser — mit dem
+  Vergrößerungsfaktor ein Ofenrohr, und genau das hat dem Rad den
+  Spielzeug-Eindruck gegeben. Jetzt 8 cm am Unterrohr, 7 cm am Oberrohr.
+- **Reifen** („zu grobstollig"): Vorher zwei Reihen mit je 16 **Klötzen** von
+  einem Fünftel Radius — das las sich als Zahnrad. Jetzt ein runder Wulst als
+  Grundkörper (er trägt die Form), darauf 42 kleine, leicht schräge Stollen, die
+  kaum über den Rand ragen, dazu ein Glanzbogen auf der Lichtseite, 24 feine
+  Speichen statt 10 und eine Felge mit Innenkante. Bei einem Rad von 20 Bildpunkten
+  Radius bleiben davon ein feiner Rand und ein Hauch Glanz — so sieht ein Reifen
+  von Weitem aus.
+- **Schaltwerk mit zwei Leitrollen**, die Kette läuft darüber, der obere Trum hat
+  helle Glieder (ein glatter Strich liest sich als Gummiband). **Lenker** mit
+  Vorbau, ansteigendem Riser, Bremshebel und einer Leitung, die an der Gabel
+  zur Bremse am Vorderrad hinunterläuft.
+
+**Der Absprung per Wisch** (`eingabe.ts`, rein, 8 Tests): Ein Wisch nach oben
+irgendwo auf der Bühne löst den Pop aus. Der Knopf „Hinten" unten links lag weit
+weg von dem, was man gerade ansieht (die Kante in der Bildmitte), und der Daumen
+musste ihn in einem Fenster von knapp einer Drittelsekunde treffen. Zwei Daumen,
+zwei Aufgaben: links lehnen, rechts wischen.
+
+- **Er löst während der Bewegung aus**, nicht beim Loslassen (18 Pixel, mindestens
+  1,1-mal so steil wie quer) — dieselbe Regel wie in `core/useInput.ts`. Ein
+  Finger löst genau einmal aus und ist danach bis zum Loslassen gesperrt.
+- **Er gilt auf der Bühne, nicht auf den Knöpfen**, und jeder Finger wird einzeln
+  geführt (`fingerRef`, nach `pointerId`).
+- **Er geht als eigenes `Eingabe.pop` an die Physik, nicht über `hinten`.** Das
+  war ein echter Fund des Mehrfinger-Tests: Wer „Hinten" gehalten hat, dem war
+  `hinten` schon seit Sekunden an, und der Vergleich „war es vorher nicht
+  gedrückt?" sah keinen frischen Druck — der Wisch wurde verschluckt. Beim
+  Lehnen mit dem linken Daumen und Wischen mit dem rechten ist genau das der
+  Normalfall. `pop` zählt immer als frisch und lehnt nicht.
+- **Tastatur** (nur Zugabe): ↑, W, Leertaste = Absprung ohne Lehnen.
+- **Der Knopf „Hinten" leuchtet nicht mehr.** Stattdessen erscheint in der
+  Bildmitte unten „↑ Wisch hoch": blass, wenn eine Kante in gut einer Sekunde
+  kommt, voll, solange das Fenster des Pop offen ist. Es sagt, **was** zu tun
+  ist — ein leuchtender Knopf sagte nur, dass etwas ist, und nur dem, der
+  gerade auf ihn schaute. Kein Dauerpuls, nur Ein- und Ausblenden.
+- Die Hinweiskarte ist kürzer und sitzt höher (30 % statt 37 %): Sie lag vorher
+  über dem Fahrer.
+
+Getestet mit **echten Touch-Ereignissen** (Chrome-Protokoll
+`Input.dispatchTouchEvent`, keine Mausklicks): Wisch 1,85 / 1,95 / 2,05 s nach
+dem Start → drüber; zu früh, nach unten oder gar nicht → Sturz; ein ruhender
+zweiter Finger stört nicht; „Hinten" halten + wischen → drüber (vor der Korrektur
+Sturz). „Vorne" halten + wischen stürzt, und das ist richtig: Vorlehnen in der
+Luft ist ein Nasensturz.
+
+Tests: 1057 (davon 8 in `eingabe.test.ts`, 2 neue zum Wisch-Absprung in
+`logik.test.ts`). Service-Worker-Version v84 → v85.
 
 ## Befehle
 
