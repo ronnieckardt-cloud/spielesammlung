@@ -3764,6 +3764,118 @@ Luft ist ein Nasensturz.
 Tests: 1057 (davon 8 in `eingabe.test.ts`, 2 neue zum Wisch-Absprung in
 `logik.test.ts`). Service-Worker-Version v84 → v85.
 
+### Version 5 — echtes 3-D
+
+Ronnis Wunsch nach Version 4, wörtlich: „So könnte man vielleicht auch noch ein paar Tricks
+einbauen, oder das auf 3D umbauen." Auf die Rückfrage: **gleich auf 3-D umbauen**. Tricks stehen
+damit noch aus — sie bauen auf der Wischgeste und `popStaerke` auf und kommen als Nächstes.
+
+**Die Physik bleibt zweidimensional.** `logik.ts` ist unverändert; ein Punkt, ein Winkel, ein
+Höhenprofil. Die Szene ist eine zweite Darstellung desselben `Lauf` — genau wie `zeichnen.ts`. Alle
+Fairness-Prüfungen (Lücken, Pop, Bildratenunabhängigkeit, „reines Gas kommt nirgends ins Ziel")
+gelten deshalb unverändert, und das war die Bedingung für den Umbau: Wer die Darstellung wechselt,
+darf nicht die Spielbarkeit neu beweisen müssen.
+
+**Dateien.** Alles Rechnende ist rein und getestet, alles mit three.js kennt keine Spielregel:
+
+| Datei | Kennt | Zweck |
+|---|---|---|
+| `rig.ts` | `Lauf` | Darstellungszustand: Kamera, Einfedern, Haltung, Sturzfahrer, Effekte als Daten (14 Tests) |
+| `profil.ts` | `Gelaende` | Höhenprofil als Linienzug, Wände einer Lücke als doppeltes x (7 Tests) |
+| `radgeo.ts` | — | alle Maße des Rades in Metern, y nach unten (9 Tests) |
+| `fahrer.ts` | — | Gelenke (`skelettBerechnen`, `sturzSkelett`) — von 2-D **und** 3-D benutzt |
+| `bauteile.ts`, `stoffe.ts` | three | Rohre zwischen zwei Punkten, Werkstoffe |
+| `rad3d.ts`, `fahrer3d.ts` | three | Rad und Fahrer als Körper |
+| `gelaende3d.ts`, `welt3d.ts`, `teilchen3d.ts` | three | Erdblock, Aufbauten, Teilchen |
+| `szene3d.ts` | three | Renderer, Kamera, Licht, Nachbearbeitung, Titelbild |
+
+`szene3d.ts` wird per `import()` nachgeladen (eigener Brocken, 19 kB gzip; der `three`-Brocken
+ist derselbe wie bei Dash City). Das Hauptbündel wuchs nur um die paar Zeilen in `FlowMtb.tsx`.
+
+**Rückfall auf 2-D.** `FlowMtb.tsx` startet mit `modus = '3d'`. Schlägt der Import oder
+`new WebGLRenderer` fehl, wird `modus` auf `'2d'` gesetzt und die Leinwand per `key` **neu
+eingehängt** — eine Leinwand, die einmal einen WebGL-Kontext hatte, gibt nie wieder einen
+2-D-Kontext her. Der Fehler wird in `dreiDGescheitert` gemerkt, damit „Nochmal" nicht jedes Mal
+erneut lädt und scheitert. Die Uhr läuft erst, wenn der Zeichner steht (`bereit`): Sonst fährt das
+Rad schon, während noch geladen wird. Geprüft mit `--disable-3d-apis`: Das Spiel läuft in 2-D weiter.
+
+**Wie das Gelände aussieht — und warum.** Eine Seitenansicht braucht Tiefe, aber nicht den
+ganzen Raum. Das Profil wird nach hinten (6,5 m) und nach vorn (2,2 m) **ausgezogen**: ein Block,
+dessen Vorderseite offen liegt, mit den Erdschichten im Anschnitt (`gelaende3d.ts`). Die Schichten
+laufen **parallel zur Oberfläche**, nicht waagerecht, und die Wände einer Lücke tragen dieselben
+Schichten ab der Oberkante. Auf der Oberseite verläuft ein Pfad aus festgefahrener Erde, daneben Gras.
+Die Kamera schaut aus 28 m und 6 m Höhe leicht von oben (`KAMERA_ABSTAND`, `KAMERA_HOEHE`) — nur
+so sieht man Boden und Tiefe, und die Seitenansicht bleibt lesbar.
+
+- **Der Graben braucht eine Rückwand bis zur Höhe der niedrigeren Seite.** Die erste Fassung
+  schloss ihn nur unterhalb des Grabenbodens; man sah quer durch die ganze Welt auf den Himmel, die
+  Lücke war ein Fenster. Dieselbe Regel wie in der 2-D-Fassung (`grabenZeichnen`).
+- **Wickelsinn von Hand prüfen.** Dreimal war die Fläche zunächst nach hinten gerichtet und damit
+  unsichtbar: Vorderseite, Rückwand und die beiden Grabenwände haben je eine eigene Reihenfolge der
+  Eckpunkte. Beim Ändern jede Fläche einzeln ansehen.
+- Der Boden **im Graben** ist Erde, kein Rasen (Scheitelfarbe), und dunkelt zur Tiefe hin ab.
+- Hinten verschwimmt der Boden zum Horizont (Luftperspektive als Scheitelfarbe, keine Nebelfunktion —
+  die würde auch Rad und Fahrer färben).
+
+**Hintergrund: weiterhin ohne Berge und Bäume.** Der Himmel ist dieselbe Zeichnung wie in 2-D
+(`himmelZeichnen`), auf eine Leinwand gemalt und als `scene.background` gesetzt: **fest am
+Bildschirm**, nichts davon bewegt sich mit. Die Regel aus „Umgebung" gilt unverändert. Bäume wären
+in 3-D mit echter Parallaxe etwas anderes als das, was damals „doof aussah" — aber das ist Ronnis
+Entscheidung, nicht meine.
+
+**Neutrale Tonwertkurve** (`THREE.NeutralToneMapping`) statt ACES wie bei Dash City. Der Himmel
+ist ein gemaltes Bild, kein Licht, und soll so aussehen, wie er in der Palette steht. ACES färbt
+Hellblau um; die neutrale Kurve lässt alles Unüberstrahlte unverändert.
+
+**Das Modell.** Dieselbe Regel wie bei Dash Citys Läufer: Überlappung statt Berührung, Kugeln an
+jedem Gelenk, Glieder verjüngen sich. +z ist die rechte Seite des Fahrers und liegt der Kamera zu —
+dort sitzen Kette, Kettenblatt, Schaltwerk und das nahe Bein. Die ferne Seite ist dunkler.
+Räder bleiben beim Einfedern auf dem Boden, der Rahmen sinkt (`radgeo.ts`); der Dämpfer sitzt
+zwischen Rahmen und Sitzstrebe und staucht dadurch von selbst. Reifenprofil als `InstancedMesh`
+(192 Stollen, einen Zentimeter hoch) dreht mit dem Rad. Helm, Brille, Rucksack, Schoner, Handschuhe
+wie in 2-D. **Der Sturz benutzt dasselbe Modell** mit `sturzSkelett` (aus `fahrerSturz`
+herausgezogen, damit beide Darstellungen gleich fallen).
+
+- **Ein Test über alle Haltungen fand einen Fehler, den das Hinsehen nie gefunden hätte:** Sitzend mit
+  Gewicht ganz hinten lag die Schulter 0,91 m vom Griff — bei 0,66 m Armlänge. Die Hand griff ins
+  Leere. `skelettBerechnen` richtet den Rumpf jetzt auf dem Kreis um die Hüfte so weit vor, bis der
+  Arm reicht. Das gilt auch für die 2-D-Fassung.
+- **Die Landung wurde in der 2-D-Zeichnung nie erkannt.** Der Stoß war `vyVorher − vy`; beim
+  Aufsetzen springt `vy` aber von −7 auf 0, die Differenz ist **negativ**. Federung und Wackeln
+  gab es dadurch nur bei Landungen aus einem noch steigenden Sprung. `rig.ts` rechnet jetzt
+  `max(0, −vyVorher, vyVorher − vy)`. Die 2-D-Fassung hat den Fehler weiterhin — dort ist er
+  harmlos, aber bekannt.
+
+**Qualität regelt sich selbst**, mit der Nachbearbeitung aus Dash City (`laufen/effekte.ts`,
+Bloom, Grading, Vignette; Stufen 3 bis 0 nach gemessener Bildzeit). Schatten gibt es nur auf Stufe 3;
+ein weicher Fleck unter dem Rad gilt auf **jeder** Stufe, denn er zeigt in der Luft, wo man landet.
+Der Qualitätshaken heißt `__mtbQualitaet` (eigener Name je Spiel, damit nichts ein anderes beeinflusst).
+
+**Ausnahme von der Importregel:** `szene3d.ts` importiert `laufen/licht.ts` und `laufen/effekte.ts`
+(Spiegelungsvorlage, Schattenhelfer, Nachbearbeitung). Das ist der einzige Fall, in dem ein Spiel
+Code eines anderen benutzt. Sauberer wäre ein Umzug nach `core/` — das betrifft aber beide Spiele
+und wurde nicht ungefragt gemacht. `nachbearbeitungBauen` bekam dafür ein optionales sechstes Argument
+(Name des Prüfhakens); Dash City ruft es unverändert auf.
+
+**Der Zeichenkontext geht beim App-Wechsel verloren** (iPad). three.js stellt Puffer und Texturen
+selbst wieder her, **nicht** die Spiegelungsvorlage (reines Grafikspeicher-Bild). `szene3d.ts` baut sie
+bei `webglcontextrestored` neu und hängt sie an alle Werkstoffe, die die alte hatten. Ohne das wären
+Rahmen, Münzen und Helm danach stumpf schwarz. `aufraeumen()` gibt den Kontext wie bei Dash City mit
+`forceContextLoss()` zurück; geprüft mit drei „Nochmal" hintereinander.
+
+**Das Titelbild ist das 3-D-Modell.** `heldenbild3d` rendert auf einer eigenen, kurzlebigen Leinwand
+und kopiert das Ergebnis in die Zielleinwand; der Kontext geht sofort zurück. Bis der Baustein
+geladen ist, steht das 2-D-Bild da — es wird ersetzt, nicht überblendet.
+
+**Prüfhaken** (nur für Bildschirmfotos, auf einem echten Gerät nie gesetzt):
+`__mtb2d` / `__mtb3d` erzwingen die Darstellung, `__mtbQualitaet` eine Stufe,
+`__mtbPrueftand` die Nahaufnahme (neu: `gier`, `nick`, `mitte`, `sturz`), `__mtbStart` jetzt
+auch mit `saat` (feste Strecke) und `x` (Startstelle). Ein Software-Renderer schafft 3 bis 5 Bilder
+je Sekunde — die Uhr läuft dann langsamer als die Wanduhr, und der Sturz bleibt nach 3,5 s
+(`ausgelaufen`) mitten in der Bewegung stehen. Das ist kein Fehler der Szene.
+
+Tests: 1087. Service-Worker-Version v85 → v86.
+
 ## Befehle
 
 ```bash
