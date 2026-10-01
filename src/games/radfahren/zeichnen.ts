@@ -1,5 +1,28 @@
-import { ANLAUF, bodenHoehe, bodenSteigung } from './logik';
+import { bodenHoehe, bodenSteigung } from './logik';
 import type { Landung, Lauf } from './logik';
+import { fahrerHinten, fahrerSturz, fahrerVorn, skelettBerechnen } from './fahrer';
+import type { FahrerGeo, FahrerPose } from './fahrer';
+import { mischen } from './farben';
+import {
+  PALETTEN,
+  bodenMuster,
+  bodenSteine,
+  grasZeichnen,
+  himmelZeichnen,
+  tor,
+  wegmarken,
+} from './umgebung';
+import type { Buehne, Palette } from './umgebung';
+import {
+  absprungMarken,
+  bildAbschluss,
+  muenzenZeichnen,
+  padsZeichnen,
+  scheinwerfer,
+  schattenZeichnen,
+  teilchensystemBauen,
+  tempoStriche,
+} from './effekte';
 
 /**
  * Flow MTB — die Darstellung. **Enthält keine einzige Spielregel.**
@@ -17,10 +40,13 @@ import type { Landung, Lauf } from './logik';
  * auszutauschen. `CLAUDE.md` sieht für Spiele mit fortlaufender Bewegung
  * ohnehin Canvas vor — dies ist das erste, das es wirklich braucht.
  *
- * Was hier eigenen Zustand hat und **nicht** in `logik.ts` gehört: die
- * Federung, die Raddrehung, der Staub und die Kamera. Das ist alles reine
- * Optik — es beeinflusst nichts, was über Sieg oder Niederlage entscheidet,
- * und hätte in der geprüften Logik nichts zu suchen.
+ * **Wer was zeichnet.** `umgebung.ts` den Himmel, den Boden-Schmuck und die
+ * Wegmarken, `effekte.ts` Münzen, Boost-Streifen, Schatten und Teilchen,
+ * `fahrer.ts` den Menschen. Hier liegen das Rad, die Kamera, die
+ * Reihenfolge — und alles, was einen eigenen Zustand hat und **nicht** in
+ * `logik.ts` gehört: Federung, Raddrehung, Haltung des Fahrers. Das ist
+ * reine Optik — es beeinflusst nichts, was über Sieg oder Niederlage
+ * entscheidet.
  */
 
 export type Zeichner = {
@@ -29,36 +55,20 @@ export type Zeichner = {
 };
 
 /*
- * Die Farben.
+ * Die Farben des Rades.
  *
  * Das Bike war zuerst schwarz — Rückmeldung: „Das Fahrrad ist ein
  * kompletter Reinfall, das ist ein Fahrrad mit drei Strichen … Macht das
  * Fahrrad rot." Rot ist dabei nicht nur Geschmack: Ein schwarzer Rahmen
- * vor dunklem Waldhintergrund verschwindet, und alles, was man dann noch
+ * vor dunklem Hintergrund verschwindet, und alles, was man dann noch
  * sieht, sind die Umrisse — genau der „drei Striche"-Eindruck. Rot trennt
  * das Rad vom Hintergrund, und erst dadurch werden die Einzelteile
  * überhaupt als Fahrrad lesbar.
+ *
+ * Himmel und Boden stehen seit der Überarbeitung in `umgebung.ts`
+ * (vier Paletten, je nach Strecke).
  */
 const FARBEN = {
-  /*
-   * Rückmeldung: „Ich will gar nicht, dass man den Himmel sieht und dass
-   * da Berge sind und Bäume, das sieht doof aus … nur den Grünstreifen
-   * von der Wiese und darunter eine hellere und eine dunklere Schicht
-   * Erde." `bodenOben`/`bodenTief` sind seitdem Erdtöne, kein Grün mehr —
-   * das steckt allein noch im schmalen Grasstrich `bodenKante` obenauf.
-   *
-   * Der Himmel selbst durfte später wieder etwas werden — Rückmeldung:
-   * „überleg dir beim Hintergrund noch was Cooles, das schön aussieht,
-   * aber sich nicht mitbewegt." `himmelOben`/`himmelUnten` sind deshalb
-   * ein Verlauf statt einer Fläche, dazu ein festes Sonnenlicht (siehe
-   * `zeichnen`) — beides in Bildschirmkoordinaten, ohne `kameraX` in der
-   * Rechnung, bewegt sich also nie mit.
-   */
-  himmelOben: '#3d7bab',
-  himmelUnten: '#bfe3f0',
-  bodenOben: '#8a6a45',
-  bodenTief: '#3b2a1a',
-  bodenKante: '#6ea653',
   /** Rahmen in drei Tönen — Grundfläche, Lichtkante, Schattenkante. */
   rahmen: '#d92d20',
   rahmenHell: '#ff6b5e',
@@ -70,82 +80,27 @@ const FARBEN = {
   profil: '#26262c',
   felge: '#8d939e',
   nabe: '#c3c8d0',
-  helm: '#f4f6f8',
-  helmSchatten: '#c9ced6',
-  visier: '#1e2a33',
-  /*
-   * Das Trikot war zuerst fast schwarz (#1b1b22) — vor dem dunklen
-   * Waldhintergrund verschmolz der Fahrer damit zu einem Klumpen, an dem
-   * nur der Helm zu erkennen war. Ronni hatte die schwarze Kleidung zwar
-   * ursprünglich gewünscht, aber später ausdrücklich freigegeben („ist mir
-   * egal, ob das jetzt schwarz sein soll"). Jetzt ein helles Blaugrau: Es
-   * hebt sich vom Hintergrund ab, ohne dem roten Rahmen die Aufmerksamkeit
-   * zu nehmen.
-   */
-  kleidung: '#4a5566',
-  hose: '#232830',
-  haut: '#e8b48a',
   akzent: '#38d9a9',
 };
 
-/**
+/*
  * Wie viele Meter quer ins Bild passen — bei Tempo etwas mehr.
  *
  * **Deutlich weniger als beim ersten Versuch (15 m).** Rückmeldung: „Das
  * ist alles viel zu klein … der Hintergrund so riesig und die Person so
- * klein. Guck dir Hill Climb Racing an." Genau das ist der Unterschied:
- * Dort füllt das Fahrzeug einen guten Teil des Bildes, hier war es ein
- * Fleck vor viel Landschaft. Bei 9 m Sichtweite nimmt das Rad rund ein
- * Achtel der Bildbreite ein statt einem Zwanzigstel.
- */
-/*
+ * klein. Guck dir Hill Climb Racing an." Dort füllt das Fahrzeug einen
+ * guten Teil des Bildes, hier war es ein Fleck vor viel Landschaft.
+ *
  * Rückmeldung, nachdem die Sprünge größer wurden: „Kameraperspektive ein
  * bisschen weiter nach hinten, dass ich mehr sehe." Bei großen,
- * aneinandergereihten Sprüngen ist Weitsicht keine Kosmetik mehr,
- * sondern Voraussetzung — sonst sieht man die nächste Kuppe nicht mehr
- * rechtzeitig, um sich in der Luft danach auszurichten.
- */
-/*
- * Feinschliff: die Spanne zwischen Ruhig und Schnell etwas weiter
- * gezogen (12–16 → 11,5–17,5) — der Tempo-Zoom war vorhanden, aber kaum
- * zu bemerken. Am unteren Ende etwas näher dran (mehr „mittendrin" bei
- * gemütlichem Tempo), am oberen Ende etwas weiter zurück (mehr sichtbare
- * Vorwarnung bei Höchsttempo) — beide Richtungen der ursprünglichen
- * Begründung oben bleiben erhalten, nur deutlicher spürbar.
+ * aneinandergereihten Sprüngen ist Weitsicht keine Kosmetik mehr, sondern
+ * Voraussetzung — sonst sieht man die nächste Kuppe nicht mehr rechtzeitig,
+ * um sich in der Luft danach auszurichten. Die Spanne zwischen Ruhig und
+ * Schnell ist deshalb weit gezogen: gemütlich nah dran, bei Höchsttempo
+ * mehr Vorwarnung.
  */
 const SICHT_RUHIG = 11.5;
 const SICHT_SCHNELL = 17.5;
-
-/**
- * Mischt zwei Farben — gebraucht für die Verlaufsstopps der Rohre.
- *
- * Nimmt nur `#rrggbb` entgegen, weil hier nur die eigenen Konstanten
- * hineingehen; ein voller Farbparser wäre für vier Aufrufe unangemessen.
- */
-function mischen(a: string, b: string, anteil: number): string {
-  const zahl = (s: string) => [
-    parseInt(s.slice(1, 3), 16),
-    parseInt(s.slice(3, 5), 16),
-    parseInt(s.slice(5, 7), 16),
-  ];
-  const [r1, g1, b1] = zahl(a);
-  const [r2, g2, b2] = zahl(b);
-  const misch = (x: number, y: number) => Math.round(x + (y - x) * anteil);
-  return `rgb(${misch(r1!, r2!)},${misch(g1!, g2!)},${misch(b1!, b2!)})`;
-}
-
-/**
- * Ein rein deterministischer Wert zwischen 0 und 1 aus einer Weltposition
- * — für Steine (siehe unten), ohne `Math.random()` und ohne ein eigenes
- * Feld in `Gelaende` zu brauchen. Bei derselben Weltposition kommt immer
- * derselbe Wert heraus, unabhängig vom Bildaufbau oder der Kamera — genau
- * die Eigenschaft, die aus einem zufällig wirkenden Muster ein Stück der
- * Strecke selbst macht statt eines bei jedem Bild neu gewürfelten.
- */
-function streuWert(meter: number): number {
-  const n = Math.sin(meter * 127.1) * 43758.5453;
-  return n - Math.floor(n);
-}
 
 /**
  * Maße des Rades in Metern.
@@ -154,17 +109,26 @@ function streuWert(meter: number): number {
  * 1,20 m Radstand — genau das sah aus wie „ein normales Rennrad", so
  * Ronnis Urteil zur ersten Fassung. Spiele wie Hill Climb Racing
  * übertreiben die Räder deutlich; erst dadurch liest sich ein Fahrzeug
- * auf den ersten Blick als geländegängig.
- *
- * **Zweiter Feinschliff, etwas näher an echten Proportionen.** Die erste
- * Fassung (0,92 m Raddurchmesser bei 1,12 m Radstand) wirkte mit fast
- * gleich großem Rad und Achsabstand kompakt bis spielzeughaft. Kleinere
- * Räder (0,84 m) bei größerem Radstand (1,18 m) lassen dasselbe Rad
- * erwachsener/länger wirken, ohne die geländegängige Übertreibung ganz
- * aufzugeben.
+ * auf den ersten Blick als geländegängig. Kleinere Räder (0,84 m) bei
+ * größerem Radstand (1,18 m) lassen es erwachsener wirken, ohne die
+ * geländegängige Übertreibung ganz aufzugeben.
  */
 const RAD_R = 0.42;
 const RADSTAND = 1.18;
+
+/**
+ * Wie viel größer Rad und Fahrer **gezeichnet** werden als ihre Maße. Auf einem
+ * Handy im Hochformat sind es nur 24 bis 34 Bildpunkte je Meter — ein Fahrer
+ * von zwei Metern ist dann kaum fünfzig Punkte hoch, und alles, was an ihm
+ * realistisch gemacht wurde, bleibt unsichtbar. Das Gelände bleibt in
+ * Meterabmessungen, der Fahrer wird vergrößert (die Physik rechnet mit einem
+ * Punkt und weiß nichts davon). Hill Climb Racing und jedes andere Spiel
+ * dieser Art macht es genauso: Das Fahrzeug füllt das Bild, nicht die Welt.
+ */
+const FAHRZEUG_GROESSE = 1.55;
+
+/** Wo auf der Strecke das Starttor steht — hinter dem Rad, am linken Bildrand. */
+const START_TOR_X = 1.2;
 
 export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   const ctx = leinwand.getContext('2d');
@@ -183,55 +147,84 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   let kameraY = 0;
   /**
    * Beim allerersten Bild springt die Kamera auf ihre Zielposition, statt
-   * hinzugleiten.
-   *
-   * Ohne das stand sie bei null, während das Rad schon bei x = 4 losfährt
-   * — im ersten Bild ragte das Rad dadurch halb aus dem rechten Bildrand
-   * heraus und glitt erst danach sichtbar in die Bildmitte. Ein weiches
-   * Nachziehen ist im Lauf richtig, beim Bildaufbau ist es ein Fehler.
+   * hinzugleiten. Ohne das stand sie bei null, während das Rad schon bei
+   * x = 4 losfährt — im ersten Bild ragte das Rad halb aus dem Bild und
+   * glitt erst danach in die Mitte. Ein weiches Nachziehen ist im Lauf
+   * richtig, beim Bildaufbau ist es ein Fehler.
    */
   let kameraGesetzt = false;
   /** Einfederung 0 bis 1, vorne und hinten getrennt. */
   let federVorn = 0;
   let federHinten = 0;
   /**
-   * Kamera-Wackeln 0 bis 1 — dieselbe Stoß-Erkennung wie die Federung,
-   * nur als kurzer Bildschirm-Ruck statt einer Rad-Bewegung. Ronni wollte
-   * mehr „Kamera-Dramatik" bei harten Landungen; ein Sturz löst denselben
-   * Stoß aus wie eine harte Landung (`vy` springt beim Aufsetzen in
-   * beiden Fällen auf null), braucht also keinen eigenen Sonderfall.
+   * Kamera-Wackeln 0 bis 1 — dieselbe Stoß-Erkennung wie die Federung, nur
+   * als kurzer Bildschirm-Ruck. Ein Sturz löst denselben Stoß aus wie eine
+   * harte Landung (`vy` springt beim Aufsetzen in beiden Fällen auf null),
+   * braucht also keinen eigenen Sonderfall.
    */
   let schuettelStaerke = 0;
   /** Gesamtdrehung der Laufräder in Radiant. */
   let radDrehung = 0;
   /**
-   * Staub — **zweiter Anlauf.** Der erste (Rückmeldung: „sieht komisch
-   * aus", ersatzlos raus) warf offenbar zu viel auf einmal auf; hier sind
-   * es bewusst nur einzelne, kleine Punkte statt einer Wolke: ein paar
-   * beim harten Einschlag (derselbe `kraft > 0,35`-Schwellenwert wie das
-   * Kamera-Wackeln, kein eigener Sonderfall), dazu höchstens alle 0,15 s
-   * ein einzelnes Staubkorn hinterm Hinterrad bei hohem Tempo am Boden.
-   * Jedes Korn lebt kaum eine halbe Sekunde. Sollte sich das wieder
-   * seltsam anfühlen, ist die Regel dieselbe wie beim ersten Mal:
-   * ersatzlos raus, nicht kleiner drehen.
+   * Erdbrocken, Funken, Ringe. **Dezent und in der Farbe des Bodens** — Staub
+   * und Rauch waren schon einmal drin und wurden entfernt („sieht komisch
+   * aus"). Was jetzt fliegt, sind kleine schwere Krümel in Bogenbahnen, keine
+   * Wolke; fällt es wieder unangenehm auf, gilt dasselbe wie damals: ersatzlos
+   * raus (`teilchen.leeren()` und die `erde`/`staub`-Aufrufe unten).
    */
-  type Staubkorn = { x: number; y: number; vx: number; vy: number; alter: number; lebenszeit: number; groesse: number };
-  let staub: Staubkorn[] = [];
-  /** Seit dem letzten Trag-Staubkorn vergangene Zeit. */
-  let staubUhr = 0;
+  const teilchen = teilchensystemBauen();
+  /** Seit dem letzten Erdkrümel hinterm Hinterrad vergangene Zeit. */
+  let roostUhr = 0;
   /** Für die Federung: die senkrechte Geschwindigkeit des letzten Bildes. */
   let vyVorher = 0;
   /**
    * Kurzer, sehr dezenter Lichtblitz bei einer perfekten Landung — das
-   * optische Gegenstück zum Kamera-Wackeln oben: Das Wackeln sagt „harter
+   * optische Gegenstück zum Kamera-Wackeln: Das Wackeln sagt „harter
    * Einschlag", der Blitz sagt „genau richtig gemacht". Bewusst kein Text
-   * (siehe `FlowMtb.tsx`, „PERFEKT!" wurde ausdrücklich entfernt) — nur
-   * ein kaum wahrnehmbares Aufhellen des ganzen Bildes, das binnen eines
-   * Wimpernschlags wieder verschwindet.
+   * („PERFEKT!" wurde ausdrücklich entfernt).
    */
   let blitzStaerke = 0;
   /** Für die Blitz-Erkennung: die Landungsart des letzten Bildes. */
   let landungVorher: Landung | null = null;
+  /** Haltung des Fahrers, gedämpft: Ein Mensch springt nicht von sitzend auf stehend. */
+  let stehenAnim = 0;
+  let gewichtAnim = 0;
+  /** Laufende Zeit für Flattern, Schimmer, Drehung der Münzen — reine Optik. */
+  let uhr = 0;
+  /** Was die Darstellung schon als eingesammelt kennt — daraus entstehen die Funken. */
+  let bekanntMuenzen = new Set<number>();
+  let bekanntPads = new Set<number>();
+  let bekanntPops = 0;
+  /** Boost-Anzeige, weich ein- und ausgeblendet (die Logik schaltet hart). */
+  let boostAnim = 0;
+  /**
+   * Der gestürzte Fahrer. Beim Sturz löst er sich vom Rad: Er fliegt in einem
+   * Bogen weiter, schlägt auf, rutscht aus und bleibt liegen, während das Rad
+   * für sich weiterkippt. Das ist **reine Optik** — die Logik hat den Lauf
+   * längst beendet und kennt nur das Rad. Rückmeldung: „man soll sehen, wie
+   * der Typ stürzt".
+   */
+  type Sturzfahrer = {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    drehung: number;
+    drehTempo: number;
+    /** 0 = fliegt, 1 = liegt. */
+    schlaff: number;
+    aufgeschlagen: boolean;
+    zeit: number;
+  };
+  let sturzFahrer: Sturzfahrer | null = null;
+  /** Das Tempo des letzten Bildes vor dem Sturz — danach hat die Logik es schon gedrosselt. */
+  let letztesVx = 0;
+  /** Fester Zahlengenerator für das Kamerazittern, siehe `effekte.ts`. */
+  let zittern = 0x1f123bb5;
+  const zufall = () => {
+    zittern = (Math.imul(zittern, 1664525) + 1013904223) >>> 0;
+    return zittern / 4294967296;
+  };
 
   const groesseAendern = (b: number, h: number) => {
     // Bildpunktzahl deckeln — dieselbe Vorsicht wie bei Dash City, ein
@@ -248,6 +241,22 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   const zeichnen = (lauf: Lauf, dt: number) => {
     const g = lauf.gelaende;
 
+    // Nur für Nahaufnahmen am Rechner: Ein Prüfstand zeigt Rad und Fahrer groß
+    // auf einfachem Grund, mit einer festgelegten Haltung. Auf einem echten
+    // Gerät ist der Wert nie gesetzt.
+    const pruef = (globalThis as { __mtbPrueftand?: PrueftandWerte }).__mtbPrueftand;
+    if (pruef) {
+      prueftandZeichnen(ctx, breite, hoehe, pixelDichte, lauf, pruef);
+      return;
+    }
+
+    // `__mtbBiom` ist ein Hilfsmittel für Bildschirmfotos am Rechner: Es erzwingt
+    // eine Umgebung, ohne die Saat der Strecke zu ändern.
+    const erzwungen = (globalThis as { __mtbBiom?: number }).__mtbBiom;
+    const biom = erzwungen ?? lauf.biom;
+    const palette: Palette = PALETTEN[((biom % PALETTEN.length) + PALETTEN.length) % PALETTEN.length]!;
+    uhr += dt;
+
     // --- Kamera ---------------------------------------------------
     /*
      * Bei Tempo etwas weiter weg. Das ist nicht nur Optik: Wer schnell
@@ -262,22 +271,20 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
     /*
      * Das Rad steht bei 34 % von links, nicht in der Mitte: Nach vorn
      * braucht man Sicht, nach hinten nicht. Die Kamera folgt gedämpft —
-     * hart mitzuziehen wirkt hektisch.
-     *
-     * **Etwas mehr Nachlauf als vorher** (Faktor 7 → 5,5): Bei 7 hatte
-     * die Kamera das Rad praktisch schon nach einem Zehntel Sekunde
-     * eingeholt — kaum als eigene Bewegung spürbar, eher wie starr
-     * angeheftet. Ein spürbarerer Nachlauf gibt der Kamera ein Stück
-     * eigenes Gewicht, ohne bei normalen Richtungswechseln hektisch zu
-     * wirken (dafür bleibt sie mit 5,5 immer noch deutlich schneller als
-     * das Rad selbst reagieren kann).
+     * hart mitzuziehen wirkt hektisch. Faktor 5,5: Bei 7 hatte die Kamera
+     * das Rad schon nach einer Zehntelsekunde eingeholt, kaum als eigene
+     * Bewegung spürbar, eher wie angeheftet.
      */
-    const zielX = lauf.x + sicht * 0.16;
-    const zielY = lauf.y + 1.1;
+    const zielX = (sturzFahrer ? Math.max(lauf.x, sturzFahrer.x) : lauf.x) + sicht * 0.16;
+    const zielY = (sturzFahrer ? Math.max(lauf.y, sturzFahrer.y - 1.2) : lauf.y) + 1.1;
     if (!kameraGesetzt) {
       kameraX = zielX;
       kameraY = zielY;
       kameraGesetzt = true;
+      // Was beim Start schon eingesammelt ist, soll keine Funken auslösen.
+      bekanntMuenzen = new Set(lauf.geholt);
+      bekanntPads = new Set(lauf.padsGenommen);
+      bekanntPops = lauf.popZahl;
     } else {
       const folgen = Math.min(1, dt * 5.5);
       kameraX += (zielX - kameraX) * folgen;
@@ -288,43 +295,59 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
      * Federung und Kamera-Wackeln reagieren auf den **Wechsel** der
      * senkrechten Geschwindigkeit, nicht auf ihren Wert — ein sanftes
      * Abbremsen federt nicht, ein plötzlicher Stopp (Landung, Sturz)
-     * schon. Absichtlich schon hier berechnet, vor dem Gelände-Umriss:
-     * Damit wackelt bei einem harten Einschlag das **ganze** Bild
-     * (Boden und Rad zusammen), nicht nur das Rad einen Bildschritt
-     * später als der Boden.
+     * schon. Schon hier berechnet, vor dem Gelände: Damit wackelt bei einem
+     * harten Einschlag das **ganze** Bild (Boden und Rad zusammen).
      */
+    const hintenX = lauf.x - 0.95 * Math.cos(lauf.winkel);
+    const vornX = lauf.x + 0.75 * Math.cos(lauf.winkel);
     const stoss = Math.max(0, vyVorher - lauf.vy);
     vyVorher = lauf.vy;
     if (lauf.amBoden && stoss > 1) {
       const kraft = Math.min(1, stoss / 14);
       federVorn = Math.min(1, federVorn + kraft);
       federHinten = Math.min(1, federHinten + kraft * 1.15);
-      // Erst ab einer echt harten Landung wackeln, nicht bei jedem
-      // normalen Aufsetzen — sonst zittert das Bild ständig mit.
+      // Auch eine normale Landung wirft ein paar Krümel auf — nur eine harte
+      // lässt das Bild wackeln und weht Staub auf.
+      const boden = palette.boden.oben;
+      teilchen.erde(hintenX, bodenHoehe(g, hintenX), 2 + Math.round(kraft * 6), lauf.vx, boden, 0.8 + kraft * 0.5);
+      teilchen.erde(vornX, bodenHoehe(g, vornX), 2 + Math.round(kraft * 5), lauf.vx, boden, 0.8 + kraft * 0.5);
       if (kraft > 0.35) {
         schuettelStaerke = Math.min(1, schuettelStaerke + kraft);
-        // Eine Handvoll Staubkörner beim Einschlag — derselbe Schwellenwert,
-        // kein eigener Sonderfall. Bewusst wenige (3–5), keine Wolke.
-        const anzahl = 3 + Math.floor(kraft * 3);
-        for (let i = 0; i < anzahl; i++) {
-          staub.push({
-            x: lauf.x + (Math.random() - 0.5) * 0.6,
-            y: 0.05,
-            vx: (Math.random() - 0.5) * 3.5,
-            vy: 1 + Math.random() * 1.8,
-            alter: 0,
-            lebenszeit: 0.3 + Math.random() * 0.25,
-            groesse: 0.05 + Math.random() * 0.05,
-          });
-        }
+        teilchen.staub(lauf.x, bodenHoehe(g, lauf.x), 3, mischen(palette.boden.saum, '#ffffff', 0.25));
       }
     }
     // Lichtblitz beim Wechsel auf eine perfekte Landung auslösen — nur
     // beim Wechsel, sonst bliebe er die ganze Landungsanzeige über an.
     if (lauf.letzteLandung === 'perfekt' && landungVorher !== 'perfekt') {
       blitzStaerke = 1;
+      teilchen.funken(lauf.x, bodenHoehe(g, lauf.x) + 0.2, 7, '#ffe9a3', 0.8);
     }
     landungVorher = lauf.letzteLandung;
+
+    // --- Ereignisse, die Funken auslösen ---------------------------
+    if (lauf.geholt.size < bekanntMuenzen.size) bekanntMuenzen = new Set();
+    if (lauf.geholt.size > bekanntMuenzen.size) {
+      for (const i of lauf.geholt) {
+        if (bekanntMuenzen.has(i)) continue;
+        bekanntMuenzen.add(i);
+        const c = g.muenzen[i];
+        if (c) teilchen.funken(c.x, c.y, 8, '#ffd75a');
+      }
+    }
+    if (lauf.padsGenommen.size < bekanntPads.size) bekanntPads = new Set();
+    if (lauf.padsGenommen.size > bekanntPads.size) {
+      for (const i of lauf.padsGenommen) {
+        if (bekanntPads.has(i)) continue;
+        bekanntPads.add(i);
+        teilchen.funken(lauf.x + 0.4, lauf.y + 0.3, 12, '#7cf1ff', 1.3);
+      }
+    }
+    if (lauf.popZahl > bekanntPops) {
+      // Ein Ring an der Kante und ein paar goldene Funken: der Pop hat geklappt.
+      teilchen.ring(lauf.popX, bodenHoehe(g, lauf.popX), '#ffc233');
+      teilchen.funken(lauf.popX, bodenHoehe(g, lauf.popX) + 0.1, 9, '#ffd36b', 1);
+    }
+    bekanntPops = lauf.popZahl;
 
     // Zurückfedern bzw. Ausklingen.
     federVorn = Math.max(0, federVorn - dt * 3.4);
@@ -332,50 +355,89 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
     schuettelStaerke = Math.max(0, schuettelStaerke - dt * 5);
     // Schnell ausklingend — rund 150 ms, ein Wimpernschlag, kein Dauerglühen.
     blitzStaerke = Math.max(0, blitzStaerke - dt * 6.5);
+    const boostZiel = lauf.boost > 0 ? 1 : 0;
+    boostAnim += (boostZiel - boostAnim) * Math.min(1, dt * (boostZiel > boostAnim ? 14 : 3.5));
 
     /*
-     * Einzelne Staubkörner hinterm Hinterrad bei zügigem Tempo am Boden —
-     * höchstens eins alle 0,15 s, nicht bei jedem Bild. Bewusst dieselbe
-     * Kornform wie beim Einschlag, nur seltener und schwächer geworfen.
+     * Erdkrümel hinterm Hinterrad bei zügigem Tempo am Boden: Bei Tempo
+     * eines alle 0,06 s, mit Boost doppelt so viele. Sie fliegen nach hinten
+     * und oben und haben die Farbe der Erde, über die man gerade fährt.
      */
-    staubUhr += dt;
-    if (lauf.amBoden && lauf.vx > 9 && staubUhr > 0.15) {
-      staubUhr = 0;
-      staub.push({
-        x: lauf.x - RADSTAND * 0.5,
-        y: 0.03,
-        vx: -lauf.vx * 0.15 + (Math.random() - 0.5) * 0.6,
-        vy: 0.6 + Math.random() * 0.5,
-        alter: 0,
-        lebenszeit: 0.35,
-        groesse: 0.04,
-      });
+    roostUhr += dt;
+    if (lauf.amBoden && lauf.vx > 7 && roostUhr > 0.06) {
+      roostUhr = 0;
+      teilchen.erde(hintenX, bodenHoehe(g, hintenX), lauf.boost > 0 ? 2 : 1, lauf.vx, palette.boden.oben, 0.65);
     }
-    // Bewegen, altern (durchsichtiger, siehe Zeichnung unten) und
-    // aussortieren, sobald ein Korn seine Lebenszeit überschritten hat.
-    // Eine leichte, rein dekorative Fallbeschleunigung — bewusst kein
-    // Bezug zu `SCHWERKRAFT` aus `logik.ts`, das wäre Physik für einen
-    // Effekt, der keine ist.
-    for (const korn of staub) {
-      korn.x += korn.vx * dt;
-      korn.y += korn.vy * dt;
-      korn.vy -= 6 * dt;
-      korn.alter += dt;
+    teilchen.schritt(dt);
+
+    // --- Der Sturz: Fahrer löst sich vom Rad -----------------------
+    const gestuerzt = lauf.vorbei && !lauf.gewonnen;
+    if (!gestuerzt) {
+      sturzFahrer = null;
+      letztesVx = lauf.vx;
+    } else {
+      if (!sturzFahrer) {
+        // Die Hüfte sitzt rund 1,4 m über dem Boden des Rades, mal Fahrzeuggröße.
+        const hx = -0.05 * FAHRZEUG_GROESSE;
+        const hy = 1.44 * FAHRZEUG_GROESSE;
+        const c = Math.cos(lauf.winkel);
+        const sn = Math.sin(lauf.winkel);
+        const tempo = Math.min(14, Math.max(4, letztesVx));
+        sturzFahrer = {
+          x: lauf.x + hx * c - hy * sn,
+          y: lauf.y + hx * sn + hy * c,
+          vx: tempo * 0.8,
+          vy: 2.2 + Math.max(0, lauf.vy),
+          drehung: lauf.winkel,
+          drehTempo: 4.6,
+          schlaff: 0,
+          aufgeschlagen: false,
+          zeit: 0,
+        };
+        // Der Aufprall des Rades hat schon Krümel geworfen; der Fahrer
+        // bekommt seinen eigenen, wenn er aufschlägt (siehe unten).
+      }
+      const f = sturzFahrer;
+      f.zeit += dt;
+      f.vy -= 22 * dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.drehung += f.drehTempo * dt;
+      // Der Körper liegt mit der Zeit flacher auf dem Boden: Der Abstand der
+      // Hüfte zum Boden schrumpft von „aufrecht" auf „liegend".
+      const abstand = 0.85 + (0.3 - 0.85) * f.schlaff;
+      const boden = bodenHoehe(g, f.x) + abstand;
+      if (f.y <= boden) {
+        f.y = boden;
+        if (!f.aufgeschlagen) {
+          f.aufgeschlagen = true;
+          teilchen.erde(f.x, boden - abstand, 9, f.vx, palette.boden.oben, 1.1);
+          teilchen.staub(f.x, boden - abstand, 3, mischen(palette.boden.saum, '#ffffff', 0.2));
+          schuettelStaerke = Math.min(1, schuettelStaerke + 0.5);
+        }
+        f.vy = f.vy < -2 ? -f.vy * 0.28 : 0;
+        f.vx *= Math.exp(-2.4 * dt);
+        f.drehTempo *= Math.exp(-3.2 * dt);
+        f.schlaff = Math.min(1, f.schlaff + dt * 1.8);
+        // Zur Ruhe kommen: auf den nächsten liegenden Winkel (Kopf nach vorn).
+        if (f.drehTempo < 1.2) {
+          const ziel = Math.round((f.drehung - Math.PI / 2) / (Math.PI * 2)) * Math.PI * 2 + Math.PI / 2;
+          f.drehung += (ziel - f.drehung) * Math.min(1, dt * 6);
+        }
+      }
     }
-    staub = staub.filter((korn) => korn.alter < korn.lebenszeit && korn.y > -0.5);
-    // Zufällig statt gerichtet — reines Bildschirm-Zittern, keine
-    // Spielregel, deshalb ist `Math.random()` hier genau richtig
-    // (anders als im Gelände, das aus der Saat kommen muss).
-    const schuettelX = schuettelStaerke > 0 ? (Math.random() - 0.5) * schuettelStaerke * 14 : 0;
-    const schuettelY = schuettelStaerke > 0 ? (Math.random() - 0.5) * schuettelStaerke * 10 : 0;
+
+    // Reines Bildschirm-Zittern, keine Spielregel — aus dem festen Generator
+    // und nicht `Math.random`, damit zwei Läufe dasselbe Bild zeigen.
+    const schuettelX = schuettelStaerke > 0 ? (zufall() - 0.5) * schuettelStaerke * 14 : 0;
+    const schuettelY = schuettelStaerke > 0 ? (zufall() - 0.5) * schuettelStaerke * 10 : 0;
 
     /**
      * Weltkoordinaten → Bildpunkte. `y` wird dabei umgedreht.
      *
      * Der Bezugspunkt liegt bei 74 % der Bildhöhe, nicht bei 62 %: Unter
      * dem Rad braucht man nur so viel Boden, dass er nicht abgeschnitten
-     * wirkt — darüber dagegen die ganze Flugbahn. Bei 62 % blieb im
-     * Hochformat ein Viertel des Bildes leere grüne Fläche.
+     * wirkt — darüber dagegen die ganze Flugbahn.
      */
     const bx = (x: number) => (x - kameraX) * proMeter + breite * 0.5 + schuettelX;
     const by = (y: number) => hoehe * 0.74 - (y - kameraY) * proMeter + schuettelY;
@@ -383,58 +445,10 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
     ctx.setTransform(pixelDichte, 0, 0, pixelDichte, 0, 0);
     ctx.clearRect(0, 0, breite, hoehe);
 
-    /*
-     * --- Himmel und Boden — bewusst kompakt ---------------------------
-     *
-     * Rückmeldung: „Ich will gar nicht, dass man den Himmel sieht und
-     * dass da irgendwelche Berge sind und dass neben der Strecke
-     * irgendwelche Bäume sind, das sieht doof aus. Man sollte nur den
-     * Grünstreifen von der Wiese sehen und darunter dann die Erde, kurz
-     * so eine hellere Schicht Erde und dann eine dunklere Schicht Erde."
-     *
-     * Weg sind damit: die drei Parallax-Bergketten, die Bäume am Wegrand
-     * und der weiche Verlauf im Boden. Übrig bleiben eine flache
-     * Himmelfläche, zwei flache Erdflächen und der grüne Grasstrich.
-     *
-     * Zwei Wolken durften bleiben — Rückmeldung: „vielleicht noch ein,
-     * zwei Wolken, aber der Hintergrund darf sich am besten nicht
-     * bewegen." Deshalb stehen sie **in Bildschirmkoordinaten**, nicht in
-     * Weltkoordinaten: keine Parallaxe, kein `kameraX` in der Rechnung,
-     * einfach zwei feste Flecken am Himmel.
-     */
-    const himmel = ctx.createLinearGradient(0, 0, 0, hoehe);
-    himmel.addColorStop(0, FARBEN.himmelOben);
-    himmel.addColorStop(1, FARBEN.himmelUnten);
-    ctx.fillStyle = himmel;
-    ctx.fillRect(0, 0, breite, hoehe);
+    const buehne: Buehne = { ctx, breite, hoehe, proMeter, kameraX, g, p: palette, uhr, bx, by };
 
-    // Festes Sonnenlicht, oben rechts — ein warmer Lichtfleck, der den
-    // sonst leeren Himmel belebt, ohne eine erkennbare Form (Sonne, Berg)
-    // zu sein, die als „Motiv" mitgezählt hätte werden müssen.
-    const sonneX = breite * 0.78;
-    const sonneY = hoehe * 0.15;
-    const sonneR = breite * 0.34;
-    const sonne = ctx.createRadialGradient(sonneX, sonneY, 0, sonneX, sonneY, sonneR);
-    sonne.addColorStop(0, 'rgba(255,246,220,0.55)');
-    sonne.addColorStop(0.4, 'rgba(255,246,220,0.2)');
-    sonne.addColorStop(1, 'rgba(255,246,220,0)');
-    ctx.fillStyle = sonne;
-    ctx.fillRect(0, 0, breite, hoehe);
-
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    for (const [wx, wy, wr] of [
-      [0.24, 0.12, 1] as const,
-      [0.7, 0.2, 0.78] as const,
-    ]) {
-      const px = breite * wx;
-      const py = hoehe * wy;
-      const r = 24 * wr;
-      ctx.beginPath();
-      ctx.arc(px, py, r, 0, Math.PI * 2);
-      ctx.arc(px + r * 0.8, py + r * 0.1, r * 0.72, 0, Math.PI * 2);
-      ctx.arc(px - r * 0.75, py + r * 0.15, r * 0.58, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // --- Himmel: fest am Bildschirm ---------------------------------
+    himmelZeichnen(buehne);
 
     // --- Das Gelände ----------------------------------------------
     /*
@@ -449,171 +463,65 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       umriss.push([px, by(bodenHoehe(g, wx)), wx]);
     }
 
-    /** Füllt die Fläche unter dem Geländeumriss, um `versatz` nach unten
-        verschoben — dieselbe Abtastung dient allen drei Schichten. */
-    const bodenFlaeche = (farbe: string, versatz: number) => {
-      ctx.fillStyle = farbe;
-      ctx.beginPath();
-      ctx.moveTo(umriss[0]![0], umriss[0]![1] + versatz);
-      for (const [px, py] of umriss) ctx.lineTo(px, py + versatz);
-      ctx.lineTo(breite + 12, hoehe);
-      ctx.lineTo(-12, hoehe);
-      ctx.closePath();
-      ctx.fill();
-    };
-
     /*
-     * Nah an einem Kicker? Steuert zwei Dinge weiter unten: den Grasstrich
-     * (setzt an einem Kicker aus, kahle Erde statt Wiese) und die spätere
-     * Landemarkierung. `1.3×` Breite deckt sowohl die Anfahrt als auch die
-     * Landeseite der Glocke ab, nicht nur den Gipfel selbst.
+     * Nah an einem Kicker? Steuert den Grasstrich (setzt an einem Kicker
+     * aus, kahle Erde statt Wiese). `1,3×` Breite deckt sowohl die Anfahrt
+     * als auch die Landeseite der Glocke ab, nicht nur den Gipfel.
      */
     const aufKicker = (wx: number) => g.kicker.some((k) => Math.abs(wx - k.x) < k.breite * 1.3);
 
+    bodenZeichnen(buehne, umriss, aufKicker);
+    bodenSteine(buehne, aufKicker, sicht);
+    grasBandZeichnen(buehne, umriss, aufKicker);
+    grasZeichnen(buehne, aufKicker, sicht);
 
-    /*
-     * Erdschichten. Ursprünglich zwei Flächen (dunkler Grund, heller
-     * Streifen obenauf) — Recherche zu anderen 2D-Bike-Spielen (Trials,
-     * Bike Mayhem) zeigt durchgehend **drei bis vier** Farbflächen
-     * übereinander, nie nur zwei: ein geschichteter Fels-Look statt zweier
-     * Aufkleber, dazu ein schmaler heller Saum direkt unter der
-     * Grasnarbe — derselbe „Sonne trifft die Kuppe"-Effekt, den jedes
-     * recherchierte Spiel an der Geländekante zeigt.
-     *
-     * **Die Reihenfolge ist hier kein Zufall.** Jede Schicht füllt von
-     * ihrem eigenen `versatz` bis zum unteren Bildrand — eine später
-     * gezeichnete Schicht übermalt also alles darüber, bis zurück zu
-     * ihrem eigenen `versatz`. Sichtbar bleibt von jeder Schicht deshalb
-     * nur das Band zwischen ihrem `versatz` und dem der **nächsten**
-     * Schicht. Damit das aufgeht, müssen die `versatz`-Werte hier
-     * **aufsteigend** gezeichnet werden — sonst verschluckt eine später
-     * gezeichnete, aber weiter oben ansetzende Schicht alle vorherigen
-     * sofort wieder.
-     */
-    bodenFlaeche(FARBEN.bodenTief, 0); // Sicherheitsgrund, wird komplett überdeckt
-    bodenFlaeche(mischen(FARBEN.bodenOben, '#ffffff', 0.3), -0.08 * proMeter); // heller Saum
+    // --- Wegmarken: Start, Distanztafeln, Ziel ----------------------
+    if (kameraX - sicht * 0.6 < START_TOR_X + 2) tor(buehne, START_TOR_X, false);
+    wegmarken(buehne, sicht);
+    if (kameraX + sicht * 0.6 > g.laenge - 4) tor(buehne, g.laenge, true);
 
-    /*
-     * `bodenOben` segmentweise statt in einer Fläche — die einzige Schicht,
-     * die das lohnt, weil sie den größten Teil des sichtbaren Bodens
-     * ausmacht. Jedes Segment bekommt seinen Ton aus der tatsächlichen
-     * Steigung an dieser Stelle (`bodenSteigung`, exakt, nicht geschätzt):
-     * flache Abschnitte bleiben hell, steile Anstiege — vor allem die
-     * Kicker-Kuppen selbst — liegen dunkler, wie im eigenen Schatten.
-     * Recherche zu anderen 2D-Bike-Spielen nannte das den billigsten Griff
-     * für mehr Relief, weil `bodenSteigung` ohnehin schon berechnet wird.
-     */
-    {
-      const versatz = -0.05 * proMeter;
-      for (let i = 0; i < umriss.length - 1; i++) {
-        const [px1, py1, wx1] = umriss[i]!;
-        const [px2, py2, wx2] = umriss[i + 1]!;
-        const steigung = bodenSteigung(g, (wx1 + wx2) / 2);
-        const ton = Math.min(0.35, Math.abs(steigung) * 0.18);
-        ctx.fillStyle = mischen(FARBEN.bodenOben, '#000000', ton);
-        ctx.beginPath();
-        ctx.moveTo(px1, py1 + versatz);
-        ctx.lineTo(px2, py2 + versatz);
-        ctx.lineTo(px2, hoehe);
-        ctx.lineTo(px1, hoehe);
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
+    // --- Auf der Strecke: Marken, Boost, Schatten, Münzen -----------
+    absprungMarken(buehne, lauf, sicht);
+    padsZeichnen(buehne, lauf, sicht);
+    schattenZeichnen(buehne, lauf, RADSTAND, FAHRZEUG_GROESSE);
+    muenzenZeichnen(buehne, lauf, sicht);
 
-    bodenFlaeche(mischen(FARBEN.bodenOben, FARBEN.bodenTief, 0.45), 0.6 * proMeter); // Rostband
-    const erdVersatz = 1.3 * proMeter;
-    bodenFlaeche(FARBEN.bodenTief, erdVersatz);
-
-    /*
-     * Der grüne Grasstrich obendrauf — ohne ihn sieht der Boden aus wie
-     * bloße Erde, nicht wie eine Wiese. **Setzt an Kickern aus**: Trials,
-     * Bike Mayhem und Mad Skills BMX 2 zeigen an Sprungschanzen
-     * durchgehend kahle, festgefahrene Erde statt Gras — in der Fiktion
-     * fährt dort ständig jemand drüber. Ohne diesen Unterschied sieht ein
-     * Kicker aus wie ein normaler Hügel und ist erst an der eigenen
-     * Flugbahn als Sprung zu erkennen, nicht schon vorher am Bild.
-     */
-    ctx.strokeStyle = FARBEN.bodenKante;
-    ctx.lineWidth = Math.max(4, 0.12 * proMeter);
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    let grasOffen = false;
-    for (const [px, py, wx] of umriss) {
-      if (aufKicker(wx)) {
-        if (grasOffen) {
-          ctx.stroke();
-          ctx.beginPath();
-          grasOffen = false;
-        }
-        continue;
-      }
-      if (!grasOffen) {
-        ctx.moveTo(px, py);
-        grasOffen = true;
-      } else {
-        ctx.lineTo(px, py);
-      }
-    }
-    if (grasOffen) ctx.stroke();
-
-    /*
-     * Kleine Steine, direkt in der Grasnarbe verankert — Recherche zu
-     * anderen 2D-Bike-Spielen: Deko, die zur Strecke selbst gehört, nicht
-     * zu einem zweiten, separat scrollenden Hintergrund. Weltposition
-     * kommt aus einer reinen Hash-Funktion von `x` (`streuWert`), nicht
-     * aus `Math.random()` — bei gleicher Weltposition liegt also immer
-     * derselbe Stein da, unabhängig vom Bildaufbau, ohne dass dafür ein
-     * eigenes Feld in `Gelaende` nötig wäre.
-     */
-    const STEIN_ABSTAND = 2.6;
-    const ersterStein = Math.floor((kameraX - sicht * 0.5) / STEIN_ABSTAND) * STEIN_ABSTAND;
-    for (let wx = ersterStein; wx < kameraX + sicht * 0.5 + STEIN_ABSTAND; wx += STEIN_ABSTAND) {
-      if (wx <= ANLAUF || aufKicker(wx)) continue; // nicht auf der Startgeraden, nicht auf Kickern
-      const wuerfel = streuWert(wx);
-      if (wuerfel > 0.4) continue; // nicht an jeder Stelle einer
-      const groesse = (0.05 + streuWert(wx + 0.5) * 0.07) * proMeter;
-      const boden = by(bodenHoehe(g, wx + streuWert(wx + 1) * 1.4 - 0.7));
-      ctx.fillStyle = mischen(FARBEN.bodenTief, '#000000', 0.15);
-      ctx.beginPath();
-      ctx.ellipse(bx(wx), boden - groesse * 0.3, groesse, groesse * 0.62, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // --- Ziellinie -------------------------------------------------
-    if (kameraX + sicht > g.laenge - 4) {
-      const zx = bx(g.laenge);
-      const zy = by(bodenHoehe(g, g.laenge));
-      const hoch = 3.4 * proMeter;
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(zx - 3, zy - hoch, 6, hoch);
-      // Karomuster als Querbalken oben.
-      const feld = Math.max(6, proMeter * 0.28);
-      for (let i = 0; i < 8; i++) {
-        for (let j = 0; j < 2; j++) {
-          ctx.fillStyle = (i + j) % 2 === 0 ? '#f8fafc' : '#111827';
-          ctx.fillRect(zx - 3 + i * feld, zy - hoch + j * feld, feld, feld);
-        }
-      }
-    }
-
-    // --- Staub -------------------------------------------------------
-    // Vor dem Rad gezeichnet, damit kein Korn optisch vor dem Fahrer
-    // schwebt — Bewegung/Alterung sind oben schon berechnet.
-    for (const korn of staub) {
-      const durchsichtig = 1 - korn.alter / korn.lebenszeit;
-      ctx.fillStyle = `rgba(138,106,69,${(durchsichtig * 0.5).toFixed(3)})`;
-      ctx.beginPath();
-      ctx.arc(bx(korn.x), by(korn.y), korn.groesse * proMeter, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Erde hinter dem Rad, vor dem Boden.
+    teilchen.zeichnen(buehne, 'boden');
 
     // --- Räder --------------------------------------------------------
-    // Federung und Kamera-Wackeln sind schon berechnet (siehe oben, vor
-    // dem Gelände-Umriss). Räder drehen sich mit dem Tempo — Umfang 2πr.
-    // Bei Rückwärtsrollen (negatives `vx`, siehe `logik.ts`) läuft das
-    // von selbst rückwärts.
+    // Federung und Kamera-Wackeln sind schon berechnet (siehe oben).
+    // Räder drehen sich mit dem Tempo — Umfang 2πr. Bei Rückwärtsrollen
+    // (negatives `vx`, siehe `logik.ts`) läuft das von selbst rückwärts.
     radDrehung += (lauf.vx / RAD_R) * dt;
+
+    // --- Haltung des Fahrers ---------------------------------------
+    /*
+     * Wer schnell ist oder in der Luft, steht auf den Pedalen (Angriffs-
+     * haltung); wer langsam rollt, sitzt. Der Übergang ist gedämpft, sonst
+     * federte der Fahrer bei jeder Temposchwelle ruckartig hoch.
+     */
+    const stehZiel = !lauf.amBoden ? 1 : lauf.vx > 9 ? 1 : lauf.vx > 5 ? (lauf.vx - 5) / 4 : 0;
+    stehenAnim += (stehZiel - stehenAnim) * Math.min(1, dt * 5);
+    /*
+     * Gewicht: In der Luft folgt es der Drehung — wer „Hinten" gedrückt hat,
+     * dreht das Rad nach oben (positive Drehrate) und verlagert sich nach
+     * hinten. Am Boden folgt es dem Hang: bergauf nach vorn über den Lenker,
+     * bergab nach hinten über das Hinterrad, wie jeder echte Fahrer.
+     */
+    const gewichtZiel = lauf.amBoden
+      ? Math.max(-1, Math.min(1, bodenSteigung(g, lauf.x) * 2.2))
+      : Math.max(-1, Math.min(1, -lauf.drehen / 5));
+    gewichtAnim += (gewichtZiel - gewichtAnim) * Math.min(1, dt * (lauf.amBoden ? 5 : 9));
+    const pose: FahrerPose = {
+      stehen: stehenAnim,
+      hocke: Math.min(1, (federVorn + federHinten) * 0.5 + (lauf.amBoden ? 0 : 0.4)),
+      gewicht: gewichtAnim,
+      streck: Math.pow(Math.max(0, lauf.popRest) / 0.8, 1.4),
+      kurbel: radDrehung * 0.22,
+      wind: Math.max(0, Math.min(1, (lauf.vx - 5) / 13)),
+      zeit: uhr,
+    };
 
     // --- Fahrrad und Fahrer ----------------------------------------
     radFahrerZeichnen(ctx, lauf, {
@@ -623,7 +531,23 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
       federVorn,
       federHinten,
       radDrehung,
+      pose,
+      ohneFahrer: sturzFahrer !== null,
     });
+    if (sturzFahrer) {
+      ctx.save();
+      ctx.translate(bx(sturzFahrer.x), by(sturzFahrer.y));
+      ctx.rotate(sturzFahrer.drehung);
+      ctx.scale(FAHRZEUG_GROESSE, FAHRZEUG_GROESSE);
+      fahrerSturz(ctx, proMeter, sturzFahrer.zeit, sturzFahrer.schlaff);
+      ctx.restore();
+    }
+
+    // --- Licht und Bildabschluss ------------------------------------
+    scheinwerfer(buehne, lauf, 1.15, 1.45);
+    teilchen.zeichnen(buehne, 'licht');
+    tempoStriche(buehne, boostAnim);
+    bildAbschluss(buehne);
 
     // --- Lichtblitz bei perfekter Landung, ganz zum Schluss ---------
     // In Bildschirmkoordinaten (nicht Weltkoordinaten) — er soll das
@@ -635,6 +559,170 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
   };
 
   return { zeichnen, groesseAendern };
+}
+
+// ---------------------------------------------------------------------
+// Boden
+// ---------------------------------------------------------------------
+
+/**
+ * Der Erdkörper in Schichten, mit Körnung und Tiefe.
+ *
+ * Recherche zu anderen 2D-Bike-Spielen (Trials, Bike Mayhem, Mad Skills BMX 2)
+ * zeigt durchgehend **drei bis vier** Farbflächen übereinander, nie nur zwei:
+ * ein geschichteter Look statt zweier Aufkleber, dazu ein heller Saum direkt
+ * unter der Grasnarbe.
+ *
+ * **Die Reihenfolge ist hier kein Zufall.** Jede Schicht füllt von ihrem
+ * eigenen Versatz bis zum unteren Bildrand — eine später gezeichnete Schicht
+ * übermalt also alles darunter. Sichtbar bleibt von jeder Schicht nur das Band
+ * bis zur **nächsten**; die Versätze müssen deshalb **aufsteigend** gezeichnet
+ * werden, sonst verschluckt eine später gezeichnete, aber weiter oben
+ * ansetzende Schicht alle vorherigen sofort wieder.
+ *
+ * Die obere Schicht wird segmentweise gefüllt, mit dem Ton aus der echten
+ * Steigung an der Stelle (`bodenSteigung`, exakt, nicht geschätzt): steile
+ * Anstiege liegen dunkler, wie im eigenen Schatten. Nur diese eine, weil sie
+ * den größten Teil des sichtbaren Bodens ausmacht.
+ *
+ * Über allem liegt eine **Körnung**, die mit der Welt wandert (siehe
+ * `bodenMuster`), und ein Verlauf nach unten: Je tiefer, desto dunkler. Eine
+ * flache Farbfläche ist Pappe; Erde hat Korn und Tiefe.
+ */
+function bodenZeichnen(
+  b: Buehne,
+  umriss: readonly (readonly [number, number, number])[],
+  _aufKicker: (wx: number) => boolean,
+) {
+  const { ctx, breite, hoehe, proMeter: m, p, g } = b;
+
+  /** Füllt die Fläche unter dem Umriss, um `versatz` Meter nach unten verschoben. */
+  const flaeche = (farbe: string, versatz: number) => {
+    ctx.fillStyle = farbe;
+    ctx.beginPath();
+    ctx.moveTo(umriss[0]![0], umriss[0]![1] + versatz * m);
+    for (const [px, py] of umriss) ctx.lineTo(px, py + versatz * m);
+    ctx.lineTo(breite + 12, hoehe);
+    ctx.lineTo(-12, hoehe);
+    ctx.closePath();
+    ctx.fill();
+  };
+
+  flaeche(p.boden.tief, 0); // Sicherheitsgrund, wird komplett überdeckt
+  flaeche(p.boden.saum, 0); // der helle Saum unter dem Gras
+
+  // Obere Schicht, nach Steigung getönt.
+  const oben = 0.16;
+  for (let i = 0; i < umriss.length - 1; i++) {
+    const [px1, py1, wx1] = umriss[i]!;
+    const [px2, py2, wx2] = umriss[i + 1]!;
+    const steigung = bodenSteigung(g, (wx1 + wx2) / 2);
+    const ton = Math.min(0.32, Math.abs(steigung) * 0.16);
+    ctx.fillStyle = mischen(p.boden.oben, '#000000', ton);
+    ctx.beginPath();
+    ctx.moveTo(px1, py1 + oben * m);
+    ctx.lineTo(px2, py2 + oben * m);
+    ctx.lineTo(px2, hoehe);
+    ctx.lineTo(px1, hoehe);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  flaeche(p.boden.rost, 0.75);
+  flaeche(p.boden.tief, 1.45);
+
+  // Die Schichtgrenzen bekommen eine feine dunkle Kante — wie ein
+  // Erdprofil im Anschnitt.
+  ctx.strokeStyle = 'rgba(0,0,0,0.16)';
+  ctx.lineWidth = Math.max(1, 0.03 * m);
+  for (const versatz of [0.75, 1.45]) {
+    ctx.beginPath();
+    ctx.moveTo(umriss[0]![0], umriss[0]![1] + versatz * m);
+    for (const [px, py] of umriss) ctx.lineTo(px, py + versatz * m);
+    ctx.stroke();
+  }
+
+  // Körnung und Tiefe, beides nur innerhalb des Erdkörpers.
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(umriss[0]![0], umriss[0]![1]);
+  for (const [px, py] of umriss) ctx.lineTo(px, py);
+  ctx.lineTo(breite + 12, hoehe);
+  ctx.lineTo(-12, hoehe);
+  ctx.closePath();
+  ctx.clip();
+
+  const kachel = bodenMuster(p);
+  const muster = ctx.createPattern(kachel, 'repeat');
+  if (muster) {
+    const S = kachel.width;
+    // Das Muster hängt am Weltursprung (`bx(0)`, `by(0)`), nicht am Bildschirm:
+    // So wandert es mit dem Boden und rutscht auch beim Wackeln nicht darüber.
+    const ox = (((b.bx(0) % S) + S) % S) - S;
+    const oy = (((b.by(0) % S) + S) % S) - S;
+    ctx.translate(ox, oy);
+    ctx.fillStyle = muster;
+    ctx.fillRect(0, 0, breite + 2 * S, hoehe + 2 * S);
+    ctx.translate(-ox, -oy);
+  }
+  const tiefe = ctx.createLinearGradient(0, hoehe * 0.58, 0, hoehe);
+  tiefe.addColorStop(0, 'rgba(0,0,0,0)');
+  tiefe.addColorStop(1, 'rgba(0,0,0,0.42)');
+  ctx.fillStyle = tiefe;
+  ctx.fillRect(0, hoehe * 0.58, breite, hoehe * 0.42);
+  ctx.restore();
+}
+
+/**
+ * Der Grasstreifen obenauf — und der festgefahrene Pfad an den Kickern.
+ *
+ * **Das Gras setzt an Kickern aus.** Trials, Bike Mayhem und Mad Skills BMX 2
+ * zeigen an Sprungschanzen durchgehend kahle Erde statt Gras — in der Fiktion
+ * fährt dort ständig jemand drüber. Ohne diesen Unterschied sieht ein Kicker
+ * aus wie ein normaler Hügel und ist erst an der eigenen Flugbahn als Sprung
+ * zu erkennen, nicht schon vorher am Bild.
+ */
+function grasBandZeichnen(
+  b: Buehne,
+  umriss: readonly (readonly [number, number, number])[],
+  aufKicker: (wx: number) => boolean,
+) {
+  const { ctx, proMeter: m, p } = b;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  /** Zeichnet eine Linie entlang des Umrisses, nur über Stücke mit `kicker` als Wert. */
+  const entlang = (farbe: string, dicke: number, versatz: number, kicker: boolean) => {
+    ctx.strokeStyle = farbe;
+    ctx.lineWidth = Math.max(2, dicke * m);
+    ctx.beginPath();
+    let offen = false;
+    for (const [px, py, wx] of umriss) {
+      if (aufKicker(wx) !== kicker) {
+        if (offen) {
+          ctx.stroke();
+          ctx.beginPath();
+          offen = false;
+        }
+        continue;
+      }
+      if (!offen) {
+        ctx.moveTo(px, py + versatz * m);
+        offen = true;
+      } else ctx.lineTo(px, py + versatz * m);
+    }
+    if (offen) ctx.stroke();
+  };
+
+  // Gras: dunkles Band, darauf ein heller Streifen — die Kuppe im Sonnenlicht.
+  entlang(p.gras[2], 0.17, 0.02, false);
+  entlang(p.gras[0], 0.13, -0.005, false);
+  entlang(p.gras[1], 0.05, -0.045, false);
+
+  // Festgefahrener Pfad auf den Kickern: heller Saum mit Spurrillen.
+  entlang(mischen(p.boden.saum, '#000000', 0.12), 0.15, 0.02, true);
+  entlang(p.boden.saum, 0.11, -0.005, true);
+  entlang(mischen(p.boden.saum, '#ffffff', 0.25), 0.035, -0.04, true);
 }
 
 /**
@@ -657,7 +745,7 @@ export function zeichnerBauen(leinwand: HTMLCanvasElement): Zeichner {
  */
 function radFahrerZeichnen(
   ctx: CanvasRenderingContext2D,
-  lauf: Lauf,
+  lauf: Pick<Lauf, 'winkel' | 'vorbei' | 'gewonnen' | 'sturzZeit'>,
   o: {
     px: number;
     py: number;
@@ -665,9 +753,12 @@ function radFahrerZeichnen(
     federVorn: number;
     federHinten: number;
     radDrehung: number;
+    pose: FahrerPose;
+    /** Beim Sturz fliegt der Fahrer für sich — dann zeichnet nur das Rad. */
+    ohneFahrer?: boolean;
   },
 ) {
-  const { px, py, proMeter, federVorn, federHinten, radDrehung } = o;
+  const { px, py, proMeter, federVorn, federHinten, radDrehung, pose } = o;
   const m = proMeter;
 
   ctx.save();
@@ -684,6 +775,7 @@ function radFahrerZeichnen(
   const sturzDreh = lauf.vorbei && !lauf.gewonnen ? Math.min(5.6, lauf.sturzZeit * 5.1) : 0;
   // Bildschirm-y zeigt nach unten, Physik-y nach oben — deshalb das Minus.
   ctx.rotate(-lauf.winkel + sturzDreh);
+  ctx.scale(FAHRZEUG_GROESSE, FAHRZEUG_GROESSE);
 
   const radR = RAD_R * m;
   const hintenX = -RADSTAND * 0.52 * m;
@@ -1121,6 +1213,21 @@ function radFahrerZeichnen(
     ctx.fill();
   }
 
+  /*
+   * Der Lenker und der Fahrer-Anteil hinter dem Rahmen. Der Lenker steht hier
+   * schon, weil das Skelett die Griffposition braucht (die Hände liegen
+   * darauf); gezeichnet wird er weiter unten, **über** dem Rahmen.
+   */
+  const lenker = { x: standOben.x + 0.06 * m, y: standOben.y - 0.16 * m };
+  const geo: FahrerGeo = {
+    m,
+    tretlager,
+    sattel: { x: sattel.x - 0.02 * m, y: sattel.y - 0.085 * m },
+    lenker,
+  };
+  const skelett = skelettBerechnen(geo, pose);
+  if (!o.ohneFahrer) fahrerHinten(ctx, geo, skelett, pose);
+
   // --- Hauptrahmen: Unterrohr, Oberrohr, Sattelrohr ---
   rohr(
     tretlager.x,
@@ -1226,7 +1333,6 @@ function radFahrerZeichnen(
   // --- Lenker und Vorbau ---
   // Der Vorbau sitzt auf der **oberen** Brücke, nicht am Steuerkopf —
   // bei einer Doppelbrückengabel ist das der einzige Platz dafür.
-  const lenker = { x: standOben.x + 0.06 * m, y: standOben.y - 0.16 * m };
   rohr(
     standOben.x,
     standOben.y - 0.01 * m,
@@ -1272,9 +1378,14 @@ function radFahrerZeichnen(
    * über zwei Umdrehungen je Sekunde; 0,22 bleibt selbst bei Höchsttempo
    * knapp darunter.
    */
-  const pedalWinkel = radDrehung * 0.22;
-  const pedalX = tretlager.x + Math.cos(pedalWinkel) * 0.17 * m;
-  const pedalY = tretlager.y + Math.sin(pedalWinkel) * 0.17 * m;
+  /*
+   * Die Kurbel dreht sich nur noch, wenn der Fahrer sitzt und tritt. Wer
+   * steht (Angriffshaltung, in der Luft, bei Tempo), hält die Pedale
+   * waagerecht — das Skelett legt den Kurbelwinkel fest (`skelettBerechnen`),
+   * hier wird nur gezeichnet, wohin es das nahe Pedal gesetzt hat.
+   */
+  const pedalX = skelett.pedalNah.x;
+  const pedalY = skelett.pedalNah.y;
   rohr(
     tretlager.x,
     tretlager.y,
@@ -1288,422 +1399,155 @@ function radFahrerZeichnen(
   ctx.fillRect(pedalX - 0.055 * m, pedalY - 0.018 * m, 0.11 * m, 0.036 * m);
 
   // ---------------------------------------------------------------
-  // Der Fahrer
+  // Der Fahrer — siehe `fahrer.ts`
   // ---------------------------------------------------------------
-  /*
-   * Die Haltung folgt dem, was passiert: In der Luft und bei harter
-   * Landung geht der Fahrer tief, sonst steht er über dem Sattel. `hocke`
-   * ist das eine Maß dafür.
-   */
-  /*
-   * **Der Fahrer ist aus Körperformen gebaut, nicht aus Rohren.**
-   *
-   * Rückmeldung: „Ich will, dass der Mensch deutlich menschlicher
-   * aussieht." Vorher liefen Rumpf, Arme und Beine durch dieselbe
-   * `rohr()`-Funktion wie der Rahmen — mit demselben Metallglanz und
-   * derselben harten Kontur. Ein Körper hat aber keine Rohre: Der Rumpf
-   * ist an den Schultern breit und an der Taille schmal, Gliedmaßen sind
-   * am Ansatz dicker als am Gelenk, und alle Übergänge sind rund.
-   *
-   * Deshalb bekommt der Fahrer eine eigene `glied()`-Funktion mit runden
-   * Enden und einen Rumpf als geschlossenen Umriss.
-   */
-  const hocke = Math.min(1, (federVorn + federHinten) * 0.5 + (lauf.amBoden ? 0 : 0.4));
-  const huefte = { x: sattel.x + 0.1 * m, y: sattel.y - 0.14 * m + hocke * 0.13 * m };
-  const schulter = { x: huefte.x + 0.36 * m, y: huefte.y - 0.5 * m + hocke * 0.17 * m };
-  const kopf = { x: schulter.x + 0.15 * m, y: schulter.y - 0.25 * m };
+  if (!o.ohneFahrer) fahrerVorn(ctx, geo, skelett, pose);
 
-  /** Ein Körperglied: weiche Kapsel mit runden Enden, kein Metallrohr. */
-  const glied = (
-    ax: number,
-    ay: number,
-    bx2: number,
-    by2: number,
-    dickeA: number,
-    dickeB: number,
-    farbe: string,
-  ) => {
-    const dx = bx2 - ax;
-    const dy = by2 - ay;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len;
-    const ny = dx / len;
-    const winkel = Math.atan2(dy, dx);
-    ctx.beginPath();
-    // Halbkreis am Ansatz, gerade Seiten, Halbkreis am Gelenk — das ist
-    // der Unterschied zwischen Arm und Rohr.
-    ctx.arc(ax, ay, dickeA, winkel + Math.PI / 2, winkel - Math.PI / 2);
-    ctx.lineTo(bx2 + nx * -dickeB, by2 + ny * -dickeB);
-    ctx.arc(bx2, by2, dickeB, winkel - Math.PI / 2, winkel + Math.PI / 2);
-    ctx.closePath();
-    ctx.strokeStyle = '#12141a';
-    ctx.lineWidth = Math.max(1.2, dickeA * 0.3);
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-    // Weicher Verlauf quer zum Glied — heller oben, dunkler unten.
-    const gg = ctx.createLinearGradient(
-      (ax + bx2) / 2 + nx * dickeA,
-      (ay + by2) / 2 + ny * dickeA,
-      (ax + bx2) / 2 - nx * dickeA,
-      (ay + by2) / 2 - ny * dickeA,
-    );
-    gg.addColorStop(0, mischen(farbe, '#ffffff', 0.28));
-    gg.addColorStop(0.55, farbe);
-    gg.addColorStop(1, mischen(farbe, '#000000', 0.35));
-    ctx.fillStyle = gg;
-    ctx.fill();
+  ctx.restore();
+}
+
+/** Die Werte, die ein Prüfstand festlegen kann (alles optional). */
+type PrueftandWerte = Partial<FahrerPose> & {
+  /** Wie viele Meter quer ins Bild passen. */
+  sicht?: number;
+  /** Radwinkel in Radiant, positiv = Vorderrad hoch. */
+  winkel?: number;
+  federVorn?: number;
+  federHinten?: number;
+  /** Welche Umgebung (0 bis 3) den Hintergrund stellt. */
+  biom?: number;
+};
+
+/**
+ * Zeichnet Rad und Fahrer groß in der Bildmitte — die Nahaufnahme für den
+ * Rechner (`__mtbPrueftand`) und das Titelbild des Startbildschirms.
+ */
+export function prueftandZeichnen(
+  ctx: CanvasRenderingContext2D,
+  breite: number,
+  hoehe: number,
+  pixelDichte: number,
+  lauf: Lauf,
+  w: PrueftandWerte,
+) {
+  ctx.setTransform(pixelDichte, 0, 0, pixelDichte, 0, 0);
+  const palette = PALETTEN[(w.biom ?? 0) % PALETTEN.length]!;
+  const boden = hoehe * 0.86;
+  const proMeter = breite / (w.sicht ?? 3.2);
+  const buehne: Buehne = {
+    ctx,
+    breite,
+    hoehe,
+    proMeter,
+    kameraX: 0,
+    g: lauf.gelaende,
+    p: palette,
+    uhr: w.zeit ?? 0.3,
+    bx: (x) => x,
+    by: (y) => y,
   };
-
-  /*
-   * Ein Gelenk: runde Scheibe mit demselben Licht-Schatten-Verlauf wie
-   * `glied()`, nicht mehr eine flache Einfarb-Fläche.
-   *
-   * Rückmeldung: „Der Mensch sieht immer noch schlecht aus." Die
-   * ursprünglichen Gelenkscheiben (Schulter, Hüfte, Knie, Ellbogen) waren
-   * jede für sich ein reiner `fillStyle`-Kreis ohne Verlauf — direkt neben
-   * den weich schattierten Gliedern (`glied()`) und dem Rumpf (eigener
-   * Verlauf) fiel das als aufgesetzte, flache „Kugel" auf, nicht als
-   * Gelenk aus demselben Material. Ein Radialverlauf mit Licht oben links
-   * behebt genau das, unabhängig vom Winkel der angrenzenden Glieder.
-   */
-  const gelenkKugel = (mx: number, my: number, radius: number, farbe: string) => {
-    const gk = ctx.createRadialGradient(
-      mx - radius * 0.35,
-      my - radius * 0.35,
-      radius * 0.1,
-      mx,
-      my,
-      radius,
-    );
-    gk.addColorStop(0, mischen(farbe, '#ffffff', 0.32));
-    gk.addColorStop(0.65, farbe);
-    gk.addColorStop(1, mischen(farbe, '#000000', 0.32));
-    ctx.beginPath();
-    ctx.arc(mx, my, radius, 0, Math.PI * 2);
-    ctx.fillStyle = gk;
-    ctx.fill();
-  };
-
-  /*
-   * **Zwei-Knochen-IK für Arm und Bein.**
-   *
-   * Vorher stand das Gelenk (Ellbogen/Knie) an einem festen Versatz von
-   * der Basis (Schulter/Hüfte) — das zweite Segment musste dann in der
-   * Länge „atmen", um trotzdem am beweglichen Ziel (Lenker, Pedal)
-   * anzukommen, das sich mit Federung und Kurbelumlauf unabhängig bewegt.
-   * Bei genauem Hinsehen sieht das wie ein Gummiglied aus, nicht wie ein
-   * Gelenk. Diese Funktion hält beide Segmentlängen fest und berechnet
-   * die Gelenkposition über den Kosinussatz — dieselbe Formel, die auch
-   * im echten Kosinussatz-Dreieck aus Ober- und Untersegment plus
-   * Ziel-Abstand steckt. `biegung` legt fest, auf welcher Seite der
-   * direkten Basis-Ziel-Linie das Gelenk liegt, damit es nicht bei jedem
-   * Bild zufällig auf die andere Seite springen kann.
-   */
-  const zweiKnochenIK = (
-    basisX: number,
-    basisY: number,
-    zielX: number,
-    zielY: number,
-    laenge1: number,
-    laenge2: number,
-    biegung: 1 | -1,
-  ) => {
-    const dx = zielX - basisX;
-    const dy = zielY - basisY;
-    const dRoh = Math.hypot(dx, dy) || 0.0001;
-    // Nie weiter strecken oder stauchen, als die beiden Segmente hergeben.
-    const d = Math.min(laenge1 + laenge2 - 0.001, Math.max(Math.abs(laenge1 - laenge2) + 0.001, dRoh));
-    const zielWinkel = Math.atan2(dy, dx);
-    const cosInnen = (laenge1 * laenge1 + d * d - laenge2 * laenge2) / (2 * laenge1 * d);
-    const innenWinkel = Math.acos(Math.min(1, Math.max(-1, cosInnen)));
-    const gelenkWinkel = zielWinkel + biegung * innenWinkel;
-    return { x: basisX + Math.cos(gelenkWinkel) * laenge1, y: basisY + Math.sin(gelenkWinkel) * laenge1 };
-  };
-
-  /*
-   * --- Bein: Hüfte → Knie → Pedal ---
-   *
-   * **Reine Zwei-Knochen-IK mit fester Biegerichtung reicht hier nicht.**
-   * Anders als der Lenker (der ungefähr an einem Fleck bleibt) läuft das
-   * Pedal einmal ganz im Kreis um das Tretlager herum — eine feste
-   * Biegeseite relativ zur (mitdrehenden) Hüfte-Pedal-Linie heißt dann,
-   * dass das Knie einmal je Kurbelumdrehung auf die andere Seite
-   * umklappt. Rückmeldung: „Die Bewegung vom Bein ist unnatürlich … das
-   * soll nicht die ganze Zeit umknicken." Ein echtes Knie beugt sich
-   * dagegen immer zur selben Seite (nach oben/vorn, nie nach unten
-   * durch). Deshalb werden **beide** Lösungen des Kosinussatzes
-   * berechnet und die mit dem kleineren `y` (in Bildschirmkoordinaten:
-   * die höher liegende) genommen — das ist genau die Seite, zu der ein
-   * Knie beim Treten tatsächlich ausweicht, ganz gleich wo das Pedal
-   * gerade steht. Am Punkt völliger Streckung fallen beide Lösungen
-   * ohnehin zusammen, der Wechsel ist dort unsichtbar.
-   */
-  const OBERSCHENKEL = 0.4 * m;
-  const UNTERSCHENKEL = 0.36 * m;
-  const pedalZielY = pedalY - 0.04 * m;
-  const knieA = zweiKnochenIK(huefte.x, huefte.y, pedalX, pedalZielY, OBERSCHENKEL, UNTERSCHENKEL, 1);
-  const knieB = zweiKnochenIK(huefte.x, huefte.y, pedalX, pedalZielY, OBERSCHENKEL, UNTERSCHENKEL, -1);
-  const knie = knieA.y <= knieB.y ? knieA : knieB;
-  glied(huefte.x, huefte.y, knie.x, knie.y, 0.115 * m, 0.086 * m, FARBEN.hose);
-  glied(knie.x, knie.y, pedalX, pedalZielY, 0.084 * m, 0.064 * m, FARBEN.hose);
-  // Kleine Gelenkscheibe am Knie — ohne sie liest sich der Übergang
-  // zwischen den beiden Bein-Kapseln als Knick, nicht als Gelenk.
-  gelenkKugel(knie.x, knie.y, 0.09 * m, FARBEN.hose);
-  // Schuh: Sohle und Spann getrennt, damit er nicht wie ein Klumpen wirkt.
-  ctx.fillStyle = '#15161b';
-  ctx.beginPath();
-  ctx.ellipse(pedalX + 0.024 * m, pedalY - 0.05 * m, 0.1 * m, 0.058 * m, 0.08, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#0a0b0e';
-  ctx.fillRect(pedalX - 0.07 * m, pedalY - 0.017 * m, 0.19 * m, 0.032 * m);
-
-  /*
-   * --- Der Rumpf als geschlossener Umriss ---
-   *
-   * Vier Punkte, mit Kurven verbunden: breite Schulter, eingezogene
-   * Taille auf der Bauchseite, gewölbter Rücken. Eine gerade Kapsel von
-   * Hüfte zu Schulter — wie vorher — liest sich als Rohr; erst die
-   * unterschiedliche Wölbung von Vorder- und Rückseite macht daraus
-   * einen Oberkörper.
-   *
-   * **Rumpftiefe deutlich größer als vorher** (`breitSchulter` 0,15 m →
-   * 0,24 m, `breitHuefte` 0,115 m → 0,17 m) — Rückmeldung: „Der Fahrer
-   * muss echt besser aussehen … das ist noch so ein kleines
-   * Strichmännchen, viel breiter mit Schultern." In der Seitenansicht
-   * dieses Spiels ist „breite Schultern" keine Links-Rechts-Breite (die
-   * sieht man von der Seite nie), sondern die Tiefe des Rumpfs an dieser
-   * Stelle — genau der Wert, der hier wächst.
-   */
-  const rDx = schulter.x - huefte.x;
-  const rDy = schulter.y - huefte.y;
-  const rLen = Math.hypot(rDx, rDy) || 1;
-  const rNx = -rDy / rLen;
-  const rNy = rDx / rLen;
-  const breitSchulter = 0.24 * m;
-  const breitHuefte = 0.17 * m;
-  ctx.beginPath();
-  ctx.moveTo(huefte.x + rNx * breitHuefte, huefte.y + rNy * breitHuefte);
-  // Rückenseite: nach außen gewölbt.
-  ctx.quadraticCurveTo(
-    (huefte.x + schulter.x) / 2 + rNx * breitSchulter * 1.35,
-    (huefte.y + schulter.y) / 2 + rNy * breitSchulter * 1.35,
-    schulter.x + rNx * breitSchulter,
-    schulter.y + rNy * breitSchulter,
-  );
-  ctx.arc(
-    schulter.x,
-    schulter.y,
-    breitSchulter,
-    Math.atan2(rNy, rNx),
-    Math.atan2(-rNy, -rNx),
-    false,
-  );
-  // Bauchseite: leicht eingezogen.
-  ctx.quadraticCurveTo(
-    (huefte.x + schulter.x) / 2 - rNx * breitHuefte * 0.75,
-    (huefte.y + schulter.y) / 2 - rNy * breitHuefte * 0.75,
-    huefte.x - rNx * breitHuefte,
-    huefte.y - rNy * breitHuefte,
-  );
-  ctx.closePath();
-  ctx.strokeStyle = '#12141a';
-  ctx.lineWidth = Math.max(1.5, 0.032 * m);
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-  const rumpfG = ctx.createLinearGradient(
-    (huefte.x + schulter.x) / 2 + rNx * breitSchulter,
-    (huefte.y + schulter.y) / 2 + rNy * breitSchulter,
-    (huefte.x + schulter.x) / 2 - rNx * breitSchulter,
-    (huefte.y + schulter.y) / 2 - rNy * breitSchulter,
-  );
-  rumpfG.addColorStop(0, mischen(FARBEN.kleidung, '#ffffff', 0.3));
-  rumpfG.addColorStop(0.5, FARBEN.kleidung);
-  rumpfG.addColorStop(1, mischen(FARBEN.kleidung, '#000000', 0.4));
-  ctx.fillStyle = rumpfG;
-  ctx.fill();
-
-  /*
-   * Teal-Akzentstreifen aufs Trikot — dieselbe Akzentfarbe wie am
-   * Unterrohr und am Tauchrohr des Rads. Rückmeldung: „Der Mensch sieht
-   * immer noch schlecht aus." Ein Grund dafür: Kleidung, Hose und die
-   * (jetzt schattierten) Gelenke sind alle nah beieinanderliegende
-   * Grautöne — der Rumpf liest sich als einfarbige Fläche, nicht als
-   * Kleidungsstück. Ein einzelner diagonaler Streifen über die Bauchseite
-   * bricht das auf und verbindet Fahrer und Rad optisch, ohne dass die
-   * Silhouette selbst angefasst werden muss.
-   */
-  {
-    const t1 = 0.22;
-    const t2 = 0.62;
-    const p1x = huefte.x + rDx * t1 - rNx * breitHuefte * 0.55;
-    const p1y = huefte.y + rDy * t1 - rNy * breitHuefte * 0.55;
-    const p2x = huefte.x + rDx * t2 - rNx * breitSchulter * 0.5;
-    const p2y = huefte.y + rDy * t2 - rNy * breitSchulter * 0.5;
-    ctx.strokeStyle = FARBEN.akzent;
-    ctx.lineWidth = Math.max(2, 0.045 * m);
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(p1x, p1y);
-    ctx.lineTo(p2x, p2y);
-    ctx.stroke();
-  }
-
-  /*
-   * Hals — ohne ihn sitzt der Helm direkt auf den Schultern.
-   *
-   * **Muss vor Schulterscheibe und Arm gezeichnet werden, nicht danach.**
-   * Rückmeldung zum ersten Versuch: „Der Hals guckt raus, er sitzt jetzt
-   * vor der Schulter." Genau das passiert, wenn der Hals **nach** dem Arm
-   * gezeichnet wird — seine helle Hautfarbe malt sich dann über den
-   * Schulteransatz des Arms und wirkt wie ein Fremdkörper davor. Jetzt
-   * kommt der Hals gleich nach dem Rumpf; Schulterscheibe, Rückenprotektor
-   * und Arm werden alle **danach** gezeichnet und übermalen seinen Ansatz
-   * wieder — sichtbar bleibt nur das kurze Stück zwischen Kragen und Helm.
-   */
-  glied(
-    schulter.x + 0.01 * m,
-    schulter.y + 0.05 * m,
-    kopf.x - 0.02 * m,
-    kopf.y + 0.03 * m,
-    0.08 * m,
-    0.075 * m,
-    FARBEN.haut,
-  );
-  // Kragen: ein Streifen Trikotfarbe, der am Halsansatz hochsteht — auch
-  // er liegt unter der Schulterscheibe und dem Arm, deckt also nur noch
-  // den Übergang zwischen Rumpf und dem sichtbaren Halsstück ab.
-  ctx.beginPath();
-  ctx.ellipse(
-    schulter.x + 0.02 * m,
-    schulter.y + 0.02 * m,
-    0.11 * m,
-    0.06 * m,
-    Math.atan2(rDy, rDx),
-    0,
-    Math.PI * 2,
-  );
-  ctx.fillStyle = mischen(FARBEN.kleidung, '#000000', 0.08);
-  ctx.fill();
-
-  /*
-   * **Gelenkscheiben an Hüfte und Schulter.**
-   *
-   * Rückmeldung: „Bei dem Fahrer gibt's einen Fehler, an der Schulter ist
-   * dann kurz nichts, da ist was raus." Der Grund: Der Rumpf rundet die
-   * Schulter nur über einen Halbkreis ab (die andere Hälfte gehört den
-   * Kurven zur Hüfte), und das Bein hört an der Hüfte mit einer geraden
-   * Kante auf (`closePath()` zieht dort nur eine Sehne, keinen Bogen).
-   * Arm- und Beinansatz decken mit ihrer eigenen Rundung zwar das meiste
-   * davon ab, aber nicht den ganzen Kreis — übrig blieb ein schmaler
-   * Keil, durch den der Himmel durchschien. Eine einfache gefüllte
-   * Scheibe an beiden Gelenken, unter Arm/Hals bzw. schon unter dem Bein
-   * gezeichnet, schließt die Lücke unabhängig vom genauen Winkel — robuster
-   * als die Kurven noch enger aneinander zu ziehen, das nur bei genau
-   * dieser Körperhaltung gepasst hätte.
-   */
-  // Radius jeweils etwas größer als der Kapsel-Ansatz an dieser Stelle
-  // (Bein 0,115 m, Arm 0,10 m) — sonst reicht die Scheibe selbst nicht
-  // bis zum sichtbaren Rand der jetzt dickeren Gliedmaßen und die Lücke
-  // wird größer statt kleiner. `gelenkKugel()` statt einer flachen
-  // Scheibe, siehe die Herleitung dort.
-  gelenkKugel(huefte.x, huefte.y, 0.135 * m, FARBEN.kleidung);
-  gelenkKugel(schulter.x, schulter.y, 0.115 * m, FARBEN.kleidung);
-
-  // Rückenprotektor, als aufgesetzte Platte auf dem Rücken.
-  ctx.fillStyle = 'rgba(20,22,28,0.55)';
-  ctx.beginPath();
-  ctx.ellipse(
-    (huefte.x + schulter.x) / 2 + rNx * 0.06 * m,
-    (huefte.y + schulter.y) / 2 + rNy * 0.06 * m,
-    0.17 * m,
-    0.085 * m,
-    Math.atan2(rDy, rDx),
-    0,
-    Math.PI * 2,
-  );
-  ctx.fill();
-
-  // --- Arm: Schulter → Ellbogen → Lenker, dieselbe Zwei-Knochen-IK ---
-  const OBERARM = 0.3 * m;
-  const UNTERARM = 0.27 * m;
-  const ellbogen = zweiKnochenIK(schulter.x, schulter.y, lenker.x, lenker.y, OBERARM, UNTERARM, 1);
-  glied(schulter.x, schulter.y, ellbogen.x, ellbogen.y, 0.1 * m, 0.076 * m, FARBEN.kleidung);
-  glied(ellbogen.x, ellbogen.y, lenker.x, lenker.y, 0.074 * m, 0.06 * m, FARBEN.kleidung);
-  // Kleine Gelenkscheibe am Ellbogen — dieselbe Überlegung wie am Knie.
-  gelenkKugel(ellbogen.x, ellbogen.y, 0.082 * m, FARBEN.kleidung);
-  // Handschuh am Lenker.
-  ctx.fillStyle = '#2a2d36';
-  ctx.strokeStyle = '#12141a';
-  ctx.lineWidth = Math.max(1, 0.022 * m);
-  ctx.beginPath();
-  ctx.arc(lenker.x, lenker.y, 0.075 * m, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  /*
-   * --- Der Fullface-Helm ---
-   *
-   * Rückmeldung: „Der Typ soll einen besseren Helm anhaben." Vorher war es
-   * ein Kreis mit einem Fleck davor. Ein Fullface hat drei Merkmale, an
-   * denen man ihn erkennt, und alle drei sind hier einzeln gebaut: die
-   * Schale mit Nackenschutz hinten, der **Kinnbügel**, der weit nach vorn
-   * ragt, und der Schirm oben. Ohne den Kinnbügel ist es ein Halbschalen-
-   * helm, ohne den Schirm ein Motorradhelm.
-   */
-  const hr = 0.2 * m;
+  himmelZeichnen(buehne);
+  ctx.fillStyle = palette.boden.oben;
+  ctx.fillRect(0, boden, breite, hoehe - boden);
+  ctx.fillStyle = palette.boden.rost;
+  ctx.fillRect(0, boden + (hoehe - boden) * 0.5, breite, (hoehe - boden) * 0.5);
+  ctx.fillStyle = palette.gras[0];
+  ctx.fillRect(0, boden - 4, breite, 7);
+  ctx.fillStyle = palette.gras[1];
+  ctx.fillRect(0, boden - 4, breite, 2);
+  // Schatten unter dem Rad, wie im Spiel.
+  const sg = ctx.createRadialGradient(breite * 0.5 + proMeter * 0.3, boden + 2, 0, breite * 0.5 + proMeter * 0.3, boden + 2, proMeter * 1.5);
+  sg.addColorStop(0, 'rgba(0,0,0,0.38)');
+  sg.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.save();
-  ctx.translate(kopf.x, kopf.y);
-  // Der Kopf ist leicht nach vorn geneigt — der Fahrer schaut die Strecke
-  // hinunter, nicht geradeaus.
-  ctx.rotate(0.22);
-
-  // Schale samt Nackenschutz.
-  ctx.fillStyle = FARBEN.helm;
-  ctx.beginPath();
-  ctx.moveTo(-hr * 0.95, hr * 0.2);
-  ctx.quadraticCurveTo(-hr * 1.1, -hr * 0.95, 0, -hr * 1.02);
-  ctx.quadraticCurveTo(hr * 1.05, -hr * 0.95, hr * 1.0, hr * 0.05);
-  ctx.quadraticCurveTo(hr * 0.95, hr * 0.5, hr * 0.5, hr * 0.62);
-  ctx.lineTo(-hr * 0.5, hr * 0.72);
-  ctx.quadraticCurveTo(-hr * 1.0, hr * 0.7, -hr * 0.95, hr * 0.2);
-  ctx.closePath();
-  ctx.fill();
-
-  // Der Kinnbügel — das Erkennungsmerkmal.
-  ctx.fillStyle = FARBEN.helm;
-  ctx.beginPath();
-  ctx.moveTo(hr * 0.45, hr * 0.15);
-  ctx.quadraticCurveTo(hr * 1.35, hr * 0.3, hr * 1.2, hr * 0.72);
-  ctx.quadraticCurveTo(hr * 0.9, hr * 0.9, hr * 0.35, hr * 0.7);
-  ctx.closePath();
-  ctx.fill();
-
-  // Schattenkante unten, damit die Schale rund wirkt.
-  ctx.strokeStyle = FARBEN.helmSchatten;
-  ctx.lineWidth = Math.max(1.2, hr * 0.1);
-  ctx.beginPath();
-  ctx.moveTo(-hr * 0.85, hr * 0.35);
-  ctx.quadraticCurveTo(-hr * 0.2, hr * 0.85, hr * 0.5, hr * 0.66);
-  ctx.stroke();
-
-  // Visieröffnung.
-  ctx.fillStyle = FARBEN.visier;
-  ctx.beginPath();
-  ctx.moveTo(hr * 0.2, -hr * 0.3);
-  ctx.quadraticCurveTo(hr * 1.0, -hr * 0.22, hr * 0.95, hr * 0.18);
-  ctx.quadraticCurveTo(hr * 0.5, hr * 0.24, hr * 0.15, hr * 0.12);
-  ctx.closePath();
-  ctx.fill();
-
-  // Der Schirm oben.
-  ctx.fillStyle = FARBEN.rahmen;
-  ctx.beginPath();
-  ctx.moveTo(hr * 0.05, -hr * 0.82);
-  ctx.quadraticCurveTo(hr * 1.15, -hr * 1.0, hr * 1.32, -hr * 0.52);
-  ctx.quadraticCurveTo(hr * 0.9, -hr * 0.62, hr * 0.2, -hr * 0.6);
-  ctx.closePath();
-  ctx.fill();
-
+  ctx.translate(0, boden + 2);
+  ctx.scale(1, 0.14);
+  ctx.translate(0, -(boden + 2));
+  ctx.fillStyle = sg;
+  ctx.fillRect(0, boden - proMeter * 12, breite, proMeter * 24);
   ctx.restore();
+  radFahrerZeichnen(ctx, { ...lauf, winkel: w.winkel ?? 0, vorbei: false }, {
+    px: breite * 0.5,
+    py: boden,
+    proMeter,
+    federVorn: w.federVorn ?? 0,
+    federHinten: w.federHinten ?? 0,
+    radDrehung: 0.4,
+    pose: {
+      stehen: w.stehen ?? 1,
+      hocke: w.hocke ?? 0,
+      gewicht: w.gewicht ?? 0,
+      streck: w.streck ?? 0,
+      kurbel: w.kurbel ?? 0.6,
+      wind: w.wind ?? 0.6,
+      zeit: w.zeit ?? 0.3,
+    },
+  });
+  ctx.fillStyle = palette.grading;
+  ctx.fillRect(0, 0, breite, hoehe);
+}
+
+/**
+ * Das Titelbild: Rad und Fahrer groß auf durchsichtigem Grund, in
+ * Angriffshaltung mit einer leichten Schräglage — dieselbe Zeichnung wie im
+ * Spiel, nicht ein zweites, vereinfachtes Bild. Vorher stand auf dem
+ * Startbildschirm ein grobes SVG-Poster; ein Spiel, dessen Titelbild anders
+ * aussieht als das Spiel, wirkt wie ein Versprechen, das es nicht hält.
+ *
+ * Gezeichnet wird einmal (Standbild). Die Leinwand bekommt die doppelte
+ * Auflösung, damit es auf einem Retina-Bildschirm scharf bleibt.
+ */
+export function heldenbildZeichnen(leinwand: HTMLCanvasElement, breiteCss: number, hoeheCss: number) {
+  const ctx = leinwand.getContext('2d');
+  if (!ctx) return;
+  const dichte = Math.min(window.devicePixelRatio || 1, 3);
+  leinwand.width = Math.round(breiteCss * dichte);
+  leinwand.height = Math.round(hoeheCss * dichte);
+  leinwand.style.width = `${breiteCss}px`;
+  leinwand.style.height = `${hoeheCss}px`;
+  ctx.setTransform(dichte, 0, 0, dichte, 0, 0);
+  ctx.clearRect(0, 0, breiteCss, hoeheCss);
+
+  // Rad und Fahrer sind rund 3,4 m breit und 3,5 m hoch — so skalieren, dass
+  // beides in die Fläche passt, ganz gleich, welches Seitenverhältnis sie hat.
+  const proMeter = Math.min(breiteCss / 3.8, (hoeheCss * 0.9) / 3.5);
+  const boden = hoeheCss * 0.93;
+  const mitteX = breiteCss * 0.5;
+
+  // Weiches Licht hinter dem Fahrer: macht aus einer Silhouette ein Bild.
+  // Der Radius reicht bis zum Rand der Fläche und nicht darüber: Ein Verlauf,
+  // der am Rand noch hell ist, zeichnet dort eine sichtbare Kante.
+  const hofR = Math.min(breiteCss, hoeheCss) * 0.5;
+  const hof = ctx.createRadialGradient(mitteX, hoeheCss * 0.5, 0, mitteX, hoeheCss * 0.5, hofR);
+  hof.addColorStop(0, 'rgba(255,255,255,0.2)');
+  hof.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hof;
+  ctx.fillRect(0, 0, breiteCss, hoeheCss);
+
+  // Schatten auf dem Boden.
+  ctx.save();
+  ctx.translate(mitteX + proMeter * 0.1, boden + 3);
+  ctx.scale(1, 0.12);
+  const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, proMeter * 1.9);
+  sg.addColorStop(0, 'rgba(0,0,0,0.5)');
+  sg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = sg;
+  ctx.beginPath();
+  ctx.arc(0, 0, proMeter * 1.9, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
+
+  radFahrerZeichnen(
+    ctx,
+    { winkel: 0.1, vorbei: false, gewonnen: false, sturzZeit: 0 },
+    {
+      px: mitteX,
+      py: boden,
+      proMeter,
+      federVorn: 0.15,
+      federHinten: 0.2,
+      radDrehung: 0.4,
+      pose: { stehen: 1, hocke: 0.12, gewicht: 0.25, streck: 0, kurbel: 0.6, wind: 0.6, zeit: 0.3 },
+    },
+  );
 }

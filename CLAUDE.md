@@ -3030,10 +3030,8 @@ nachgezogen, beide ohne neue Zeichentechnik:
   Levelnummern, die feste Projekt-Regel „nie `Math.random`" gilt für
   genau diesen Fall (Gelände, Aufgaben, alles Regelhafte) — nicht für
   jede Zeile Zeichencode.
-- **Noch offen aus derselben Recherche:** eine echte Körnungs-Textur
-  (Canvas-Pattern, Vorbild `laufen/texturen.ts`). Fleißarbeit, keine
-  schwierige Entscheidung — nachziehbar, wenn noch mehr Bodendetail
-  gewünscht ist.
+- **Körnungs-Textur** (Canvas-Pattern, Vorbild `laufen/texturen.ts`) ist
+  inzwischen da, siehe „Version 2" unten (`bodenMuster`).
 
 ### Kamera-Wackeln bei harten Landungen
 
@@ -3372,6 +3370,149 @@ schlecht aus." Zwei konkrete Schwachstellen gefunden und behoben:
   verbindet Fahrer und Rad optisch.
 
 Service-Worker-Version v71 → v72.
+
+### Version 2 — Spieltiefe, echter Fahrer, eigene Umgebungen
+
+Ronnis Auftrag nach Dash City: „Dann kannst du das MTB Game mal ordentlich
+überarbeiten. Geht das Männchen noch realistischer?" Dieselbe Frage wie bei
+Dash City („Das Spiel ist ziemlich einfach") — und derselbe Weg: erst die
+Logik, dann das Bild, ohne an der Steuerung etwas zu ändern (immer noch
+Dauergas, zwei Knöpfe zum Lehnen, eine Bremse).
+
+**Dateien jetzt:** `logik.ts` (Physik, Inhalt, Aufgaben), `zeichnen.ts`
+(Kamera, Rad, Reihenfolge), `fahrer.ts` (der Mensch), `umgebung.ts` (Himmel,
+Boden-Schmuck, Wegmarken, vier Paletten), `effekte.ts` (Münzen, Pfeile,
+Schatten, Teilchen, Licht), `farben.ts` (Mischfunktion, Lichtrichtung).
+
+**Spieltiefe — alles aus der Strecke abgeleitet, nichts gewürfelt.**
+`inhaltBauen` legt **nach** dem Gelände Münzen, Boost-Streifen und
+Absprungmarken darauf. Das Gelände selbst ändert sich dadurch nicht, jede
+Strecke ist mit ihrer Saat exakt dieselbe wie vorher — alle
+Fairness-Prüfungen gelten unverändert.
+
+- **Münzen liegen auf der echten Flugbahn.** Ein Probefahrer (`PROBE_TEMPO`)
+  fährt beim Bauen über jeden Kicker, und die Münzen kommen dorthin, wo er in
+  der Luft war. Wer sauber anrollt, nimmt alle mit, wer zu schnell oder zu
+  langsam ist, verpasst ein paar. Eine Münze, die man nie erreichen kann, ist
+  Deko und keine Anleitung. Zwei Fallen dabei: `flugBahn` muss den
+  **längsten** Luftabschnitt nehmen (ein Ein-Bild-Hüpfer auf der Anfahrt
+  beendete die Suche sonst, es gab nur noch rund zehn Münzen je Strecke), und
+  die Landung braucht Mindestflugzeit (`LANDUNG_MIN_LUFT`), damit solche
+  Hüpfer nicht als Landung zählen.
+- **Boost-Streifen** (`BOOST_SCHUB`, `BOOST_UEBER_TEMPO`): Der Schub darf das
+  Höchsttempo **weich** überschreiten (`ueberTempo` klingt ab), eine harte
+  Kappe risse das Tempo nach dem Schub schlagartig herunter. Vor jedem großen
+  Kicker liegt einer; in langen Rollstrecken (ab 28 m) zusätzlich einer, der
+  keinen Sprung verlängert — nur Tempo-Gefühl und Punkte. Ein Test sichert,
+  dass nicht nur jede fünfte Strecke einen hat.
+- **Pop** (`POP_FENSTER`, `POP_SCHUB`): Wer genau an der Absprungkante frisch
+  „Hinten" antippt, bekommt Extrahöhe. Die Kante zeigen drei gelbe Pfeile am
+  Boden (`absprungMarken`) — eine Regel, die man erraten muss, fühlt sich
+  unfair an. Optional: Wer es nie versucht, fährt wie bisher.
+- **Drei laufende Aufgaben** (`Mission`, `MISSION_NAMEN`): Münzen, perfekte
+  Landungen, Saltos, Tempo, Luftzeit, Pops. Ziele am einfachen Fairness-Bot
+  gemessen (drei bis vier je Fahrt); der Lohn wächst (`missionsLohn`). Alles
+  aus Saat und Zähler erzeugt, nie aus der Uhr. *Bekannte Schwäche:* Die
+  Tempo-Aufgabe (58 km/h) erledigt sich in den ersten Sekunden von selbst —
+  als Einstieg gewollt, nicht als Ziel.
+- **Vier Umgebungen** (`biomVon`): Wiese, Abendrot, Nacht, Herbst. Hängen nur
+  an der Saat und sind **rein optisch**.
+
+**Der Fahrer ist ein Körper mit Skelett** (`fahrer.ts`). Zwei-Knochen-IK für
+Arme und Beine (Maße im Maßstab des Rades), zwei Beine und zwei Arme —
+die fernen werden **vor** dem Rahmen gezeichnet und abgedunkelt, die nahen
+danach. Glieder sind **Röhren**: eine glatte Kurve durch drei Punkte mit
+stetig wechselndem Querschnitt, kein Gelenk, an dem zwei Teile aneinander-
+stoßen. Form kommt aus dem Licht (fest oben links, `farben.ts`), nicht aus
+der Kontur. Dazu Fullface-Helm mit Brille, Rucksack, Knie- und
+Ellbogenschoner, Handschuhe, Schuhe, flatternder Saum bei Tempo. Die Haltung
+folgt dem Spiel: sitzend bei langsamer Fahrt, stehend ab Tempo, Gewicht
+nach dem Hang, Streckung beim Pop, Hocke bei der Landung.
+
+- **Die Vergrößerung** (`FAHRZEUG_GROESSE` 1,55): Auf einem Handy im
+  Hochformat sind es 24 bis 34 Bildpunkte je Meter — ein Fahrer von 2 m wäre
+  50 Punkte hoch, und jedes Detail bliebe unsichtbar. Das Gelände bleibt in
+  Metern, Rad und Fahrer werden größer gezeichnet (die Physik weiß nichts
+  davon).
+- **Das Gesicht war ein Gebiss.** Drei kleine Lüftungslöcher am Kinnbügel
+  lasen sich bei Titelbild-Größe als Zähne, die Haut als bärtiger Fleck.
+  Jetzt ein einzelner Schlitz, Haut mit Verlauf, Nase und Mundlinie.
+- **Der Sturz löst den Fahrer vom Rad** (`fahrerSturz`, Zustand in
+  `zeichnen.ts`): Er fliegt im Bogen weiter, schlägt auf, rutscht, bleibt
+  liegen; Arme und Beine schlagen in der Luft (`schlaff` 0 → 1 blendet das aus).
+  Derselbe Körper wie auf dem Rad, nur mit freien Gelenken. Reine Optik — die
+  Logik hat den Lauf längst beendet. Die Kamera folgt dem Fahrer, nicht dem Rad.
+- **Der Sturz war bisher eingefroren — das war ein Fehler, kein Geschmack.**
+  `useGameLoop` lief mit `running: … && !(vorbei && beendet)`; sobald `onScore`
+  die Hülle neu rendern ließ, hielt die Uhr an, und die 1,1 s bis zum
+  Rundenende zeigten ein Standbild (die „Ausroll"-Logik in `taktKern` lief nie).
+  Jetzt läuft die Uhr 3,5 s nach dem Aus weiter (`ausgelaufen`).
+  *Merksatz:* Wer etwas „ausschwingen" lässt, muss prüfen, dass die Uhr
+  dabei wirklich noch läuft.
+- **`Knopf` stand innerhalb der Komponente** und war dadurch bei jedem
+  Rendern ein neuer Komponententyp: React hängte die Knöpfe neu ein, und weil
+  der Punktestand zweimal je Sekunde die Hülle neu rendern lässt, wurde jeder
+  gehaltene Knopf zweimal je Sekunde ausgetauscht — ohne dass das `pointerup`
+  je am neuen ankam. Das Rad blieb „gelehnt". Jetzt auf Modulebene.
+
+**Umgebung — der Hintergrund bewegt sich weiterhin nicht mit.** Himmel,
+Sonne/Mond, Wolken und Sterne stehen in **Bildschirmkoordinaten**, in ihrer
+Rechnung kommt kein `kameraX` vor. Keine Berge, keine Bäume. Alles, was zur
+Strecke gehört, steht in Weltkoordinaten und kommt aus Hashwerten der Position
+(`streu`), nie aus `Math.random`: Gras in drei Tönen, Blumen (nachts
+Leuchtpilze), Steine im Boden, Distanztafeln alle 100 m, Start- und Zieltor.
+
+- **Erdkörper in Schichten mit Körnung** (`bodenZeichnen`): Saum, nach
+  Steigung getönte Oberschicht, Rost-Band, Tiefe — dazu eine kachelbare
+  Körnung (`bodenMuster`), die am **Weltursprung** hängt und mit dem Boden
+  wandert, und ein Verlauf nach unten. Die Reihenfolge der Schichten ist
+  weiterhin keine Nebensache (aufsteigende Versätze, siehe oben).
+- **Kicker tragen kahle Erde** statt Gras, mit hellem Pfad — man erkennt
+  eine Schanze, bevor man auf ihr fährt.
+- **Der Schatten zeigt, wo man landet.** In der Luft wird er mit der Höhe
+  kleiner und blasser, am Boden sitzt er als Fleck unter den Reifen.
+- **Nachts ein Scheinwerferkegel** vom Lenker, additiv gezeichnet; er folgt
+  der Neigung des Rades.
+- **Erdbrocken statt Staubwolken** (zweiter Anlauf, siehe oben): kleine,
+  schwere Krümel in Bogenbahnen in der **Farbe des Bodens**, hinterm
+  Hinterrad bei Tempo und beim Aufsetzen. Ein weicher Staubhauch nur bei
+  einem echten Einschlag. Erste Fassung war blass-weiß gemischt und las sich
+  wie Schnee oder Konfetti — Erdfarbe, dunkler mischen. Sollte es wieder
+  „komisch aussehen": `teilchen.erde`/`teilchen.staub` ersatzlos entfernen.
+- **Funken** (additiv): goldene beim Einsammeln, türkise beim Boost, ein Ring
+  und goldene Funken beim Pop. Münzen drehen sich (|cos|, nie ganz flach) und
+  tragen auf der Rückseite keinen Stern. Der Boost zeigt dünne Tempostriche —
+  **an den Boost gebunden**, nicht ans Tempo, sonst laufen sie ständig und
+  verlieren ihre Aussage.
+- Dauerpulse unter 1,7 Hz (Absprungpfeile atmen mit 0,8 Hz, Boost-Pfeile
+  wandern mit rund 1 Hz); Vignette und Farbton liegen als Abschluss über dem
+  Bild.
+
+**Oberfläche.** Glasflächen (`rounded-2xl border bg-black/35 backdrop-blur`)
+für Tempo, Münzen, Zeit; die drei Aufgaben als kleine Zeilen mit Fortschritts-
+balken links oben; eine geschaffte Aufgabe meldet sich kurz oben in der Mitte
+(einzige neue Texteinblendung — „PERFEKT!" und Verwandte bleiben ausdrücklich
+weg). Alles wird **direkt ins DOM geschrieben** (`anzeigen`), React rendert
+während der Fahrt nicht; das Aufploppen der Münzzahl über `element.animate`
+(entfällt bei „weniger Bewegung"). Knöpfe tragen Bedeutung: **Bernstein**
+(Hinten) ist dieselbe Farbe wie die Absprungpfeile — dort wird er für den Pop
+gebraucht —, **Türkis** (Vorne) die Farbe des Fahrers, **Rot** die Bremse.
+
+- **Das Titelbild ist der echte Fahrer** (`heldenbildZeichnen`, dieselbe
+  Zeichnung wie im Spiel auf durchsichtigem Grund), eingesetzt als `Symbol`
+  des Startbildschirms statt des App-Symbols. Als Deko im Hintergrund lag der
+  Spielen-Knopf über seinem Kopf, das grobe SVG-Poster davor sah nicht wie das
+  Spiel aus. Verlauf mit Radius **bis zum Rand der Fläche**, nicht darüber —
+  sonst zeichnet er dort eine sichtbare Kante.
+- **Prüfhaken nur für Bildschirmfotos** (auf einem echten Gerät nie gesetzt):
+  `globalThis.__mtbPrueftand` zeigt Rad und Fahrer groß auf einfachem Grund
+  mit festgelegter Haltung (`sicht`, `stehen`, `gewicht`, `winkel`, `biom` …),
+  `globalThis.__mtbBiom` erzwingt eine Umgebung. Mit Playwright über
+  `page.addInitScript` setzen.
+- **Preis:** Das Hauptbündel wuchs um rund 11 kB gzip (193 → 205 kB). Flow MTB
+  steckt im Hauptbündel, nicht nachgeladen.
+
+Service-Worker-Version v82 → v83.
 
 ## Befehle
 
