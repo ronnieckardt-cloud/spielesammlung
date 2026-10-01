@@ -1278,7 +1278,8 @@ beim Einrichten alles auf einmal. Schlägt das fehl, bricht die Einrichtung
 
 Weitere Entscheidungen:
 
-- **`szene.ts` ist der einzige Ort im Projekt, der three.js kennt, und
+- **`szene.ts` (samt `effekte.ts`, `licht.ts`, `kulisse.ts`, `partikel.ts`,
+  `texturen.ts`) ist der einzige Ort im Projekt, der three.js kennt, und
   enthält keine einzige Spielregel.** Sie bekommt einen `Lauf` gereicht und
   stellt ihn dar. Alles Rechnende steht in `logik.ts` und ist ohne Browser
   geprüft. Genau diese Trennung war die eigentliche Bedingung — nicht die
@@ -1623,6 +1624,75 @@ sich an der Steuerung etwas ändert.
   Mauern tun das. Die Hindernisse entstehen weiter nur aus der
   Abschnittsnummer, derselbe Lauf mit derselben Eingabe bleibt
   reproduzierbar.
+
+### Version 3 — Optik auf App-Store-Niveau
+
+Rückmeldung: „Die Optik sollte wesentlich hochwertiger wirken, das sieht alles
+noch sehr einfach aus." Die Szene war sauber gebaut, aber flach beleuchtet,
+leer an den Rändern und ohne alles, was ein fertiges Spiel nach dem Rendern
+macht. Sechs Griffe, in der Reihenfolge ihrer Wirkung:
+
+- **Nachbearbeitung** (`effekte.ts`): Leuchtfilter (Bloom), Vignette,
+  Farbgrading und eine leichte Tempo-Unschärfe am Rand. Es ist derselbe
+  `three`-Brocken: `EffectComposer` und Passes liegen als Beispiel-Module im
+  Paket `three/examples/jsm`, keine neue Bibliothek. Reihenfolge der Passes:
+  Szene → Bloom → `OutputPass` (Tonwert + sRGB) → eigener Grade-Shader. Der
+  Grade-Shader steht **nach** dem Tonwert-Mapping: Sättigung und Vignette
+  verhalten sich nur im Anzeigeraum so, wie man sie erwartet. Das Rauschen
+  gegen Streifen im Himmel ist fest je Pixel — ein zeitabhängiges wäre ein
+  Dauerflimmern.
+- **Qualitätsstufen 3 bis 0, automatisch.** Ich kenne das Gerät nicht. Die
+  Szene beginnt auf 3 (Bloom, Grading, Schatten, volle Auflösung) und
+  schaltet **nach gemessener Bildzeit** zurück (über 28 ms im Mittel von 70
+  Bildern, nach 45 Bildern Einwöhnung — die ersten übersetzen Shader), nie
+  wieder hinauf: Sonst pendelt es an der Grenze, und jedes Umschalten kostet
+  einen Ruckler. Gedeckelte Zeitschritte (50 ms = App-Wechsel) zählen nicht.
+  Fehlt dem Gerät `EXT_color_buffer_float`, beginnt es gleich auf 1 — ohne
+  diese Prüfung gäbe es kein Fehlersignal, sondern ein **schwarzes Bild**.
+- **Spiegelung und Schatten** (`licht.ts`): ein kleiner, im Code gebauter
+  Himmel mit heller Sonne und zwei Leuchtflächen wird einmal zur
+  Spiegelungsvorlage (PMREM). **Je Material, nicht für die ganze Szene:**
+  `scene.environment` lieferte auch Grundlicht und machte die Figur blass wie
+  unter einer Dunstglocke. Eine Münze bekommt viel Spiegelung, ein Pullover
+  einen Hauch (0,28). Echte Sonnenschatten gibt es für Figur, Hindernisse,
+  Münzen, Bäume, Laternen und Straßenrand-Dinge — **nicht für Häuser**:
+  Deren Schatten läge dauerhaft quer über der halben Straße. Die Fahrbahn-
+  Markierung ist dafür von Basic- auf Lambert-Material gewechselt, sonst
+  bliebe ein Streifen mitten im Schatten leuchtend weiß.
+- **Eine Welt am Rand der Straße** (`kulisse.ts`): ferne Skyline in zwei
+  Ebenen (Umriss und Fenster als getrennte Bilder, damit eine Zeichnung zu
+  jeder Tageszeit passt), Sonne und Mond, Zebrastreifen, Mülleimer,
+  Hydranten, Bänke, Schilder, Ampeln, Haltestellen, Lichtpfützen und Hof an
+  den Laternen. Alles Instanzen — ein Zeichenaufruf je Teil für alle
+  Exemplare — auf einem Ring wie die Laternen. **Die Dinge stehen auf einem
+  11-Meter-Raster, versetzt um 5,5**, weil Bäume und Laternen auf Vielfachen
+  von 11 stehen; sonst steht irgendwann eine Bank im Baumstamm.
+- **Nacht ist ein Wert.** `nachtFaktor()` (0 bis 1, aus der Lampenhelligkeit
+  abgeleitet) steuert Fensterlicht (`emissiveMap` aus `fensterLichtTextur`
+  mit demselben Raster wie die Wand), Neonschilder, Lampen, Lichtpfützen,
+  Wolken und Skyline-Fenster. Eine Zahl, kein Umschalter je Ding.
+- **Gestirne je Zone** gleiten zur neuen Stellung (Sonne, tief stehendes
+  Abendlicht, Mond, großes Neon-Gestirn). Bewusst nahe der Bildmitte: Weiter
+  außen versteckten die Häuserzeilen sie vollständig.
+- **Effekte, die auf das Spiel antworten**: Funken beim Einsammeln, Staub
+  beim Landen, Splitter beim Stolpern, Reibungsfunken beim Rutschen,
+  Schweif bei Turbo, Fresnel-Hülle fürs Schild, Tempolinien, Sichtfeld, das
+  sich mit dem Tempo weitet, Kameraneigung beim Spurwechsel. Partikel sind
+  Ringspeicher mit festem Zahlengenerator (nie `Math.random`) und blenden in
+  Kameranähe aus — eine Staubwolke unter der Linse wäre ein riesiger hellen
+  Fleck. **Aus bei „weniger Bewegung".** Die Warnlichter blinken unter einem
+  Hertz und sind je nur ein Punkt (Projektgrenze für Dauerpulse).
+
+*Merksatz:* Der größte Sprung kam nicht aus mehr Geometrie, sondern aus dem,
+was nach dem Zeichnen passiert, und aus Dingen, die nichts mit dem Spiel zu
+tun haben und trotzdem vorbeiziehen.
+
+**Prüfhaken nur für Bildschirmfotos** (auf einem echten Gerät nie gesetzt):
+`globalThis.__dashQualitaet` erzwingt eine Stufe (sonst schaltet ein
+Software-Renderer sofort auf 0), `__dashZone` hält eine Zone fest,
+`__dashLauf` überstimmt Felder des Laufs (Schild, Turbo …), um Effekte ohne
+Erspielen zu zeigen. Mit Playwright über `page.addInitScript` setzen.
+
 
 ## Box Push — Besonderheiten
 

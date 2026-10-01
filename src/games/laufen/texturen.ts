@@ -633,3 +633,239 @@ export function muenzTextur(): THREE.Texture {
   t.anisotropy = 8;
   return t;
 }
+
+/**
+ * Nur die **beleuchteten** Fenster einer Hauswand, vor Schwarz — das Gegenstück
+ * zu `hauswandTextur` mit exakt demselben Raster.
+ *
+ * Sie dient als Eigenlicht-Bild (`emissiveMap`): Nachts leuchten damit genau
+ * die Fenster, die auch am Tag als beleuchtet gemalt sind, und der Leuchtfilter
+ * macht daraus echtes Licht. Beide Bilder müssen dieselben Konstanten benutzen
+ * (Achsen, Geschosse, Fenstermaße, Streuung) — sonst leuchtet nachts ein
+ * Fenster, das am Tag dunkel war, oder die Wand daneben.
+ */
+export function fensterLichtTextur(): THREE.Texture {
+  const B = 256;
+  const H = 256;
+  const ACHSEN = 4;
+  const GESCHOSSE = 8;
+  const { leinwand, stift } = flaeche(B, H);
+  stift.fillStyle = '#000';
+  stift.fillRect(0, 0, B, H);
+
+  const bahn = B / ACHSEN;
+  const geschoss = H / GESCHOSSE;
+  const fb = 36;
+  const fh = 19;
+  // Warme und kühle Lichtfarben im Wechsel: Eine Fassade, in der jedes
+  // Fenster dasselbe Gelb hat, sieht nach Raster aus, nicht nach Menschen.
+  const farben = ['#ffd27a', '#fff0c8', '#ffb85c', '#ffe6a8', '#cfe6ff'];
+  for (let z = 0; z < GESCHOSSE; z++) {
+    for (let s = 0; s < ACHSEN; s++) {
+      const wert = (s * 7 + z * 13 + s * z * 3) % 10;
+      if (wert >= 3) continue;
+      const x = s * bahn + (bahn - fb) / 2;
+      const y = z * geschoss + (geschoss - fh) / 2 + 1;
+      const g = stift.createLinearGradient(x, y, x, y + fh);
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(0.4, farben[(s * 3 + z * 5) % farben.length]!);
+      g.addColorStop(1, farben[(s * 3 + z * 5) % farben.length]!);
+      stift.fillStyle = g;
+      stift.fillRect(x, y, fb, fh);
+    }
+  }
+  return alsTextur(leinwand, 1, 1);
+}
+
+/**
+ * Die Skyline am Ende der Straße: zwei Bilder — ein Umriss und die Fenster
+ * darin. Beide in Weiß mit Durchsichtigkeit; die Farbe kommt vom Werkstoff,
+ * damit eine einzige Zeichnung zu jeder Tageszeit passt.
+ *
+ * Am Ende der Straße lief der Blick bisher in Dunst. Eine ferne Häuserreihe
+ * gibt dem Bild einen Ort — man läuft **auf etwas zu**.
+ */
+export function skylineTexturen(saat: number): { umriss: THREE.Texture; fenster: THREE.Texture } {
+  const B = 1024;
+  const H = 256;
+  const a = flaeche(B, H);
+  const b = flaeche(B, H);
+  const w = wuerfel(saat);
+
+  let x = -10;
+  while (x < B) {
+    const breite = 22 + Math.floor(w() * 56);
+    // Hohe Türme sind seltener, und in der Mitte stehen die höchsten — das
+    // ergibt eine Silhouette mit Gipfel statt eines gleichmäßigen Zaunes.
+    const mitte = 1 - Math.abs((x + breite / 2) / B - 0.5) * 1.3;
+    const hoehe = 36 + w() * 120 * Math.max(0.35, mitte) + (w() < 0.12 ? 60 : 0);
+    const oben = H - hoehe;
+    a.stift.fillStyle = '#fff';
+    a.stift.fillRect(x, oben, breite, hoehe);
+    // Abgetreppter Aufsatz und Antenne
+    if (w() < 0.55) {
+      const bb = breite * (0.4 + w() * 0.3);
+      const hh = 8 + w() * 18;
+      a.stift.fillRect(x + (breite - bb) / 2, oben - hh, bb, hh);
+    }
+    if (w() < 0.3) {
+      a.stift.fillRect(x + breite / 2 - 1, oben - 30 - w() * 18, 2, 40);
+    }
+    // Fenster: kleine helle Punkte in Reihen, ein Teil davon „an".
+    for (let fy = oben + 6; fy < H - 4; fy += 7) {
+      for (let fx = x + 4; fx < x + breite - 5; fx += 6) {
+        if (w() < 0.34) {
+          b.stift.fillStyle = w() < 0.8 ? '#ffe3a0' : '#cfe6ff';
+          b.stift.fillRect(fx, fy, 3, 4);
+        }
+      }
+    }
+    x += breite + Math.floor(w() * 6);
+  }
+
+  const mach = (l: HTMLCanvasElement) => {
+    const t = new THREE.CanvasTexture(l);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    return t;
+  };
+  return { umriss: mach(a.leinwand), fenster: mach(b.leinwand) };
+}
+
+/**
+ * Ein weicher Lichtfleck — für Sonne, Lampenschein, Lichtpfützen auf dem
+ * Asphalt. Weiß mit rundem Abfall; die Farbe bestimmt der Werkstoff.
+ */
+export function leuchtTextur(): THREE.Texture {
+  const S = 128;
+  const { leinwand, stift } = flaeche(S, S);
+  const g = stift.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.18, 'rgba(255,255,255,0.7)');
+  g.addColorStop(0.45, 'rgba(255,255,255,0.25)');
+  g.addColorStop(0.75, 'rgba(255,255,255,0.06)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  stift.fillStyle = g;
+  stift.fillRect(0, 0, S, S);
+  const t = new THREE.CanvasTexture(leinwand);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/**
+ * Ein Zebrastreifen: weiße Balken **in Fahrtrichtung**, quer über die Straße
+ * gereiht, leicht abgenutzt. Er ist die einzige Markierung, die die Straße
+ * **quer** schneidet — und damit der stärkste Tempo-Eindruck am Boden: Man
+ * sieht ihn auf sich zukommen und unter sich verschwinden.
+ */
+export function zebraTextur(): THREE.Texture {
+  const B = 512;
+  const H = 128;
+  const { leinwand, stift } = flaeche(B, H);
+  const w = wuerfel(0x2eb7a);
+  const BALKEN = 14;
+  const bahn = B / BALKEN;
+  for (let i = 0; i < BALKEN; i++) {
+    stift.fillStyle = 'rgba(236,238,240,0.92)';
+    stift.fillRect(i * bahn + bahn * 0.14, 0, bahn * 0.72, H);
+  }
+  // Abnutzung: kleine dunkle Flecken, wie Reifenspuren und Splitt.
+  for (let i = 0; i < 700; i++) {
+    stift.fillStyle = `rgba(60,64,70,${0.10 + w() * 0.25})`;
+    stift.fillRect(Math.floor(w() * B), Math.floor(w() * H), 1 + Math.floor(w() * 3), 1 + Math.floor(w() * 3));
+  }
+  return alsTextur(leinwand, 1, 1);
+}
+
+/**
+ * Ein senkrechtes Leuchtschild: ein Wort, Buchstabe unter Buchstabe, in
+ * Neonfarbe auf dunklem Grund mit Rand — wie die Ausleger über den Läden einer
+ * Einkaufsstraße. Das Wort ist hier kein Text, den jemand lesen soll, sondern
+ * ein Farbfleck mit Zeichencharakter.
+ */
+export function leuchtschildTextur(wort: string, farbe: string): THREE.Texture {
+  const B = 96;
+  const H = 320;
+  const { leinwand, stift } = flaeche(B, H);
+
+  stift.fillStyle = '#05070d';
+  stift.beginPath();
+  stift.roundRect(4, 4, B - 8, H - 8, 14);
+  stift.fill();
+
+  stift.shadowColor = farbe;
+  stift.shadowBlur = 14;
+  stift.strokeStyle = farbe;
+  stift.lineWidth = 5;
+  stift.beginPath();
+  stift.roundRect(8, 8, B - 16, H - 16, 11);
+  stift.stroke();
+
+  stift.fillStyle = farbe;
+  stift.textAlign = 'center';
+  stift.textBaseline = 'middle';
+  const zeilen = [...wort];
+  const schritt = Math.min(62, (H - 40) / zeilen.length);
+  stift.font = `900 ${Math.floor(schritt * 0.82)}px system-ui, Arial, sans-serif`;
+  zeilen.forEach((buchstabe, i) => {
+    stift.fillText(buchstabe, B / 2, H / 2 + (i - (zeilen.length - 1) / 2) * schritt);
+  });
+  // Noch einmal ohne Schein darüber: schärft die Buchstaben.
+  stift.shadowBlur = 0;
+  stift.fillStyle = '#ffffff';
+  stift.globalAlpha = 0.55;
+  zeilen.forEach((buchstabe, i) => {
+    stift.fillText(buchstabe, B / 2, H / 2 + (i - (zeilen.length - 1) / 2) * schritt);
+  });
+
+  const t = new THREE.CanvasTexture(leinwand);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+/** Ein erleuchtetes Plakat für die Haltestelle: ein Farbverlauf mit einfachen Formen. */
+export function plakatTextur(farbeA: string, farbeB: string): THREE.Texture {
+  const B = 96;
+  const H = 160;
+  const { leinwand, stift } = flaeche(B, H);
+  const g = stift.createLinearGradient(0, 0, B, H);
+  g.addColorStop(0, farbeA);
+  g.addColorStop(1, farbeB);
+  stift.fillStyle = g;
+  stift.fillRect(0, 0, B, H);
+  stift.fillStyle = 'rgba(255,255,255,0.85)';
+  stift.beginPath();
+  stift.arc(B * 0.5, H * 0.38, 22, 0, Math.PI * 2);
+  stift.fill();
+  stift.fillRect(14, H * 0.68, B - 28, 8);
+  stift.fillRect(24, H * 0.68 + 16, B - 48, 6);
+  const t = new THREE.CanvasTexture(leinwand);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/**
+ * Die beleuchteten Schaufenster des Erdgeschosses — Gegenstück zu
+ * `sockelTextur` mit demselben Raster, als Eigenlicht-Bild. Nachts fällt das
+ * warme Licht der Läden auf den Gehweg-Rand, und genau dort läuft man.
+ */
+export function sockelLichtTextur(): THREE.Texture {
+  const B = 256;
+  const H = 128;
+  const { leinwand, stift } = flaeche(B, H);
+  stift.fillStyle = '#000';
+  stift.fillRect(0, 0, B, H);
+  const breite = B / 4;
+  const farben = ['#ffd9a0', '#ffe9c4', '#ffc27a', '#d8ecff'];
+  for (let i = 0; i < 4; i++) {
+    const x = i * breite;
+    const g = stift.createLinearGradient(x, 26, x, H - 10);
+    g.addColorStop(0, '#ffeccc');
+    g.addColorStop(0.3, farben[i]!);
+    g.addColorStop(1, 'rgba(255,170,90,0.35)');
+    stift.fillStyle = g;
+    stift.fillRect(x + 10, 28, breite - 20, H - 42);
+  }
+  return alsTextur(leinwand, 1, 1);
+}
