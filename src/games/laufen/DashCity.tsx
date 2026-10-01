@@ -616,13 +616,18 @@ export function DashCity({
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
         <div className="flex flex-col items-start gap-1.5">
-          <span
-            ref={punkteRef}
-            className="text-4xl leading-none font-black tabular-nums text-white"
-            style={{ textShadow: '0 2px 0 rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.6)' }}
-          >
-            0
-          </span>
+          <div className="flex flex-col leading-none">
+            <span className="mb-1 text-[10px] font-black tracking-[0.22em] text-white/70 uppercase [text-shadow:0_1px_4px_rgba(0,0,0,0.7)]">
+              Punkte
+            </span>
+            <span
+              ref={punkteRef}
+              className="text-4xl leading-none font-black tabular-nums text-white"
+              style={{ textShadow: '0 2px 0 rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.6)' }}
+            >
+              0
+            </span>
+          </div>
           {/* Kombo: erst ab vier Hindernissen in Folge sichtbar (siehe
               Zeichenschleife), sonst wäre es Rauschen. */}
           <div
@@ -634,29 +639,34 @@ export function DashCity({
           {/* Die drei laufenden Missionen. Klein und blass: Sie sollen
               Ziel geben, nicht ablenken — gelesen wird sie in einer ruhigen
               Sekunde, nicht mitten im Sprung. */}
-          <ul aria-label="Missionen" className="mt-1 flex w-40 flex-col gap-1">
-            {[0, 1, 2].map((i) => (
-              <li key={i} className="rounded-lg bg-black/35 px-2 py-1 backdrop-blur-sm">
-                <span
-                  ref={(el) => {
-                    missionNamenRef.current[i] = el;
-                  }}
-                  className="block truncate text-[11px] leading-tight font-bold text-white/90"
-                />
-                <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-black/50">
-                  <div
+          <div className="mt-1 w-40 rounded-2xl border border-white/15 bg-black/30 px-2 py-1.5 shadow-lg backdrop-blur-md">
+            <p className="mb-1 text-[9px] font-black tracking-[0.2em] text-white/60 uppercase">
+              Missionen
+            </p>
+            <ul aria-label="Missionen" className="flex flex-col gap-1.5">
+              {[0, 1, 2].map((i) => (
+                <li key={i}>
+                  <span
                     ref={(el) => {
-                      missionBalkenRef.current[i] = el;
+                      missionNamenRef.current[i] = el;
                     }}
-                    className="h-full rounded-full bg-emerald-400"
-                    style={{ width: '0%' }}
+                    className="block truncate text-[10.5px] leading-tight font-bold text-white"
                   />
-                </div>
-              </li>
-            ))}
-          </ul>
+                  <div className="mt-0.5 h-[3px] overflow-hidden rounded-full bg-white/15">
+                    <div
+                      ref={(el) => {
+                        missionBalkenRef.current[i] = el;
+                      }}
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300"
+                      style={{ width: '0%' }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-        <span className="flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1.5 text-sm font-bold text-amber-300 tabular-nums backdrop-blur-sm">
+        <span className="flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-black/35 px-3 py-1.5 text-sm font-bold text-amber-300 tabular-nums shadow-lg backdrop-blur-md">
           <svg viewBox="-10 -10 20 20" className="size-4" aria-hidden="true">
             <circle r={8} fill="#facc15" stroke="#a16207" strokeWidth={2} />
           </svg>
@@ -691,14 +701,14 @@ export function DashCity({
       >
         <div
           ref={schildBadgeRef}
-          className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
+          className="flex flex-col gap-1 rounded-xl border border-white/15 bg-black/40 px-2.5 py-1.5 shadow-lg backdrop-blur-md transition-opacity duration-200"
           style={{ opacity: 0 }}
         >
           <span className="text-xs font-black text-blue-300">🛡️ Schild</span>
         </div>
         <div
           ref={magnetBadgeRef}
-          className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
+          className="flex flex-col gap-1 rounded-xl border border-white/15 bg-black/40 px-2.5 py-1.5 shadow-lg backdrop-blur-md transition-opacity duration-200"
           style={{ opacity: 0 }}
         >
           <span className="text-xs font-black text-red-300">🧲 Magnet</span>
@@ -708,7 +718,7 @@ export function DashCity({
         </div>
         <div
           ref={turboBadgeRef}
-          className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
+          className="flex flex-col gap-1 rounded-xl border border-white/15 bg-black/40 px-2.5 py-1.5 shadow-lg backdrop-blur-md transition-opacity duration-200"
           style={{ opacity: 0 }}
         >
           <span className="text-xs font-black text-amber-300">⚡ Turbo</span>
@@ -718,7 +728,7 @@ export function DashCity({
         </div>
         <div
           ref={sprungBadgeRef}
-          className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
+          className="flex flex-col gap-1 rounded-xl border border-white/15 bg-black/40 px-2.5 py-1.5 shadow-lg backdrop-blur-md transition-opacity duration-200"
           style={{ opacity: 0 }}
         >
           <span className="text-xs font-black text-teal-300">⬆️ Sprung</span>
@@ -728,7 +738,7 @@ export function DashCity({
         </div>
         <div
           ref={doppelBadgeRef}
-          className="flex flex-col gap-1 rounded-xl bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition-opacity duration-200"
+          className="flex flex-col gap-1 rounded-xl border border-white/15 bg-black/40 px-2.5 py-1.5 shadow-lg backdrop-blur-md transition-opacity duration-200"
           style={{ opacity: 0 }}
         >
           <span className="text-xs font-black text-pink-300">✳️ Punkte ×2</span>

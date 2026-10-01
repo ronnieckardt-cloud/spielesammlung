@@ -5,21 +5,33 @@ import {
   LUECKE_LAENGE,
   SCHONZEIT,
   SPUR_BREITE,
+  TEMPO_MAX,
+  TEMPO_START,
+  TURBO_FAKTOR,
   spurX,
+  tempoBei,
   zoneBei,
 } from './logik';
 import type { Lauf } from './logik';
+import { nachbearbeitungBauen } from './effekte';
+import { empfaengtSchatten, schattenEinrichten, umgebungBauen, wirftSchatten } from './licht';
+import { kulisseBauen, ringZ } from './kulisse';
+import { partikelBauen } from './partikel';
+import type { Kulisse } from './kulisse';
 import {
   asphaltTextur,
   containerTextur,
+  fensterLichtTextur,
   gehwegTextur,
   hauswandTextur,
   himmelMalen,
   himmelTextur,
+  leuchtschildTextur,
   markierungTextur,
   muenzTextur,
   randschattenTextur,
   schattenTextur,
+  sockelLichtTextur,
   sockelTextur,
   warnTextur,
   wolkeTextur,
@@ -38,10 +50,17 @@ import {
  * 3-D die Projektregeln nicht bricht.
  *
  * Zielgerät bleibt ein altes iPad: geteilte Geometrien und Werkstoffe, ein
- * fester Vorrat wiederverwendeter Körper statt ständigem Neuanlegen, keine
- * echten Schattenwürfe, `devicePixelRatio` gedeckelt. Die Texturen sind im
- * Code gezeichnet (siehe `texturen.ts`) — sie kosten fast nichts und heben
- * die Bildqualität mehr als alles andere.
+ * fester Vorrat wiederverwendeter Körper statt ständigem Neuanlegen,
+ * `devicePixelRatio` gedeckelt. Die Texturen sind im Code gezeichnet (siehe
+ * `texturen.ts`) — sie kosten fast nichts und heben die Bildqualität mehr als
+ * alles andere.
+ *
+ * **Die Optik hat Qualitätsstufen** (siehe `effekte.ts`): Auf der höchsten gibt
+ * es echte Schatten, Leuchtfilter und Farbgrading, und die Szene schaltet
+ * nach gemessener Bildzeit von selbst zurück. Was daran hängt, steht im
+ * Rückruf `beiStufe` weiter unten. Hilfsdateien: `licht.ts` (Spiegelung,
+ * Schatten), `kulisse.ts` (Skyline, Straßenrand), `partikel.ts` (Funken,
+ * Staub). Sie kennen wie diese Datei keine Spielregel.
  */
 
 /**
@@ -159,6 +178,12 @@ type Stimmung = {
   sonne: number;
   sonneStaerke: number;
   belichtung: number;
+  /** Wie stark Metall und Lack die Umgebung spiegeln — nachts viel weniger. */
+  umgebung: number;
+  /** Helligkeit der Laternenköpfe — am Tag kaum zu sehen, nachts strahlend. */
+  lampen: number;
+  /** Farbe des Fensterlichts — Abendrot warm, Neon rosa. */
+  fensterFarbe: number;
 };
 const STIMMUNGEN: readonly Stimmung[] = [
   {
@@ -170,6 +195,9 @@ const STIMMUNGEN: readonly Stimmung[] = [
     sonne: 0xfff2d8,
     sonneStaerke: 2.5,
     belichtung: 1.12,
+    umgebung: 0.9,
+    lampen: 0.5,
+    fensterFarbe: 0xffe2b0,
   },
   {
     himmel: ['#3b2a6b', '#b8507c', '#f59e6b', '#ffd9a0'],
@@ -180,6 +208,9 @@ const STIMMUNGEN: readonly Stimmung[] = [
     sonne: 0xffa860,
     sonneStaerke: 2.3,
     belichtung: 1.1,
+    umgebung: 0.75,
+    lampen: 1.8,
+    fensterFarbe: 0xffc890,
   },
   {
     himmel: ['#050a1f', '#0e1a44', '#1d2f66', '#34508a'],
@@ -190,6 +221,9 @@ const STIMMUNGEN: readonly Stimmung[] = [
     sonne: 0xa9bfff,
     sonneStaerke: 1.2,
     belichtung: 1.3,
+    umgebung: 0.32,
+    lampen: 3.4,
+    fensterFarbe: 0xffffff,
   },
   {
     himmel: ['#14002e', '#4b0f6e', '#b0207f', '#ff5fa2'],
@@ -200,6 +234,9 @@ const STIMMUNGEN: readonly Stimmung[] = [
     sonne: 0xff7ad9,
     sonneStaerke: 1.7,
     belichtung: 1.25,
+    umgebung: 0.5,
+    lampen: 3,
+    fensterFarbe: 0xffb8ee,
   },
 ];
 
@@ -289,8 +326,14 @@ function figurBauen(): Figur {
   // Phong statt Lambert: Ein leichter Glanz macht aus einer flachen Fläche
   // eine gewölbte. Bei einer Figur aus lauter Grundkörpern ist das der
   // Unterschied zwischen „Spielfigur aus Kunststoff" und „Pappe".
+  // Aus `shininess` wird eine Rauheit: Je glänzender, desto glatter. Standard
+  // statt Phong, damit die Figur die Umgebung spiegelt (Schuhe, Stoffglanz).
   const stoff = (farbe: number, glanz = 18) =>
-    new THREE.MeshPhongMaterial({ color: farbe, shininess: glanz, specular: 0x2a2a2a });
+    new THREE.MeshStandardMaterial({
+      color: farbe,
+      roughness: Math.max(0.3, Math.min(0.9, 0.95 - glanz * 0.0135)),
+      metalness: 0,
+    });
 
   const mShirt = stoff(FARBEN.shirt, 26);
   const mShirtDunkel = stoff(FARBEN.shirtDunkel, 22);
@@ -433,10 +476,10 @@ function figurBauen(): Figur {
    */
   const muetze = new THREE.Mesh(
     new THREE.SphereGeometry(0.272, 20, 14, 0, Math.PI * 2, 0, Math.PI / 1.85),
-    new THREE.MeshPhongMaterial({
+    new THREE.MeshStandardMaterial({
       color: FARBEN.shirtDunkel,
-      shininess: 22,
-      specular: 0x2a2a2a,
+      roughness: 0.65,
+      metalness: 0,
       side: THREE.DoubleSide,
     }),
   );
@@ -610,7 +653,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     antialias: true,
     powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+  // Die Auflösung setzt `effekte.ts` — sie hängt von der Qualitätsstufe ab.
   // Filmische Tonwertkurve: Ohne sie brennen die hellen Flächen (Himmel,
   // Gehweg) aus und die Farben wirken flach.
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -642,13 +685,62 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   const hemi = new THREE.HemisphereLight(0xdaf0ff, 0x6d7f90, 1.25);
   szene.add(hemi);
   const sonne = new THREE.DirectionalLight(0xfff2d8, 2.5);
-  sonne.position.set(-9, 13, 5);
-  szene.add(sonne);
+  // Dieselbe Richtung wie zuvor ((-9, 13, 5) vom Ziel aus), nur weiter weg: Der
+  // Schatten braucht Platz davor, und das Ziel steht mitten im Nahbereich.
+  sonne.target.position.set(0, 0, 14);
+  sonne.position.set(-14, 33, 22);
+  szene.add(sonne, sonne.target);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  schattenEinrichten(sonne);
+
+  // Eine Umgebung zum Spiegeln — siehe `licht.ts`.
+  const umgebung = umgebungBauen(renderer);
+  /*
+   * **Je Material, nicht für die ganze Szene.** `scene.environment` wirkt auf
+   * jedes Standard-Material gleich stark — die Figur wurde dadurch blass wie
+   * unter einer Dunstglocke, weil die Umgebung nicht nur spiegelt, sondern
+   * auch ihr Grundlicht mitliefert. Eine Münze will viel Spiegelung, ein
+   * Pullover fast keine. Deshalb bekommt jedes Material seine eigene Vorlage
+   * und seinen eigenen Faktor; die Zone dreht alle zusammen herauf und
+   * herunter (`spiegelnde`).
+   */
+  const spiegelnde: { stoff: THREE.MeshStandardMaterial; basis: number }[] = [];
+  const spiegelt = (stoff: THREE.MeshStandardMaterial, basis: number) => {
+    if (!umgebung) return;
+    stoff.envMap = umgebung.texture;
+    stoff.envMapIntensity = basis * STIMMUNGEN[0]!.umgebung;
+    spiegelnde.push({ stoff, basis });
+  };
   // Ein schwaches Gegenlicht von vorn setzt die Silhouette der Figur vom
   // Hintergrund ab — sie ist das Einzige, was man dauernd ansieht.
   const gegenlicht = new THREE.DirectionalLight(0xbfe3f4, 0.55);
   gegenlicht.position.set(4, 5, 14);
   szene.add(gegenlicht);
+
+  /** Wirft die Sonne gerade echte Schatten? Steuert, wie kräftig der gemalte Fleck ist. */
+  let schattenAktiv = true;
+  /** Schaltet die Kulisse um — sie entsteht erst weiter unten. */
+  let kulisseDetail: ((an: boolean) => void) | null = null;
+
+  /*
+   * Bloom, Grading und Vignette — und die automatische Qualitätsstufe.
+   * `beiStufe` läuft einmal beim Start und danach bei jedem Zurückschalten.
+   */
+  const nachbearbeitung = nachbearbeitungBauen(
+    renderer,
+    szene,
+    kamera,
+    (stufe) => {
+      // Echte Schatten nur auf der höchsten Stufe. Der gemalte Fleck unter
+      // der Figur bleibt immer — auf den niedrigen Stufen ist er der einzige.
+      sonne.castShadow = stufe >= 3;
+      schattenAktiv = stufe >= 3;
+      // Dinge am Straßenrand und Lichtpfützen erst ab Stufe 2.
+      kulisseDetail?.(stufe >= 2);
+    },
+    ruhig,
+  );
 
   // ---------------------------------------------------------------
   // Straße, Markierung, Gehwege
@@ -667,6 +759,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   );
   strasse.rotation.x = -Math.PI / 2;
   strasse.position.z = STRASSE_LAENGE / 2 - 14;
+  strasse.receiveShadow = true;
   szene.add(strasse);
 
   /*
@@ -685,15 +778,19 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   markierungBild.repeat.set(1, STRASSE_LAENGE / MARKIERUNG_TAKT);
   const markierung = new THREE.Mesh(
     new THREE.PlaneGeometry(strassenBreite, STRASSE_LAENGE),
-    new THREE.MeshBasicMaterial({
+    // Lambert statt Basic: Ein Streifen, der mitten im Schatten eines Hindernisses
+    // leuchtend weiß bliebe, würde die Straße sofort wieder flach machen.
+    // Etwas abgedunkelt, sonst überstrahlt der Streifen und leuchtet im Bloom.
+    new THREE.MeshLambertMaterial({
       map: markierungBild,
+      color: 0xc4c4c4,
       transparent: true,
       depthWrite: false,
-      fog: true,
     }),
   );
   markierung.rotation.x = -Math.PI / 2;
   markierung.position.set(0, 0.012, STRASSE_LAENGE / 2 - 14);
+  markierung.receiveShadow = true;
   szene.add(markierung);
 
   // Der Schlagschatten der Häuserzeile. Er erdet die Straße: Ohne ihn
@@ -727,6 +824,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       GEHWEG_HOEHE / 2,
       STRASSE_LAENGE / 2 - 14,
     );
+    gehweg.receiveShadow = true;
     szene.add(gehweg);
 
     // Der Bordstein ist eine eigene, hellere Kante. Er ist die einzige
@@ -741,6 +839,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       (GEHWEG_HOEHE + 0.05) / 2,
       STRASSE_LAENGE / 2 - 14,
     );
+    bordstein.receiveShadow = true;
     szene.add(bordstein);
   }
 
@@ -774,23 +873,155 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
    * Aufbau und zwölf Texturen im Grafikspeicher.
    */
   const hausBilder = hausFarben.map(([grund, fenster]) => hauswandTextur(grund, fenster));
+  /*
+   * Das Fensterlicht-Bild ist für alle Wandfarben **dasselbe** (nur die
+   * beleuchteten Fenster, siehe `fensterLichtTextur`) — je Dichtestufe ein
+   * Klon mit eigener Wiederholung, wie bei den Wänden.
+   */
+  const lichtBild = fensterLichtTextur();
+  const lichtBilder = [2, 3, 5].map((dichte, i) => {
+    const t = i === 0 ? lichtBild : lichtBild.clone();
+    t.repeat.set(1, dichte);
+    return t;
+  });
   const hausStoffe = hausBilder.flatMap((bild) =>
     [2, 3, 5].map((dichte, i) => {
       const eigenes = i === 0 ? bild : bild.clone();
       eigenes.repeat.set(1, dichte);
-      return new THREE.MeshPhongMaterial({ map: eigenes, shininess: 14, specular: 0x1c1c1c });
+      return new THREE.MeshPhongMaterial({
+        map: eigenes,
+        shininess: 14,
+        specular: 0x1c1c1c,
+        // Nachts leuchten die Fenster, die am Tag als beleuchtet gemalt sind.
+        // Die Stärke setzt `stimmungAnwenden` (am Tag 0).
+        emissive: 0xffffff,
+        emissiveMap: lichtBilder[i]!,
+        emissiveIntensity: 0,
+      });
     }),
   );
   const sockelBild = sockelTextur();
-  const sockelStoff = new THREE.MeshPhongMaterial({ map: sockelBild, shininess: 10 });
+  const sockelStoff = new THREE.MeshPhongMaterial({
+    map: sockelBild,
+    shininess: 10,
+    emissive: 0xffffff,
+    emissiveMap: sockelLichtTextur(),
+    emissiveIntensity: 0,
+  });
   const attikaStoff = new THREE.MeshPhongMaterial({ color: 0x535a63 });
 
-  const haeuser = Array.from({ length: VORRAT_HAEUSER }, () => {
+  /** Maße eines Hauses nach Platz im Ring — fest je Platz, damit nichts springt. */
+  const hausMasse = (index: number) => {
+    const seite = index % 2 === 0 ? -1 : 1;
+    const reihe = Math.floor(index / 2);
+    const hoehe = 11 + ((reihe * 37) % 24);
+    const dicke = 5 + ((reihe * 19) % 4) * 0.8;
+    const laenge = 7 + ((reihe * 23) % 7);
+    const stufe = hoehe < 17 ? 0 : hoehe < 25 ? 1 : 2;
+    return { seite, reihe, hoehe, dicke, laenge, stufe };
+  };
+
+  /*
+   * **Dachaufbauten.** Ein Haus, das oben als glatter Kasten endet, sieht nach
+   * Bauklotz aus. Jedes Haus bekommt je nach Platz einen Technikaufbau,
+   * einen Wassertank, Klimageräte oder einen Mast — mit rotem Warnlicht, das
+   * langsam blinkt (unter einem Hertz, und nur ein Punkt, kein Flächenblinken).
+   */
+  const dachStoff = new THREE.MeshStandardMaterial({ color: 0x5b636d, roughness: 0.85 });
+  const tankStoff = new THREE.MeshStandardMaterial({ color: 0x7a5a42, roughness: 0.8 });
+  const mastStoff = new THREE.MeshStandardMaterial({ color: 0x8b95a1, roughness: 0.5, metalness: 0.5 });
+  const warnLicht = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.8, 0.2, 0.15) });
+  const dachKasten = new THREE.BoxGeometry(1, 1, 1);
+  const tankGeo = new THREE.CylinderGeometry(1, 1, 1, 14);
+  const tankDachGeo = new THREE.ConeGeometry(1.08, 0.5, 14);
+  const dachMastGeo = new THREE.CylinderGeometry(0.035, 0.06, 1, 6);
+  const kugelGeo = new THREE.SphereGeometry(0.13, 8, 6);
+
+  /*
+   * Leuchtschilder an der Hauswand — Ausleger quer zur Straße, damit man sie
+   * von vorn sieht. Tagsüber matte Schilder, nachts Neon.
+   */
+  const schildGeo = new THREE.PlaneGeometry(0.85, 2.55);
+  const klammerGeo = new THREE.BoxGeometry(0.55, 0.06, 0.06);
+  const SCHILDER: readonly (readonly [string, string])[] = [
+    ['HOTEL', '#ff5fa2'],
+    ['BAR', '#22d3ee'],
+    ['PIZZA', '#fbbf24'],
+    ['KINO', '#a78bfa'],
+    ['CAFE', '#34d399'],
+    ['DISCO', '#f472b6'],
+  ];
+  const schildStoffe = SCHILDER.map(
+    ([wort, farbe]) =>
+      new THREE.MeshBasicMaterial({
+        map: leuchtschildTextur(wort, farbe),
+        color: new THREE.Color(0.8, 0.8, 0.8),
+        side: THREE.DoubleSide,
+      }),
+  );
+
+  const haeuser = Array.from({ length: VORRAT_HAEUSER }, (_, index) => {
+    const m = hausMasse(index);
     const g = new THREE.Group();
     const koerper = new THREE.Mesh(hausGeo, hausStoffe[0]);
     const sockel = new THREE.Mesh(hausGeo, sockelStoff);
     const attika = new THREE.Mesh(hausGeo, attikaStoff);
     g.add(koerper, sockel, attika);
+
+    // Dach
+    const dach = new THREE.Group();
+    dach.position.y = m.hoehe + 0.75;
+    const variante = (m.reihe + (m.seite > 0 ? 2 : 0)) % 4;
+    if (variante === 0 || variante === 3) {
+      const aufbau = new THREE.Mesh(dachKasten, dachStoff);
+      aufbau.scale.set(m.dicke * 0.5, 1.9, m.laenge * 0.4);
+      aufbau.position.set(m.dicke * 0.1, 0.95, 0);
+      dach.add(aufbau);
+    }
+    if (variante === 1 || variante === 3) {
+      const tank = new THREE.Mesh(tankGeo, tankStoff);
+      tank.scale.set(1.05, 1.5, 1.05);
+      tank.position.set(-m.dicke * 0.22, 0.75, m.laenge * 0.22);
+      dach.add(tank);
+      const haube = new THREE.Mesh(tankDachGeo, dachStoff);
+      haube.position.set(-m.dicke * 0.22, 1.75, m.laenge * 0.22);
+      dach.add(haube);
+    }
+    if (variante === 2) {
+      for (let k = 0; k < 3; k++) {
+        const klima = new THREE.Mesh(dachKasten, dachStoff);
+        klima.scale.set(1.4, 0.8, 1.1);
+        klima.position.set((k - 1) * 1.7, 0.4, (k % 2) * 1.2 - 0.6);
+        dach.add(klima);
+      }
+    }
+    if (variante === 0 || variante === 2) {
+      const hMast = 4 + (m.reihe % 3) * 1.6;
+      const mast = new THREE.Mesh(dachMastGeo, mastStoff);
+      mast.scale.y = hMast;
+      mast.position.set(-m.dicke * 0.25, hMast / 2, -m.laenge * 0.25);
+      dach.add(mast);
+      const licht = new THREE.Mesh(kugelGeo, warnLicht);
+      licht.position.set(-m.dicke * 0.25, hMast + 0.05, -m.laenge * 0.25);
+      dach.add(licht);
+    }
+    g.add(dach);
+
+    // Leuchtschild an der Straßenseite (jedes dritte Haus bleibt ohne)
+    if (m.reihe % 3 !== 2) {
+      const sx = -m.seite * (m.dicke / 2 + 0.55);
+      const sy = 3.9 + (m.reihe % 3) * 1.15 + 1.28;
+      const sz = (((m.reihe * 5) % 7) / 6 - 0.5) * (m.laenge - 3);
+      const schild = new THREE.Mesh(schildGeo, schildStoffe[(m.reihe + (m.seite > 0 ? 3 : 0)) % schildStoffe.length]);
+      schild.position.set(sx, sy, sz);
+      // Die Fläche steht quer zur Straße und zeigt zur Kamera (−z).
+      schild.rotation.y = Math.PI;
+      g.add(schild);
+      const klammer = new THREE.Mesh(klammerGeo, mastStoff);
+      klammer.position.set(-m.seite * (m.dicke / 2 + 0.27), sy + 1.0, sz);
+      g.add(klammer);
+    }
+
     szene.add(g);
     return { g, koerper, sockel, attika };
   });
@@ -798,12 +1029,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   /** Höhe des Erdgeschosses. */
   const SOCKEL_H = 3.4;
   const hausSetzen = (h: (typeof haeuser)[number], index: number, versatz: number) => {
-    const seite = index % 2 === 0 ? -1 : 1;
-    const reihe = Math.floor(index / 2);
-    const hoehe = 11 + ((reihe * 37) % 24);
-    const dicke = 5 + ((reihe * 19) % 4) * 0.8;
-    const laenge = 7 + ((reihe * 23) % 7);
-    const stufe = hoehe < 17 ? 0 : hoehe < 25 ? 1 : 2;
+    const { seite, reihe, hoehe, dicke, laenge, stufe } = hausMasse(index);
     h.koerper.material = hausStoffe[((reihe * 5) % hausFarben.length) * 3 + stufe]!;
     h.koerper.scale.set(dicke, hoehe - SOCKEL_H, laenge);
     h.koerper.position.y = SOCKEL_H + (hoehe - SOCKEL_H) / 2;
@@ -832,10 +1058,12 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
    * Hindernis verwechselt werden.
    */
   const metallStoff = new THREE.MeshPhongMaterial({ color: 0x3b4450, shininess: 46 });
-  const lampenStoff = new THREE.MeshPhongMaterial({
+  // Die Helligkeit stellt `stimmungAnwenden` je Zone ein (`emissiveIntensity`).
+  const lampenStoff = new THREE.MeshStandardMaterial({
     color: 0xfff4d0,
-    emissive: 0x8a7530,
-    shininess: 70,
+    emissive: 0xffe3a0,
+    emissiveIntensity: STIMMUNGEN[0]!.lampen,
+    roughness: 0.4,
   });
   const mastGeo = new THREE.CylinderGeometry(0.075, 0.115, 7, 8);
   const auslegerGeo = new THREE.BoxGeometry(1.9, 0.1, 0.1);
@@ -858,25 +1086,41 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     return g;
   });
 
-  const stammStoff = new THREE.MeshPhongMaterial({ color: 0x6b4a2f, shininess: 6 });
-  const laubStoff = new THREE.MeshPhongMaterial({ color: 0x3f7a35, shininess: 10 });
-  const laubHellStoff = new THREE.MeshPhongMaterial({ color: 0x599a41, shininess: 10 });
-  const stammGeo = new THREE.CylinderGeometry(0.13, 0.2, 2.4, 8);
-  const kroneGeo = new THREE.SphereGeometry(0.9, 12, 9);
+  /*
+   * **Bäume aus Facetten, nicht aus glatten Kugeln.** Eine glatte Kugel auf
+   * einem Stab liest sich als Lutscher; eine Krone aus mehreren, leicht
+   * verdrehten Vielflächnern mit sichtbaren Flächen liest sich als Laub und
+   * ist die Bildsprache, die man von Stadtspielen auf dem Handy kennt. Fünf
+   * Ballen in drei Grüntönen, jeder Baum anders groß und gedreht.
+   */
+  const stammStoff = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.9 });
+  const laubStoffe = [0x3f7a35, 0x4f9440, 0x35682e].map(
+    (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true }),
+  );
+  const stammGeo = new THREE.CylinderGeometry(0.12, 0.21, 2.5, 8);
+  const kroneGeo = new THREE.IcosahedronGeometry(1, 1);
+  const BALLEN: readonly (readonly [number, number, number, number])[] = [
+    [0, 3.05, 0, 1.0],
+    [0.62, 2.55, 0.25, 0.72],
+    [-0.58, 2.65, -0.3, 0.78],
+    [0.12, 3.75, -0.1, 0.68],
+    [-0.25, 3.3, 0.55, 0.58],
+  ];
 
-  const baeume = Array.from({ length: VORRAT_BAEUME }, () => {
+  const baeume = Array.from({ length: VORRAT_BAEUME }, (_, i) => {
     const g = new THREE.Group();
     const stamm = new THREE.Mesh(stammGeo, stammStoff);
-    stamm.position.y = 1.2 + GEHWEG_HOEHE;
+    stamm.position.y = 1.25 + GEHWEG_HOEHE;
     g.add(stamm);
-    const unten = new THREE.Mesh(kroneGeo, laubStoff);
-    unten.position.y = 2.85 + GEHWEG_HOEHE;
-    unten.scale.set(1, 0.85, 1);
-    g.add(unten);
-    const oben = new THREE.Mesh(kroneGeo, laubHellStoff);
-    oben.position.y = 3.55 + GEHWEG_HOEHE;
-    oben.scale.setScalar(0.68);
-    g.add(oben);
+    BALLEN.forEach(([x, y, z, r], k) => {
+      const ballen = new THREE.Mesh(kroneGeo, laubStoffe[(i + k) % laubStoffe.length]);
+      ballen.position.set(x, y + GEHWEG_HOEHE, z);
+      ballen.scale.set(r, r * 0.88, r);
+      ballen.rotation.set(k * 0.9 + i, k * 1.7, 0);
+      g.add(ballen);
+    });
+    g.scale.setScalar(0.92 + (i % 3) * 0.12);
+    g.rotation.y = i * 1.3;
     szene.add(g);
     return g;
   });
@@ -885,23 +1129,38 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   // Wolken
   // ---------------------------------------------------------------
   const wolkenGeo = new THREE.PlaneGeometry(26, 13);
+  const wolkenStoffe: THREE.MeshBasicMaterial[] = [];
   const wolken = Array.from({ length: VORRAT_WOLKEN }, (_, i) => {
-    const m = new THREE.Mesh(
-      wolkenGeo,
-      new THREE.MeshBasicMaterial({
-        map: wolkeTextur(0x1234 + i * 7717),
-        transparent: true,
-        depthWrite: false,
-        opacity: 0.9,
-        // Ohne das frisst der Dunst die Wolken auf, bevor man sie sieht —
-        // sie liegen ja weit hinten. Sie gehören zum Himmel, nicht zur
-        // Straße.
-        fog: false,
-      }),
-    );
+    const stoff = new THREE.MeshBasicMaterial({
+      map: wolkeTextur(0x1234 + i * 7717),
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.9,
+      // Ohne das frisst der Dunst die Wolken auf, bevor man sie sieht —
+      // sie liegen ja weit hinten. Sie gehören zum Himmel, nicht zur
+      // Straße.
+      fog: false,
+    });
+    wolkenStoffe.push(stoff);
+    const m = new THREE.Mesh(wolkenGeo, stoff);
     szene.add(m);
     return m;
   });
+
+  // ---------------------------------------------------------------
+  // Kulisse: Skyline, Sonne, Dinge am Straßenrand, Lichtpfützen
+  // ---------------------------------------------------------------
+  const kulisse: Kulisse = kulisseBauen({
+    szene,
+    kamera,
+    strassenBreite,
+    gehwegBreite: GEHWEG_BREITE,
+    gehwegHoehe: GEHWEG_HOEHE,
+  });
+  kulisse.detail(nachbearbeitung.stufe() >= 2);
+  kulisseDetail = kulisse.detail;
+  /** Die Köpfe der Laternen in Weltkoordinaten — für Lichtpfützen und Lampenschein. */
+  const laternenKoepfe = Array.from({ length: VORRAT_LATERNEN }, () => new THREE.Vector3());
 
   // ---------------------------------------------------------------
   // Hindernisse
@@ -919,6 +1178,19 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     loch: new THREE.MeshBasicMaterial({ color: 0x030507 }),
     lochTiefe: new THREE.MeshBasicMaterial({ color: 0x000000 }),
   };
+
+  /*
+   * Leuchtende Details an den Hindernissen. Sie sind klein, aber bei Dämmerung
+   * und Nacht genau das, was ein Hindernis aus zwanzig Metern lesbar macht —
+   * und sie sind der Grund, warum der Leuchtfilter überhaupt etwas zu tun
+   * bekommt. Das Blinken bleibt unter einem Hertz und ist nur ein Punkt.
+   */
+  const warnAmber = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.0, 1.5, 0.2) });
+  const ledRot = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 0.15, 0.12) });
+  const randLeuchte = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.2, 0.15) });
+  const warnKugelGeo = new THREE.SphereGeometry(0.075, 8, 6);
+  const ledGeo = new THREE.BoxGeometry(1, 0.035, 0.03);
+  const randStreifenGeo = new THREE.BoxGeometry(0.05, 0.03, 1);
 
   const breit = SPUR_BREITE * 0.86;
   const geo = {
@@ -957,6 +1229,10 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       const fuss = new THREE.Mesh(geo.huerdeFuss, stoffe.dunkel);
       fuss.position.set(seite * (breit / 2 - 0.09), 0.04, 0);
       huerde.add(fuss);
+      // Warnlicht auf dem Standbein, zur Kamera (−z) hin versetzt.
+      const lampe = new THREE.Mesh(warnKugelGeo, warnAmber);
+      lampe.position.set(seite * (breit / 2 - 0.09), 0.5, -0.1);
+      huerde.add(lampe);
     }
     gruppe.add(huerde);
 
@@ -975,6 +1251,12 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     const quer = new THREE.Mesh(geo.querbalken, stoffe.dunkel);
     quer.position.y = 2.04;
     balken.add(quer);
+    // Rote Leuchtleiste an der Unterkante des Schildes — sie zeigt, wo man
+    // drunter durch muss.
+    const led = new THREE.Mesh(ledGeo, ledRot);
+    led.scale.x = breit * 0.92;
+    led.position.set(0, 1.27, -0.07);
+    balken.add(led);
     for (const seite of [-1, 1]) {
       const pfosten = new THREE.Mesh(geo.pfosten, stoffe.dunkel);
       pfosten.position.set(seite * (breit / 2 + 0.16), 1.2, 0);
@@ -1017,6 +1299,14 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       kante.position.set(0, 0.08, zKante);
       luecke.add(kante);
     }
+    // Glühende Streifen an den Längsseiten: Ein Loch ohne eigenes Licht ist
+    // nachts nur ein dunkler Fleck auf dunkler Straße.
+    for (const seite of [-1, 1]) {
+      const streifen = new THREE.Mesh(randStreifenGeo, randLeuchte);
+      streifen.scale.z = LUECKE_LAENGE - 0.4;
+      streifen.position.set(seite * (breit / 2 + 0.12), 0.1, LUECKE_LAENGE / 2);
+      luecke.add(streifen);
+    }
     gruppe.add(luecke);
 
     gruppe.visible = false;
@@ -1052,12 +1342,17 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
    * Bildpunkte, und die in genau dem Goldton, den er vorher als eigene Farbe
    * hatte.
    */
-  const muenzStoff = new THREE.MeshPhongMaterial({
+  // Gold: ein Metall, das die Umgebung spiegelt. Die Prägung kommt aus dem
+  // Bild (`map`), das Leuchten aus einem warmen Eigenlicht — es lässt die
+  // Münze auch im Schatten der Häuser nicht stumpf wirken.
+  const muenzStoff = new THREE.MeshStandardMaterial({
     map: muenzBild,
-    emissive: 0x4a3800,
-    shininess: 90,
-    specular: 0xfff3c4,
+    metalness: 0.85,
+    roughness: 0.28,
+    emissive: 0x5a4200,
+    emissiveIntensity: 0.9,
   });
+  spiegelt(muenzStoff, 1.3);
   const muenzen = Array.from({ length: VORRAT_MUENZEN }, () => {
     const m = new THREE.Mesh(muenzGeo, muenzStoff);
     m.visible = false;
@@ -1133,28 +1428,26 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   const schubDoppelGeo = new THREE.ExtrudeGeometry(funkeForm, { depth: 0.1, bevelEnabled: false });
   schubDoppelGeo.translate(0, 0, -0.05);
 
-  const schubTurboStoff = new THREE.MeshPhongMaterial({
-    color: 0xfbbf24,
-    emissive: 0x7c4a03,
-    shininess: 70,
-    specular: 0xfff3c4,
-  });
-  const schubSprungStoff = new THREE.MeshPhongMaterial({
-    color: 0x2dd4bf,
-    emissive: 0x0a4f47,
-    shininess: 70,
-    specular: 0xd1fef7,
-  });
+  // Alle Schübe: glatter Kunststoff mit kräftigem Eigenlicht. Das Eigenlicht
+  // liegt über 1 und lässt sie im Leuchtfilter (Bloom) strahlen — ein Extra
+  // soll aus zwanzig Metern wie etwas aussehen, das man haben will.
+  const schubStoff = (farbe: number, eigen: number) =>
+    new THREE.MeshStandardMaterial({
+      color: farbe,
+      emissive: eigen,
+      emissiveIntensity: 1.6,
+      roughness: 0.25,
+      metalness: 0.15,
+    });
+  const schubTurboStoff = schubStoff(0xfbbf24, 0x9a5a05);
+  const schubSprungStoff = schubStoff(0x2dd4bf, 0x0c6a60);
+  const schubStoffe: THREE.MeshStandardMaterial[] = [schubTurboStoff, schubSprungStoff];
   // Pink/Magenta — die dritte Farbe im Bild, die weder mit dem Amber der
   // Münzen/Turbo noch mit dem Türkis des Sprungschubs verwechselt werden
   // kann, und bewusst nicht das Violett des eigenen Shirts (Akzentfarbe
   // des Spiels), sonst verschmilzt der Doppler optisch mit der Figur.
-  const schubDoppelStoff = new THREE.MeshPhongMaterial({
-    color: 0xf472b6,
-    emissive: 0x7a1f4f,
-    shininess: 70,
-    specular: 0xfce7f3,
-  });
+  const schubDoppelStoff = schubStoff(0xf472b6, 0x9a2a62);
+  schubStoffe.push(schubDoppelStoff);
   // Schild: ein Wappen mit spitzem Fuß. Blau — die einzige kalte, helle
   // Farbe im Bild neben dem Türkis des Sprungschubs, deshalb deutlich
   // satter und mit weißem Kern.
@@ -1170,22 +1463,19 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   wappenForm.closePath();
   const schubSchildGeo = new THREE.ExtrudeGeometry(wappenForm, { depth: 0.1, bevelEnabled: false });
   schubSchildGeo.translate(0, 0, -0.05);
-  const schubSchildStoff = new THREE.MeshPhongMaterial({
-    color: 0x3b82f6,
-    emissive: 0x15357a,
-    shininess: 80,
-    specular: 0xdbeafe,
-  });
+  const schubSchildStoff = schubStoff(0x3b82f6, 0x1d46a0);
+  schubStoffe.push(schubSchildStoff);
   // Magnet: ein Hufeisen, Pole unten in Weiß — das bekannte Zeichen, kein Rätsel.
   const magnetBogenGeo = new THREE.TorusGeometry(0.2, 0.085, 8, 20, Math.PI);
   const magnetPolGeo = new THREE.BoxGeometry(0.17, 0.14, 0.17);
-  const schubMagnetStoff = new THREE.MeshPhongMaterial({
-    color: 0xef4444,
-    emissive: 0x6b1414,
-    shininess: 70,
-    specular: 0xfee2e2,
+  const schubMagnetStoff = schubStoff(0xef4444, 0x8a1c1c);
+  const schubMagnetPolStoff = new THREE.MeshStandardMaterial({
+    color: 0xf1f5f9,
+    roughness: 0.3,
+    metalness: 0.6,
   });
-  const schubMagnetPolStoff = new THREE.MeshPhongMaterial({ color: 0xf1f5f9, shininess: 60 });
+  schubStoffe.push(schubMagnetStoff, schubMagnetPolStoff);
+  for (const st of schubStoffe) spiegelt(st, 1.1);
 
   const schuebe = Array.from({ length: VORRAT_SCHUEBE }, () => {
     const gruppe = new THREE.Group();
@@ -1220,6 +1510,18 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   // ---------------------------------------------------------------
   const figur = figurBauen();
   szene.add(figur.gruppe);
+  // Nur ein Hauch Spiegelung: genug für den Glanz auf den weißen Schuhen, zu
+  // wenig, um den Stoff zu verwaschen.
+  {
+    const gesehen = new Set<THREE.Material>();
+    figur.gruppe.traverse((t) => {
+      const m = (t as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (m && !gesehen.has(m)) {
+        gesehen.add(m);
+        spiegelt(m, 0.28);
+      }
+    });
+  }
 
   const schattenStoff = new THREE.MeshBasicMaterial({
     map: schattenTextur(),
@@ -1274,17 +1576,114 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
   szene.add(magnetRing);
   // Schild: eine blasse Kugel um die Figur. Halbdurchsichtig und ohne
   // Tiefenschreiben, damit sie die Figur nicht verdeckt.
-  const schildBlase = new THREE.Mesh(
-    new THREE.SphereGeometry(1.05, 20, 14),
-    new THREE.MeshBasicMaterial({
-      color: 0x60a5fa,
-      transparent: true,
-      opacity: 0.22,
-      depthWrite: false,
-    }),
-  );
+  /*
+   * Eine Hülle mit **leuchtendem Rand**: In der Mitte fast durchsichtig, am
+   * Rand hell (Fresnel). So sieht eine Energiehülle aus — ein gleichmäßig
+   * blasse Kugel dagegen wie eine Seifenblase aus Plastik. Dazu wandert ein
+   * schmales Band langsam nach oben.
+   */
+  const schildStoff = new THREE.ShaderMaterial({
+    uniforms: { uZeit: { value: 0 }, uFarbe: { value: new THREE.Color(0.35, 0.65, 2.4) } },
+    vertexShader: /* glsl */ `
+      varying vec3 vN;
+      varying vec3 vV;
+      varying float vH;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal);
+        vV = normalize(-mv.xyz);
+        vH = position.y;
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uZeit;
+      uniform vec3 uFarbe;
+      varying vec3 vN;
+      varying vec3 vV;
+      varying float vH;
+      void main() {
+        float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.4);
+        float band = smoothstep(0.82, 1.0, sin(vH * 5.0 - uZeit * 2.2)) * 0.35;
+        float a = 0.035 + f * 0.6 + band * (0.25 + f);
+        gl_FragColor = vec4(uFarbe * a, a);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneFactor,
+  });
+  const schildBlase = new THREE.Mesh(new THREE.SphereGeometry(1.05, 28, 18), schildStoff);
   schildBlase.visible = false;
   szene.add(schildBlase);
+
+  // --- Partikel, Tempolinien ---------------------------------------
+  const partikel = partikelBauen(szene);
+  // Tempolinien: dünne, lange Striche, die vom Fluchtpunkt nach außen
+  // wegziehen — nur bei hohem Tempo und Turbo. Fest berechnet aus Zahlen
+  // (kein Zufall), jede Linie hat ihre feste Richtung und läuft im Kreis.
+  const LINIEN = 30;
+  const linienStoff = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(1.4, 1.5, 1.8),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    fog: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const linien = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), linienStoff, LINIEN);
+  linien.frustumCulled = false;
+  linien.visible = false;
+  szene.add(linien);
+  const linienMatrix = new THREE.Matrix4();
+  const linienPos = new THREE.Vector3();
+  const linienDreh = new THREE.Quaternion();
+  const linienSkal = new THREE.Vector3();
+  /** Fester Wert aus 0…1 für Linie `i`, Streuung `k` — kein Zufall, gleiche Eingabe gleiches Bild. */
+  const hash = (i: number, k: number) => {
+    const v = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  let linienHell = 0;
+
+  /** Was im letzten Bild galt — für Ereignisse (Münze, Landung, Treffer …). */
+  const vor = {
+    muenzen: 0,
+    schuebe: 0,
+    stolper: 0,
+    y: 0,
+    vorbei: false,
+    turbo: 0,
+    sprung: 0,
+    doppel: 0,
+    magnet: 0,
+    schild: false,
+  };
+  let staubUhr = 0;
+  let funkenUhr = 0;
+  let fovAkt = SICHTFELD;
+  let rollAkt = 0;
+
+  // --- Wer wirft einen Schatten, wer fängt ihn auf --------------------
+  // Häuser nicht (siehe `licht.ts`). Die Lücke auch nicht: Ein Loch wirft
+  // nichts und empfängt nichts.
+  wirftSchatten(figur.gruppe);
+  for (const k of hindernisse) {
+    for (const teil of [k.huerde, k.balken, k.mauer]) {
+      wirftSchatten(teil);
+      empfaengtSchatten(teil);
+    }
+  }
+  for (const m of muenzen) m.castShadow = true;
+  for (const k of schuebe) wirftSchatten(k.gruppe);
+  for (const l of laternen) wirftSchatten(l);
+  for (const b of baeume) {
+    wirftSchatten(b);
+    empfaengtSchatten(b);
+  }
 
   /** Die Stimmung, auf die gerade übergeblendet wird — siehe `STIMMUNGEN`. */
   let zone = 0;
@@ -1297,8 +1696,15 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     hemiStaerke: STIMMUNGEN[0]!.hemiStaerke,
     sonneStaerke: STIMMUNGEN[0]!.sonneStaerke,
     belichtung: STIMMUNGEN[0]!.belichtung,
+    umgebung: STIMMUNGEN[0]!.umgebung,
+    lampen: STIMMUNGEN[0]!.lampen,
+    fensterFarbe: new THREE.Color(STIMMUNGEN[0]!.fensterFarbe),
   };
+  /** 0 = Tag, 1 = tiefe Nacht — aus der Lampenhelligkeit abgeleitet. */
+  const nachtFaktor = () => Math.max(0, Math.min(1, (jetzt.lampen - STIMMUNGEN[0]!.lampen) / (3.4 - STIMMUNGEN[0]!.lampen)));
   const ziel = new THREE.Color();
+  const weiss = new THREE.Color(1, 1, 1);
+  const wolkenFarbe = new THREE.Color();
   const stimmungAnwenden = (dt: number, sofort: boolean) => {
     const st = STIMMUNGEN[zone % STIMMUNGEN.length]!;
     // Etwa eine Sekunde bis zur neuen Stimmung; sofort bei „weniger Bewegung".
@@ -1317,6 +1723,9 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     jetzt.hemiStaerke += (st.hemiStaerke - jetzt.hemiStaerke) * f;
     jetzt.sonneStaerke += (st.sonneStaerke - jetzt.sonneStaerke) * f;
     jetzt.belichtung += (st.belichtung - jetzt.belichtung) * f;
+    jetzt.umgebung += (st.umgebung - jetzt.umgebung) * f;
+    jetzt.lampen += (st.lampen - jetzt.lampen) * f;
+    jetzt.fensterFarbe.lerp(ziel.set(st.fensterFarbe), f);
 
     nebel.color.copy(jetzt.dunst);
     hemi.color.copy(jetzt.hemiOben);
@@ -1325,6 +1734,26 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     sonne.color.copy(jetzt.sonne);
     sonne.intensity = jetzt.sonneStaerke;
     renderer.toneMappingExposure = jetzt.belichtung;
+    for (const sp of spiegelnde) sp.stoff.envMapIntensity = sp.basis * jetzt.umgebung;
+    lampenStoff.emissiveIntensity = jetzt.lampen;
+
+    // Alles, was nachts leuchtet, hängt an **einem** Wert.
+    const nacht = nachtFaktor();
+    for (const hs of hausStoffe) {
+      hs.emissiveIntensity = nacht * 1.0;
+      hs.emissive.copy(jetzt.fensterFarbe);
+    }
+    sockelStoff.emissiveIntensity = nacht * 0.75;
+    sockelStoff.emissive.copy(jetzt.fensterFarbe);
+    // Tagsüber matte Schilder (0,8), nachts Neon (bis 2,6 — über 1 = Bloom).
+    const schildHell = 0.8 + nacht * 1.8;
+    for (const ss of schildStoffe) ss.color.setScalar(schildHell);
+    // Wolken: tagsüber weiß, im Abendrot getönt, nachts kaum noch zu sehen.
+    wolkenFarbe.copy(jetzt.dunst).lerp(weiss, 0.55 - nacht * 0.45).multiplyScalar(1 - nacht * 0.7);
+    for (const ws of wolkenStoffe) {
+      ws.color.copy(wolkenFarbe);
+      ws.opacity = 0.9 - nacht * 0.55;
+    }
     if (geaendert) himmelMalen(himmel, jetzt.himmel.map((c) => `#${c.getHexString()}`));
   };
 
@@ -1371,13 +1800,11 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
    */
   let kameraX = 0;
 
-  /** Ringförmig weiterrücken: was hinten rausläuft, kommt vorn wieder rein. */
-  const ringZ = (reihe: number, abstand: number, anzahl: number, s: number, schub: number) => {
-    const runde = anzahl * abstand;
-    return (((reihe * abstand + schub - s) % runde) + runde) % runde;
-  };
-
   const zeichnen = (lauf: Lauf, dt: number) => {
+    // Nur für Bildschirmfotos: Ein Prüfstand kann Felder des Laufs überstimmen
+    // (Schild, Turbo …), um Effekte zu zeigen, ohne sie erst zu erspielen.
+    const uebersteuert = (globalThis as { __dashLauf?: Partial<Lauf> }).__dashLauf;
+    if (uebersteuert) lauf = { ...lauf, ...uebersteuert };
     /*
      * Zwei getrennte Uhren, und das ist der Kern des Aufpralls: `laufzeit`
      * treibt Laufschritt, Münzdrehung und Hüpfer — nach dem Zusammenstoß
@@ -1423,6 +1850,12 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       // Für die rechte Seite die ganze Laterne drehen, damit der Ausleger
       // wieder über die Fahrbahn zeigt.
       laterne.rotation.y = seite < 0 ? 0 : Math.PI;
+      // Der Lampenkopf in Weltkoordinaten: Der Ausleger zeigt über die Fahrbahn.
+      laternenKoepfe[i]!.set(
+        laterne.position.x + (seite < 0 ? 1.75 : -1.75),
+        laterne.position.y + 6.8,
+        laterne.position.z,
+      );
     });
 
     baeume.forEach((baum, i) => {
@@ -1679,7 +2112,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     const hoch = Math.min(1, figurY / 2.2);
     const sk = 1 - hoch * 0.5;
     schatten.scale.set(sk, sk * 1.3, 1);
-    schattenStoff.opacity = 1 - hoch * 0.65;
+    schattenStoff.opacity = (1 - hoch * 0.65) * (schattenAktiv ? 0.5 : 1);
 
     // Die Wirkungsringe — leichtes Pulsieren statt starrer Größe, sonst
     // wirken sie wie aufgemalt statt wie eine aktive Kraft.
@@ -1714,6 +2147,7 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       const puls = 1 + Math.sin(laufzeit * 5) * 0.03;
       schildBlase.position.set(fx, figurY + 0.9, figurZ);
       schildBlase.scale.set(puls, puls * 1.1, puls);
+      schildStoff.uniforms['uZeit']!.value = laufzeit;
     }
 
     // Stolpern: kurz nach hinten gelehnt und aus dem Takt, die Schonzeit
@@ -1725,9 +2159,136 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       figur.gruppe.rotation.z += Math.sin(laufzeit * 22) * 0.12 * k;
     }
 
+    // Warnlicht auf den Dächern: ein roter Punkt, gut 0,8 Hz — weit unter der
+    // Grenze, und nur ein paar Pixel groß.
+    {
+      const b = 0.5 + 0.5 * Math.sin(laufzeit * 5.2);
+      warnLicht.color.setRGB(0.6 + 2.2 * b, 0.05 + 0.15 * b, 0.05 + 0.1 * b);
+      // Die Warnlichter an den Hürden: etwas langsamer (0,7 Hz), sanft.
+      const w = 0.55 + 0.45 * Math.sin(laufzeit * 4.4);
+      warnAmber.color.setRGB(0.8 + 2.4 * w, 0.4 + 1.1 * w, 0.05 + 0.15 * w);
+    }
+
     // Zonenwechsel: Himmel, Dunst und Licht laufen auf die neue Stimmung zu.
-    zone = zoneBei(lauf.strecke);
-    stimmungAnwenden(dt, ruhig);
+    // Nur für Bildschirmfotos: Ein Prüfstand kann eine Zone festhalten, statt
+    // 600 Meter zu laufen. Auf einem echten Gerät ist der Wert nie gesetzt.
+    const festeZone = (globalThis as { __dashZone?: number }).__dashZone;
+    zone = festeZone ?? zoneBei(lauf.strecke);
+    stimmungAnwenden(dt, ruhig || festeZone !== undefined);
+    kulisse.aktualisieren(
+      lauf.strecke,
+      dt,
+      zone,
+      { nacht: nachtFaktor(), dunst: jetzt.dunst },
+      laternenKoepfe,
+    );
+
+    // --- Ereignisse: Funken, Staub, Tempolinien --------------------------
+    const tempoAnteil = Math.max(
+      0,
+      Math.min(1, (tempoBei(lauf.strecke) - TEMPO_START) / (TEMPO_MAX - TEMPO_START)),
+    );
+    const tempoWelt = tempoBei(lauf.strecke) * (lauf.turboRest > 0 ? TURBO_FAKTOR : 1);
+    // Partikel sind Verzierung: aus bei „weniger Bewegung" und auf der
+    // niedrigsten Stufe, wo jede Reserve gebraucht wird.
+    const partikelAn = !ruhig && nachbearbeitung.stufe() >= 1;
+    partikel.an(partikelAn);
+    if (partikelAn) {
+      const nachtF = nachtFaktor();
+      const staubHell = 0.5 - nachtF * 0.32;
+      const staubFarbe = [staubHell, staubHell * 0.97, staubHell * 0.92] as const;
+      const brust = figurY + 1.0;
+      if (!lauf.vorbei) {
+        if (lauf.muenzenZahl > vor.muenzen) {
+          partikel.funken({
+            x: fx, y: brust, z: 0.6, n: 7, streu: [2.0, 2.4, 1.2], zug: [0, 2.4, 1.5],
+            farbe: [2.8, 2.0, 0.5], groesse: 0.2, dauer: 0.55,
+          });
+        }
+        if (lauf.schubZahl > vor.schuebe) {
+          const farbe: readonly [number, number, number] =
+            lauf.turboRest > vor.turbo ? [3.0, 2.0, 0.4]
+            : lauf.sprungRest > vor.sprung ? [0.4, 2.6, 2.3]
+            : lauf.doppelRest > vor.doppel ? [3.0, 0.9, 1.9]
+            : lauf.magnetRest > vor.magnet ? [3.0, 0.5, 0.5]
+            : [0.5, 1.4, 3.2];
+          partikel.funken({
+            x: fx, y: brust, z: 0.4, n: 28, streu: [3.4, 3.6, 2.4], zug: [0, 2.8, 0],
+            farbe, groesse: 0.28, dauer: 0.85,
+          });
+        }
+        if (lauf.stolperZahl > vor.stolper) {
+          partikel.funken({
+            x: fx, y: brust - 0.1, z: 0.5, n: 22, streu: [3.6, 3.2, 3.0], zug: [0, 2.0, 1],
+            farbe: [3.0, 1.1, 0.25], groesse: 0.24, dauer: 0.7,
+          });
+          partikel.staub({
+            x: fx, y: 0.4, z: 0.4, n: 9, streu: [1.8, 0.8, 1.4], zug: [0, 0.9, 0],
+            farbe: staubFarbe, groesse: 0.6, dauer: 0.9,
+          });
+        }
+        if (vor.schild && !lauf.schild) {
+          partikel.funken({
+            x: fx, y: brust, z: 0.2, n: 34, streu: [3.8, 3.8, 3.0], zug: [0, 1.4, 0],
+            farbe: [0.5, 1.4, 3.2], groesse: 0.26, dauer: 0.8,
+          });
+        }
+        if (vor.y > 0.05 && lauf.y <= 0.05) {
+          partikel.staub({
+            x: fx, y: 0.12, z: 0, n: 9, streu: [1.9, 0.5, 1.5], zug: [0, 0.9, 0],
+            farbe: staubFarbe, groesse: 0.55, dauer: 0.7,
+          });
+        }
+        staubUhr -= dt;
+        if (staubUhr <= 0 && lauf.y <= 0.05 && !rutscht) {
+          staubUhr = 0.13;
+          partikel.staub({
+            x: fx + (Math.sin(laufzeit * 40) > 0 ? 0.14 : -0.14), y: 0.08, z: -0.15,
+            n: 1, streu: [0.25, 0.1, 0.2], zug: [0, 0.55, 0],
+            farbe: staubFarbe, groesse: 0.15, dauer: 0.4,
+          });
+        }
+        funkenUhr -= dt;
+        if (funkenUhr <= 0) {
+          if (rutscht) {
+            funkenUhr = 0.05;
+            partikel.funken({
+              x: fx, y: 0.12, z: 0.3, n: 2, streu: [1.3, 1.0, 0.8], zug: [0, 1.4, 1.2],
+              farbe: [3.0, 2.0, 0.8], groesse: 0.1, dauer: 0.3,
+            });
+          } else if (lauf.turboRest > 0) {
+            funkenUhr = 0.06;
+            partikel.funken({
+              x: fx + (Math.sin(laufzeit * 31) > 0 ? 0.2 : -0.2), y: figurY + 0.6, z: -0.3,
+              n: 2, streu: [0.5, 0.5, 0.3], zug: [0, 0.2, -1.5],
+              farbe: [3.0, 1.9, 0.35], groesse: 0.18, dauer: 0.45,
+            });
+          }
+        }
+      }
+      if (lauf.vorbei && !vor.vorbei) {
+        partikel.funken({
+          x: fx, y: brust, z: 0.4, n: 44, streu: [4.2, 3.8, 3.4], zug: [0, 2.2, 0],
+          farbe: [3.0, 1.0, 0.25], groesse: 0.26, dauer: 0.95,
+        });
+        partikel.staub({
+          x: fx, y: 0.3, z: 0.3, n: 14, streu: [2.2, 1.0, 1.8], zug: [0, 1.0, 0],
+          farbe: staubFarbe, groesse: 0.7, dauer: 1.1,
+        });
+      }
+      partikel.aktualisieren(dt, lauf.vorbei ? 0 : tempoWelt);
+      partikel.skala(renderer.domElement.height, kamera.fov);
+    }
+    vor.muenzen = lauf.muenzenZahl;
+    vor.schuebe = lauf.schubZahl;
+    vor.stolper = lauf.stolperZahl;
+    vor.y = lauf.y;
+    vor.vorbei = lauf.vorbei;
+    vor.turbo = lauf.turboRest;
+    vor.sprung = lauf.sprungRest;
+    vor.doppel = lauf.doppelRest;
+    vor.magnet = lauf.magnetRest;
+    vor.schild = lauf.schild;
 
     // --- Kamera ---
     // Folgt gedämpft zur Seite; hart mitzuziehen wirkt hektisch, gar nicht
@@ -1749,16 +2310,63 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
       kx += Math.sin(aufprall * 74) * staerke;
       ky += Math.cos(aufprall * 63) * staerke * 0.7;
     }
+    if (!ruhig) {
+      // Mehr Tempo, weiteres Bild: Das Sichtfeld öffnet sich leicht, bei
+      // Turbo deutlich — der Rand rückt weg, alles wirkt schneller.
+      const fovZiel = SICHTFELD + tempoAnteil * 3 + (lauf.turboRest > 0 && !lauf.vorbei ? 4 : 0);
+      fovAkt += (fovZiel - fovAkt) * Math.min(1, dt * 2.5);
+      if (Math.abs(kamera.fov - fovAkt) > 0.03) {
+        kamera.fov = fovAkt;
+        kamera.updateProjectionMatrix();
+      }
+      // Beim Spurwechsel neigt sich die Kamera in die Kurve, wie eine Lenkung.
+      const rollZiel = lauf.vorbei ? 0 : (bildX(spurX(lauf.zielSpur)) - fx) * 0.02;
+      rollAkt += (rollZiel - rollAkt) * Math.min(1, dt * 7);
+      // Ein Hauch Mitschwingen im Laufschritt.
+      ky += huepfer * 0.35;
+    }
     kamera.position.set(kx, ky, KAMERA_Z);
     kamera.lookAt(fx * 0.32, KAMERA_ZIEL_Y + lauf.y * 0.28, 18);
+    if (!ruhig) kamera.rotateZ(rollAkt);
 
-    renderer.render(szene, kamera);
+    // --- Tempolinien: vom Fluchtpunkt nach außen ---------------------------
+    {
+      const ziel = ruhig || lauf.vorbei ? 0 : Math.max(lauf.turboRest > 0 ? 0.5 : 0, (tempoAnteil - 0.5) * 0.45);
+      linienHell += (ziel - linienHell) * Math.min(1, dt * 4);
+      linien.visible = linienHell > 0.01;
+      if (linien.visible) {
+        linienStoff.opacity = linienHell;
+        for (let i = 0; i < LINIEN; i++) {
+          const ang = hash(i, 1) * Math.PI * 2;
+          // Fester Winkel zur Blickachse: Die Linie wandert mit wachsender
+          // Nähe nach außen, genau wie bei jedem Warp-Effekt.
+          const ab = 0.3 + hash(i, 2) * 0.36;
+          const dist = 4 + ((((hash(i, 3) * 60 - lauf.strecke * 1.7) % 60) + 60) % 60);
+          linienPos.set(
+            kx + Math.cos(ang) * ab * dist,
+            ky + Math.sin(ang) * ab * dist * 0.8,
+            KAMERA_Z + dist,
+          );
+          const laenge = 1.8 + hash(i, 4) * 3.2 + tempoAnteil * 2;
+          linienSkal.set(0.03, 0.03, laenge);
+          linienMatrix.compose(linienPos, linienDreh, linienSkal);
+          linien.setMatrixAt(i, linienMatrix);
+        }
+        linien.instanceMatrix.needsUpdate = true;
+      }
+    }
+
+    // Tempo als Anteil zwischen Start- und Höchsttempo; Turbo zählt obendrauf.
+    nachbearbeitung.rendern(dt, {
+      tempo: lauf.vorbei ? 0 : 0.25 + tempoAnteil * 0.4 + (lauf.turboRest > 0 ? 0.3 : 0),
+      turbo: lauf.turboRest > 0 && !lauf.vorbei ? 1 : 0,
+    });
   };
 
   const groesseAendern = (breite: number, hoehe: number) => {
     kamera.aspect = breite / hoehe;
     kamera.updateProjectionMatrix();
-    renderer.setSize(breite, hoehe, false);
+    nachbearbeitung.groesse(breite, hoehe);
   };
 
   const aufraeumen = () => {
@@ -1768,16 +2376,22 @@ export function szeneBauen(leinwand: HTMLCanvasElement, ruhig = false): Szene {
     szene.traverse((teil) => {
       const netz = teil as THREE.Mesh;
       if (netz.geometry) netz.geometry.dispose();
+      if ((teil as THREE.InstancedMesh).isInstancedMesh) (teil as THREE.InstancedMesh).dispose();
       const material = netz.material;
       const freigeben = (m: THREE.Material) => {
         const mitBild = m as THREE.Material & { map?: THREE.Texture | null };
         mitBild.map?.dispose();
+        (m as THREE.MeshPhongMaterial).emissiveMap?.dispose();
+        (m as THREE.ShaderMaterial).uniforms?.['karte']?.value?.dispose?.();
         m.dispose();
       };
       if (Array.isArray(material)) material.forEach(freigeben);
       else if (material) freigeben(material as THREE.Material);
     });
     himmel.dispose();
+    umgebung?.dispose();
+    sonne.shadow.dispose();
+    nachbearbeitung.aufraeumen();
     /*
      * **`dispose()` allein gibt den WebGL-Kontext nicht frei.** Es räumt nur
      * die Puffer der Bibliothek ab; der Zeichenkontext der Leinwand bleibt
