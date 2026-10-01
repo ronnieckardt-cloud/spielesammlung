@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ReactNode, Ref } from 'react';
+import type { PointerEvent as ZeigerEreignis, ReactNode } from 'react';
 import { Startbildschirm } from '../../core/Startbildschirm';
 import type { DekoTeil } from '../../core/Startbildschirm';
 import { useGameLoop } from '../../core/useGameLoop';
@@ -22,6 +22,8 @@ import {
   tempoKmh,
 } from './logik';
 import type { Eingabe, Lauf } from './logik';
+import { fingerBewegen } from './eingabe';
+import type { Finger } from './eingabe';
 import type { Zeichner } from './zeichnen';
 import { heldenbildZeichnen, zeichnerBauen } from './zeichnen';
 
@@ -132,20 +134,16 @@ function Knopf({
   farbe,
   setzen,
   beiDruck,
-  knopfRef,
 }: {
   label: string;
   zeichen: ReactNode;
   farbe: KnopfFarbe;
   setzen: (an: boolean) => void;
   beiDruck: () => void;
-  /** Für das Leuchten, wenn die Tipp-Zone offen ist — es wird direkt gesetzt, ohne React. */
-  knopfRef?: Ref<HTMLButtonElement>;
 }) {
   const stil = KNOPF_STIL[farbe];
   return (
     <button
-      ref={knopfRef}
       type="button"
       aria-label={label}
       className="pointer-events-auto flex size-[4.25rem] touch-none flex-col items-center justify-center rounded-2xl border backdrop-blur-sm select-none transition-transform duration-100 active:scale-95 active:brightness-125"
@@ -279,9 +277,12 @@ export function FlowMtb({
   /** Bis zu welcher Laufzeit die „Aufgabe geschafft"-Meldung steht. */
   const meldungBisZeitRef = useRef(0);
   const boostAktivRef = useRef(false);
-  const hintenKnopfRef = useRef<HTMLButtonElement>(null);
-  /** Ob die Tipp-Zone gerade offen ist und der Knopf leuchtet. */
-  const popOffenRef = useRef(false);
+  /** Der Hinweis „Wisch hoch" in der Bildmitte unten — er erscheint vor einer Absprungkante. */
+  const wischHinweisRef = useRef<HTMLDivElement>(null);
+  /** Wie dringend der Hinweis gerade ist: 0 aus, 1 Vorwarnung, 2 Fenster offen. */
+  const popStufeRef = useRef<0 | 1 | 2>(0);
+  /** Die Finger, die gerade auf der Bühne liegen (ohne die Knöpfe) — für den Wisch nach oben. */
+  const fingerRef = useRef(new Map<number, Finger>());
   /**
    * Hält ein Antippen fest, bis die Uhr es gesehen hat. Ein Finger, der binnen eines
    * Bildes (16 ms) wieder abhebt, wäre sonst für die Physik nie dagewesen — und
@@ -289,6 +290,12 @@ export function FlowMtb({
    * Pop belohnen soll.
    */
   const hintenMerkerRef = useRef(false);
+  /**
+   * Ein frischer Absprung ohne Lehnen (Wisch nach oben, Taste „hoch"). Er geht
+   * als `pop` an die Physik und zählt auch dann, wenn „Hinten" gleichzeitig
+   * gehalten wird — siehe `Eingabe.pop`.
+   */
+  const popMerkerRef = useRef(false);
   /** `settings` für die Anzeige-Funktion, ohne sie bei jeder Änderung neu zu bauen. */
   const reduziertRef = useRef(settings.reducedMotion);
   reduziertRef.current = settings.reducedMotion;
@@ -320,23 +327,22 @@ export function FlowMtb({
     }
 
     /*
-     * Die Tipp-Zone ist offen: Eine Absprungmarke liegt voraus, und bis dahin
-     * bleibt weniger Zeit als das Fenster des Pop. Der Knopf „Hinten" leuchtet
-     * dann — wer den Finger darauf hat, sieht es, ohne hinzuschauen. Die Zone
-     * am Boden zeigt dasselbe (siehe `absprungMarken`); das Leuchten ist die
-     * Zugabe, nicht der einzige Hinweis.
+     * Eine Absprungkante liegt voraus. Der Hinweis „Wisch hoch" steht in der Bildmitte
+     * unten, dort, wo die Daumen ohnehin sind, und wird in zwei Stufen dringlich:
+     * zuerst blass (die Kante kommt in gut einer Sekunde), dann voll, sobald das
+     * Fenster des Pop offen ist. Die Tipp-Zone am Boden (siehe `absprungMarken`)
+     * zeigt dasselbe; der Hinweis sagt dazu, **was** zu tun ist — vorher leuchtete
+     * der Knopf „Hinten", und wer nicht gerade auf ihn schaute, sah gar nichts.
      */
-    const marke = neu.amBoden && !neu.popGenommen && neu.vx > 2
-      ? neu.gelaende.absprung.find((a) => a > neu.x - 0.1 && a - neu.x <= neu.vx * POP_FENSTER)
+    const voraus = neu.amBoden && !neu.popGenommen && neu.vx > 2
+      ? neu.gelaende.absprung.find((a) => a > neu.x - 0.1 && a - neu.x <= neu.vx * 1.1)
       : undefined;
-    const offen = marke !== undefined;
-    if (offen !== popOffenRef.current && hintenKnopfRef.current) {
-      popOffenRef.current = offen;
-      const k = hintenKnopfRef.current;
-      k.style.boxShadow = offen
-        ? '0 0 0 3px rgba(255,226,120,0.95), 0 0 26px rgba(255,200,60,0.85)'
-        : '0 6px 14px rgba(0,0,0,0.3)';
-      k.style.transform = offen ? 'scale(1.07)' : '';
+    const stufe: 0 | 1 | 2 = voraus === undefined ? 0 : voraus - neu.x <= neu.vx * POP_FENSTER ? 2 : 1;
+    if (stufe !== popStufeRef.current && wischHinweisRef.current) {
+      popStufeRef.current = stufe;
+      const h = wischHinweisRef.current;
+      h.style.opacity = stufe === 0 ? '0' : stufe === 1 ? '0.6' : '1';
+      h.style.transform = stufe === 2 ? 'translateY(0) scale(1.1)' : stufe === 1 ? 'translateY(0)' : 'translateY(8px)';
     }
 
     // Boost: Das Tempofeld bekommt einen türkisen Schein, solange er wirkt.
@@ -444,6 +450,12 @@ export function FlowMtb({
           lehnenZielRef.current = an ? -1 : 0;
           if (an) hintenMerkerRef.current = true;
           return true;
+        // Der Absprung allein, ohne zu lehnen — das Gegenstück zum Wisch nach oben.
+        case 'ArrowUp':
+        case 'KeyW':
+        case 'Space':
+          if (an) popMerkerRef.current = true;
+          return true;
         default:
           return false;
       }
@@ -491,6 +503,8 @@ export function FlowMtb({
       // Der rohe Druck für den Pop: gedrückt oder seit dem letzten Bild angetippt.
       e.hinten = ziel < 0 || hintenMerkerRef.current;
       hintenMerkerRef.current = false;
+      e.pop = popMerkerRef.current;
+      popMerkerRef.current = false;
 
       const vorher = holeLauf();
       const neu = takt(vorher, dt, eingabeRef.current);
@@ -565,7 +579,7 @@ export function FlowMtb({
     return (
       <Startbildschirm
         titel="Flow MTB"
-        untertitel="Du fährst automatisch los. Springen, sauber landen, in der Luft das Rad gerade halten."
+        untertitel="Du fährst automatisch los. Vor der Lücke nach oben wischen, in der Luft das Rad gerade halten."
         bestScore={bestScore}
         verlauf="linear-gradient(165deg, #0f2b40 0%, #1d4d5c 45%, #0b1a24 100%)"
         deko={DEKO}
@@ -578,11 +592,39 @@ export function FlowMtb({
 
   const hinweisWeg = () => setZeigeHinweis(false);
 
+  /*
+   * Der Wisch nach oben = Absprung (siehe `eingabe.ts`). Er gilt auf der ganzen
+   * Bühne, **nicht** auf den Knöpfen: Wer „Hinten" oder „Bremse" hält, wischt nicht,
+   * und ein Daumen, der am Knopf abrutscht, soll keinen Absprung auslösen.
+   * Jeder Finger wird einzeln geführt — der linke kann lehnen, während der rechte
+   * wischt. Der Absprung geht als eigenes `pop` an die Physik (nicht über „Hinten"):
+   * Er lehnt nicht, und er zählt auch, wenn „Hinten" gerade gehalten wird.
+   */
+  const buehneDruck = (ev: ZeigerEreignis<HTMLDivElement>) => {
+    if (ev.target instanceof Element && ev.target.closest('button')) return;
+    fingerRef.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, ausgeloest: false });
+    hinweisWeg();
+  };
+  const buehneBewegt = (ev: ZeigerEreignis<HTMLDivElement>) => {
+    const f = fingerRef.current.get(ev.pointerId);
+    if (f && fingerBewegen(f, ev.clientX, ev.clientY)) popMerkerRef.current = true;
+  };
+  const buehneLos = (ev: ZeigerEreignis<HTMLDivElement>) => {
+    fingerRef.current.delete(ev.pointerId);
+  };
+
   /** Eine Glasfläche für die Anzeigen — dieselbe Machart überall, sonst wirkt es zusammengestückelt. */
   const glas = 'rounded-2xl border border-white/15 bg-black/35 shadow-lg backdrop-blur-md';
 
   return (
-    <div ref={buehneRef} className="relative min-h-0 flex-1 touch-none select-none overflow-hidden">
+    <div
+      ref={buehneRef}
+      className="relative min-h-0 flex-1 touch-none select-none overflow-hidden"
+      onPointerDown={buehneDruck}
+      onPointerMove={buehneBewegt}
+      onPointerUp={buehneLos}
+      onPointerCancel={buehneLos}
+    >
       <canvas ref={leinwandRef} className="block size-full" />
 
       {/* Oben links: Tempo, Münzen und die drei laufenden Aufgaben. */}
@@ -678,6 +720,19 @@ export function FlowMtb({
         </div>
       </div>
 
+      {/* Vor einer Absprungkante: was zu tun ist. Nur Anzeige, fängt keine Berührung ab. */}
+      <div
+        ref={wischHinweisRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-28 grid place-items-center transition-[opacity,transform] duration-150"
+        style={{ opacity: 0, transform: 'translateY(8px)' }}
+      >
+        <div className="flex items-center gap-2 rounded-full border border-amber-100/70 bg-amber-400/90 px-4 py-1.5 text-amber-950 shadow-xl">
+          <span className="text-xl leading-none font-black">↑</span>
+          <span className="text-sm font-black">Wisch hoch</span>
+        </div>
+      </div>
+
       {/*
        * Steuerung: links Gewicht, rechts Bremse. **Kein Gas-Knopf** — Fahren
        * ist der Grundzustand, siehe `eingabeRef` oben. Während der Fahrt
@@ -695,7 +750,6 @@ export function FlowMtb({
             label="Hinten"
             zeichen="↺"
             farbe="bernstein"
-            knopfRef={hintenKnopfRef}
             setzen={(an) => (lehnenZielRef.current = an ? -1 : 0)}
             beiDruck={() => {
               hintenMerkerRef.current = true;
@@ -721,7 +775,7 @@ export function FlowMtb({
 
       {/* Die Anleitung verschwindet mit der ersten Eingabe. */}
       {zeigeHinweis && (
-        <div className="pointer-events-none absolute inset-x-0 top-[37%] grid place-items-center px-6">
+        <div className="pointer-events-none absolute inset-x-0 top-[30%] grid place-items-center px-6">
           <div className="flex max-w-xs flex-col gap-1.5 rounded-2xl border border-white/15 bg-black/55 px-4 py-3 backdrop-blur-md">
             <p className="text-center text-base font-black text-white">So geht&apos;s</p>
             <HinweisZeile
@@ -731,10 +785,10 @@ export function FlowMtb({
                 </span>
               }
             >
-              In der Luft das Rad gerade halten, beide Räder zugleich landen.
+              In der Luft das Rad mit den Knöpfen gerade halten.
             </HinweisZeile>
-            <HinweisZeile zeichen={<span className="text-lg font-black text-amber-300">›››</span>}>
-              Gelbes Band vor der Kante: <b>Hinten</b> antippen = Pop. Ohne Pop kommst du über keine Lücke.
+            <HinweisZeile zeichen={<span className="text-lg font-black text-amber-300">↑</span>}>
+              Vor der Kante (gelbes Band) <b>nach oben wischen</b> = Absprung. Sonst fällst du in die Lücke.
             </HinweisZeile>
             <HinweisZeile zeichen={<span className="block size-4 rounded-full bg-amber-300 ring-2 ring-amber-700" />}>
               Münzen sammeln, türkise Streifen = Schub.

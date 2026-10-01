@@ -189,24 +189,50 @@ export function skelettBerechnen(g: FahrerGeo, pose: FahrerPose): Skelett {
   const pedalNah = plus(g.tretlager, kv);
   const pedalFern = minus(g.tretlager, kv);
 
-  // Hüfte: im Sattel oder stehend über und hinter dem Tretlager.
-  const sitz: P = { x: g.sattel.x - 0.03 * m, y: g.sattel.y - 0.12 * m + hocke * 0.04 * m };
-  const steh: P = {
-    // Gewicht neutral: Hüfte knapp hinter dem Tretlager, die Arme leicht
-    // gebeugt. Ganz hinten (−1) sind die Arme fast gestreckt, ganz vorn (+1)
-    // liegt die Brust über dem Lenker — die beiden Enden sind Grenzen der
-    // Reichweite, nicht der Optik: Weiter weg kämen die Hände nicht mehr
-    // an den Griff.
-    x: g.tretlager.x + (-0.1 + 0.2 * gewicht) * m,
-    y: g.tretlager.y - (0.97 - 0.26 * hocke + 0.07 * streck) * m,
+  /*
+   * **Die Stehhaltung wird vom Lenker aus gebaut, nicht von der Hüfte.**
+   * Rückmeldung: „Die Arme sind verbogen, die sind irgendwie verkehrt rum."
+   * Vorher stand die Hüfte fest über dem Tretlager, der Rumpf kippte um einen
+   * festen Winkel, und wohin die Schulter dabei fiel, ergab sich von selbst:
+   * rund 0,4 m vom Griff — bei 0,66 m Armlänge. Die Differenz musste als Knick
+   * in den Ellbogen. Der sprang weit vor den Griff, der Unterarm lief rückwärts
+   * zur Hand, und das las sich als verdrehter Arm.
+   *
+   * Ein echter Fahrer in der Angriffshaltung macht es umgekehrt: Die Arme sind
+   * leicht gebeugt (gut 90 Prozent der Länge), die Schulter liegt **hinter und
+   * über** dem Griff, und der Rumpf ergibt sich daraus. Genau so wird hier
+   * gerechnet: erst die Schulter relativ zur Hand, dann die Hüfte so, dass der
+   * Rumpf seine Länge behält, und zuletzt der Neigungswinkel aus beidem. Die
+   * Knie bleiben dabei deutlich gebeugt — gestreckte Beine wirkten wie Stelzen.
+   */
+  const torsoLaenge = LAENGEN.torso * m;
+  const stehSchulter: P = {
+    x: g.lenker.x - (0.4 - 0.13 * gewicht - 0.04 * hocke) * m,
+    y: g.lenker.y - (0.47 - 0.1 * hocke + 0.05 * streck) * m,
   };
-  const huefte = lernP(sitz, steh, stehen);
+  const stehHuefteY = g.tretlager.y - (0.9 - 0.22 * hocke + 0.07 * streck) * m;
+  // Senkrechter Abstand Schulter → Hüfte; mehr als die Rumpflänge geht nicht.
+  const dyRumpf = Math.min(stehHuefteY - stehSchulter.y, torsoLaenge * 0.985);
+  const dxRumpf = Math.sqrt(torsoLaenge * torsoLaenge - dyRumpf * dyRumpf);
+  const stehHuefte: P = { x: stehSchulter.x - dxRumpf, y: stehSchulter.y + dyRumpf };
+  const stehLehn = Math.atan2(dxRumpf, dyRumpf);
 
-  // Rumpf: Gewicht hinten richtet auf, Gewicht vorn legt sich über den Lenker.
-  const lehnGrad = lern(50, 58, stehen) + 15 * gewicht - 7 * hocke;
-  const lehn = (lehnGrad * Math.PI) / 180;
+  // Sitzend: die Hüfte im Sattel, der Rumpf neigt sich mit dem Gewicht.
+  const sitz: P = { x: g.sattel.x - 0.03 * m, y: g.sattel.y - 0.12 * m + hocke * 0.04 * m };
+  const sitzLehn = (((50 + 14 * gewicht - 7 * hocke) * Math.PI) / 180) as number;
+
+  const huefte = lernP(sitz, stehHuefte, stehen);
+  const lehn = lern(sitzLehn, stehLehn, stehen);
   const rumpf: P = { x: Math.sin(lehn), y: -Math.cos(lehn) };
-  const schulter = plus(huefte, mal(rumpf, LAENGEN.torso * m));
+  const schulter = plus(huefte, mal(rumpf, torsoLaenge));
+
+  /*
+   * Welche der beiden Ellbogenlösungen gilt, entschied vorher ein Vergleich der
+   * y-Werte. Liegt die Hand fast senkrecht unter der Schulter, sind beide
+   * y-Werte nahezu gleich, und das Gelenk sprang von Bild zu Bild zwischen vorn
+   * und hinten. Jetzt zählt die Seite relativ zur Richtung Schulter → Hand
+   * (siehe `ellbogen` unten), und die ist stabil.
+   */
 
   const kopfWinkel = lehn * 0.62;
   const kopf = plus(schulter, {
@@ -225,11 +251,14 @@ export function skelettBerechnen(g: FahrerGeo, pose: FahrerPose): Skelett {
     return a.x >= b.x ? a : b;
   };
 
-  // Ellbogen zeigen nach oben und leicht nach außen.
+  // Ellbogen zeigen nach vorn-oben, die Seite „links" der Blickrichtung
+  // Schulter → Hand (bei y nach unten ist das die Normale `(dy, −dx)`).
   const hand = g.lenker;
   const ellbogen = (): P => {
     const [a, b] = ik(schulter, hand, LAENGEN.oberarm * m, LAENGEN.unterarm * m);
-    return a.y <= b.y ? a : b;
+    const dh = minus(hand, schulter);
+    const seite = (p: P) => (p.x - schulter.x) * dh.y - (p.y - schulter.y) * dh.x;
+    return seite(a) >= seite(b) ? a : b;
   };
   const eb = ellbogen();
 

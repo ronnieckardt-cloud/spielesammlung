@@ -1136,6 +1136,14 @@ export type Eingabe = {
    * `lehnen < −0,5`.
    */
   hinten?: boolean;
+  /**
+   * Ein **frischer** Absprung in diesem Bild — der Wisch nach oben oder die Taste
+   * „hoch", beides ohne zu lehnen. Er zählt als Pop-Druck, ganz gleich, ob
+   * „Hinten" gerade gehalten wird: Wer mit dem linken Daumen lehnt und mit dem
+   * rechten nach oben wischt, hat `hinten` schon seit Sekunden an, und ein
+   * Vergleich „war es vorher nicht gedrückt?" würde den Wisch verschlucken.
+   */
+  pop?: boolean;
 };
 
 export const KEINE_EINGABE: Eingabe = { gas: false, bremse: false, lehnen: 0 };
@@ -1502,7 +1510,7 @@ function taktKern(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
    */
   const hinten = e.hinten ?? e.lehnen < -0.5;
   let druck = lauf.druck;
-  if (hinten && !lauf.hintenGedrueckt) druck = 0;
+  if (e.pop === true || (hinten && !lauf.hintenGedrueckt)) druck = 0;
   else if (druck >= 0) druck = druck + dt > 1 ? -1 : druck + dt;
   let popZahl = lauf.popZahl;
   const popRest0 = Math.max(0, lauf.popRest - dt);

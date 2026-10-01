@@ -951,6 +951,40 @@ describe('Lücken', () => {
     expect(z.popZahl).toBe(1);
   });
 
+  it('zählt den Wisch-Absprung auch dann, wenn „Hinten" schon gehalten wird', () => {
+    // Links lehnt der Daumen seit Sekunden, rechts wischt der andere nach oben. `hinten`
+    // ist dann dauerhaft an — ein reiner Vergleich mit dem Bild davor sähe keinen
+    // frischen Druck und würfe den Wisch weg.
+    const start = neuesSpiel(SAAT);
+    const g = start.gelaende;
+    const l = g.luecken[0]!;
+    const x = lueckeKante(l) - 8;
+    let z: Lauf = { ...start, x, y: bodenHoehe(g, x), vx: TEMPO_MAX, winkel: bodenWinkel(g, x) };
+    let gewischt = false;
+    while (z.amBoden) {
+      const jetzt = !gewischt && lueckeKante(l) - z.x <= z.vx * 0.15;
+      if (jetzt) gewischt = true;
+      z = takt(z, 1 / 60, { gas: true, bremse: false, lehnen: -1, hinten: true, pop: jetzt });
+    }
+    expect(z.popZahl).toBe(1);
+
+    // Kontrolle: Wer „Hinten" nur hält und nie wischt, bekommt an der Kante keinen Pop.
+    let k: Lauf = { ...start, x, y: bodenHoehe(g, x), vx: TEMPO_MAX, winkel: bodenWinkel(g, x) };
+    while (k.amBoden) k = takt(k, 1 / 60, { gas: true, bremse: false, lehnen: -1, hinten: true });
+    expect(k.popZahl).toBe(0);
+  });
+
+  it('zählt einen Wisch-Absprung ohne zu lehnen', () => {
+    const start = neuesSpiel(SAAT);
+    const g = start.gelaende;
+    const l = g.luecken[0]!;
+    const x = lueckeKante(l) - 3;
+    let z: Lauf = { ...start, x, y: bodenHoehe(g, x), vx: TEMPO_MAX, winkel: bodenWinkel(g, x) };
+    z = takt(z, 1 / 60, { gas: true, bremse: false, lehnen: 0, pop: true });
+    while (z.amBoden) z = takt(z, 1 / 60, GAS);
+    expect(z.popZahl).toBe(1);
+  });
+
   it('staffelt die Stärke des Pop nach dem Zeitpunkt', () => {
     expect(popStaerke(0)).toBe(1);
     expect(popStaerke(0.2)).toBe(1);
