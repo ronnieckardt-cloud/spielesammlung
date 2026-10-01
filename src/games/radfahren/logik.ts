@@ -39,11 +39,39 @@ type Welle = { laenge: number; hoehe: number; phase: number };
  */
 type Kicker = { x: number; hoehe: number; breite: number };
 
+/**
+ * Mit welchem Tempo der Probefahrer anrollt (m/s). Mit Gas beschleunigt er auf
+ * dem Weg zur Kuppe noch bis rund `TEMPO_MAX` — das ist, wo ein Spieler die
+ * meiste Zeit tatsächlich fährt.
+ */
+const PROBE_TEMPO = 14;
+
+/** Eine Münze: Mittelpunkt in Weltkoordinaten (`y` ist die Höhe über null). */
+export type Muenze = { x: number; y: number };
+
+/** Ein Boost-Streifen am Boden: wer drüberfährt, bekommt einen Schub. */
+export type Pad = { x: number; laenge: number };
+
 export type Gelaende = {
   wellen: readonly Welle[];
   kicker: readonly Kicker[];
   /** Länge der Strecke in Metern; dahinter liegt die Ziellinie. */
   laenge: number;
+  /**
+   * Münzen und Boost-Streifen. Sie **ändern das Gelände nicht** und ziehen
+   * keine Zufallszahl: Sie werden nach dem Bauen aus den Kickern abgeleitet
+   * (siehe `inhaltBauen`). Dadurch bleibt jede Strecke mit ihrer Saat exakt
+   * dieselbe wie vor der Überarbeitung — und alle Fairness-Prüfungen
+   * gelten unverändert weiter.
+   */
+  muenzen: readonly Muenze[];
+  pads: readonly Pad[];
+  /**
+   * Wo ein Fahrer mit gewöhnlichem Tempo über jeden Kicker abhebt. Die
+   * Darstellung zeigt diese Stellen als leuchtende Marke — dort lohnt sich
+   * der Pop.
+   */
+  absprung: readonly number[];
 };
 
 /**
@@ -265,7 +293,129 @@ export function gelaendeBauen(saat: number, laenge = STRECKE_LAENGE): Gelaende {
     }
   }
 
-  return { wellen, kicker, laenge };
+  const grund: Gelaende = { wellen, kicker, laenge, muenzen: [], pads: [], absprung: [] };
+  return { ...grund, ...inhaltBauen(grund) };
+}
+
+// ---------------------------------------------------------------
+// Münzen und Boost-Streifen
+// ---------------------------------------------------------------
+
+/** Punkte je eingesammelter Münze. */
+export const MUENZ_PUNKTE = 10;
+/** Wie nah das Rad an eine Münze kommen muss (Meter, waagerecht und senkrecht). */
+const MUENZ_REICHWEITE_X = 1.0;
+const MUENZ_REICHWEITE_Y = 0.95;
+/** Ab dieser Breite zählt ein Kicker als „groß" — davor liegt ein Boost-Streifen. */
+const GROSS_AB_BREITE = MEGA_BREITE_MIN - 0.5;
+/** Punkte für jeden mitgenommenen Boost-Streifen. */
+export const PAD_PUNKTE = 15;
+/** Der Schub eines Boost-Streifens in Meter je Sekunde. */
+export const BOOST_SCHUB = 2.6;
+/** Wie weit der Schub über das Höchsttempo hinausreichen darf. */
+export const BOOST_UEBER_TEMPO = 2.2;
+/** So lange zeigt die Darstellung den Boost an, in Sekunden. */
+export const BOOST_ANZEIGE = 1.3;
+/** Wie schnell die Zusatzgeschwindigkeit über dem Höchsttempo abklingt (1/s). */
+const BOOST_ABKLINGEN = 1.5;
+
+/**
+ * Leitet Münzen und Boost-Streifen aus dem fertigen Gelände ab.
+ *
+ * **Die Münzen über einem Kicker liegen auf der echten Flugbahn.** Ein
+ * Bogen aus ausgedachten Zahlen hätte meistens neben der Stelle gelegen, an
+ * der man wirklich fliegt — und eine Münze, die man nie erreicht, ist
+ * Dekoration, keine Anleitung. Deshalb fährt hier ein Fahrer mit
+ * gewöhnlichem Tempo probeweise über jeden Kicker, und die Münzen kommen
+ * dorthin, wo er in der Luft war. Wer schneller oder langsamer anfliegt,
+ * verpasst ein paar davon; wer die Linie trifft, nimmt alle mit. Das ist die
+ * Belohnung für sauberes Tempo-Gefühl, ohne dass ein Wort dazu nötig wäre.
+ *
+ * Auf langen ebenen Stücken liegt außerdem eine Reihe Münzen am Boden — die
+ * Belohnung fürs Durchrollen. Vor jedem **großen** Kicker liegt ein
+ * Boost-Streifen: Der Schub bleibt klein, aber er macht den großen Sprung
+ * noch ein Stück weiter. Bei kleinen Kickern gibt es keinen, weil dort die
+ * Lücke zum nächsten Boden auf das Höchsttempo zugeschnitten ist.
+ */
+function inhaltBauen(g: Gelaende): { muenzen: Muenze[]; pads: Pad[]; absprung: number[] } {
+  const muenzen: Muenze[] = [];
+  const pads: Pad[] = [];
+  const absprung: number[] = [];
+  const sortiert = [...g.kicker].sort((a, b) => a.x - b.x);
+  /** Ab hier ist der Boden nach dem letzten Kicker wieder ruhig. */
+  let freiAb = ANLAUF + 4;
+
+  for (const k of sortiert) {
+    const anfahrt = k.x - k.breite * 2.1;
+    const luecke = anfahrt - freiAb;
+
+    // Eine Reihe am Boden in langen ebenen Stücken.
+    if (luecke >= 14) {
+      const mitte = freiAb + luecke * 0.38;
+      for (let i = 0; i < 5; i++) {
+        const x = mitte - 3.2 + i * 1.6;
+        muenzen.push({ x, y: bodenHoehe(g, x) + 0.95 });
+      }
+    }
+    if (k.breite >= GROSS_AB_BREITE && luecke >= 12) {
+      pads.push({ x: anfahrt - 7.5, laenge: 3.5 });
+    } else if (luecke >= 28) {
+      // In einer langen Rollstrecke **weit** vor dem nächsten Sprung: Der
+      // Schub ist bis dahin längst abgeklungen (er halbiert sich in gut
+      // einer halben Sekunde), verlängert also keinen Sprung, dessen Landezone
+      // auf das Höchsttempo zugeschnitten ist — er ist Tempo-Gefühl und
+      // Punkte, kein Risiko.
+      pads.push({ x: freiAb + luecke * 0.3, laenge: 3.5 });
+    }
+
+    // Der Bogen über dem Kicker — auf der Flugbahn eines Probefahrers.
+    const bahn = flugBahn(g, k, PROBE_TEMPO);
+    if (bahn.length > 0) absprung.push(bahn[0]!.x);
+    let weg = 0;
+    let naechste = 0.7;
+    let gesetzt = 0;
+    for (let i = 1; i < bahn.length - 2 && gesetzt < 8; i++) {
+      weg += Math.hypot(bahn[i]!.x - bahn[i - 1]!.x, bahn[i]!.y - bahn[i - 1]!.y);
+      if (weg >= naechste) {
+        // Der Bezugspunkt des Fahrers liegt eine Handbreit über dem Rad.
+        muenzen.push({ x: bahn[i]!.x + 0.1, y: bahn[i]!.y + 0.75 });
+        naechste += 1.7;
+        gesetzt++;
+      }
+    }
+    freiAb = Math.max(freiAb, k.x + k.breite * 2.1);
+  }
+  return {
+    muenzen: muenzen.filter((m) => m.x > ANLAUF + 3 && m.x < g.laenge - 6),
+    pads,
+    absprung,
+  };
+}
+
+/**
+ * Die Flugbahn eines Probefahrers über einen Kicker — der **längste**
+ * Abschnitt in der Luft. Kurze Hüpfer auf der Anfahrt (siehe
+ * `LANDUNG_MIN_LUFT`) gehören nicht dazu.
+ */
+function flugBahn(g: Gelaende, k: Kicker, tempo: number): { x: number; y: number }[] {
+  let l = leererLauf(g, 0);
+  l = { ...l, x: k.x - k.breite * 3.2, vx: tempo, y: bodenHoehe(g, k.x - k.breite * 3.2) };
+  let aktuell: { x: number; y: number }[] = [];
+  let beste: { x: number; y: number }[] = [];
+  for (let i = 0; i < 400; i++) {
+    l = taktKern(l, 1 / 60, { gas: true, bremse: false, lehnen: 0 });
+    if (!l.amBoden) {
+      aktuell.push({ x: l.x, y: l.y });
+    } else {
+      if (aktuell.length > beste.length) beste = aktuell;
+      // Nach dem ersten richtigen Sprung ist die Probefahrt zu Ende.
+      if (beste.length >= LANDUNG_MIN_LUFT * 60 * 1.5) break;
+      aktuell = [];
+    }
+    if (l.vorbei) break;
+  }
+  if (aktuell.length > beste.length) beste = aktuell;
+  return beste;
 }
 
 /**
@@ -521,6 +671,20 @@ export const LANDUNG_GUT = 0.55;
 export const LANDUNG_HART = 1.0;
 
 /**
+ * Kürzeste Flugzeit, die als **Sprung** zählt, in Sekunden.
+ *
+ * Auf der Anfahrtsseite eines Kickers hebt das Rad bei hohem Tempo für
+ * ein, zwei Bilder ab und setzt sofort wieder auf — die Abhebe-Bedingung
+ * (siehe `takt`) ist dort schon erfüllt, die Bahn des Rades liegt aber noch
+ * knapp unter der des Bodens. Jedes dieser Hüpferchen zählte vorher als
+ * „perfekte Landung": Der Flow-Zähler schoss binnen Sekunden auf Anschlag,
+ * jede Landung gab 60 Punkte, das Handy vibrierte im Bildtakt — ohne dass
+ * jemand einen Sprung gemacht hätte. Ein Aufsetzen nach weniger als dieser
+ * Zeit ist jetzt nur ein Bodenkontakt, keine Landung.
+ */
+export const LANDUNG_MIN_LUFT = 0.08;
+
+/**
  * Punkte je voller Drehung, die man in der Luft schafft **und steht**.
  * Ronnis ursprüngliche Vorgabe für die Punkte nannte „Tricks" schon immer
  * mit („Score entsteht aus … Distanz, Tricks, perfekte Landungen …"), nur
@@ -531,6 +695,27 @@ export const LANDUNG_HART = 1.0;
  * Landung, das muss sich auch im Punktestand zeigen.
  */
 export const TRICK_PUNKTE_JE_DREHUNG = 200;
+
+/**
+ * **Der Pop** — der Absprung-Kick, die Fähigkeit, die zu jedem Kicker gehört.
+ *
+ * Wer „Hinten" **frisch** antippt, kurz bevor das Rad abhebt (oder in den
+ * ersten Augenblicken danach), zieht das Rad hoch und bekommt zusätzlichen
+ * Schwung nach oben: höher, länger in der Luft, mehr Zeit für einen Salto.
+ * Frisch heißt: Wer „Hinten" schon lange festhält, bekommt nichts — sonst
+ * wäre der Pop ein Dauerzustand ohne Können. Die Marken am Boden (siehe
+ * `Gelaende.absprung`) zeigen, wo die Kante liegt.
+ *
+ * Er ist freiwillig: Ein Fahrer, der nie poppt, fährt exakt wie zuvor. Genau
+ * deshalb ändert er an der Fairness der Strecken nichts — er kommt obendrauf.
+ */
+export const POP_FENSTER = 0.3;
+/** So kurz nach dem Abheben zählt ein frischer Druck noch als Pop. */
+export const POP_NACH = 0.15;
+/** Zusätzliche Aufwärtsgeschwindigkeit in m/s. */
+export const POP_SCHUB = 2.6;
+/** Punkte je gelungenem Pop. */
+export const POP_PUNKTE = 30;
 
 /** Was bei der letzten Landung passiert ist — nur fürs Anzeigen und Punkte. */
 export type Landung = 'perfekt' | 'gut' | 'hart' | 'sturz';
@@ -586,6 +771,45 @@ export type Lauf = {
   trickPunkte: number;
   /** Volle Drehungen der letzten Landung — nur für die Anzeige. */
   letzterTrick: number;
+  /** Nummern der schon eingesammelten Münzen in `gelaende.muenzen`. */
+  geholt: ReadonlySet<number>;
+  muenzenZahl: number;
+  /** Nummern der schon befahrenen Boost-Streifen. */
+  padsGenommen: ReadonlySet<number>;
+  /** Sekunden, die der Boost noch angezeigt wird. */
+  boost: number;
+  /**
+   * Wie weit das Tempo gerade über `TEMPO_MAX` liegen darf. Springt bei einem
+   * Boost-Streifen hoch und klingt weich ab — eine harte Kappe bei
+   * `TEMPO_MAX` risse das Tempo nach dem Schub schlagartig herunter.
+   */
+  ueberTempo: number;
+  /**
+   * Sekunden, seit „Hinten" frisch gedrückt wurde; −1, solange es nicht
+   * gedrückt ist. Daran hängt der **Pop**: Wer genau an der Kante antippt,
+   * bekommt einen Extra-Schub nach oben (siehe `POP_SCHUB`).
+   */
+  druck: number;
+  /** Wie oft der Pop geklappt hat — für Punkte und Missionen. */
+  popZahl: number;
+  /** Sekunden, die der Pop noch angezeigt wird. */
+  popRest: number;
+  /** Im laufenden Sprung schon ein Pop gewertet? Verhindert doppelte Wertung. */
+  popGenommen: boolean;
+  /** Wo der letzte Pop stattfand (Weltkoordinate) — für den Ring in der Darstellung. */
+  popX: number;
+  /** Alle geschafften Drehungen (Saltos) dieser Fahrt. */
+  saltos: number;
+  /** Höchstes Tempo dieser Fahrt in km/h. */
+  tempoSpitze: number;
+  missionen: readonly Mission[];
+  missionZahl: number;
+  missionPunkte: number;
+  /** Die zuletzt geschaffte Mission — für die Anzeige. */
+  letzteMission: Mission | null;
+  /** Welche Umgebung (0 bis 3) — rein optisch, siehe `biomVon`. */
+  biom: number;
+  saat: number;
 };
 
 /** Die Eingaben eines Bildes. Alles, was der Spieler beeinflussen kann. */
@@ -598,8 +822,8 @@ export type Eingabe = {
 
 export const KEINE_EINGABE: Eingabe = { gas: false, bremse: false, lehnen: 0 };
 
-export function neuesSpiel(saat: number, laenge = STRECKE_LAENGE): Lauf {
-  const gelaende = gelaendeBauen(saat, laenge);
+/** Ein Lauf am Start, ohne Missionen — die Grundlage für `neuesSpiel` und die Probefahrten. */
+function leererLauf(gelaende: Gelaende, saat: number): Lauf {
   return {
     gelaende,
     x: 4,
@@ -622,7 +846,143 @@ export function neuesSpiel(saat: number, laenge = STRECKE_LAENGE): Lauf {
     luftDrehStart: 0,
     trickPunkte: 0,
     letzterTrick: 0,
+    geholt: new Set(),
+    muenzenZahl: 0,
+    padsGenommen: new Set(),
+    boost: 0,
+    ueberTempo: 0,
+    druck: -1,
+    popZahl: 0,
+    popRest: 0,
+    popGenommen: false,
+    popX: 0,
+    saltos: 0,
+    tempoSpitze: 0,
+    missionen: [],
+    missionZahl: 0,
+    missionPunkte: 0,
+    letzteMission: null,
+    biom: biomVon(saat),
+    saat,
   };
+}
+
+export function neuesSpiel(saat: number, laenge = STRECKE_LAENGE): Lauf {
+  const lauf = leererLauf(gelaendeBauen(saat, laenge), saat);
+  // Drei verschiedene Aufgaben zum Start.
+  const arten: Missionsart[] = [];
+  const missionen: Mission[] = [];
+  for (let i = 0; i < 3; i++) {
+    const m = neueMission(lauf, i, arten);
+    arten.push(m.art);
+    missionen.push(m);
+  }
+  return { ...lauf, missionen };
+}
+
+/**
+ * Welche Umgebung diese Strecke bekommt, 0 bis 3 (Wiese, Abendrot, Nacht,
+ * Herbst). **Rein optisch** — die Physik kennt sie nicht. Sie hängt allein an
+ * der Saat, also sieht dieselbe Strecke überall gleich aus.
+ */
+export function biomVon(saat: number): number {
+  return Math.min(3, Math.floor(schritt(saat ^ 0x5bd1e995).wert * 4));
+}
+
+// ---------------------------------------------------------------
+// Missionen
+// ---------------------------------------------------------------
+
+export type Missionsart = 'muenzen' | 'perfekt' | 'salto' | 'tempo' | 'luft' | 'pop';
+
+/** `start` ist der Zählerstand beim Beginn der Mission, damit sie nur zählt, was danach passiert. */
+export type Mission = { art: Missionsart; ziel: number; start: number };
+
+const MISSIONS_ARTEN: readonly Missionsart[] = ['muenzen', 'perfekt', 'salto', 'tempo', 'luft', 'pop'];
+/**
+ * Zielwerte der ersten Aufgabe jeder Art und ihr Zuwachs je weiteren drei
+ * geschafften Aufgaben. Gemessen am einfachen Bot aus den Fairness-Tests (der
+ * schafft die Strecke, fährt aber ohne Absicht): Er soll in einer Fahrt etwa
+ * drei bis vier Aufgaben erledigen — mehr hieße, dass sie sich von selbst
+ * erledigen und keine Ziele mehr sind.
+ */
+const MISSION_BASIS: Record<Missionsart, number> = {
+  muenzen: 34,
+  perfekt: 5,
+  salto: 2,
+  tempo: 58,
+  luft: 8,
+  pop: 4,
+};
+const MISSION_SCHRITT: Record<Missionsart, number> = {
+  muenzen: 12,
+  perfekt: 1,
+  salto: 1,
+  tempo: 2,
+  luft: 3,
+  pop: 1,
+};
+export const MISSION_NAMEN: Record<Missionsart, (ziel: number) => string> = {
+  muenzen: (z) => `Sammle ${z} Münzen`,
+  perfekt: (z) => `Lande ${z}× perfekt`,
+  salto: (z) => `Springe ${z} Saltos`,
+  tempo: (z) => `Fahre ${z} km/h`,
+  luft: (z) => `Fliege ${z} s in der Luft`,
+  pop: (z) => `Pop ${z}× an der Kante`,
+};
+
+/** Bonuspunkte für die n-te geschaffte Mission — wächst langsam. */
+export function missionsLohn(n: number): number {
+  return 100 + 40 * Math.floor(n / 3);
+}
+
+/** Wie weit eine Mission ist, in Einheiten ihres Ziels (kann über `ziel` liegen). */
+export function missionFortschritt(l: Lauf, m: Mission): number {
+  switch (m.art) {
+    case 'muenzen':
+      return l.muenzenZahl - m.start;
+    case 'perfekt':
+      return l.perfekte - m.start;
+    case 'salto':
+      return l.saltos - m.start;
+    case 'luft':
+      return l.luftGesamt - m.start;
+    case 'pop':
+      return l.popZahl - m.start;
+    case 'tempo':
+      return l.tempoSpitze;
+  }
+}
+
+/**
+ * Eine neue Aufgabe. Aus Saat und Zähler gewürfelt, nie aus der Uhr — dieselbe
+ * Strecke mit derselben Fahrt ergibt dieselben Aufgaben. Die Tempo-Aufgabe
+ * liegt immer **über** dem bisherigen Spitzentempo und wird gar nicht mehr
+ * angeboten, wenn die Spitze schon nah am Höchsttempo liegt.
+ */
+export function neueMission(l: Lauf, index: number, belegt: readonly Missionsart[]): Mission {
+  const spitzenGrenze = TEMPO_MAX * 3.6 - 4;
+  const frei = MISSIONS_ARTEN.filter(
+    (a) => !belegt.includes(a) && !(a === 'tempo' && l.tempoSpitze >= spitzenGrenze),
+  );
+  const e = schritt(saatAus(l.saat, 'mission', l.missionZahl, index));
+  const art = frei[Math.floor(e.wert * frei.length)]!;
+  const stufe = Math.floor(l.missionZahl / 3);
+  let ziel = MISSION_BASIS[art] + MISSION_SCHRITT[art] * stufe;
+  if (art === 'tempo') ziel = Math.min(Math.floor(spitzenGrenze + 2), Math.max(ziel, Math.ceil(l.tempoSpitze) + 4));
+  const start =
+    art === 'muenzen'
+      ? l.muenzenZahl
+      : art === 'perfekt'
+        ? l.perfekte
+        : art === 'salto'
+          ? l.saltos
+          : art === 'luft'
+            ? l.luftGesamt
+            : art === 'pop'
+              ? l.popZahl
+              : 0;
+  return { art, ziel, start };
 }
 
 /**
@@ -657,6 +1017,102 @@ export function landungBewerten(unterschied: number): Landung {
  * Bodenkontakt vor der Bewegung prüft, prüft den Stand von gestern.
  */
 export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
+  const neu = taktKern(lauf, dt, e);
+  // Ein beendeter Lauf sammelt nichts mehr ein.
+  if (lauf.vorbei) return neu;
+  return inhaltAnwenden(neu, dt);
+}
+
+/**
+ * Was nach der eigentlichen Fahrphysik passiert: Münzen aufsammeln,
+ * Boost-Streifen mitnehmen, Zähler fortschreiben, Missionen prüfen.
+ *
+ * **Bewusst getrennt von `taktKern`.** Die Fahrphysik hat mehrere Rückgabe-
+ * stellen (Landung, Sturz, Ziel, Normalfall), und an jeder einzeln die neuen
+ * Dinge nachzutragen, hieße vier Stellen, an denen eine vergessen werden
+ * kann. So sieht diese Funktion immer das fertige Ergebnis eines Schrittes.
+ * Außerdem können die Probefahrten bei der Münzplatzierung (`flugBahn`) den
+ * Kern ohne diesen Teil benutzen.
+ */
+function inhaltAnwenden(neu: Lauf, dt: number): Lauf {
+  let l = neu;
+  const mx = l.x + 0.1;
+  const my = l.y + 0.75;
+
+  // --- Münzen ---
+  let geholt = l.geholt;
+  let zahl = l.muenzenZahl;
+  const m = l.gelaende.muenzen;
+  // Die Münzen sind nach x geordnet genug, um früh abzubrechen; trotzdem
+  // linear: bei ein paar Hundert Münzen kostet das nichts.
+  for (let i = 0; i < m.length; i++) {
+    const c = m[i]!;
+    if (c.x < mx - MUENZ_REICHWEITE_X - 0.5) continue;
+    if (c.x > mx + MUENZ_REICHWEITE_X + 0.5) break;
+    if (geholt.has(i)) continue;
+    if (Math.abs(c.x - mx) < MUENZ_REICHWEITE_X && Math.abs(c.y - my) < MUENZ_REICHWEITE_Y) {
+      if (geholt === l.geholt) geholt = new Set(l.geholt);
+      (geholt as Set<number>).add(i);
+      zahl += 1;
+    }
+  }
+
+  // --- Boost-Streifen (nur am Boden) ---
+  let vx = l.vx;
+  let ueberTempo = l.ueberTempo;
+  let boost = l.boost;
+  let padsGenommen = l.padsGenommen;
+  if (l.amBoden) {
+    const pads = l.gelaende.pads;
+    for (let i = 0; i < pads.length; i++) {
+      const p = pads[i]!;
+      if (padsGenommen.has(i)) continue;
+      if (l.x >= p.x && l.x <= p.x + p.laenge) {
+        padsGenommen = new Set(padsGenommen).add(i);
+        ueberTempo = BOOST_UEBER_TEMPO;
+        vx = Math.min(TEMPO_MAX + BOOST_UEBER_TEMPO, vx + BOOST_SCHUB);
+        boost = BOOST_ANZEIGE;
+      }
+    }
+  }
+  boost = Math.max(0, boost - dt);
+
+  // --- Zähler ---
+  const tempoSpitze = Math.max(l.tempoSpitze, vx * 3.6);
+
+  l = {
+    ...l,
+    geholt,
+    muenzenZahl: zahl,
+    vx,
+    ueberTempo,
+    boost,
+    padsGenommen,
+    tempoSpitze,
+  };
+
+  // --- Missionen ---
+  let missionPunkte = l.missionPunkte;
+  let missionZahl = l.missionZahl;
+  let letzteMission = l.letzteMission;
+  const missionen = [...l.missionen];
+  for (let i = 0; i < missionen.length; i++) {
+    const mi = missionen[i]!;
+    if (missionFortschritt(l, mi) >= mi.ziel) {
+      missionPunkte += missionsLohn(missionZahl);
+      letzteMission = mi;
+      missionZahl += 1;
+      const andere = missionen.filter((_, k) => k !== i).map((x) => x.art);
+      missionen[i] = neueMission({ ...l, missionZahl }, i, andere);
+    }
+  }
+  if (missionZahl !== l.missionZahl) {
+    l = { ...l, missionen, missionZahl, missionPunkte, letzteMission };
+  }
+  return l;
+}
+
+function taktKern(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
   if (lauf.vorbei) {
     /*
      * Nach dem Aus läuft die Sturzuhr weiter, damit die Darstellung
@@ -685,6 +1141,20 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
 
   const g = lauf.gelaende;
   let { x, y, vx, vy, winkel, drehen, amBoden, luftZeit, flow } = lauf;
+
+  // „Hinten" frisch gedrückt? Wer es schon festhält, hat keinen frischen Druck.
+  let druck = lauf.druck;
+  if (e.lehnen < -0.5) druck = druck < 0 ? 0 : druck + dt;
+  else druck = -1;
+  let popZahl = lauf.popZahl;
+  const popRest0 = Math.max(0, lauf.popRest - dt);
+  let popRest = popRest0;
+  let popGenommen = lauf.popGenommen;
+  let popX = lauf.popX;
+  // Die Zusatzgeschwindigkeit des Boosts klingt weich ab (siehe `Lauf.ueberTempo`).
+  const ueberTempo = lauf.ueberTempo * Math.exp(-BOOST_ABKLINGEN * dt);
+  /** Alles, was nach jedem Schritt in den neuen Lauf muss. */
+  const neben = () => ({ druck, popZahl, popRest, popGenommen, popX, ueberTempo });
   let luftGesamt = lauf.luftGesamt;
   let letzteLandung = lauf.letzteLandung;
   let perfekte = lauf.perfekte;
@@ -725,7 +1195,7 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
      * jederzeit da wieder heraus (beide wirken unten ungebremst in ihre
      * Richtung).
      */
-    vx = Math.min(TEMPO_MAX, Math.max(-RUECKROLL_MAX, vx));
+    vx = Math.min(TEMPO_MAX + ueberTempo, Math.max(-RUECKROLL_MAX, vx));
 
     x += vx * dt;
     y = bodenHoehe(g, x);
@@ -772,6 +1242,17 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
       luftZeit = 0;
       // Merkpunkt für die Drehzählung — siehe „Tricks" unten bei der Landung.
       luftDrehStart = winkel;
+      // Pop: „Hinten" frisch gedrückt, kurz bevor das Rad die Kante verlässt.
+      // `popGenommen` wird erst bei einer echten Landung zurückgesetzt, nicht
+      // bei jedem Hüpferchen auf der Anfahrt — sonst zählte derselbe Druck
+      // mehrfach.
+      if (!popGenommen && druck >= 0 && druck <= POP_FENSTER) {
+        vy += POP_SCHUB;
+        popZahl += 1;
+        popRest = 0.8;
+        popGenommen = true;
+        popX = x;
+      }
     }
   } else {
     // --- In der Luft ---
@@ -796,6 +1277,15 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
      * statt nach oben.
      */
     drehen -= e.lehnen * LUFT_DREHUNG * dt;
+    // Ein frischer Druck in den ersten Augenblicken nach dem Abheben zählt
+    // noch als Pop — die Kante ist nie auf den Frame genau zu treffen.
+    if (!popGenommen && luftZeit <= POP_NACH && druck >= 0 && druck <= luftZeit) {
+      vy += POP_SCHUB * 0.85;
+      popZahl += 1;
+      popRest = 0.8;
+      popGenommen = true;
+      popX = x;
+    }
     /*
      * **Ohne Eingabe treibt die Nase langsam nach unten** — kein
      * Gleichgewicht, das sich von selbst hält. Rückmeldung: „Ich muss
@@ -837,7 +1327,15 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
     winkel += drehen * dt;
 
     const boden = bodenHoehe(g, x);
-    if (y <= boden) {
+    if (y <= boden && luftZeit < LANDUNG_MIN_LUFT) {
+      // Nur ein Aufsetzen im Vorbeigehen (siehe `LANDUNG_MIN_LUFT`): Boden-
+      // kontakt, aber keine Landung — keine Wertung, kein Flow, kein Schub.
+      y = boden;
+      vy = 0;
+      amBoden = true;
+      luftZeit = 0;
+      drehen = 0;
+    } else if (y <= boden) {
       // --- Landung ---
       y = boden;
       const hang = bodenWinkel(g, x);
@@ -862,6 +1360,7 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
       if (bewertung !== 'sturz' && flips > 0) {
         trickPunkte += flips * TRICK_PUNKTE_JE_DREHUNG;
       }
+      const saltosNeu = lauf.saltos + letzterTrick;
 
       if (bewertung === 'sturz') {
         return {
@@ -887,6 +1386,9 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
           vorbei: true,
           gewonnen: false,
           sturzZeit: 0,
+          ...neben(),
+          popGenommen: false,
+          saltos: saltosNeu,
         };
       }
 
@@ -934,6 +1436,9 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
         trickPunkte,
         letzterTrick,
         zeit: lauf.zeit + dt,
+        ...neben(),
+        popGenommen: false,
+        saltos: saltosNeu,
       };
     }
   }
@@ -962,6 +1467,7 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
       vorbei: true,
       gewonnen: true,
       sturzZeit: 0,
+      ...neben(),
     };
   }
 
@@ -984,6 +1490,7 @@ export function takt(lauf: Lauf, dt: number, e: Eingabe = KEINE_EINGABE): Lauf {
     letzterTrick,
     luftDrehStart,
     zeit: lauf.zeit + dt,
+    ...neben(),
   };
 }
 
@@ -1013,7 +1520,17 @@ export function punkte(lauf: Lauf): number {
   const luft = Math.floor(lauf.luftGesamt * 40);
   const landungen = lauf.perfekte * 60;
   const zielBonus = lauf.gewonnen ? Math.max(0, Math.floor(1600 - lauf.zeit * 12)) : 0;
-  return strecke + luft + landungen + lauf.trickPunkte + zielBonus;
+  return (
+    strecke +
+    luft +
+    landungen +
+    lauf.trickPunkte +
+    zielBonus +
+    lauf.muenzenZahl * MUENZ_PUNKTE +
+    lauf.popZahl * POP_PUNKTE +
+    lauf.padsGenommen.size * PAD_PUNKTE +
+    lauf.missionPunkte
+  );
 }
 
 /** Die Saat einer Strecke. Gleiche Nummer = gleiche Strecke, überall. */

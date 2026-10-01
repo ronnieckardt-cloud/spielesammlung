@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Startbildschirm } from '../../core/Startbildschirm';
 import type { DekoTeil } from '../../core/Startbildschirm';
 import { useGameLoop } from '../../core/useGameLoop';
 import { haptik } from '../../core/haptik';
 import type { GameProps } from '../../core/types';
 import {
+  MISSION_NAMEN,
   STRECKE_LAENGE,
   TRICK_PUNKTE_JE_DREHUNG,
+  missionFortschritt,
+  missionsLohn,
   neuesSpiel,
   punkte,
   streckenSaat,
@@ -15,8 +19,7 @@ import {
 } from './logik';
 import type { Eingabe, Lauf } from './logik';
 import type { Zeichner } from './zeichnen';
-import { zeichnerBauen } from './zeichnen';
-import { MtbIcon } from './Icon';
+import { heldenbildZeichnen, zeichnerBauen } from './zeichnen';
 
 /**
  * Flow MTB — ein physikbasiertes 2-D-Mountainbike-Spiel.
@@ -34,245 +37,143 @@ import { MtbIcon } from './Icon';
  * geschrieben. Dasselbe Vorgehen wie bei Dash City.
  */
 
-/*
- * **Der Startbildschirm war leer** — Rückmeldung: „Allein schon das
- * Titelding sieht kacke aus." `Startbildschirm` gibt jedem Spiel nur
- * Symbol, Titel und ein paar schwebende Deko-Teile vor; bei den anderen
- * Spielen reichen dafür kleine Formen (Gebäude, Berge), weil das Symbol
- * oben schon das Spiel zeigt. Hier stand bislang nur eine Handvoll
- * winziger Berg-Dreiecke — nichts, was nach Fahrrad aussah.
- *
- * Jetzt steht ein großes Helden-Bild des Bikes unten im Bild, im selben
- * Rot wie im Spiel, in einer Sprung-Schräglage: Genau das, um das sich
- * das ganze Spiel dreht, statt eines austauschbaren Icons. Die Berge
- * bleiben als Rahmen an den Rändern.
+/**
+ * Das Titelbild ist der echte Fahrer auf dem echten Rad — dieselbe Zeichnung
+ * wie im Spiel (`heldenbildZeichnen`). Rückmeldung zu einer früheren Fassung:
+ * „Allein schon das Titelding sieht kacke aus." Ein grobes Poster, das anders
+ * aussieht als das Spiel, war der Kern davon.
  */
+function HeldenSymbol(_: { className?: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (ref.current) heldenbildZeichnen(ref.current, 250, 200);
+  }, []);
+  // Steht anstelle des App-Symbols über dem Titel — es ist die Hauptfigur des
+  // Bildschirms, nicht Deko im Hintergrund. Als Deko lag der Spielen-Knopf
+  // über dem Kopf des Fahrers.
+  return <canvas ref={ref} aria-hidden="true" className="relative drop-shadow-[0_14px_22px_rgba(0,0,0,0.35)]" />;
+}
+
+/** Eine kleine Münze als Schmuck — dieselbe Prägung wie im Spiel, ohne Drehung. */
+function DekoMuenze({ gross }: { gross: number }) {
+  return (
+    <svg viewBox="0 0 40 40" style={{ width: gross, height: gross }}>
+      <circle cx="20" cy="20" r="17" fill="#ffc933" stroke="#8a5206" strokeWidth="2.5" />
+      <circle cx="20" cy="20" r="12" fill="none" stroke="#fff3b0" strokeWidth="1.6" opacity="0.8" />
+      <path
+        d="M20 11 L22.6 17 L29 17.4 L24 21.6 L25.7 28 L20 24.4 L14.3 28 L16 21.6 L11 17.4 L17.4 17 Z"
+        fill="#935606"
+        opacity="0.85"
+      />
+      <ellipse cx="14" cy="12.5" rx="4" ry="2" fill="#fff" opacity="0.7" transform="rotate(-35 14 12.5)" />
+    </svg>
+  );
+}
+
+/** Drei Pfeile wie die Absprungmarken auf der Strecke. */
+function DekoPfeile({ farbe }: { farbe: string }) {
+  return (
+    <svg viewBox="0 0 48 24" className="w-12" fill="none" stroke={farbe} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 4 L14 12 L6 20" />
+      <path d="M20 4 L28 12 L20 20" opacity="0.75" />
+      <path d="M34 4 L42 12 L34 20" opacity="0.5" />
+    </svg>
+  );
+}
+
 const DEKO: readonly DekoTeil[] = [
-  { x: 6, y: 14, winkel: -8, verzoegerung: 0, inhalt: <DekoBerg hoehe={50} /> },
-  { x: 90, y: 10, winkel: 6, verzoegerung: 0.6, inhalt: <DekoBerg hoehe={64} /> },
-  { x: 92, y: 32, winkel: -5, verzoegerung: 1.3, inhalt: <DekoBerg hoehe={36} /> },
-  { x: 3, y: 34, winkel: 7, verzoegerung: 0.9, inhalt: <DekoBerg hoehe={40} /> },
-  // Unter dem Knopf verankert, nicht in der Bildmitte: Der Inhaltsblock
-  // (Symbol/Titel/Knopf) sitzt je nach Bildschirmhöhe unterschiedlich —
-  // ein mittig verankertes Bild geriete auf kurzen Bildschirmen in den
-  // Knopf. Die Illustration ist bewusst flach (breiter als hoch), damit
-  // sie auch bei wenig Restplatz noch ganz hineinpasst.
-  { x: 50, y: 78, verzoegerung: 0.4, inhalt: <DekoHeldenbike /> },
+  { x: 8, y: 12, winkel: -8, verzoegerung: 0, inhalt: <DekoMuenze gross={34} /> },
+  { x: 86, y: 9, winkel: 10, verzoegerung: 0.6, inhalt: <DekoMuenze gross={44} /> },
+  { x: 90, y: 34, winkel: -6, verzoegerung: 1.3, inhalt: <DekoMuenze gross={28} /> },
+  { x: 4, y: 36, winkel: 8, verzoegerung: 0.9, inhalt: <DekoPfeile farbe="#ffc233" /> },
+  { x: 74, y: 24, winkel: 0, verzoegerung: 0.3, inhalt: <DekoPfeile farbe="#7cf1ff" /> },
 ];
 
-function DekoBerg({ hoehe }: { hoehe: number }) {
-  return (
-    <svg viewBox="0 0 40 40" className="w-10" style={{ height: hoehe }}>
-      <path d="M20 4 L38 38 L2 38 Z" fill="#1e3a54" opacity={0.85} />
-      <path d="M20 4 L27 17 L13 17 Z" fill="#e2f0f7" opacity={0.9} />
-    </svg>
-  );
-}
-
 /**
- * Das Bike, in Sprung-Schräglage — dasselbe Rot, dieselbe Doppelbrücken-
- * gabel wie im Spiel, hier als flaches Poster-Bild statt als Canvas-
- * Zeichnung. Eine eigene, einfachere Bauart als `zeichnen.ts` ist hier
- * richtig: Der Startbildschirm ist ein Standbild, kein bewegtes Rad mit
- * Federweg — er darf, anders als das Spielbild, ruhig grob vereinfachen.
+ * Ein Steuerknopf. Er hält, solange der Finger liegt.
+ *
+ * **Auf Modulebene, nicht in `FlowMtb`.** Als Funktion innerhalb der
+ * Komponente wäre `Knopf` bei jedem Rendern ein neuer Komponententyp, und
+ * React hängt dann die Knöpfe neu ein. Weil der Punktestand zweimal je
+ * Sekunde nach außen geht und die Hülle dabei neu rendert, wäre jeder
+ * Knopf zweimal je Sekunde ausgetauscht worden — mitten im Halten, ohne dass
+ * je ein `pointerup` am neuen Knopf ankäme. Das Rad blieb dann „gelehnt".
+ *
+ * **`touch-none` steht hier zusätzlich zum übergeordneten Bereich noch
+ * einmal direkt am Knopf.** Rückmeldung: „Ich kann nur eine Taste
+ * drücken, dann geht Vorne/Hinten nicht mehr." Auf iOS Safari wird
+ * `touch-action: none` nicht zuverlässig vererbt: Setzt ein zweiter Finger
+ * auf einem ANDEREN Element auf, während der erste noch hält, kann der
+ * Browser das als Mehrfinger-Geste einstufen.
  */
-function DekoHeldenbike() {
-  // Feste Punkte statt Freihand-Kurven — jeder einzeln nachvollziehbar,
-  // damit sich keine zweite sich selbst überschneidende Fläche mehr
-  // einschleicht (das Rahmen-Vieleck der ersten Fassung tat genau das
-  // und ergab den unförmigen roten Fleck aus der Rückmeldung).
-  const RW = { x: 66, y: 114 }; // Hinterrad-Achse
-  const FW = { x: 226, y: 114 }; // Vorderrad-Achse
-  const BB = { x: 138, y: 116 }; // Tretlager
-  const ST = { x: 116, y: 54 }; // Sattelrohr oben
-  const HT = { x: 194, y: 60 }; // Steuerrohr oben
-  const KRONE = { x: 192, y: 48 }; // Doppelbrücke unten
-  const LENKER_MITTE = { x: 190, y: 29 }; // Doppelbrücke oben, Vorbau
-  const GRIFF = { x: 221, y: 27 }; // Lenkergriff
-  const HUEFTE = { x: 124, y: 54 };
-  const SCHULTER = { x: 163, y: 17 };
-  const KNIE = { x: 147, y: 74 };
-  const PEDAL = { x: 147, y: 101 };
-  const KOPF = { x: 173, y: 6 };
+type KnopfFarbe = 'bernstein' | 'tuerkis' | 'rot';
+const KNOPF_STIL: Record<KnopfFarbe, { grund: string; rand: string }> = {
+  bernstein: {
+    grund: 'linear-gradient(160deg, rgba(251,191,36,0.5), rgba(180,83,9,0.55))',
+    rand: 'rgba(253,224,71,0.65)',
+  },
+  tuerkis: {
+    grund: 'linear-gradient(160deg, rgba(45,212,191,0.5), rgba(15,118,110,0.55))',
+    rand: 'rgba(94,234,212,0.65)',
+  },
+  rot: {
+    grund: 'linear-gradient(160deg, rgba(248,113,113,0.5), rgba(153,27,27,0.55))',
+    rand: 'rgba(252,165,165,0.6)',
+  },
+};
 
+function Knopf({
+  label,
+  zeichen,
+  farbe,
+  setzen,
+  beiDruck,
+}: {
+  label: string;
+  zeichen: ReactNode;
+  farbe: KnopfFarbe;
+  setzen: (an: boolean) => void;
+  beiDruck: () => void;
+}) {
+  const stil = KNOPF_STIL[farbe];
   return (
-    <svg
-      viewBox="0 0 300 150"
-      className="w-[70vw] max-w-[300px] -translate-x-1/2 drop-shadow-[0_16px_26px_rgba(0,0,0,0.4)]"
-      aria-hidden="true"
+    <button
+      type="button"
+      aria-label={label}
+      className="pointer-events-auto flex size-[4.25rem] touch-none flex-col items-center justify-center rounded-2xl border backdrop-blur-sm select-none transition-transform duration-100 active:scale-95 active:brightness-125"
+      style={{ background: stil.grund, borderColor: stil.rand, boxShadow: '0 6px 14px rgba(0,0,0,0.3)' }}
+      onPointerDown={(ev) => {
+        ev.preventDefault();
+        ev.currentTarget.setPointerCapture(ev.pointerId);
+        setzen(true);
+        beiDruck();
+      }}
+      onPointerUp={() => setzen(false)}
+      onPointerCancel={() => setzen(false)}
+      onPointerLeave={() => setzen(false)}
+      onContextMenu={(ev) => ev.preventDefault()}
     >
-      {/* Weicher Lichtschein hinter dem Rad — dieselbe Regel wie beim
-          App-Symbol: ein Fleck Licht macht aus einer Silhouette ein Bild. */}
-      <ellipse cx={150} cy={80} rx={140} ry={78} fill="#ffffff" opacity={0.1} />
-
-      {/* Nur eine leichte Schräglage (6°), nicht die dramatische
-          Sprunghaltung der ersten Fassung — die hatte den Kopf so weit
-          nach oben verschoben, dass er den Spielen-Knopf überlappte. */}
-      <g transform={`rotate(-6 ${BB.x} ${BB.y})`}>
-        {/* Schwungspuren hinter dem Rad. */}
-        <g stroke="#ffffff" strokeOpacity={0.3} strokeWidth={4} strokeLinecap="round">
-          <path d="M4 68 L38 65" />
-          <path d="M0 84 L42 82" />
-          <path d="M8 100 L46 99" />
-        </g>
-
-        {/* Hinterrad. */}
-        <Rad mitte={RW} />
-        {/* Vorderrad. */}
-        <Rad mitte={FW} />
-
-        {/* Doppelbrücken-Gabel: Standrohr, Brücke, Fahrwerksbein zum Rad —
-            dasselbe Erkennungsmerkmal wie im Spiel. */}
-        <line
-          x1={HT.x}
-          y1={HT.y}
-          x2={LENKER_MITTE.x}
-          y2={LENKER_MITTE.y}
-          stroke="#c9ced6"
-          strokeWidth={8}
-          strokeLinecap="round"
-        />
-        <line
-          x1={KRONE.x}
-          y1={KRONE.y}
-          x2={FW.x}
-          y2={FW.y}
-          stroke="#3d434d"
-          strokeWidth={12}
-          strokeLinecap="round"
-        />
-        <line
-          x1={KRONE.x - 17}
-          y1={KRONE.y}
-          x2={KRONE.x + 17}
-          y2={KRONE.y + 3}
-          stroke="#8c1710"
-          strokeWidth={12}
-          strokeLinecap="round"
-        />
-
-        {/* Rahmen — ein einziges, garantiert einfaches Dreieck. */}
-        <path
-          d={`M${BB.x},${BB.y} L${ST.x},${ST.y} L${HT.x},${HT.y} Z`}
-          fill="#d92d20"
-          stroke="#8c1710"
-          strokeWidth={5}
-          strokeLinejoin="round"
-        />
-        {/* Teal-Akzentstreifen aufs Unterrohr — derselbe Farbtupfer wie im
-            Spiel selbst, damit das Heldenbike zum neuen Look passt. */}
-        <line
-          x1={BB.x - 4}
-          y1={BB.y - 6}
-          x2={HT.x - 6}
-          y2={HT.y + 5}
-          stroke="#38d9a9"
-          strokeWidth={3}
-          strokeLinecap="round"
-        />
-        {/* Kettenstrebe und Sitzstrebe zum Hinterrad. */}
-        <line x1={RW.x} y1={RW.y} x2={BB.x} y2={BB.y} stroke="#8c1710" strokeWidth={9} strokeLinecap="round" />
-        <line x1={RW.x} y1={RW.y} x2={ST.x} y2={ST.y} stroke="#8c1710" strokeWidth={7} strokeLinecap="round" />
-
-        {/* Sattel und Lenker. */}
-        <line
-          x1={ST.x - 14}
-          y1={ST.y - 3}
-          x2={ST.x + 8}
-          y2={ST.y - 5}
-          stroke="#101014"
-          strokeWidth={8}
-          strokeLinecap="round"
-        />
-        <line
-          x1={LENKER_MITTE.x}
-          y1={LENKER_MITTE.y}
-          x2={GRIFF.x}
-          y2={GRIFF.y}
-          stroke="#101014"
-          strokeWidth={7}
-          strokeLinecap="round"
-        />
-
-        {/* Dämpfer mit Spiralfeder — dieselbe Wendel wie im Spiel, hier
-            als vereinfachtes Zickzack, weil sie bei dieser Größe ohnehin
-            nur als Textur wahrgenommen wird. */}
-        <line
-          x1={(BB.x + RW.x) / 2}
-          y1={BB.y - 4}
-          x2={ST.x - 6}
-          y2={ST.y + 16}
-          stroke="#3d434d"
-          strokeWidth={7}
-          strokeLinecap="round"
-        />
-        <path
-          d={`M${(BB.x + RW.x) / 2 + 4},${BB.y - 6} L${(BB.x + RW.x) / 2 - 5},${BB.y - 16} L${(BB.x + RW.x) / 2 + 4},${BB.y - 26} L${ST.x - 10},${ST.y + 20}`}
-          fill="none"
-          stroke="#38d9a9"
-          strokeWidth={3.5}
-          strokeLinecap="round"
-        />
-
-        {/* --- Der Fahrer: Hüfte → Knie → Pedal, Hüfte → Schulter → Griff --- */}
-        <g strokeLinecap="round" fill="none">
-          <path
-            d={`M${HUEFTE.x},${HUEFTE.y} L${KNIE.x},${KNIE.y} L${PEDAL.x},${PEDAL.y}`}
-            stroke="#232830"
-            strokeWidth={15}
-          />
-          <path
-            d={`M${HUEFTE.x},${HUEFTE.y} L${SCHULTER.x},${SCHULTER.y}`}
-            stroke="#4a5566"
-            strokeWidth={20}
-          />
-          <path
-            d={`M${SCHULTER.x},${SCHULTER.y} L${GRIFF.x},${GRIFF.y}`}
-            stroke="#4a5566"
-            strokeWidth={13}
-          />
-        </g>
-        {/* Schuh. */}
-        <ellipse cx={PEDAL.x + 8} cy={PEDAL.y - 2} rx={13} ry={7} fill="#15161b" />
-
-        {/* Fullface-Helm mit rotem Streifen — derselbe Kontrast wie im
-            Spiel: hell gegen die dunkle Kleidung. */}
-        <circle cx={KOPF.x} cy={KOPF.y} r={16} fill="#f4f6f8" />
-        <path
-          d={`M${KOPF.x - 4},${KOPF.y - 15} Q${KOPF.x + 16},${KOPF.y - 17} ${KOPF.x + 20},${KOPF.y - 1} Q${KOPF.x + 8},${KOPF.y - 8} ${KOPF.x - 4},${KOPF.y - 5} Z`}
-          fill="#d92d20"
-        />
-        <ellipse cx={KOPF.x + 8} cy={KOPF.y + 1} rx={8} ry={6} fill="#1e2a33" />
-      </g>
-    </svg>
+      <span aria-hidden="true" className="text-2xl leading-none text-white">
+        {zeichen}
+      </span>
+      <span className="mt-0.5 text-[10px] font-bold text-white/85">{label}</span>
+    </button>
   );
 }
 
-function Rad({ mitte }: { mitte: { x: number; y: number } }) {
-  const speichen = [0, 60, 120, 180, 240, 300];
+/** Eine Zeile der Anleitung: ein Farbzeichen, ein Satz. */
+function HinweisZeile({ zeichen, children }: { zeichen: ReactNode; children: ReactNode }) {
   return (
-    <g>
-      <circle cx={mitte.x} cy={mitte.y} r={32} fill="#16161a" />
-      <circle cx={mitte.x} cy={mitte.y} r={32} fill="none" stroke="#26262c" strokeWidth={7} />
-      {/* Seitenwand: ein schmaler, hellerer Ring — passend zum
-          zweizeiligen Stollenprofil im eigentlichen Spiel. */}
-      <circle cx={mitte.x} cy={mitte.y} r={27} fill="none" stroke="#3a3a44" strokeWidth={2} />
-      <circle cx={mitte.x} cy={mitte.y} r={22} fill="none" stroke="#8d939e" strokeWidth={4} />
-      <g stroke="#dfe3e9" strokeWidth={2} opacity={0.85}>
-        {speichen.map((w) => (
-          <line
-            key={w}
-            x1={mitte.x + Math.cos((w * Math.PI) / 180) * 6}
-            y1={mitte.y + Math.sin((w * Math.PI) / 180) * 6}
-            x2={mitte.x + Math.cos((w * Math.PI) / 180) * 21}
-            y2={mitte.y + Math.sin((w * Math.PI) / 180) * 21}
-          />
-        ))}
-      </g>
-      <circle cx={mitte.x} cy={mitte.y} r={6.5} fill="#c3c8d0" />
-    </g>
+    <p className="flex items-center gap-2.5 text-left text-[13px] leading-snug text-white/90">
+      <span aria-hidden="true" className="grid w-6 shrink-0 place-items-center">
+        {zeichen}
+      </span>
+      <span>{children}</span>
+    </p>
   );
 }
+
+const ANZAHL_MISSIONEN = 3;
 
 export function FlowMtb({
   onScore,
@@ -283,6 +184,13 @@ export function FlowMtb({
 }: GameProps) {
   const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [zeigeHinweis, setZeigeHinweis] = useState(true);
+  /**
+   * Die Uhr läuft nach dem Aus noch ein paar Sekunden weiter. Vorher hielt sie
+   * mit dem ersten erneuten Rendern nach `vorbei` an (der Punktestand geht an
+   * die Hülle und löst es aus) — der Sturz stand dadurch im ersten Bild still,
+   * und das Ausrutschen und Liegenbleiben war nie zu sehen.
+   */
+  const [ausgelaufen, setAusgelaufen] = useState(false);
 
   const leinwandRef = useRef<HTMLCanvasElement>(null);
   const buehneRef = useRef<HTMLDivElement>(null);
@@ -345,6 +253,103 @@ export function FlowMtb({
   const trickRef = useRef<HTMLDivElement>(null);
   /** Bis zu welcher Laufzeit die Trick-Anzeige noch sichtbar bleibt. */
   const trickBisZeitRef = useRef(0);
+  const tempoKapselRef = useRef<HTMLDivElement>(null);
+  const muenzKapselRef = useRef<HTMLDivElement>(null);
+  const muenzRef = useRef<HTMLSpanElement>(null);
+  const missionNameRef = useRef<(HTMLSpanElement | null)[]>([]);
+  const missionBalkenRef = useRef<(HTMLDivElement | null)[]>([]);
+  const meldungRef = useRef<HTMLDivElement>(null);
+  /** Bis zu welcher Laufzeit die „Aufgabe geschafft"-Meldung steht. */
+  const meldungBisZeitRef = useRef(0);
+  const boostAktivRef = useRef(false);
+  /** `settings` für die Anzeige-Funktion, ohne sie bei jeder Änderung neu zu bauen. */
+  const reduziertRef = useRef(settings.reducedMotion);
+  reduziertRef.current = settings.reducedMotion;
+
+  /**
+   * Schreibt den Stand in die Anzeigen — direkt ins DOM, ohne React. Wird
+   * nach jedem Bild gerufen und einmal beim Aufbau, damit die Aufgaben schon
+   * im ersten Bild dastehen.
+   */
+  const anzeigen = useCallback((neu: Lauf, vorher: Lauf) => {
+    if (tempoRef.current) tempoRef.current.textContent = String(Math.round(tempoKmh(neu)));
+    if (zeitRef.current) zeitRef.current.textContent = neu.zeit.toFixed(1);
+    if (balkenRef.current) {
+      const anteil = Math.min(100, (neu.x / neu.gelaende.laenge) * 100);
+      balkenRef.current.style.width = `${anteil.toFixed(1)}%`;
+    }
+    if (flowRef.current) {
+      flowRef.current.style.opacity = neu.flow > 1 ? '1' : '0';
+      flowRef.current.textContent = `FLOW ×${neu.flow}`;
+    }
+
+    // Münzen: die Zahl, und ein kurzes Aufploppen beim Einsammeln.
+    if (muenzRef.current) muenzRef.current.textContent = String(neu.muenzenZahl);
+    if (neu.muenzenZahl > vorher.muenzenZahl && !reduziertRef.current) {
+      muenzKapselRef.current?.animate(
+        [{ transform: 'scale(1)' }, { transform: 'scale(1.16)' }, { transform: 'scale(1)' }],
+        { duration: 170, easing: 'ease-out' },
+      );
+    }
+
+    // Boost: Das Tempofeld bekommt einen türkisen Schein, solange er wirkt.
+    const boost = neu.boost > 0;
+    if (boost !== boostAktivRef.current && tempoKapselRef.current) {
+      boostAktivRef.current = boost;
+      tempoKapselRef.current.style.boxShadow = boost
+        ? '0 0 0 1.5px rgba(124,241,255,0.8), 0 0 20px rgba(80,225,255,0.55)'
+        : '';
+    }
+
+    // Aufgaben: Text und Fortschritt je Zeile. Der Text wird nur geschrieben,
+    // wenn er sich ändert — bei sechzig Bildern je Sekunde sonst ein
+    // sinnloser DOM-Zugriff.
+    for (let i = 0; i < ANZAHL_MISSIONEN; i++) {
+      const m = neu.missionen[i];
+      const name = missionNameRef.current[i];
+      const balken = missionBalkenRef.current[i];
+      if (!m || !name || !balken) continue;
+      const text = MISSION_NAMEN[m.art](m.ziel);
+      if (name.dataset['t'] !== text) {
+        name.dataset['t'] = text;
+        name.textContent = text;
+      }
+      const anteil = Math.max(0, Math.min(1, missionFortschritt(neu, m) / m.ziel));
+      balken.style.width = `${(anteil * 100).toFixed(0)}%`;
+    }
+    // Eine geschaffte Aufgabe meldet sich kurz oben in der Mitte.
+    if (neu.missionZahl > vorher.missionZahl && meldungRef.current) {
+      meldungRef.current.textContent = `Aufgabe geschafft  +${missionsLohn(neu.missionZahl - 1)}`;
+      meldungBisZeitRef.current = neu.zeit + 2.4;
+    }
+    if (meldungRef.current) {
+      const sichtbar = neu.zeit < meldungBisZeitRef.current;
+      meldungRef.current.style.opacity = sichtbar ? '1' : '0';
+      meldungRef.current.style.transform = sichtbar ? 'translateY(0)' : 'translateY(-8px)';
+    }
+
+    /*
+     * Trick-Anzeige: nur beim Wechsel auf eine gestandene Landung mit
+     * mindestens einer vollen Drehung neu einblenden, dann `zeit`-
+     * gesteuert wieder ausblenden — direkt aus der Laufzeit, weil kein
+     * eigenes Feld in `Lauf` für „Sekunden, die diese Anzeige noch
+     * steht" gebraucht wird.
+     */
+    if (
+      neu.letzteLandung !== vorher.letzteLandung &&
+      neu.letzteLandung !== 'sturz' &&
+      neu.letzterTrick > 0
+    ) {
+      trickBisZeitRef.current = neu.zeit + 1.6;
+    }
+    if (trickRef.current) {
+      const sichtbar = neu.zeit < trickBisZeitRef.current;
+      trickRef.current.style.opacity = sichtbar ? '1' : '0';
+      if (sichtbar) {
+        trickRef.current.textContent = `${neu.letzterTrick * 360}° +${neu.letzterTrick * TRICK_PUNKTE_JE_DREHUNG}`;
+      }
+    }
+  }, []);
 
   // --- Leinwand aufsetzen -----------------------------------------
   useEffect(() => {
@@ -364,12 +369,13 @@ export function FlowMtb({
     // Ein einzelnes Bild sofort zeichnen, damit nicht kurz eine leere
     // Fläche steht, bevor die Uhr das erste Mal tickt.
     zeichner.zeichnen(holeLauf(), 0);
+    anzeigen(holeLauf(), holeLauf());
 
     return () => {
       window.removeEventListener('resize', messen);
       zeichnerRef.current = null;
     };
-  }, [gestartet, holeLauf]);
+  }, [gestartet, holeLauf, anzeigen]);
 
   // --- Tastatur ----------------------------------------------------
   useEffect(() => {
@@ -416,7 +422,6 @@ export function FlowMtb({
   }, [gestartet]);
 
   // --- Die Uhr -----------------------------------------------------
-  const lauf = laufRef.current;
   useGameLoop(
     (dt) => {
       /*
@@ -455,39 +460,8 @@ export function FlowMtb({
 
       zeichnerRef.current?.zeichnen(neu, dt);
 
-      // --- Anzeigen ---
-      if (tempoRef.current) tempoRef.current.textContent = String(Math.round(tempoKmh(neu)));
-      if (zeitRef.current) zeitRef.current.textContent = neu.zeit.toFixed(1);
-      if (balkenRef.current) {
-        const anteil = Math.min(100, (neu.x / neu.gelaende.laenge) * 100);
-        balkenRef.current.style.width = `${anteil.toFixed(1)}%`;
-      }
-      if (flowRef.current) {
-        flowRef.current.style.opacity = neu.flow > 1 ? '1' : '0';
-        flowRef.current.textContent = `FLOW ×${neu.flow}`;
-      }
-      /*
-       * Trick-Anzeige: nur beim Wechsel auf eine gestandene Landung mit
-       * mindestens einer vollen Drehung neu einblenden, dann `zeit`-
-       * gesteuert wieder ausblenden — dieselbe Zeitsteuerung wie sonst
-       * über `meldungRest`, hier aber direkt aus der Laufzeit, weil kein
-       * eigenes Feld in `Lauf` für „Sekunden, die diese Anzeige noch
-       * steht" gebraucht wird.
-       */
-      if (
-        neu.letzteLandung !== vorher.letzteLandung &&
-        neu.letzteLandung !== 'sturz' &&
-        neu.letzterTrick > 0
-      ) {
-        trickBisZeitRef.current = neu.zeit + 1.6;
-      }
-      if (trickRef.current) {
-        const sichtbar = neu.zeit < trickBisZeitRef.current;
-        trickRef.current.style.opacity = sichtbar ? '1' : '0';
-        if (sichtbar) {
-          trickRef.current.textContent = `${neu.letzterTrick * 360}° +${neu.letzterTrick * TRICK_PUNKTE_JE_DREHUNG}`;
-        }
-      }
+      anzeigen(neu, vorher);
+
       /*
        * Bewusst **keine** Text-Einblendung „PERFEKT!" / „Harte Landung" /
        * „Gestürzt" mehr. Rückmeldung, wörtlich: „Ich will nicht, dass
@@ -511,9 +485,11 @@ export function FlowMtb({
          * eigener — dieselbe Überlegung wie beim Aufprall in Dash City.
          */
         window.setTimeout(() => onGameOver(p, neu.gewonnen), neu.gewonnen ? 700 : 1100);
+        // Hinter dem Rundenende-Dialog muss nichts mehr gezeichnet werden.
+        window.setTimeout(() => setAusgelaufen(true), 3500);
       }
     },
-    { fps: 60, running: gestartet && !(lauf?.vorbei && beendet.current) },
+    { fps: 60, running: gestartet && !ausgelaufen },
   );
 
   // Punktestand nach außen, zweimal je Sekunde.
@@ -534,103 +510,102 @@ export function FlowMtb({
         bestScore={bestScore}
         verlauf="linear-gradient(165deg, #0f2b40 0%, #1d4d5c 45%, #0b1a24 100%)"
         deko={DEKO}
-        Symbol={MtbIcon}
+        Symbol={HeldenSymbol}
         knopfFarbe="#0f2b40"
         onStart={() => setGestartet(true)}
       />
     );
   }
 
-  /**
-   * Ein Steuerknopf. Er hält, solange der Finger liegt.
-   *
-   * **`touch-none` steht hier zusätzlich zum übergeordneten Bereich noch
-   * einmal direkt am Knopf.** Rückmeldung: „Ich kann nur eine Taste
-   * drücken, dann geht Vorne/Hinten nicht mehr." Auf `buehneRef` (dem
-   * ganzen Spielbereich) stand `touch-action: none` schon, aber manche
-   * mobilen Browser — vor allem iOS Safari — werten das nicht zuverlässig
-   * als vererbt: Setzt ein zweiter Finger auf einem ANDEREN Element auf,
-   * während der erste noch hält, kann der Browser das als Beginn einer
-   * Mehrfinger-Geste statt als eigenen, unabhängigen Tastendruck
-   * einstufen — genau dann bleibt „Gas" gedrückt, aber „Vorne"/„Hinten"
-   * reagiert nicht mehr. Jeder Knopf braucht `touch-action: none` **an
-   * sich selbst**, nicht nur am Elternbereich, damit zwei Finger auf zwei
-   * Knöpfen unabhängig voneinander erkannt werden.
-   */
-  const Knopf = ({
-    kind,
-    label,
-    zeichen,
-    setzen,
-  }: {
-    kind: string;
-    label: string;
-    zeichen: string;
-    setzen: (an: boolean) => void;
-  }) => (
-    <button
-      type="button"
-      aria-label={label}
-      className={`pointer-events-auto touch-none flex size-16 select-none flex-col items-center justify-center rounded-2xl border border-white/25 bg-black/35 backdrop-blur-sm active:bg-white/25 ${kind}`}
-      onPointerDown={(ev) => {
-        ev.preventDefault();
-        ev.currentTarget.setPointerCapture(ev.pointerId);
-        setzen(true);
-        setZeigeHinweis(false);
-      }}
-      onPointerUp={() => setzen(false)}
-      onPointerCancel={() => setzen(false)}
-      onPointerLeave={() => setzen(false)}
-      onContextMenu={(ev) => ev.preventDefault()}
-    >
-      <span aria-hidden="true" className="text-2xl leading-none">
-        {zeichen}
-      </span>
-      <span className="mt-0.5 text-[10px] font-bold text-white/75">{label}</span>
-    </button>
-  );
+  const hinweisWeg = () => setZeigeHinweis(false);
+
+  /** Eine Glasfläche für die Anzeigen — dieselbe Machart überall, sonst wirkt es zusammengestückelt. */
+  const glas = 'rounded-2xl border border-white/15 bg-black/35 shadow-lg backdrop-blur-md';
 
   return (
     <div ref={buehneRef} className="relative min-h-0 flex-1 touch-none select-none overflow-hidden">
       <canvas ref={leinwandRef} className="block size-full" />
 
-      {/* Kopfzeile: Tempo, Zeit, Fortschritt */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
-        <div className="rounded-2xl bg-black/40 px-3 py-1.5 backdrop-blur-sm">
-          <span
-            ref={tempoRef}
-            className="text-2xl leading-none font-black text-white tabular-nums"
-          >
+      {/* Oben links: Tempo, Münzen und die drei laufenden Aufgaben. */}
+      <div className="pointer-events-none absolute top-0 left-0 flex flex-col items-start gap-1.5 p-3">
+        <div ref={tempoKapselRef} className={`${glas} px-3 py-1.5 transition-shadow duration-300`}>
+          <span ref={tempoRef} className="text-2xl leading-none font-black text-white tabular-nums">
             0
           </span>
           <span className="ml-1 text-xs font-bold text-white/70">km/h</span>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <div className="rounded-2xl bg-black/40 px-3 py-1.5 text-sm font-bold text-white tabular-nums backdrop-blur-sm">
-            <span ref={zeitRef}>0.0</span>s
-          </div>
-          {/* Etwas präsenter als vorher (größere Schrift, kräftigerer
-              Hintergrund, dünner Rand) — sie ist die einzige laufende
-              Rückmeldung zur Landungsqualität, seit die Text-Overlays
-              „PERFEKT!" usw. ausdrücklich raus sind (siehe unten). Kein
-              neues Element, nur derselbe Pill etwas deutlicher. */}
-          <div
-            ref={flowRef}
-            className="rounded-full border border-teal-300/40 bg-teal-400/35 px-3 py-1 text-sm font-black text-teal-100 transition-opacity duration-200"
-            style={{ opacity: 0 }}
-          >
-            FLOW ×1
-          </div>
-          {/* Trick-Anzeige: eigene Farbe (Pink) statt Teal, damit sie sich
-              von der Flow-Anzeige direkt darüber klar unterscheidet. */}
-          <div
-            ref={trickRef}
-            className="rounded-full bg-pink-400/25 px-2.5 py-1 text-xs font-black text-pink-200 transition-opacity duration-200"
-            style={{ opacity: 0 }}
-          >
-            360° +200
-          </div>
+        <div ref={muenzKapselRef} className={`${glas} flex items-center gap-1.5 px-2.5 py-1`}>
+          <svg viewBox="0 0 40 40" className="size-5" aria-hidden="true">
+            <circle cx="20" cy="20" r="17" fill="#ffc933" stroke="#8a5206" strokeWidth="3" />
+            <circle cx="20" cy="20" r="11.5" fill="none" stroke="#fff3b0" strokeWidth="2" opacity="0.8" />
+          </svg>
+          <span ref={muenzRef} className="text-base leading-none font-black text-amber-200 tabular-nums">
+            0
+          </span>
+          <span className="sr-only">Münzen</span>
         </div>
+        {/*
+         * Die drei Aufgaben. Klein und blass, solange sie nicht dran sind —
+         * sie sind ein Ziel neben dem Fahren, kein zweites Spiel. Eine
+         * geschaffte Aufgabe wird sofort durch eine neue ersetzt; der Balken
+         * zeigt, wie weit man ist.
+         */}
+        <ul className="mt-0.5 flex w-44 flex-col gap-1" aria-label="Aufgaben">
+          {Array.from({ length: ANZAHL_MISSIONEN }, (_, i) => (
+            <li key={i} className="rounded-xl border border-white/10 bg-black/30 px-2 py-1 backdrop-blur-sm">
+              <span
+                ref={(el) => {
+                  missionNameRef.current[i] = el;
+                }}
+                className="block truncate text-[11px] leading-tight font-semibold text-white/90"
+              />
+              <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/15">
+                <div
+                  ref={(el) => {
+                    missionBalkenRef.current[i] = el;
+                  }}
+                  className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400"
+                  style={{ width: '0%' }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Oben rechts: Zeit, Flow, Trick. */}
+      <div className="pointer-events-none absolute top-0 right-0 flex flex-col items-end gap-1.5 p-3">
+        <div className={`${glas} px-3 py-1.5 text-sm font-bold text-white tabular-nums`}>
+          <span ref={zeitRef}>0.0</span>s
+        </div>
+        {/* Die einzige laufende Rückmeldung zur Landungsqualität, seit die
+            Text-Einblendungen „PERFEKT!" usw. ausdrücklich raus sind. */}
+        <div
+          ref={flowRef}
+          className="rounded-full border border-teal-300/50 bg-teal-400/35 px-3 py-1 text-sm font-black text-teal-100 shadow-lg backdrop-blur-md transition-opacity duration-200"
+          style={{ opacity: 0 }}
+        >
+          FLOW ×1
+        </div>
+        {/* Eigene Farbe (Pink), damit sie sich von der Flow-Anzeige direkt
+            darüber klar unterscheidet. */}
+        <div
+          ref={trickRef}
+          className="rounded-full border border-pink-300/40 bg-pink-400/30 px-2.5 py-1 text-xs font-black text-pink-100 backdrop-blur-md transition-opacity duration-200"
+          style={{ opacity: 0 }}
+        >
+          360° +200
+        </div>
+      </div>
+
+      {/* Oben in der Mitte: eine geschaffte Aufgabe, kurz. */}
+      <div className="pointer-events-none absolute inset-x-0 top-14 grid place-items-center px-6">
+        <div
+          ref={meldungRef}
+          role="status"
+          className="rounded-full border border-amber-200/60 bg-amber-400/90 px-4 py-1.5 text-sm font-black text-amber-950 shadow-xl transition-[opacity,transform] duration-300"
+          style={{ opacity: 0, transform: 'translateY(-8px)' }}
+        />
       </div>
 
       {/* Streckenfortschritt unten */}
@@ -645,56 +620,63 @@ export function FlowMtb({
       </div>
 
       {/*
-       * Steuerung: links Gewicht, rechts Bremse.
+       * Steuerung: links Gewicht, rechts Bremse. **Kein Gas-Knopf** — Fahren
+       * ist der Grundzustand, siehe `eingabeRef` oben. Während der Fahrt
+       * gleichzeitig gebraucht wird nur noch Lehnen, und das braucht einen
+       * Finger. Die Bremse bleibt rechts: Man bremst nie **und** lehnt im
+       * selben Moment absichtlich.
        *
-       * **Kein Gas-Knopf mehr** — Fahren ist jetzt der Grundzustand, siehe
-       * `eingabeRef` oben. Während der Fahrt gleichzeitig gebraucht wird
-       * nur noch Lehnen, und das ist eine einzelne Hand/ein einzelner
-       * Finger. Bremse bleibt rechts stehen: Man bremst nie **und** lehnt
-       * im selben Moment absichtlich (man will vor einem Sprung langsamer
-       * werden, nicht mitten im Absprung), deshalb ist das gleichzeitige
-       * Bedienen beider Seiten hier kein echter Anwendungsfall mehr.
+       * Die Farben tragen eine Bedeutung: Bernstein (Hinten) ist dieselbe
+       * Farbe wie die Absprungmarken auf der Strecke — dort wird es gebraucht,
+       * für den Pop. Türkis (Vorne) ist die Farbe des Fahrers, Rot die Bremse.
        */}
       <div className="pointer-events-none absolute inset-x-0 bottom-5 flex items-end justify-between px-4">
         <div className="flex gap-2">
           <Knopf
-            kind=""
             label="Hinten"
             zeichen="↺"
+            farbe="bernstein"
             setzen={(an) => (lehnenZielRef.current = an ? -1 : 0)}
+            beiDruck={hinweisWeg}
           />
           <Knopf
-            kind=""
             label="Vorne"
             zeichen="↻"
+            farbe="tuerkis"
             setzen={(an) => (lehnenZielRef.current = an ? 1 : 0)}
+            beiDruck={hinweisWeg}
           />
         </div>
         <Knopf
-          kind=""
           label="Bremse"
           zeichen="⊘"
+          farbe="rot"
           setzen={(an) => (eingabeRef.current.bremse = an)}
+          beiDruck={hinweisWeg}
         />
       </div>
 
-      {/*
-       * Der Hinweis verschwindet mit der ersten Eingabe.
-       *
-       * Seit Fahren der Grundzustand ist (kein Gas-Knopf mehr, siehe
-       * `eingabeRef` oben), geht es hier nur noch um das eine, was
-       * während der Fahrt wirklich zu tun ist: lehnen.
-       */}
+      {/* Die Anleitung verschwindet mit der ersten Eingabe. */}
       {zeigeHinweis && (
-        <div className="pointer-events-none absolute inset-x-0 top-[38%] grid place-items-center px-6">
-          <div className="rounded-2xl bg-black/60 px-5 py-4 text-center backdrop-blur-sm">
-            <p className="text-base font-black text-white">So geht&apos;s</p>
-            <p className="mt-2 text-sm text-white/90">
-              Du fährst automatisch los — <span aria-hidden="true">↺↻</span> in der Luft das Rad gerade
-              halten
-            </p>
-            <p className="text-sm text-white/90">Beide Räder zugleich = perfekt</p>
-            <p className="mt-2 text-xs text-white/60">
+        <div className="pointer-events-none absolute inset-x-0 top-[37%] grid place-items-center px-6">
+          <div className="flex max-w-xs flex-col gap-1.5 rounded-2xl border border-white/15 bg-black/55 px-4 py-3 backdrop-blur-md">
+            <p className="text-center text-base font-black text-white">So geht&apos;s</p>
+            <HinweisZeile
+              zeichen={
+                <span className="text-lg font-black text-white">
+                  ↺<span className="text-teal-300">↻</span>
+                </span>
+              }
+            >
+              In der Luft das Rad gerade halten, beide Räder zugleich landen.
+            </HinweisZeile>
+            <HinweisZeile zeichen={<span className="text-lg font-black text-amber-300">›››</span>}>
+              Gelbe Pfeile: an der Kante <b>Hinten</b> antippen = Pop, extra Höhe.
+            </HinweisZeile>
+            <HinweisZeile zeichen={<span className="block size-4 rounded-full bg-amber-300 ring-2 ring-amber-700" />}>
+              Münzen sammeln, türkise Streifen = Schub.
+            </HinweisZeile>
+            <p className="text-center text-xs text-white/60">
               {settings.reducedMotion ? 'Pfeiltasten gehen auch' : 'Pfeiltasten oder WASD gehen auch'}
             </p>
           </div>
