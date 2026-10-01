@@ -3408,7 +3408,8 @@ Fairness-Prüfungen gelten unverändert.
 - **Pop** (`POP_FENSTER`, `POP_SCHUB`): Wer genau an der Absprungkante frisch
   „Hinten" antippt, bekommt Extrahöhe. Die Kante zeigen drei gelbe Pfeile am
   Boden (`absprungMarken`) — eine Regel, die man erraten muss, fühlt sich
-  unfair an. Optional: Wer es nie versucht, fährt wie bisher.
+  unfair an. Auf Kickern bleibt er freiwillig; **an Lücken ist er Pflicht**,
+  siehe „Version 3".
 - **Drei laufende Aufgaben** (`Mission`, `MISSION_NAMEN`): Münzen, perfekte
   Landungen, Saltos, Tempo, Luftzeit, Pops. Ziele am einfachen Fairness-Bot
   gemessen (drei bis vier je Fahrt); der Lohn wächst (`missionsLohn`). Alles
@@ -3513,6 +3514,156 @@ gebraucht —, **Türkis** (Vorne) die Farbe des Fahrers, **Rot** die Bremse.
   steckt im Hauptbündel, nicht nachgeladen.
 
 Service-Worker-Version v82 → v83.
+
+### Version 3 — Lücken, und der Absprung wird gesteuert
+
+Ronnis Rückmeldung zur Version 2, wörtlich: „Funktioniert die Steuerung auch
+gut? Vorher konnte man es einfach durchfahren lassen, es war nicht nötig, was
+zu steuern. Es könnten auch Gaps und Kicker eingebaut werden um etwas
+Abwechslung zu haben — überleg, wie da der Absprung gesteuert werden soll."
+
+**Erst gemessen, dann gebaut.** 40 Strecken, drei Fahrer (Skript mit echter
+Physik, keine Schätzung):
+
+| Fahrer | vorher | jetzt |
+|---|---|---|
+| reines Dauergas | **24 von 40** | **0 von 40** |
+| Fahrer mit Reaktionszeit, ohne Pop | 38 von 40 | 3 von 40 |
+| Fahrer mit Reaktionszeit, mit Pop | 39 von 40 | 40 von 40 |
+| nur Pop, nie in der Luft lenken | — | 5 von 40 |
+
+Ronni hatte recht, und die Zahl erklärt warum: Die Nasen-Drift in der Luft
+(`NATUR_NICKEN`, siehe „Schwerer, weil Steuern jetzt wirklich nötig ist")
+machte aus „immer" ein „meistens", der Pop war nie nötig. *Merksatz:* Eine
+Anforderung wie „man muss steuern" ist erst erfüllt, wenn **reines Gas auf
+keiner Strecke** ins Ziel kommt — ein „meistens nicht" fühlt sich für jeden
+Spieler an wie „geht auch so".
+
+**Die Antwort ist eine neue Abschnittsart, die Lücke** (`Luecke` in
+`logik.ts`): Rampe → harte Kante → Graben → Gegenseite → Landehang. Anders als
+ein Kicker (eine glatte Glocke, auf der man irgendwo abhebt) ist der Absprung
+hier **eine Stelle**.
+
+- **Der Boden springt an der Kante, absichtlich.** `bodenHoehe` liefert im
+  Graben `GRABEN_BODEN` (−7 m); `bodenSteigung` ist dort 0. Die alten
+  Stetigkeitstests nehmen die Kanten aus.
+- **Das Abheben an der Kante steht als eigene Regel im Bodenzweig von `takt`**,
+  nicht in der Fliehkraft-Bedingung: Die Kante ist ein Sprung in der
+  Bodenhöhe, und ob ein Bild genau in das 10-cm-Fenster davor fällt, hinge sonst
+  von der Bildrate ab. Das Rad hebt mit dem Winkel auf, in dem die Rampe endet.
+- **Zwei Wege zum Sturz, beide ohne Landung zu sein:** die Wand der Gegenseite
+  (geprüft beim **Überschreiten** der Linie, nicht jedes Bild — hinter der
+  Kante würde die Bodenhöhe sonst auf die Oberkante springen und aus einem
+  Aufprall eine Landung machen) und der Graben. Wer im Graben schon 2,5 m
+  unter der niedrigeren Seite ist, stürzt **sofort** und fällt weiter (der
+  `vorbei`-Zweig lässt das Rad fallen); sonst fiele man eine Sekunde lang
+  sieben Meter ohne jede Reaktion.
+- **Die Breite wird aus der echten Physik gemessen** (`lueckenFlug`,
+  `lueckeBauen`): Eine Probefahrt mit `taktKern` aus 28 m ebenem Anlauf,
+  einmal ohne Pop, einmal mit dem **schwächsten gültigen** (Tipp 0,28 s vor
+  der Kante). Gewählt wird die **kleinste** Breite, bei der der Fahrer ohne Pop
+  mindestens 0,55 m unter der Gegenseite ankommt und der mit schwachem Pop
+  mindestens 0,55 m darüber. Das sind die zwei Zusagen einer Lücke: *Ohne Pop
+  schafft sie keiner, mit Pop schafft sie jeder.* Keine zweite Rechnung neben
+  der Physik — die liefe bei der nächsten Änderung still auseinander.
+- **Drei Formen** (`zielArt`): abwärts (Gegenseite niedriger), eben, hinauf
+  (Gegenseite höher als die Kante, bis 2,1 m). Breite 9,5 bis 16,5 m.
+- **Der ebene Anlauf macht das Tempo zu einer Konstante** (28 m,
+  `LUECKEN_ANLAUF`): Nach jeder Landung ist man wieder bei Höchsttempo, ohne
+  etwas tun zu müssen — außer zu bremsen. Gemessen reicht ab etwa 16,5 m/s an
+  der Rampe (darunter scheitert auch ein Pop); `Boost` vor der Lücke hätte
+  den Pop überflüssig gemacht und wird deshalb in den 45 m davor entfernt.
+- **Wo sie liegen:** immer eine im zweiten Abschnitt (rund Meter 80 bis 105),
+  mindestens zwei je Strecke, sonst gewürfelt (Flow-Zone 20 %, Skill-Zone 28 %).
+  Vor dem Ziel bleiben 10 m Platz — wer die Ziellinie mitten im Flug
+  überquert, hätte sie nie springen müssen. Hinter einer Lücke braucht ein
+  Mega-Kicker mehr Platz (seine Flanke reicht gut zwei Breiten weit).
+- **Münzbogen auf der Linie des vollen Pops** über jeder Lücke, Boost-Streifen
+  nach der Landung (nur, wenn kein Kicker gleich folgt — gemessen an der
+  Flanke, nicht an der Anfahrt), neue Aufgabe „Springe über N Lücken",
+  `LUECKEN_PUNKTE` je Lücke.
+
+**Wie der Absprung gesteuert wird — und was ich verworfen habe.**
+Entschieden: **Einmal „Hinten" antippen, kurz bevor die Kante kommt.** Dazu der
+Anlauf, der das Tempo liefert. Warum so:
+
+- Der Pop existierte schon (Version 2) und hängt an einem Knopf, der am Boden
+  sonst nichts tut — kein dritter Knopf, kein zweiter Finger (Gas als Knopf war
+  genau daran gescheitert).
+- **Verworfen: Aufladen** (halten, an der Kante loslassen). „Hinten" gehalten
+  kippt in der Luft die Nase hoch; Halten und Lenken liefen gegeneinander.
+- **Verworfen: eigener Sprungknopf / Hüpfer überall.** Würde jeden Abschnitt
+  zu einem Hüpfspiel machen und die Landungswertung aushebeln. Hindernisse zum
+  Überhüpfen (Baumstamm, Stein) wären ein möglicher nächster Schritt, mit
+  derselben Taste.
+- **Verworfen: nur Tempo.** Tempo ist durch den Anlauf eine Konstante, also
+  keine Fähigkeit.
+
+Dabei vier Änderungen am Pop selbst, alle aus dem Messen:
+
+1. **`druck` zählt jetzt die Zeit seit dem letzten Antippen, auch wenn der
+   Finger schon oben ist.** Vorher zählte nur, wer im Moment des Abhebens noch
+   drückte — wer tippte und losließ, das Natürlichste an einer Kante, bekam
+   nichts. (`hintenGedrueckt` im `Lauf` erkennt den Beginn eines Drucks.)
+2. **Roher Druck statt der weichen Rampe** (`Eingabe.hinten`). Ein Antippen von
+   80 ms kommt über die Lehnen-Rampe (0,1 s) nur bis −0,8, ein kürzeres nie
+   über −0,5. `FlowMtb.tsx` hält ein Antippen außerdem in `hintenMerkerRef` fest,
+   bis die Uhr es gesehen hat — ein Finger, der binnen eines Bildes abhebt,
+   wäre sonst nie dagewesen.
+3. **Die Stärke hängt am Zeitpunkt** (`popStaerke`): voll bis 0,2 s vor der
+   Kante, danach linear auf drei Viertel bei 0,3 s. Timing lohnt sich, ohne dass
+   ein knapp danebenliegender Druck nichts bringt. Die Lücken sind auf das
+   Dreiviertel gebaut.
+4. **Zu früh zählt nicht** (> `POP_FENSTER`): Sonst wäre das Fenster keins.
+
+**Das Fenster ist sichtbar, nicht zu raten:**
+
+- **Tipp-Zone auf dem Boden** (`absprungMarken`): ein Lichtvorhang vor der
+  Kante, so lang wie das Fenster bei Höchsttempo (gut fünf Meter), hinten blass
+  und niedrig (schwächerer Pop), vorn hell und hoch (voller Pop). Er folgt der
+  Rampe (Spalte für Spalte eigener senkrechter Verlauf), leuchtet stärker,
+  solange man darin fährt, und ist die zuverlässigste Anzeige — der Boden
+  verrät nicht, wann man tippen soll, die Zone schon.
+- **Der „Hinten"-Knopf leuchtet**, solange das Fenster offen ist (`anzeigen`,
+  direkt ins DOM). Wer den Finger darauf hat, sieht es ohne Hinsehen. Zugabe,
+  nicht einziger Hinweis (Farbe nie als einziges Merkmal: die Zone steht auch
+  da).
+- **Warnschild** neun Meter vor der Rampe, **Holzrampe** mit Fugen und
+  gelb-schwarzer Kappe an der Kante, helle Lippe an der Gegenseite, **Dunkel im
+  Graben** (muss vor dem Erdkörper gezeichnet werden — der Boden deckt nur ab,
+  wo er ist, sonst läge im Graben der Himmel frei und die Lücke sähe aus wie
+  ein Fenster ins Blaue). Gras bricht an Rampe und Landehang ab (kahle Erde),
+  Striche am Boden werden an Graben-Wänden abgesetzt.
+- **Sturz an der Wand:** Brocken aus der Kante, der Fahrer prallt von der Wand
+  ab (statt durch sie hindurch auf die Oberkante zu rutschen); die Kamera
+  folgt ihm in den Graben.
+
+**Tests** (`describe('Lücken')` in `logik.test.ts`, 20 Stück): jede der 12
+Strecken, jede Lücke, drei Tipp-Zeitpunkte im Fenster → hinüber; ohne Pop →
+Sturz; zu früh → Sturz; deutlich zu langsam → Sturz; Tipp-und-loslassen zählt;
+roher Druck zählt; Stärke gestaffelt; Graben fällt über mehrere Bilder; ein
+Fahrer mit Reaktionszeit, binärer Eingabe und Rampe schafft ≥ 19 von 20
+Strecken. Die alte Schwelle „reines Gas < 6 von 10" ist durch ein
+kategorisches `0` ersetzt.
+
+**Fallen, die beim Bauen auftraten** (alle von den Tests gefunden, nicht vom
+Hinsehen):
+
+- Ein Test, der bei „zu früh antippen" nur 1 m Anlauf hatte, tippte ohnehin
+  erst im Moment des Starts — „zu früh" war gar nicht herstellbar. *Der Test
+  muss die Situation überhaupt erzeugen können.*
+- Die Probe-Flugbahn kennt die echte Gegenseite nicht (Graben dort 60 m
+  breit): Münzen am Ende des Bogens lagen **im Boden** der Gegenseite. Der
+  Bogen endet jetzt, sobald die Bahn die echte Geländehöhe erreicht.
+- Ein Belohnungs-Streifen nach der Landung lag schief auf der **Flanke** eines
+  13 m breiten Kickers — die Anfahrt (2,1 Breiten) ist für die Platzierung das
+  falsche Maß, die Flanke reicht gut zwei Breiten.
+
+*Prüfhaken nur für Bildschirmfotos:* `globalThis.__mtbStart = { luecke, anlauf,
+halt? }` setzt das Rad mit Höchsttempo vor eine Lücke (`halt` hält die Szene
+nach dem ersten Bild an).
+
+Service-Worker-Version v83 → v84.
 
 ## Befehle
 

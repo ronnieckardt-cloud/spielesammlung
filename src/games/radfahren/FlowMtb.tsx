@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Startbildschirm } from '../../core/Startbildschirm';
 import type { DekoTeil } from '../../core/Startbildschirm';
 import { useGameLoop } from '../../core/useGameLoop';
@@ -7,8 +7,12 @@ import { haptik } from '../../core/haptik';
 import type { GameProps } from '../../core/types';
 import {
   MISSION_NAMEN,
+  POP_FENSTER,
   STRECKE_LAENGE,
+  TEMPO_MAX,
   TRICK_PUNKTE_JE_DREHUNG,
+  bodenHoehe,
+  bodenWinkel,
   missionFortschritt,
   missionsLohn,
   neuesSpiel,
@@ -128,16 +132,20 @@ function Knopf({
   farbe,
   setzen,
   beiDruck,
+  knopfRef,
 }: {
   label: string;
   zeichen: ReactNode;
   farbe: KnopfFarbe;
   setzen: (an: boolean) => void;
   beiDruck: () => void;
+  /** Für das Leuchten, wenn die Tipp-Zone offen ist — es wird direkt gesetzt, ohne React. */
+  knopfRef?: Ref<HTMLButtonElement>;
 }) {
   const stil = KNOPF_STIL[farbe];
   return (
     <button
+      ref={knopfRef}
       type="button"
       aria-label={label}
       className="pointer-events-auto flex size-[4.25rem] touch-none flex-col items-center justify-center rounded-2xl border backdrop-blur-sm select-none transition-transform duration-100 active:scale-95 active:brightness-125"
@@ -206,7 +214,16 @@ export function FlowMtb({
   const holeLauf = useCallback(() => {
     if (!laufRef.current) {
       // Jede Runde eine andere Strecke, aber innerhalb der Runde fest.
-      laufRef.current = neuesSpiel(streckenSaat(Date.now() % 100000));
+      let neu = neuesSpiel(streckenSaat(Date.now() % 100000));
+      // Nur für Bildschirmfotos am Rechner (auf einem echten Gerät nie gesetzt):
+      // setzt das Rad vor eine Lücke, mit Höchsttempo.
+      const hilfe = (globalThis as { __mtbStart?: { luecke: number; anlauf: number; halt?: boolean } }).__mtbStart;
+      const l = hilfe ? neu.gelaende.luecken[hilfe.luecke] : undefined;
+      if (hilfe && l) {
+        const x = l.x0 - hilfe.anlauf;
+        neu = { ...neu, x, y: bodenHoehe(neu.gelaende, x), vx: TEMPO_MAX, winkel: bodenWinkel(neu.gelaende, x) };
+      }
+      laufRef.current = neu;
     }
     return laufRef.current;
   }, []);
@@ -262,6 +279,16 @@ export function FlowMtb({
   /** Bis zu welcher Laufzeit die „Aufgabe geschafft"-Meldung steht. */
   const meldungBisZeitRef = useRef(0);
   const boostAktivRef = useRef(false);
+  const hintenKnopfRef = useRef<HTMLButtonElement>(null);
+  /** Ob die Tipp-Zone gerade offen ist und der Knopf leuchtet. */
+  const popOffenRef = useRef(false);
+  /**
+   * Hält ein Antippen fest, bis die Uhr es gesehen hat. Ein Finger, der binnen eines
+   * Bildes (16 ms) wieder abhebt, wäre sonst für die Physik nie dagewesen — und
+   * ausgerechnet das schnelle, entschlossene Tippen an der Kante ist das, was der
+   * Pop belohnen soll.
+   */
+  const hintenMerkerRef = useRef(false);
   /** `settings` für die Anzeige-Funktion, ohne sie bei jeder Änderung neu zu bauen. */
   const reduziertRef = useRef(settings.reducedMotion);
   reduziertRef.current = settings.reducedMotion;
@@ -290,6 +317,26 @@ export function FlowMtb({
         [{ transform: 'scale(1)' }, { transform: 'scale(1.16)' }, { transform: 'scale(1)' }],
         { duration: 170, easing: 'ease-out' },
       );
+    }
+
+    /*
+     * Die Tipp-Zone ist offen: Eine Absprungmarke liegt voraus, und bis dahin
+     * bleibt weniger Zeit als das Fenster des Pop. Der Knopf „Hinten" leuchtet
+     * dann — wer den Finger darauf hat, sieht es, ohne hinzuschauen. Die Zone
+     * am Boden zeigt dasselbe (siehe `absprungMarken`); das Leuchten ist die
+     * Zugabe, nicht der einzige Hinweis.
+     */
+    const marke = neu.amBoden && !neu.popGenommen && neu.vx > 2
+      ? neu.gelaende.absprung.find((a) => a > neu.x - 0.1 && a - neu.x <= neu.vx * POP_FENSTER)
+      : undefined;
+    const offen = marke !== undefined;
+    if (offen !== popOffenRef.current && hintenKnopfRef.current) {
+      popOffenRef.current = offen;
+      const k = hintenKnopfRef.current;
+      k.style.boxShadow = offen
+        ? '0 0 0 3px rgba(255,226,120,0.95), 0 0 26px rgba(255,200,60,0.85)'
+        : '0 6px 14px rgba(0,0,0,0.3)';
+      k.style.transform = offen ? 'scale(1.07)' : '';
     }
 
     // Boost: Das Tempofeld bekommt einen türkisen Schein, solange er wirkt.
@@ -395,6 +442,7 @@ export function FlowMtb({
         case 'ArrowLeft':
         case 'KeyA':
           lehnenZielRef.current = an ? -1 : 0;
+          if (an) hintenMerkerRef.current = true;
           return true;
         default:
           return false;
@@ -439,6 +487,10 @@ export function FlowMtb({
       const maxSchritt = (dt / RAMPZEIT) || 0;
       e.lehnen =
         Math.abs(differenz) <= maxSchritt ? ziel : e.lehnen + Math.sign(differenz) * maxSchritt;
+
+      // Der rohe Druck für den Pop: gedrückt oder seit dem letzten Bild angetippt.
+      e.hinten = ziel < 0 || hintenMerkerRef.current;
+      hintenMerkerRef.current = false;
 
       const vorher = holeLauf();
       const neu = takt(vorher, dt, eingabeRef.current);
@@ -489,7 +541,14 @@ export function FlowMtb({
         window.setTimeout(() => setAusgelaufen(true), 3500);
       }
     },
-    { fps: 60, running: gestartet && !ausgelaufen },
+    {
+      fps: 60,
+      // `halt` ist nur für Bildschirmfotos: Die Szene bleibt nach dem ersten Bild stehen.
+      running:
+        gestartet &&
+        !ausgelaufen &&
+        !(globalThis as { __mtbStart?: { halt?: boolean } }).__mtbStart?.halt,
+    },
   );
 
   // Punktestand nach außen, zweimal je Sekunde.
@@ -636,8 +695,12 @@ export function FlowMtb({
             label="Hinten"
             zeichen="↺"
             farbe="bernstein"
+            knopfRef={hintenKnopfRef}
             setzen={(an) => (lehnenZielRef.current = an ? -1 : 0)}
-            beiDruck={hinweisWeg}
+            beiDruck={() => {
+              hintenMerkerRef.current = true;
+              hinweisWeg();
+            }}
           />
           <Knopf
             label="Vorne"
@@ -671,7 +734,7 @@ export function FlowMtb({
               In der Luft das Rad gerade halten, beide Räder zugleich landen.
             </HinweisZeile>
             <HinweisZeile zeichen={<span className="text-lg font-black text-amber-300">›››</span>}>
-              Gelbe Pfeile: an der Kante <b>Hinten</b> antippen = Pop, extra Höhe.
+              Gelbes Band vor der Kante: <b>Hinten</b> antippen = Pop. Ohne Pop kommst du über keine Lücke.
             </HinweisZeile>
             <HinweisZeile zeichen={<span className="block size-4 rounded-full bg-amber-300 ring-2 ring-amber-700" />}>
               Münzen sammeln, türkise Streifen = Schub.
