@@ -116,6 +116,7 @@ Ein neues Spiel wird an genau einer Stelle bekannt gemacht:
 | `<Startbildschirm titel untertitel bestScore verlauf deko Symbol knopfFarbe onStart>` | Das Titelbild eines Spiels. Acht Spiele hatten sich denselben Aufbau einzeln zusammengesetzt, vier hatten gar keinen. |
 | `<Punktegewinn>` + `usePunktegewinn(punkte, schwelle?)` | Das „+N" über dem Feld. Erkennt Zuwächse selbst und zeigt sie an. |
 | `<Komboherz kombo ruhig>` | Serien-Anzeige: ein pochendes Herz mit der Zahl darin, das **mit der Serie wächst**. Benutzt von Block Burst (`kombo`) und Line Fall (`vierfachStreak`). |
+| `core/leiter.ts` + `<Leiterspiel …>` | Die **Gewinnleiter** („Wer wird Millionär"-Prinzip): fünfzehn Stufen, drei Joker, zwei Sicherheitsstufen, Aufhören. Reine Logik und fertige Oberfläche; ein Spiel liefert nur Fragen und Farben. Benutzt von Quiz Time und Word Play — siehe „Die Gewinnleiter". |
 
 Zum Kombo-Herz: Der Schlag ist ein echter Doppelschlag (laut, leise,
 Pause), kein gleichmäßiges Auf und Ab — erst dadurch liest es sich als
@@ -759,7 +760,11 @@ versucht deshalb genau dasselbe Level erneut.
   statt „Vorbei" — dafür wurde `GameProps.onGameOver` um ein optionales
   zweites Argument erweitert (siehe „Die Schnittstelle" oben).
 
-## Antwort-Rückmeldung (Quiz Time, Word Play, Brain Blitz)
+## Antwort-Rückmeldung (Brain Blitz, Even Cut, Flow Link und die Leiter)
+
+*Quiz Time und Word Play laufen inzwischen über `core/Leiterspiel` und benutzen
+nur noch die beiden Klassen unten; ihre Rückmeldung (Ergebniszeile,
+Erklärung) steht im Abschnitt „Die Gewinnleiter".*
 
 Alle drei zeigen vier Antworten und hatten dafür nur `transition-colors` —
 zehn Aufgaben je Runde, und zehnmal passierte optisch fast nichts. Zwei
@@ -786,31 +791,38 @@ unangenehm bis gefährlich wird — diese eine Stelle darf weder schneller
 noch flächiger werden, und das Muster gehört nirgendwo sonst hin.
 Ganzflächige Hell-Dunkel-Wechsel sind grundsätzlich tabu.
 
-## Wissensquiz — Besonderheiten
+## Quiz Time — Besonderheiten
 
-- `fragen.ts`: reine Daten (ca. 100 Fragen, vier Antworten je Frage), nichts
-  Logisches drin — neue Fragen einfach ergänzen. Ein eigener Test prüft nur
-  die Struktur (vier nicht-leere Antworten, gültiger Richtig-Index, keine
-  Dopplung) — Faktentreue kann kein Test prüfen, das bleibt beim
-  sorgfältigen Schreiben.
-- Level = Runde, genau wie beim Farbsortierer: aus der Levelnummer werden
-  zehn Fragen gemischt gezogen (`neuesLevel` in `logik.ts`), gleiche
-  Levelnummer ergibt für alle dieselben zehn Fragen. „Nochmal" nach einer
-  Runde startet automatisch das nächste Level; Pfeile im Kopf springen
-  gezielt zu einer bestimmten Levelnummer.
-- Nach jeder Antwort sofortige Rückmeldung (richtig grün, falsch rot, die
-  tatsächlich richtige Antwort wird immer angezeigt) — man lernt auch aus
-  falschen Antworten, nicht erst am Rundenende.
-- Jede Frage trägt zusätzlich ein `erklaerung`-Feld: ein kurzer
-  Wissens-Hinweis ("💡 …"), der unterhalb der Antworten erscheint, sobald
-  beantwortet wurde — unabhängig davon, ob richtig oder falsch geklickt
-  wurde. So bleibt auch bei einer falschen Antwort ein Lerneffekt. Ein Test
-  prüft nur, dass jede Frage eine nicht-leere Erklärung hat.
-- Eigener Startbildschirm (`Startbildschirm` in `Quiz.tsx`, gleiche
-  `gestartet`-Vorlage wie Blockblitz): kräftiger Blau-Lila-Verlauf mit
-  schwebenden geometrischen Formen (Kreis, Quadrat, Dreieck per
-  `clip-path`, `DEKO_FORMEN`) — angelehnt an die Optik typischer
-  Quiz-Apps im App Store.
+Seit der Umstellung auf die Gewinnleiter (siehe „Die Gewinnleiter") ein
+**Wer-wird-Millionär-Spiel**: fünfzehn Fragen je Level, von „Wie viele Beine
+hat eine Spinne?" bis zu Fragen, die nur wenige wissen. Interne `id` bleibt
+`quiz`, das Spiel bleibt duellfähig.
+
+- **Drei Fragendateien nach Gebiet** (`fragen-schwer-natur.ts`, `-welt.ts`,
+  `-kultur.ts`) neben der alten `fragen.ts` — zusammen über 250 Fragen, jede
+  mit ihrer `schwere`. `pool.ts` sammelt sie über `import.meta.glob`; wer neue Fragen
+  schreibt, legt sie in eine Datei `fragen-*.ts` und exportiert eine Liste.
+  Kein Eintrag irgendwo sonst.
+- **Kopfnuss (`kopfnuss.ts`) — „es werden mehr rechnen".** Vier der fünfzehn
+  Stufen (`KOPFNUSS_STUFEN`: 3, 6, 9 und 12) sind Rechenaufgaben, die aus der
+  Saat **erzeugt** werden, nicht aus einer Liste gezogen: von „47 + 38" bis
+  „47 × 53" und Potenzen, mit je Schwere Tausenden Varianten. Die falschen
+  Antworten sind **typische Rechenfehler** (Reihenfolge der Rechenarten,
+  Zehnerübertrag vergessen), nicht Zufallszahlen — sonst riete man die
+  Lösung am Aussehen. Das Ergebnis ist nie negativ. Die Tests rechnen jede
+  Aufgabe **unabhängig** über `ausdruck` nach (ein Test, der dieselbe Formel
+  benutzt wie der Erzeuger, prüft nichts). Die letzten drei Stufen sind immer
+  Wissen: Eine Rechenaufgabe um die Höchstzahl liest sich wie ein
+  Aufgabenblatt.
+- Level = Runde, gleiche Levelnummer → überall dieselben Fragen. Der Pool
+  wird je Schwere **einmal je Durchgang** gemischt und in Abschnitte
+  geteilt (`fragenAusPool`): Die Level eines Durchgangs überschneiden sich
+  garantiert nicht. Ein Test verlangt mindestens zwölf Level ohne
+  wiederholte Wissensfrage.
+- Farben: tiefes Blau mit goldenem Rahmen (`STIL` in `Quiz.tsx`). Das
+  `accent` in `index.ts` bleibt **Orange**, nicht Gold: `spielfarbe.test.ts`
+  verlangt, dass kein Spiel die Farbe eines anderen belegt, und Gold gehört
+  dem Stern.
 
 ## Gehirnjogging — Besonderheiten
 
@@ -846,26 +858,122 @@ Ganzflächige Hell-Dunkel-Wechsel sind grundsätzlich tabu.
   Index, und `MerkfolgenAnzeige` bekommt `key={`${z.level}-${z.index}`}`,
   damit sie in genau diesem Fall wirklich neu mountet.
 
-## Wortspiel — Besonderheiten
+## Word Play — Besonderheiten
 
-- `woerter.ts`: reine Daten (ca. 90 Wörter), nichts Logisches drin — Aufbau
-  bewusst wie `fragen.ts` beim Quiz: vier Antworten, `richtig` als fester
-  Index (nicht zur Laufzeit gemischt). Jedes Wort hat zusätzlich eine
-  `stufe` (1-3) und eine `regel` — eine kurze Erklärung, die nach der
-  Antwort immer erscheint, richtig oder falsch geklickt. Ein Test prüft nur
-  Struktur (vier eindeutige Antworten, gültiger Index, keine doppelt
-  vorkommende richtige Schreibweise im ganzen Pool) — Rechtschreibung
-  selbst kann kein Test prüfen, das bleibt beim sorgfältigen Schreiben.
-- Anders als beim Quiz steigt die Schwierigkeit mit dem Level: bis Level 20
-  nur Stufe 1 (kurze, häufige Wörter), bis Level 50 zusätzlich Stufe 2
-  (Umlaute, Doppelkonsonanten, Dehnungs-h), danach auch Stufe 3 (lange
-  Wörter, Fremdwörter, Fugenlaute) — `maxStufeFuerLevel` in `logik.ts`.
-  `neuesLevel` filtert den Pool auf die erlaubte Stufe, bevor gemischt wird.
-- Die Fehlschreibungen sind von Hand gebaut, keine zufällig erzeugten
-  Buchstabendreher — jede zeigt eine echte, typische deutsche
-  Rechtschreibfalle (ß/ss, ie/i, Doppelkonsonanten, Dehnungs-h, v/f,
-  Fremdwort-Schreibung). Zufällige Vertauschungen hätten oft unsinnige,
-  offensichtlich falsche Wörter ergeben statt lehrreicher Fehler.
+Ebenfalls auf der Gewinnleiter, in Violett/Pink. Interne `id` `wortspiel`,
+duellfähig.
+
+- **Nicht mehr nur Rechtschreibung.** Neben den ~90 Rechtschreibwörtern
+  (`woerter.ts`, unverändert, mit `stufe` und `regel`) gibt es drei neue
+  Dateien: `wortfragen-wortschatz.ts` (Bedeutung, Gegenteil, Synonym,
+  Wortbildung), `wortfragen-redensarten.ts` (Redewendung, Sprichwort,
+  Oberbegriff, Herkunft) und `wortfragen-schreibung.ts` (schwierigere
+  Rechtschreibung und Grammatik). `pool.ts` fügt alles zusammen; die
+  Rechtschreibwörter werden dabei zu `LeiterFrage`n umgebaut. Zusammen über
+  240 Fragen.
+- **Je Schwere drei Fragen**, aus dem ganzen Pool gezogen — ein Level ist
+  also eine Mischung, kein Block aus einer Sorte. Die Tests verlangen auf
+  jeder Schwere mindestens drei Kategorien und mehrere Rechtschreibwörter
+  je Level.
+- **Die Identität einer Frage ist `fragenSchluessel` (Text **und** sortierte
+  Antworten), nie der Text allein.** Bei den Rechtschreibwörtern lautet die
+  Frage immer „Welches Wort ist richtig geschrieben?" — ein Ausschluss über
+  den Text hätte nach dem ersten Wort alle übrigen ausgesperrt, und die
+  Sortierung hätte von der Dateireihenfolge abgehangen.
+- Die Fehlschreibungen sind weiterhin von Hand gebaut, jede eine echte,
+  typische Falle (ß/ss, ie/i, Doppelkonsonanten, Dehnungs-h, v/f).
+
+## Die Gewinnleiter
+
+Ronni: „Wissen und Wortspiele in sowas wie Wer wird Millionär … das kann
+sehr umfangreich sein, das geile Spiel wird, und mein Plan ist, irgendwann in
+der Software zu machen, wo ich Sprachen lernen kann." Deshalb ein **gemeinsamer
+Kern**, nicht zwei Kopien: `core/leiter.ts` (Logik, getestet) und
+`core/Leiterspiel.tsx` (Oberfläche). Ein späteres Vokabel-Spiel braucht nur
+eine Fragendatei, einen `STIL` und eine dünne Umhüllung wie `Quiz.tsx`.
+
+**Die Regeln:**
+
+- **Fünfzehn Stufen, Schwere 1 bis 5** (je drei Stufen eine Schwere:
+  Grundschule, Klasse 5/6, Klasse 7–9, Allgemeinbildung, knifflig).
+- **Sicherheitsstufen bei 5 und 10.** Eine falsche Antwort wirft nur bis zur
+  letzten erreichten zurück. **Aufhören** nimmt den aktuellen Gewinn mit
+  (erst nach der ersten richtigen Antwort).
+- **Drei Joker, je einmal:** 50:50 (zwei falsche fallen weg), Publikum
+  (Prozentbalken in den Antworten), Anruf (ein Freund nennt einen Tipp mit
+  Sicherheit). Publikum und Anruf liegen **je Schwere** unterschiedlich oft
+  richtig (`PUBLIKUM_TREFFER`/`ANRUF_TREFFER`, von 97 % bis 40 %): Ein Joker,
+  der immer stimmt, ist eine Abkürzung, einer, der nie stimmt, wird nie
+  benutzt. Das Urteil ist aus der Saat berechnet, nicht gewürfelt — gleicher
+  Zustand, gleiche Hilfe, Duell bleibt fair. Tests prüfen die
+  Trefferquoten statistisch.
+- **Markieren, dann „Das ist meine Antwort", dann Wartezeit** (1,5 s, bei
+  „weniger Bewegung" 0,5 s) **und erst dann die Auflösung.** Die Wartezeit
+  ist der Zeitgeber der Anzeige; die Logik kennt keine Uhr
+  (`einloggen` → `aufloesen`). Ein Antippen löst nie sofort aus: Bei einer
+  Frage um 25.000 Punkte ist ein verrutschter Daumen sonst eine Katastrophe.
+
+**Warum die Preise bei 100.000 enden, nicht bei einer Million.** Der Server
+(`spiel_ergebnis_melden`) markiert ein Ergebnis als `verdaechtig`, wenn es
+mehr als das **Dreifache** der bisherigen Bestleistung ist, und
+`spiel_katalog.max_punkte` begrenzt den Wert je Spiel (stand bei 400, jetzt
+für `quiz` und `wortspiel` auf **100000**; das Duell lehnt über 1.000.000 ab).
+Mit Verdopplung je Stufe bis zur Million wäre jede zweite Bestleistung aus
+der Rangliste gefallen. Die Preise wachsen deshalb nur mit Faktor 1,3 bis 2
+je Stufe (`PREISE`). Wer die Leiter ändert, muss **beide** Schranken
+mitdenken. *Merksatz:* Ein neues Punktesystem ist erst fertig, wenn der
+Server es annimmt — nicht wenn die App es anzeigt.
+
+**Inhalte werden gegengeprüft, nicht nur geschrieben.** Fakten kann kein Test
+prüfen. Der Ablauf, mit dem die ~500 neuen Fragen entstanden:
+
+1. Agenten schreiben die Fragen (je Schwere und Gebiet).
+2. **Andere** Agenten lösen sie **ohne Schlüssel** (blind).
+3. Ein Skript vergleicht; jede Abweichung wird von Hand entschieden
+   (Frage umformuliert, ersetzt oder Schlüssel korrigiert). Ergebnis:
+   511 von 511 stimmen; fünf Fragen wurden dabei umgeschrieben.
+
+`core/leiterfragen.test.ts` prüft nur die **Form** jeder Fragendatei: genau
+vier verschiedene Antworten, Längen (Frage ≤ 150, Antwort ≤ 40 Zeichen — auf
+dem Handy stehen zwei Antworten nebeneinander), keine Antwort, die auf andere
+verweist („alle", „keine davon"; die Reihenfolge wird gemischt), eine
+Erklärung, keine Dopplung in der Liste.
+
+**Antworten werden je Level gemischt** (`antwortenMischen`, aus der Saat):
+Wer Fragen von Hand schreibt, setzt die richtige Antwort überall an
+dieselbe Stelle. Gleich für alle Spieler, also duellsicher.
+
+**Oberfläche** (`Leiterspiel.tsx`, drei Dinge, die nur das Bild fand):
+
+- **Nach dem Auflösen ersetzt die Rückmeldung die Joker-Zeile** (Ergebniszeile,
+  „💡 Erklärung", Weiter-Knopf), und der Antwortbereich scrollt ans Ende. Auf
+  375 × 560 lag die zweite Antwortreihe zuerst **hinter** der Rückmeldung —
+  also oft genau die richtige. Die Frage darf oben halb hinausragen, die
+  Antworten mit ✓ und ✗ nicht.
+- **Die Leiter auf dem Handy ist ein Dialog** (Knopf „n/15 Gewinn ▾"), auf dem
+  Tablet (`md`) steht sie daneben. Der Dialog zentriert **sicher**
+  (`overflow-y-auto` außen, `min-h-full justify-center` innen): Mit
+  `justify-center` auf dem Scrollbereich selbst ragt der Anfang nach oben
+  heraus, und Stufe 15 war nicht erreichbar.
+- Auf dem Tablet **oben ausgerichtet** (`md:pt-[7vh]`), nicht mittig: Weil
+  Joker-Zeile und Rückmeldung unterschiedlich hoch sind, sprang die Frage
+  bei jeder Antwort um ein paar Pixel.
+
+**Fallen, auf die geachtet werden muss:**
+
+- **Glob-Muster müssen Testdateien ausschließen.** `./fragen*.ts` zog
+  `fragen.test.ts` mit ein, Vitest lief dadurch im Browser — leere Seite.
+  Die Muster stehen deshalb explizit mit `'!…/*.test.ts'`.
+- **`.spielknopf` und `.spielbuehne > *` überstimmen Tailwind** (siehe Merge
+  Up) — Zustandsfarben stehen inline.
+- **Ein ergänzter Pool verschiebt die Abschnitte**, und „Level 7" bedeutet
+  danach andere Fragen. Das ist in Ordnung (Bestenlisten hängen an der
+  Levelnummer, nicht an den Fragen), nur ein laufendes Duell würde es
+  treffen — Fragen deshalb nicht mitten in einem Duell ergänzen.
+
+**Noch offen:** Sprachen-Spiel (Vokabeln) auf demselben Kern; mehr Fragen für
+die höchsten Schweren (der kleinste Topf ist Word Play Schwere 5 mit rund
+36 Fragen — das reicht für etwa zwölf Level ohne Wiederholung).
 
 ## Star Dash — Besonderheiten
 
@@ -2428,6 +2536,16 @@ Sterne beschreiben einen **Besitz** und wachsen. Drei blasse Sterne sagen
 genauso deutlich „hier ist noch nichts" — und zusätzlich, wie viel es zu
 holen gibt.
 
+**Arena Brawler steht als letzte Kachel auf der Spiele-Seite** (`Linkkachel`,
+`ArenaSymbol`), obwohl er kein Spiel der Sammlung ist: Er ist eine eigene
+Seite (`/arena-brawler-godot/`, der Godot-Export) und fehlte in der Übersicht,
+sodass man ihn nur über „Mehr" fand. Die Kachel ist ein **Link, kein Knopf**
+(`<a href>` — ein Seitenwechsel, kein Spielstart), trägt dasselbe App-Symbol-Format
+und ein „öffnet eine eigene Seite" im `aria-label`. Sie steht **hinter** allen
+Spielen und bleibt dort, weil die Reihenfolge fest ist; sie zählt nicht in
+„ausprobiert" und „Sterne", denn es gibt keine Bestenliste dafür. Die leichtere
+Phaser-Fassung (Arena Brawler Mini) bleibt unter „Mehr".
+
 **Der Farbbruch ist zu.** Die Hüllenseiten (`Seite.tsx`) lagen auf fast
 schwarzem Grund, während die Startseite kräftig bunt war — der auffälligste
 Bruch der ganzen App, es wirkte wie zwei Programme. Sie bekommen jetzt einen
@@ -2848,6 +2966,15 @@ steht hinter dem Rautezeichen, der Server sieht immer nur `/`.
 
 `netlify.toml` bleibt vorerst liegen, damit während des Umzugs beide Wege
 funktionieren.
+
+**Auslieferung aus einer Cloud-Sitzung** (kein Zugriff auf Ronnis lokales
+Token): Der Netlify-Dienst (`netlify-deploy-services-updater`, `deploy-site`
+für `9d35f7b3-64b4-4d7d-ae3c-3c1a31855ae5`) liefert einen Befehl, der aus einem
+**normalen Klon von `main`** mit echtem `.git`-Ordner läuft. Aus einem
+`git worktree` bricht er ab („not a git repository: …/.git/worktrees/…") — dann
+ist **nichts** veröffentlicht, die Gegenprobe mit `curl` oben deckt das auf.
+Vorher einen `node_modules`-Symlink entfernen. Und wie immer: erst
+`SPEICHER` hochzählen, dann bauen, dann ausliefern, dann die echte Adresse prüfen.
 
 ## Die zweite große Prüfrunde
 
