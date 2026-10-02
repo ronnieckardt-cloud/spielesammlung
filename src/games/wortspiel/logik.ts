@@ -1,86 +1,31 @@
-import { rng, saatAus } from '../../core/rng';
-import { WOERTER } from './woerter';
-import type { Wort } from './woerter';
+import { STUFEN, fragenAusPool, fragenSchluessel } from '../../core/leiter';
+import type { LeiterFrage } from '../../core/leiter';
+import { WORTFRAGEN } from './pool';
 
 /**
- * Wortspiel: Level = Runde, wie beim Wissensquiz. Aus der Levelnummer wird
- * eine feste, reproduzierbare Auswahl an Wörtern gezogen — gleiche
- * Levelnummer, gleiche Wörter, für alle vergleichbar. Anders als beim Quiz
- * steigt die Schwierigkeit mit dem Level: höhere Level dürfen aus einem
- * größeren Teil des Pools ziehen (mehr schwierige Wörter dazu, die
- * leichten bleiben immer mit dabei). Reine Logik, kein React.
+ * Die fünfzehn Fragen eines Levels von Word Play.
+ *
+ * Die Regeln der Leiter (Preise, Joker, Sicherheitsstufen) stehen in `core/leiter.ts`; hier steht nur,
+ * **welche Fragen** Word Play stellt: je drei pro Schwere, aus dem ganzen Wortpool — Rechtschreibung,
+ * Gegenteile, Bedeutungen, Redewendungen, Grammatik. Reine Logik, ohne React.
+ *
+ * Gleiche Levelnummer, gleiche Fragen — überall, für immer (sonst wäre das Duell wertlos).
  */
+export function fragenFuerLevel(level: number): LeiterFrage[] {
+  const ergebnis: LeiterFrage[] = [];
+  const benutzt = new Set<string>();
 
-export const WOERTER_PRO_LEVEL = 8;
-
-export type Zustand = {
-  level: number;
-  woerter: readonly Wort[];
-  index: number;
-  ausgewaehlt: number | null;
-  richtigeAnzahl: number;
-  serie: number;
-  punkte: number;
-  vorbei: boolean;
-};
-
-/** Ab welcher Levelnummer welche Schwierigkeitsstufen dazukommen. */
-export function maxStufeFuerLevel(level: number): 1 | 2 | 3 {
-  if (level <= 20) return 1;
-  if (level <= 50) return 2;
-  return 3;
-}
-
-const PUNKTE_BASIS = 10;
-const PUNKTE_SERIE_MAX_BONUS = 20;
-const PUNKTE_SERIE_SCHRITT = 2;
-
-/** Richtige Antworten geben mehr, je länger die Serie am Stück läuft — bis zu einem Deckel. */
-export function punkteFuerAntwort(richtig: boolean, serieNachAntwort: number): number {
-  if (!richtig) return 0;
-  return PUNKTE_BASIS + Math.min(PUNKTE_SERIE_MAX_BONUS, (serieNachAntwort - 1) * PUNKTE_SERIE_SCHRITT);
-}
-
-export function neuesLevel(level: number): Zustand {
-  const erlaubteStufe = maxStufeFuerLevel(level);
-  const pool = WOERTER.filter((w) => w.stufe <= erlaubteStufe);
-  const gemischt = rng(saatAus('wortspiel', level)).mischen(pool);
-  const woerter = gemischt.slice(0, Math.min(WOERTER_PRO_LEVEL, gemischt.length));
-  return {
-    level,
-    woerter,
-    index: 0,
-    ausgewaehlt: null,
-    richtigeAnzahl: 0,
-    serie: 0,
-    punkte: 0,
-    vorbei: false,
-  };
-}
-
-/** Eine Schreibweise für das aktuelle Wort wählen — geht nur einmal pro Wort. */
-export function antwortWaehlen(z: Zustand, antwortIndex: 0 | 1 | 2 | 3): Zustand {
-  if (z.vorbei || z.ausgewaehlt !== null) return z;
-  const wort = z.woerter[z.index];
-  if (!wort) return z;
-
-  const richtig = antwortIndex === wort.richtig;
-  const serie = richtig ? z.serie + 1 : 0;
-  const punkte = z.punkte + punkteFuerAntwort(richtig, serie);
-
-  return {
-    ...z,
-    ausgewaehlt: antwortIndex,
-    richtigeAnzahl: z.richtigeAnzahl + (richtig ? 1 : 0),
-    serie,
-    punkte,
-  };
-}
-
-/** Zum nächsten Wort — erst möglich, nachdem das aktuelle beantwortet wurde. */
-export function naechstesWort(z: Zustand): Zustand {
-  if (z.vorbei || z.ausgewaehlt === null) return z;
-  const naechsterIndex = z.index + 1;
-  if (naechsterIndex >= z.woerter.length) return { ...z, vorbei: true };
-  return { ...z, index: naechsterIndex, ausgewaehlt: null };
+  for (let schwere = 1; schwere <= 5; schwere++) {
+    let gezogen = fragenAusPool(WORTFRAGEN, 'wortspiel', level, schwere as 1 | 2 | 3 | 4 | 5, 3, benutzt);
+    // Zu wenige Fragen in einer Schwere (Datei gelöscht): von der nächstliegenden auffüllen, statt eine leere Frage zu zeigen.
+    for (let abstand = 1; gezogen.length < 3 && abstand < 5; abstand++) {
+      for (const s of [schwere - abstand, schwere + abstand]) {
+        if (s < 1 || s > 5 || gezogen.length >= 3) continue;
+        gezogen = [...gezogen, ...fragenAusPool(WORTFRAGEN, 'wortspiel', level, s as 1 | 2 | 3 | 4 | 5, 3 - gezogen.length, benutzt)];
+      }
+    }
+    gezogen.forEach((f) => benutzt.add(fragenSchluessel(f)));
+    ergebnis.push(...gezogen);
+  }
+  return ergebnis.slice(0, STUFEN);
 }

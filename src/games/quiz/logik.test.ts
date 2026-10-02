@@ -1,138 +1,93 @@
 import { describe, it, expect } from 'vitest';
-import { FRAGEN } from './fragen';
-import {
-  FRAGEN_PRO_LEVEL,
-  LEVEL_JE_DURCHGANG,
-  antwortWaehlen,
-  fragenFuerLevel,
-  naechsteFrage,
-  neuesLevel,
-  punkteFuerAntwort,
-} from './logik';
+import { STUFEN, fragenSchluessel, pruefeFrage, schwereAnStufe } from '../../core/leiter';
+import { KOPFNUSS_STUFEN, fragenFuerLevel } from './logik';
+import { WISSENSFRAGEN } from './pool';
 
-describe('neuesLevel', () => {
-  it('ist bei gleicher Levelnummer reproduzierbar', () => {
-    expect(neuesLevel(5)).toEqual(neuesLevel(5));
+/** Wie viele Wissensfragen eine Schwere je Level braucht: Stufen je Abschnitt minus die Kopfnüsse darin. */
+const WISSEN_JE_SCHWERE = [1, 2, 3, 4, 5].map((s) => [0, 1, 2].map((k) => (s - 1) * 3 + k).filter((st) => !KOPFNUSS_STUFEN.has(st)).length);
+
+describe('Wissenspool von Quiz Time', () => {
+  it('ist aus allen Fragendateien zusammengesetzt und groß genug', () => {
+    expect(WISSENSFRAGEN.length).toBeGreaterThanOrEqual(250);
   });
 
-  it('unterscheidet sich zwischen zwei Levelnummern', () => {
-    expect(neuesLevel(1).fragen).not.toEqual(neuesLevel(2).fragen);
+  it('jede Schwere trägt zwölf Level ohne eine einzige Wiederholung', () => {
+    // Das ist die Zusage an den Spieler: Zwölf Runden lang kommt nichts zweimal. Bei weniger Fragen
+    // wiederholt sich eine Schwere früher.
+    for (let schwere = 1; schwere <= 5; schwere++) {
+      const anzahl = WISSENSFRAGEN.filter((f) => f.schwere === schwere).length;
+      expect(anzahl, `Schwere ${schwere}`).toBeGreaterThanOrEqual(12 * WISSEN_JE_SCHWERE[schwere - 1]!);
+    }
   });
 
-  it('zieht genau FRAGEN_PRO_LEVEL Fragen, ohne Wiederholung innerhalb des Levels', () => {
-    const z = neuesLevel(3);
-    expect(z.fragen).toHaveLength(FRAGEN_PRO_LEVEL);
-    const texte = z.fragen.map((f) => f.frage);
-    expect(new Set(texte).size).toBe(FRAGEN_PRO_LEVEL);
+  it('keine Frage kommt im ganzen Pool zweimal vor', () => {
+    const schluessel = WISSENSFRAGEN.map(fragenSchluessel);
+    expect(new Set(schluessel).size).toBe(schluessel.length);
+    const texte = WISSENSFRAGEN.map((f) => f.frage.trim().toLowerCase());
+    expect(new Set(texte).size).toBe(texte.length);
   });
 
-  it('zieht nur Fragen aus dem echten Pool', () => {
-    const z = neuesLevel(7);
-    const poolTexte = new Set(FRAGEN.map((f) => f.frage));
-    for (const f of z.fragen) expect(poolTexte.has(f.frage)).toBe(true);
+  it('jede Frage besteht die Formprüfung', () => {
+    for (const f of WISSENSFRAGEN) expect(pruefeFrage(f), f.frage).toEqual([]);
   });
 
-  it('stellt innerhalb eines Durchgangs keine Frage zweimal', () => {
+  it('es gibt viele Kategorien, und die schweren Schweren sind nicht auf eine einzige beschränkt', () => {
+    expect(new Set(WISSENSFRAGEN.map((f) => f.kategorie)).size).toBeGreaterThanOrEqual(12);
+    for (const schwere of [3, 4, 5]) {
+      const kategorien = new Set(WISSENSFRAGEN.filter((f) => f.schwere === schwere).map((f) => f.kategorie));
+      expect(kategorien.size, `Schwere ${schwere}`).toBeGreaterThanOrEqual(6);
+    }
+  });
+});
+
+describe('Ein Level von Quiz Time', () => {
+  it('besteht aus fünfzehn Fragen, deren Schwere zur Stufe passt', () => {
+    for (const level of [1, 2, 7, 25, 120]) {
+      const fragen = fragenFuerLevel(level);
+      expect(fragen).toHaveLength(STUFEN);
+      fragen.forEach((f, stufe) => expect(f.schwere, `Level ${level}, Stufe ${stufe + 1}`).toBe(schwereAnStufe(stufe)));
+    }
+  });
+
+  it('Kopfnüsse stehen genau an den vorgesehenen Stufen — und die letzten drei Fragen sind immer Wissen', () => {
+    for (const level of [1, 5, 33]) {
+      fragenFuerLevel(level).forEach((f, stufe) => {
+        expect(f.kategorie === 'Kopfnuss', `Level ${level}, Stufe ${stufe + 1}`).toBe(KOPFNUSS_STUFEN.has(stufe));
+      });
+    }
+    expect([...KOPFNUSS_STUFEN].every((s) => s < STUFEN - 3)).toBe(true);
+  });
+
+  it('gleiches Level ergibt dieselben Fragen, ein anderes Level andere — Voraussetzung für das Duell', () => {
+    expect(fragenFuerLevel(9)).toEqual(fragenFuerLevel(9));
+    expect(fragenFuerLevel(9)).not.toEqual(fragenFuerLevel(10));
+  });
+
+  it('keine Frage kommt in einem Level zweimal vor', () => {
+    for (let level = 1; level <= 40; level++) {
+      const schluessel = fragenFuerLevel(level).map(fragenSchluessel);
+      expect(new Set(schluessel).size, `Level ${level}`).toBe(STUFEN);
+    }
+  });
+
+  it('die Wissensfragen der ersten zwölf Level wiederholen sich nicht', () => {
     const gesehen = new Set<string>();
-    for (let level = 1; level <= LEVEL_JE_DURCHGANG; level++) {
-      for (const f of neuesLevel(level).fragen) {
-        expect(gesehen.has(f.frage)).toBe(false);
-        gesehen.add(f.frage);
+    for (let level = 1; level <= 12; level++) {
+      for (const f of fragenFuerLevel(level).filter((x) => x.kategorie !== 'Kopfnuss')) {
+        const k = fragenSchluessel(f);
+        expect(gesehen.has(k), `Level ${level}: „${f.frage}" kam schon vor`).toBe(false);
+        gesehen.add(k);
       }
     }
-    expect(gesehen.size).toBe(LEVEL_JE_DURCHGANG * FRAGEN_PRO_LEVEL);
   });
 
-  it('fängt nach einem vollen Durchgang neu gemischt an, nicht von vorn', () => {
-    const ersteRunde = neuesLevel(1).fragen.map((f) => f.frage);
-    const zweiteRunde = neuesLevel(1 + LEVEL_JE_DURCHGANG).fragen.map((f) => f.frage);
-    expect(zweiteRunde).not.toEqual(ersteRunde);
-  });
-
-  it('liefert für jedes Level volle FRAGEN_PRO_LEVEL Fragen, auch weit oben', () => {
-    for (const level of [1, LEVEL_JE_DURCHGANG, LEVEL_JE_DURCHGANG + 1, 137]) {
-      expect(fragenFuerLevel(level)).toHaveLength(FRAGEN_PRO_LEVEL);
+  it('jede Frage jedes Levels besteht die Formprüfung — auch die gerechneten', () => {
+    for (let level = 1; level <= 60; level++) {
+      for (const f of fragenFuerLevel(level)) expect(pruefeFrage(f), `Level ${level}: ${f.frage}`).toEqual([]);
     }
   });
 
-  it('startet bei Frage 0, 0 Punkten, nicht vorbei', () => {
-    const z = neuesLevel(1);
-    expect(z.index).toBe(0);
-    expect(z.punkte).toBe(0);
-    expect(z.richtigeAnzahl).toBe(0);
-    expect(z.vorbei).toBe(false);
-    expect(z.ausgewaehlt).toBeNull();
-  });
-});
-
-describe('antwortWaehlen', () => {
-  it('erkennt eine richtige Antwort und zählt sie', () => {
-    const z = neuesLevel(1);
-    const richtigerIndex = z.fragen[0]!.richtig;
-    const nach = antwortWaehlen(z, richtigerIndex);
-    expect(nach.ausgewaehlt).toBe(richtigerIndex);
-    expect(nach.richtigeAnzahl).toBe(1);
-    expect(nach.serie).toBe(1);
-    expect(nach.punkte).toBeGreaterThan(0);
-  });
-
-  it('erkennt eine falsche Antwort und setzt die Serie zurück', () => {
-    const z = neuesLevel(1);
-    const falscherIndex = [0, 1, 2, 3].find((i) => i !== z.fragen[0]!.richtig) as 0 | 1 | 2 | 3;
-    const nach = antwortWaehlen(z, falscherIndex);
-    expect(nach.richtigeAnzahl).toBe(0);
-    expect(nach.serie).toBe(0);
-    expect(nach.punkte).toBe(0);
-  });
-
-  it('lässt sich für dieselbe Frage nicht zweimal beantworten', () => {
-    const z = neuesLevel(1);
-    const einmal = antwortWaehlen(z, z.fragen[0]!.richtig);
-    const zweimal = antwortWaehlen(einmal, 0);
-    expect(zweimal).toBe(einmal);
-  });
-
-  it('reagiert nach Rundenende auf nichts mehr', () => {
-    const z = { ...neuesLevel(1), vorbei: true };
-    expect(antwortWaehlen(z, 0)).toBe(z);
-  });
-});
-
-describe('naechsteFrage', () => {
-  it('geht erst weiter, nachdem geantwortet wurde', () => {
-    const z = neuesLevel(1);
-    expect(naechsteFrage(z)).toBe(z);
-  });
-
-  it('springt zur nächsten Frage und setzt die Auswahl zurück', () => {
-    const z = neuesLevel(1);
-    const beantwortet = antwortWaehlen(z, z.fragen[0]!.richtig);
-    const nach = naechsteFrage(beantwortet);
-    expect(nach.index).toBe(1);
-    expect(nach.ausgewaehlt).toBeNull();
-  });
-
-  it('markiert die Runde nach der letzten Frage als vorbei', () => {
-    let z = neuesLevel(1);
-    for (let i = 0; i < FRAGEN_PRO_LEVEL; i++) {
-      z = antwortWaehlen(z, z.fragen[z.index]!.richtig);
-      z = naechsteFrage(z);
-    }
-    expect(z.vorbei).toBe(true);
-    expect(z.richtigeAnzahl).toBe(FRAGEN_PRO_LEVEL);
-  });
-});
-
-describe('punkteFuerAntwort', () => {
-  it('gibt 0 Punkte für eine falsche Antwort', () => {
-    expect(punkteFuerAntwort(false, 0)).toBe(0);
-  });
-
-  it('gibt mehr Punkte für eine längere Serie, bis zu einem Deckel', () => {
-    const kurz = punkteFuerAntwort(true, 1);
-    const laenger = punkteFuerAntwort(true, 5);
-    const sehrLang = punkteFuerAntwort(true, 50);
-    expect(laenger).toBeGreaterThan(kurz);
-    expect(sehrLang).toBeGreaterThanOrEqual(laenger);
+  it('ungültige Levelnummern stürzen nicht ab', () => {
+    for (const level of [0, -5, 1.7, 100000]) expect(fragenFuerLevel(level)).toHaveLength(STUFEN);
   });
 });

@@ -1,100 +1,94 @@
 import { describe, it, expect } from 'vitest';
-import {
-  WOERTER_PRO_LEVEL,
-  antwortWaehlen,
-  maxStufeFuerLevel,
-  naechstesWort,
-  neuesLevel,
-  punkteFuerAntwort,
-} from './logik';
+import { STUFEN, fragenSchluessel, pruefeFrage, schwereAnStufe } from '../../core/leiter';
+import { fragenFuerLevel } from './logik';
+import { RECHTSCHREIBUNG, WORTFRAGEN } from './pool';
 import { WOERTER } from './woerter';
 
-describe('maxStufeFuerLevel', () => {
-  it('erlaubt bis Level 20 nur Stufe 1, bis Level 50 bis Stufe 2, danach alles', () => {
-    expect(maxStufeFuerLevel(1)).toBe(1);
-    expect(maxStufeFuerLevel(20)).toBe(1);
-    expect(maxStufeFuerLevel(21)).toBe(2);
-    expect(maxStufeFuerLevel(50)).toBe(2);
-    expect(maxStufeFuerLevel(51)).toBe(3);
-    expect(maxStufeFuerLevel(9000)).toBe(3);
-  });
-});
-
-describe('neuesLevel', () => {
-  it('zieht bis Level 20 nur Wörter der Stufe 1', () => {
-    const z = neuesLevel(10);
-    expect(z.woerter.length).toBe(WOERTER_PRO_LEVEL);
-    for (const w of z.woerter) expect(w.stufe).toBe(1);
+describe('Wortpool von Word Play', () => {
+  it('enthält alle neunzig Rechtschreib-Wörter, mit der Stufe als Schwere und der Regel als Erklärung', () => {
+    expect(RECHTSCHREIBUNG).toHaveLength(WOERTER.length);
+    RECHTSCHREIBUNG.forEach((f, i) => {
+      const w = WOERTER[i]!;
+      expect(f.schwere).toBe(w.stufe);
+      expect(f.erklaerung).toBe(w.regel);
+      expect(f.antworten[f.richtig]).toBe(w.antworten[w.richtig]);
+      expect(f.kategorie).toBe('Rechtschreibung');
+    });
   });
 
-  it('zieht ab Level 51 auch aus allen drei Stufen', () => {
-    // Über mehrere Level hinweg sollte mindestens einmal Stufe 3 dabei sein.
-    let hatStufeDrei = false;
-    for (let level = 51; level < 70; level++) {
-      const z = neuesLevel(level);
-      if (z.woerter.some((w) => w.stufe === 3)) hatStufeDrei = true;
+  it('kommt aus allen Fragendateien zusammen und ist groß genug', () => {
+    expect(WORTFRAGEN.length).toBeGreaterThanOrEqual(240);
+  });
+
+  it('jede Schwere trägt zwölf Level ohne eine einzige Wiederholung (je drei Fragen)', () => {
+    for (let schwere = 1; schwere <= 5; schwere++) {
+      const anzahl = WORTFRAGEN.filter((f) => f.schwere === schwere).length;
+      expect(anzahl, `Schwere ${schwere}`).toBeGreaterThanOrEqual(36);
     }
-    expect(hatStufeDrei).toBe(true);
   });
 
-  it('ist deterministisch: gleiche Levelnummer ergibt dieselben Wörter', () => {
-    const a = neuesLevel(42);
-    const b = neuesLevel(42);
-    expect(a.woerter).toEqual(b.woerter);
+  it('keine Frage kommt im ganzen Pool zweimal vor', () => {
+    const schluessel = WORTFRAGEN.map(fragenSchluessel);
+    expect(new Set(schluessel).size).toBe(schluessel.length);
   });
 
-  it('startet mit leerem Fortschritt', () => {
-    const z = neuesLevel(1);
-    expect(z.index).toBe(0);
-    expect(z.ausgewaehlt).toBeNull();
-    expect(z.vorbei).toBe(false);
-    expect(z.punkte).toBe(0);
-    expect(z.richtigeAnzahl).toBe(0);
-  });
-});
-
-describe('punkteFuerAntwort', () => {
-  it('gibt bei falscher Antwort null Punkte', () => {
-    expect(punkteFuerAntwort(false, 0)).toBe(0);
+  it('jede Frage besteht die Formprüfung', () => {
+    for (const f of WORTFRAGEN) expect(pruefeFrage(f), `${f.frage} ${f.antworten}`).toEqual([]);
   });
 
-  it('gibt bei richtiger Antwort Basis-Punkte plus Serien-Bonus, gedeckelt', () => {
-    expect(punkteFuerAntwort(true, 1)).toBe(10);
-    expect(punkteFuerAntwort(true, 2)).toBe(12);
-    expect(punkteFuerAntwort(true, 50)).toBe(30);
-  });
-});
-
-describe('antwortWaehlen', () => {
-  it('erkennt die richtige Schreibweise aus dem Wortpool', () => {
-    const wort = WOERTER[0]!;
-    const z = neuesLevel(1);
-    // Erstes Wort der Runde ersetzen, um einen bekannten Fall zu testen.
-    const zMitBekanntemWort = { ...z, woerter: [wort, ...z.woerter.slice(1)] };
-    const nach = antwortWaehlen(zMitBekanntemWort, wort.richtig);
-    expect(nach.richtigeAnzahl).toBe(1);
-    expect(nach.punkte).toBe(10);
-  });
-
-  it('lässt sich nicht zweimal für dasselbe Wort beantworten', () => {
-    const z1 = antwortWaehlen(neuesLevel(1), 0);
-    const z2 = antwortWaehlen(z1, 1);
-    expect(z2).toEqual(z1);
-  });
-});
-
-describe('naechstesWort', () => {
-  it('ist ein No-op, solange das aktuelle Wort noch nicht beantwortet ist', () => {
-    const z = neuesLevel(1);
-    expect(naechstesWort(z)).toEqual(z);
-  });
-
-  it('meldet die Runde nach dem letzten Wort als vorbei', () => {
-    let z = neuesLevel(1);
-    for (let i = 0; i < WOERTER_PRO_LEVEL; i++) {
-      z = antwortWaehlen(z, 0);
-      z = naechstesWort(z);
+  it('außer Rechtschreibung gibt es Wortschatz, Redewendungen und Grammatik — in jeder Schwere gemischt', () => {
+    const kategorien = new Set(WORTFRAGEN.map((f) => f.kategorie));
+    for (const k of ['Rechtschreibung', 'Gegenteil', 'Synonym', 'Bedeutung', 'Redewendung', 'Sprichwort', 'Grammatik']) {
+      expect(kategorien.has(k), k).toBe(true);
     }
-    expect(z.vorbei).toBe(true);
+    for (let schwere = 1; schwere <= 5; schwere++) {
+      const arten = new Set(WORTFRAGEN.filter((f) => f.schwere === schwere).map((f) => f.kategorie));
+      expect(arten.size, `Schwere ${schwere}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
+describe('Ein Level von Word Play', () => {
+  it('besteht aus fünfzehn Fragen, deren Schwere zur Stufe passt', () => {
+    for (const level of [1, 2, 7, 25, 120]) {
+      const fragen = fragenFuerLevel(level);
+      expect(fragen).toHaveLength(STUFEN);
+      fragen.forEach((f, stufe) => expect(f.schwere, `Level ${level}, Stufe ${stufe + 1}`).toBe(schwereAnStufe(stufe)));
+    }
+  });
+
+  it('gleiches Level ergibt dieselben Fragen, ein anderes Level andere — Voraussetzung für das Duell', () => {
+    expect(fragenFuerLevel(9)).toEqual(fragenFuerLevel(9));
+    expect(fragenFuerLevel(9)).not.toEqual(fragenFuerLevel(10));
+  });
+
+  it('keine Frage kommt in einem Level zweimal vor — auch nicht, wenn mehrere dieselbe Frage stellen', () => {
+    for (let level = 1; level <= 40; level++) {
+      const schluessel = fragenFuerLevel(level).map(fragenSchluessel);
+      expect(new Set(schluessel).size, `Level ${level}`).toBe(STUFEN);
+    }
+  });
+
+  it('mehr als ein Rechtschreib-Wort je Level ist möglich (der Ausschluss sperrt nicht alle gleichlautenden Fragen)', () => {
+    let mehrere = 0;
+    for (let level = 1; level <= 40; level++) {
+      if (fragenFuerLevel(level).filter((f) => f.kategorie === 'Rechtschreibung').length >= 2) mehrere++;
+    }
+    expect(mehrere).toBeGreaterThan(20);
+  });
+
+  it('die ersten zwölf Level wiederholen keine Frage', () => {
+    const gesehen = new Set<string>();
+    for (let level = 1; level <= 12; level++) {
+      for (const f of fragenFuerLevel(level)) {
+        const k = fragenSchluessel(f);
+        expect(gesehen.has(k), `Level ${level}: „${f.frage}" ${f.antworten} kam schon vor`).toBe(false);
+        gesehen.add(k);
+      }
+    }
+  });
+
+  it('ungültige Levelnummern stürzen nicht ab', () => {
+    for (const level of [0, -5, 1.7, 100000]) expect(fragenFuerLevel(level)).toHaveLength(STUFEN);
   });
 });

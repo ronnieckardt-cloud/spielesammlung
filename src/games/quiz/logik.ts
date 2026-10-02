@@ -1,107 +1,57 @@
-import { rng, saatAus } from '../../core/rng';
-import { FRAGEN } from './fragen';
-import type { Frage } from './fragen';
+import { STUFEN, fragenAusPool, fragenSchluessel, schwereAnStufe } from '../../core/leiter';
+import type { LeiterFrage } from '../../core/leiter';
+import { saatAus } from '../../core/rng';
+import { kopfnuss } from './kopfnuss';
+import { WISSENSFRAGEN } from './pool';
 
 /**
- * Wissensquiz: Level = Runde, wie beim Farbsortierer. Aus der Levelnummer
- * wird eine feste, reproduzierbare Auswahl an Fragen gezogen — gleiche
- * Levelnummer, gleiche Fragen, für alle vergleichbar. Reine Logik, kein
- * React, testbar ohne Klick.
+ * Die fünfzehn Fragen eines Levels: Wissen, durchsetzt mit Kopfnüssen.
+ *
+ * Die Regeln der Leiter (Preise, Joker, Sicherheitsstufen) stehen in `core/leiter.ts`; hier steht nur,
+ * **welche Fragen** Quiz Time stellt. Reine Logik, ohne React.
  */
-
-export const FRAGEN_PRO_LEVEL = 10;
-
-export type Zustand = {
-  level: number;
-  fragen: readonly Frage[];
-  index: number;
-  ausgewaehlt: number | null;
-  richtigeAnzahl: number;
-  serie: number;
-  punkte: number;
-  vorbei: boolean;
-};
-
-const PUNKTE_BASIS = 10;
-const PUNKTE_SERIE_MAX_BONUS = 20;
-const PUNKTE_SERIE_SCHRITT = 2;
-
-/** Richtige Antworten geben mehr, je länger die Serie am Stück läuft — bis zu einem Deckel. */
-export function punkteFuerAntwort(richtig: boolean, serieNachAntwort: number): number {
-  if (!richtig) return 0;
-  return PUNKTE_BASIS + Math.min(PUNKTE_SERIE_MAX_BONUS, (serieNachAntwort - 1) * PUNKTE_SERIE_SCHRITT);
-}
 
 /**
- * Wie viele Level am Stück ohne eine einzige Wiederholung auskommen —
- * ergibt sich allein aus Poolgröße und Fragen je Level. Mehr Fragen in
- * `fragen.ts` verlängern den Durchgang also von selbst.
+ * Welche Stufen (0 = erste Frage) eine Kopfnuss sind: die letzte jedes der ersten vier Abschnitte.
+ *
+ * Das sind vier von fünfzehn — „es werden mehr rechnen", aber das Spiel bleibt ein Wissensquiz. Die
+ * letzten drei Fragen sind immer Wissen: Eine Rechenaufgabe als Frage um die Höchstzahl liest sich wie
+ * ein Aufgabenblatt und nimmt dem Ende die Spannung.
  */
-export const LEVEL_JE_DURCHGANG = Math.max(1, Math.floor(FRAGEN.length / FRAGEN_PRO_LEVEL));
+export const KOPFNUSS_STUFEN: ReadonlySet<number> = new Set([2, 5, 8, 11]);
 
 /**
- * Die zehn Fragen eines Levels.
+ * Das Level als Liste: gleiche Levelnummer, gleiche Fragen — überall, für immer (sonst wäre das Duell wertlos).
  *
- * Vorher mischte **jedes** Level den ganzen Pool neu und nahm die ersten
- * zehn. Bei 100 Fragen und 10 je Level heißt das rechnerisch eine
- * Wiederholung pro Level: schon Level 2 stellt im Schnitt eine Frage aus
- * Level 1 noch einmal, und ab etwa Level 10 kommt gar nichts Neues mehr.
- *
- * Jetzt wird der Pool **einmal je Durchgang** gemischt und in Abschnitte von
- * zehn geteilt. Level 1 bis 10 sind dadurch garantiert überschneidungsfrei;
- * erst danach fängt ein neuer Durchgang mit einer anderen Mischung an, Level
- * 11 ist also nicht einfach Level 1 noch einmal.
- *
- * Gleiche Levelnummer ergibt weiterhin überall dieselben Fragen — sonst
- * wäre das Duell (`duellFaehig` in `index.ts`) wertlos.
+ * Gibt es für eine Schwere zu wenige Wissensfragen (Datei vergessen, gelöscht), springt die Auswahl auf die
+ * nächstliegende Schwere über, statt eine leere Frage anzuzeigen. Die Tests verlangen trotzdem einen
+ * ausreichenden Pool — der Ersatz ist ein Sicherheitsnetz, kein Plan.
  */
-export function fragenFuerLevel(level: number): readonly Frage[] {
-  // Ab 0 zählen macht die Rechnung mit Abschnitt und Durchgang lesbar.
-  const nummer = Math.max(1, Math.floor(level)) - 1;
-  const durchgang = Math.floor(nummer / LEVEL_JE_DURCHGANG);
-  const abschnitt = nummer % LEVEL_JE_DURCHGANG;
-  const gemischt = rng(saatAus('quiz', 'durchgang', durchgang)).mischen(FRAGEN);
-  const von = abschnitt * FRAGEN_PRO_LEVEL;
-  return gemischt.slice(von, von + FRAGEN_PRO_LEVEL);
-}
+export function fragenFuerLevel(level: number): LeiterFrage[] {
+  const ergebnis: LeiterFrage[] = [];
+  const benutzt = new Set<string>();
 
-export function neuesLevel(level: number): Zustand {
-  const fragen = fragenFuerLevel(level);
-  return {
-    level,
-    fragen,
-    index: 0,
-    ausgewaehlt: null,
-    richtigeAnzahl: 0,
-    serie: 0,
-    punkte: 0,
-    vorbei: false,
-  };
-}
+  for (let schwere = 1; schwere <= 5; schwere++) {
+    const stufen = [0, 1, 2].map((k) => (schwere - 1) * 3 + k);
+    const wissensStufen = stufen.filter((s) => !KOPFNUSS_STUFEN.has(s));
+    let wissen = fragenAusPool(WISSENSFRAGEN, 'quiz', level, schwere as 1 | 2 | 3 | 4 | 5, wissensStufen.length, benutzt);
+    for (let abstand = 1; wissen.length < wissensStufen.length && abstand < 5; abstand++) {
+      for (const s of [schwere - abstand, schwere + abstand]) {
+        if (s < 1 || s > 5 || wissen.length >= wissensStufen.length) continue;
+        wissen = [...wissen, ...fragenAusPool(WISSENSFRAGEN, 'quiz', level, s as 1 | 2 | 3 | 4 | 5, wissensStufen.length - wissen.length, benutzt)];
+      }
+    }
+    wissen.forEach((f) => benutzt.add(fragenSchluessel(f)));
 
-/** Eine Antwort auf die aktuelle Frage wählen — geht nur einmal pro Frage. */
-export function antwortWaehlen(z: Zustand, antwortIndex: 0 | 1 | 2 | 3): Zustand {
-  if (z.vorbei || z.ausgewaehlt !== null) return z;
-  const frage = z.fragen[z.index];
-  if (!frage) return z;
-
-  const richtig = antwortIndex === frage.richtig;
-  const serie = richtig ? z.serie + 1 : 0;
-  const punkte = z.punkte + punkteFuerAntwort(richtig, serie);
-
-  return {
-    ...z,
-    ausgewaehlt: antwortIndex,
-    richtigeAnzahl: z.richtigeAnzahl + (richtig ? 1 : 0),
-    serie,
-    punkte,
-  };
-}
-
-/** Zur nächsten Frage — erst möglich, nachdem die aktuelle beantwortet wurde. */
-export function naechsteFrage(z: Zustand): Zustand {
-  if (z.vorbei || z.ausgewaehlt === null) return z;
-  const naechsterIndex = z.index + 1;
-  if (naechsterIndex >= z.fragen.length) return { ...z, vorbei: true };
-  return { ...z, index: naechsterIndex, ausgewaehlt: null };
+    let k = 0;
+    for (const stufe of stufen) {
+      if (KOPFNUSS_STUFEN.has(stufe)) {
+        ergebnis.push(kopfnuss(saatAus('quiz', 'kopfnuss', level, stufe), schwereAnStufe(stufe)));
+      } else {
+        const f = wissen[k++];
+        if (f) ergebnis.push(f);
+      }
+    }
+  }
+  return ergebnis.slice(0, STUFEN);
 }
