@@ -27,13 +27,25 @@ export type FarbEintrag = {
    * Die Werte gelten für einen Ring mit Halbmesser um die 25.
    */
   muster?: string;
+  /**
+   * Dasselbe Muster für das Laufband. Dort ist ein Segment nur 12,5 breit,
+   * und die Ringmuster (Strichlänge 13 und mehr) wären von „durchgezogen"
+   * nicht zu unterscheiden — gleiche Art, kleinere Maße.
+   */
+  bandMuster?: string;
+  /**
+   * Verschiebung des Musters, damit die **Mitte** des Segments auf einem
+   * Strich liegt und nicht in einer Lücke — dort sitzt die Raute, und eine
+   * Raute in einem Loch sah aus, als fehle dem Segment ein Stück.
+   */
+  bandVersatz?: number;
 };
 
 export const FARBEN: readonly FarbEintrag[] = [
   { id: 'kirsche', hex: '#fb7185', dunkel: '#9f1239', name: 'Rot' },
-  { id: 'sonne', hex: '#fbbf24', dunkel: '#b45309', name: 'Gelb', muster: '13 7' },
-  { id: 'lagune', hex: '#2dd4bf', dunkel: '#0f766e', name: 'Türkis', muster: '6 6' },
-  { id: 'flieder', hex: '#c084fc', dunkel: '#6b21a8', name: 'Violett', muster: '1.5 6' },
+  { id: 'sonne', hex: '#fbbf24', dunkel: '#b45309', name: 'Gelb', muster: '13 7', bandMuster: '4.5 2.5', bandVersatz: 3 },
+  { id: 'lagune', hex: '#2dd4bf', dunkel: '#0f766e', name: 'Türkis', muster: '6 6', bandMuster: '2.5 2.5', bandVersatz: 0 },
+  { id: 'flieder', hex: '#c084fc', dunkel: '#6b21a8', name: 'Violett', muster: '1.5 6', bandMuster: '0.8 2.4', bandVersatz: 0.55 },
 ];
 
 export function farbe(index: number): FarbEintrag {
