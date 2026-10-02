@@ -344,7 +344,8 @@ hintereinander gebaut werden, ohne auf Rückmeldung zu warten. Trotzdem nach
 jedem Spiel gründlich selbst testen (Tests, Typprüfung, Browser-Check) und
 kurz zusammenfassen, was fertig ist.
 
-1. ✅ Hülle, gemeinsame Bausteine, Platzhalter-Spiel („Sternenfang")
+1. ✅ Hülle, gemeinsame Bausteine, Platzhalter-Spiel („Sternenfang") — inzwischen
+   als **Star Dash** von Grund auf neu gebaut, siehe „Star Dash — Besonderheiten"
 2. ✅ Farbsortierer — von Grund auf neu gebaut (Ronnis vorhandene Fassung ist
    nie in der Session angekommen)
 3. ✅ Blockblitz
@@ -865,6 +866,119 @@ Ganzflächige Hell-Dunkel-Wechsel sind grundsätzlich tabu.
   Rechtschreibfalle (ß/ss, ie/i, Doppelkonsonanten, Dehnungs-h, v/f,
   Fremdwort-Schreibung). Zufällige Vertauschungen hätten oft unsinnige,
   offensichtlich falsche Wörter ergeben statt lehrreicher Fehler.
+
+## Star Dash — Besonderheiten
+
+Der **Platzhalter aus dem ersten Bauabschnitt, jetzt ein richtiges Spiel.**
+Vorher: ein Feld von fünf mal fünf, ein einziger Stern an einem Zufallsort,
+Schritt für Schritt ablaufen, bis fünfzehn Sekunden um waren. Der vierzigste
+Stern war so leicht wie der erste, und es gab nichts zu planen — bei der
+Bestandsaufnahme über alle Spiele war es das schwächste. Interne `id` bleibt
+`platzhalter`.
+
+**Die Regel in einem Satz:** Ein Wisch schickt den Sternenschlucker in eine
+Richtung, und er **gleitet, bis etwas im Weg ist** — jeden Stern auf dem Weg
+schluckt er mit. Man wählt damit nicht Schritte, sondern Anlauf und Bremse:
+Ein Fels ist ein Prellbock, den man zum Anhalten *braucht*; ein Loch oder ein
+Komet kostet drei Sekunden.
+
+Das Spiel besteht aus **Wellen**: Eine Welle ist ein kleines Rätsel (Felsen,
+Sterne, später Löcher, ein Goldstern und Kometen) auf einem Brett von sechs
+mal sieben. Geschafft, sobald alle Sterne geschluckt sind; dafür gibt es
+Punkte und Zeit, danach kommt die nächste.
+
+- **Jede Welle ist bewiesen lösbar** (`loesung` in `logik.ts`). Eine
+  Breitensuche über *(Position × Menge der schon geschluckten Sterne)* — wie
+  bei Box Push zählt nicht der einzelne Schritt, sondern der Gleitzug, und
+  die Suche bleibt dadurch klein. Dieselbe Suche liefert die **Bestmarke**
+  (`par`): die Zahl Gleitzüge der besten Lösung. `welleErzeugen` würfelt bis
+  zu 80 Versuche und verwirft jedes Brett ohne Lösung; Sterne liegen nur auf
+  Feldern, über die man tatsächlich gleiten kann.
+- **Die Bestmarke ist gedeckelt** (`par <= sterne + spielraum`). Die ersten
+  Messungen ergaben für Welle 1 im Mittel 4,7 Züge für drei Sterne — ein
+  Anfänger, der gleich in die erste Welle fällt, hört nach zwei Minuten auf.
+  In Welle 1 und 2 darf es deshalb keinen Zug mehr geben als Sterne, bis
+  Welle 5 einen mehr, danach zwei. Gefunden hat das ein Test über 40 Saaten
+  je Welle, nicht das Spielen.
+- **Zeit ist die Schwierigkeit, nicht das Brett.** Ab Welle 15 gibt es keine
+  weiteren Felsen, Sterne oder Kometen — ohne weitere Schraube könnte ein
+  sicherer Spieler endlos weiterspielen. Der Zeitbonus einer Welle
+  (`wellenZeit`, `(4 + 1,5 · par)` Sekunden) **schrumpft deshalb um zwei
+  Prozent je Welle bis auf die Hälfte**. Ein Test lässt einen Bot mit einer
+  Sekunde je Gleitzug mindestens Welle 10 erreichen und einen mit fünf
+  Sekunden nicht Welle 8 — die Wirtschaft trägt also *und* bricht.
+- **Die Uhr steht, solange eine Welle gefeiert wird** (`welleGeschafft`).
+  Das Schild „Welle geschafft" ist eine Belohnung und darf nichts kosten.
+- **Kometen ziehen einmal je Gleitzug**, nicht in Echtzeit: Das Spiel bleibt
+  rundenbasiert und damit ohne Browser prüfbar. Sie kehren an Rand, Fels,
+  Loch und anderen Kometen um und liegen **nie** auf dem Spieler (der Treffer
+  wirft sie zurück statt auf ihn drauf).
+- **Auch ein Zug gegen ein Loch oder einen Kometen direkt vor der Nase lässt
+  die Kometen ziehen.** Das war ein echter Fund der Zeitwirtschafts-Probe:
+  Steht ein Komet in einem Gang und ist jede andere Richtung eine Wand, käme
+  man nie weiter, weil der Komet sich nur bewegt, wenn jemand zieht. Ein
+  Wisch gegen eine bloße Wand ist dagegen **kein** Zug — er kostet nichts und
+  bewegt nichts.
+- **Punkte:** Stern 10, Goldstern 30, mehrere Sterne in *einem* Gleitzug
+  zählen mal Anzahl (zwei Sterne = ×2). Eine Welle bringt 50 plus 25 je Zug
+  unter „Bestmarke + 2". Zusammen gibt das den Grund, nachzudenken: Wer die
+  Bestmarke trifft, bekommt rund das Doppelte dessen, der hastig fünf Züge
+  macht.
+
+### Die Oberfläche
+
+- **Kein Raster, sondern Prozent.** Die Figur und die Kometen **gleiten als
+  Ganzes** über das Brett (`transform: translate(x·100 %, y·100 %)` mit
+  `transition`) — das geht nur, wenn jede Kachel exakt ein Sechstel mal ein
+  Siebtel der Fläche ist. Ein CSS-Raster mit Zwischenraum verschöbe jede
+  Prozentangabe um die Lücken. Das Schachbrett darunter ist ein
+  `repeating-conic-gradient`.
+- **`padding: 7 %` ist hier falsch — und hat die ersten Felsen zu Kieseln
+  gemacht.** Prozent-Innenabstände beziehen sich in CSS immer auf die
+  **Breite des umgebenden Blocks**, hier also des ganzen Bretts: Die Kachel
+  war darunter auf null geschrumpft, die Sterne fehlten ganz. `inset` bezieht
+  sich dagegen auf das Elternelement (`Einzug` in `Platzhalter.tsx`).
+  *Merksatz:* Für „Abstand in Prozent der eigenen Kachel" nie `padding`,
+  immer ein absolut gelegtes Kind mit `inset`.
+- **Gleitzeit 55 ms je Feld**, der Komet braucht danach 220 ms. Die Figur
+  gleitet linear (sie *fährt*, sie federt nicht), kommt dann mit einer kurzen
+  Stauchung in Flugrichtung an. Sterne platzen genau dann, wenn die Figur sie
+  erreicht (`--verzoegerung` je Stern); dazu klingt jeder Stern **einen Ton
+  höher** als der davor, sodass ein langer Gleitzug als aufsteigende
+  Tonleiter zu hören ist.
+- **Zug-Rückmeldung bei jeder Eingabe:** ein Wisch gegen die Wand lässt die
+  Figur kurz in die Richtung ruckeln. Ohne das wirkt ein blockierter Wisch wie
+  ein verschluckter. Strafen schütteln das Brett und zeigen „−3 s" am Timer —
+  beides erst bei der **Ankunft**, nicht schon beim Wisch.
+- **Eine Eingabe wird vorgemerkt**, solange die Figur noch gleitet (höchstens
+  385 ms bei sieben Feldern). Wer schnell wischt, will keinen Zug
+  verschlucken; mehr als eine Eingabe zu puffern hieße, einen Fehlgriff
+  nachträglich noch auszuführen.
+- **Ein gehaltener Pfeil ist kein Befehl, noch einmal dorthin zu ziehen.**
+  `Steuerkreuz` wiederholt bei Halten alle 45 ms; ein Zug gegen ein Loch
+  kostet Zeit. `richten` verwirft deshalb dieselbe Richtung, die innerhalb von
+  320 ms nach der letzten Eingabe noch einmal ankommt — und **jede
+  verworfene Wiederholung verlängert die Sperre**, bis der Finger wirklich
+  oben ist. Der Baustein selbst blieb unverändert.
+- **`gleiten` läuft nicht in einem `setState`-Updater.** Töne und Zeitgeber im
+  Updater feuern unter StrictMode doppelt (siehe „Ein Updater darf keine
+  Nebenwirkungen haben"). Stattdessen hält eine Ref (`zRef`) den Stand;
+  jeder Eingang rechnet genau einmal und ruft danach `setzen`.
+- **Form, nicht nur Farbe** (`Teile.tsx`): Fels = kantig und grau, Loch =
+  Ringe, Komet = Feuerkopf mit Schweif (der Schweif zeigt, wohin er zieht),
+  Stern = Stern, Goldstern = **Münze** mit Stern darin — dreifach so viel
+  Wert, also schon an der Umrissform erkennbar.
+- **Bei „weniger Bewegung"** springt die Figur ohne Gleitzeit, Kometen ziehen
+  sofort, Stern-Verzögerungen sind 0, und die Web-Animationen (Ruck, Stauchen,
+  Schütteln) entfallen. Das Spiel ist rundenbasiert, es geht dadurch nichts
+  verloren.
+- **Wischen auf der ganzen Bühne** (`bereich: buehne`), nicht nur auf dem
+  Brett: Auf kleinen Handys ist das Brett schmal, und der Daumen trifft den
+  Rand. `wurf: 'down'`, damit ein schneller Wisch nach unten „nach unten" ist
+  und die Leertaste kein Zug.
+- **Nicht duellfähig**: Kometen und Wellen hängen an der Saat, aber die
+  Wellenzahl hängt am Können — es gibt kein festes Level, das zwei Spieler
+  gemeinsam spielen könnten.
 
 ## Snake Rush — Besonderheiten
 
