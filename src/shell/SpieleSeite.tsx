@@ -1,6 +1,8 @@
 import { spiele } from '../core/registry';
 import { fortschrittLesen } from './speicher';
 import { BunterGrund } from './BunterGrund';
+import { ArenaSymbol } from './ArenaSymbol';
+import { Linkkachel } from './Linkkachel';
 import { Spielkachel } from './Spielkachel';
 
 /**
@@ -77,6 +79,18 @@ export function SpieleSeite({ onSpielen }: { onSpielen: (id: string) => void }) 
             verzoegerung={100 + Math.min(i * 24, 380)}
           />
         ))}
+        {/* Arena Brawler steht **hinter** allen Spielen der Sammlung und bleibt dort: Die Reihenfolge ist
+            fest (siehe oben), und er ist kein Spiel der Sammlung, sondern eine eigene Seite — er zählt
+            deshalb auch nicht in „ausprobiert" und „Sterne". Der Godot-Export ist die volle Fassung; die
+            leichtere Phaser-Fassung bleibt unter „Mehr". */}
+        <Linkkachel
+          titel="Arena Brawler"
+          href="/arena-brawler-godot/"
+          Symbol={ArenaSymbol}
+          akzent="#f59e0b"
+          hinweis="öffnet eine eigene Seite"
+          verzoegerung={100 + Math.min(spiele.length * 24, 380)}
+        />
       </ul>
 
       {/* Nur auf breiten Bildschirmen: Auf dem Handy gibt es keine Tastatur,

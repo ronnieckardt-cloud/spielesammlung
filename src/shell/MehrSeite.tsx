@@ -51,7 +51,9 @@ function Zeile({
  * innerhalb dieser App wechselt.
  *
  * Arena Brawler ist absichtlich kein `GameApi`-Spiel — kein Eintrag in
- * `registry.ts`, kein Wrapper, `src/games/` bleibt unangetastet. Es gibt ihn
+ * `registry.ts`, kein Wrapper, `src/games/` bleibt unangetastet. (Seit er auch als
+ * Kachel am Ende von `SpieleSeite.tsx` steht, führen zwei Wege hierher: die Kachel
+ * zur Godot-Fassung, die beiden Zeilen unten zu beiden.) Es gibt ihn
  * als zwei eigenständige Prototypen, beide mit eigener `index.html` und
  * eigenem Bau, keiner Teil dieser React-App: der Phaser-Prototyp unter
  * `/arena-brawler/` (siehe `arena-brawler-mini/README.md`, gespiegelt nach
