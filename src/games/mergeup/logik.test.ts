@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   GROESSE,
+  MEILENSTEIN_AB,
+  START_JOKER,
   ZIEL_STUFE,
+  hammer,
   hoechsteStufe,
   kachelSetzen,
   leeresRaster,
@@ -9,6 +12,7 @@ import {
   reiheSchieben,
   schieben,
   wertVonStufe,
+  zurueck,
   ziehen,
   zugMoeglich,
 } from './logik';
@@ -25,6 +29,14 @@ function stand(raster: Feld[][], rest: Partial<Zustand> = {}): Zustand {
     raster,
     punkte: 0,
     hoechsteStufe: hoechsteStufe(raster),
+    // Ohne Joker, damit die älteren Tests unverändert gelten: Wer keinen Joker hat, ist bei
+    // „nichts geht mehr" auch wirklich vorbei. Die Joker-Tests setzen ihre eigenen.
+    joker: 0,
+    belohnt: hoechsteStufe(raster),
+    verlauf: null,
+    festgefahren: false,
+    meilenstein: null,
+    entfernt: null,
     gewonnen: false,
     vorbei: false,
     saat: 1,
@@ -369,6 +381,217 @@ describe('ziehen', () => {
           expect(nach.bild![y]![x] === null).toBe(f === null);
         }),
       );
+    }
+  });
+});
+
+/** Ein Raster, bei dem jeder Zug nach rechts die 6 (64) zur 7 (128) macht. */
+const FAST_MEILENSTEIN = () => r([6, 6, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]);
+
+/** Ein volles Brett, auf dem nichts mehr geht. */
+const SACKGASSE = () => r([1, 2, 1, 2], [2, 1, 2, 1], [1, 2, 1, 2], [2, 1, 2, 3]);
+
+/**
+ * Ein Brett, auf dem der Zug nach links die untere Reihe verschiebt und die neue Kachel (immer 2
+ * oder 4) auf das einzige freie Feld fällt — und danach garantiert nichts mehr geht: Die Nachbarn
+ * dieses Feldes sind 8er, und in den übrigen Reihen liegt nirgends Gleiches nebeneinander.
+ */
+const VOR_DER_SACKGASSE = () => r([3, 4, 3, 4], [4, 3, 4, 3], [3, 4, 3, 4], [0, 4, 3, 4]);
+
+describe('Joker: Meilensteine', () => {
+  it('beginnt mit einem Joker', () => {
+    expect(neuesSpiel(1).joker).toBe(START_JOKER);
+  });
+
+  it('gibt einen Joker für die erste neue höchste Kachel ab dem Meilenstein', () => {
+    const z = stand(FAST_MEILENSTEIN(), { belohnt: MEILENSTEIN_AB });
+    const nach = ziehen(z, 'links');
+    expect(nach.hoechsteStufe).toBe(MEILENSTEIN_AB + 1);
+    expect(nach.joker).toBe(z.joker + 1);
+    expect(nach.meilenstein).toBe(MEILENSTEIN_AB + 1);
+    expect(nach.belohnt).toBe(MEILENSTEIN_AB + 1);
+  });
+
+  it('gibt unterhalb des Meilensteins keinen', () => {
+    const z = stand(r([2, 2, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]));
+    const nach = ziehen(z, 'links');
+    expect(nach.joker).toBe(z.joker);
+    expect(nach.meilenstein).toBeNull();
+  });
+
+  it('belohnt dieselbe Stufe nicht noch einmal', () => {
+    // Schon einmal eine 128 gehabt (belohnt = 7): Wieder eine zu bauen gibt nichts mehr.
+    const z = stand(FAST_MEILENSTEIN(), { belohnt: MEILENSTEIN_AB + 1 });
+    const nach = ziehen(z, 'links');
+    expect(nach.joker).toBe(z.joker);
+    expect(nach.meilenstein).toBeNull();
+  });
+
+  it('lässt die beste Kachel nie sinken, auch wenn man sie wegschlägt', () => {
+    let z = stand(r([8, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { joker: 2 });
+    z = hammer(z, 0, 0);
+    z = ziehen(z, 'links');
+    expect(z.hoechsteStufe).toBe(8);
+  });
+});
+
+describe('Joker: Zurück', () => {
+  it('nimmt den letzten Zug samt Punkten zurück und kostet einen Joker', () => {
+    const start = stand(r([1, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { joker: 2 });
+    const gezogen = ziehen(start, 'links');
+    expect(gezogen.punkte).toBeGreaterThan(0);
+    const zurueckgenommen = zurueck(gezogen);
+    expect(zurueckgenommen.raster).toEqual(start.raster);
+    expect(zurueckgenommen.punkte).toBe(0);
+    expect(zurueckgenommen.joker).toBe(1);
+    expect(zurueckgenommen.saat).toBe(start.saat);
+  });
+
+  it('zählt die Zugnummer hoch — die Anzeige startet daran ihre Bewegung', () => {
+    const gezogen = ziehen(stand(r([1, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { joker: 1 }), 'links');
+    expect(zurueck(gezogen).zug).toBe(gezogen.zug + 1);
+  });
+
+  it('geht nur einen Schritt zurück', () => {
+    const gezogen = ziehen(stand(r([1, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { joker: 3 }), 'links');
+    const einmal = zurueck(gezogen);
+    expect(einmal.verlauf).toBeNull();
+    expect(zurueck(einmal)).toBe(einmal);
+  });
+
+  it('tut nichts ohne Joker oder ohne einen Zug, den man zurücknehmen könnte', () => {
+    const gezogen = ziehen(stand(r([1, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { joker: 0 }), 'links');
+    expect(zurueck(gezogen)).toBe(gezogen);
+    const frisch = stand(leeresRaster(), { joker: 2 });
+    expect(zurueck(frisch)).toBe(frisch);
+  });
+
+  it('gibt den Meilenstein-Joker nicht zurück — sonst ließe er sich beliebig oft verdienen', () => {
+    // Joker 1 → Meilenstein (+1) = 2 → Zurück (−1) = 1 → derselbe Zug noch einmal: nichts mehr.
+    const z = stand(FAST_MEILENSTEIN(), { belohnt: MEILENSTEIN_AB, joker: 1 });
+    const mit = ziehen(z, 'links');
+    expect(mit.joker).toBe(2);
+    const zurueckgenommen = zurueck(mit);
+    expect(zurueckgenommen.joker).toBe(1);
+    const nochmal = ziehen(zurueckgenommen, 'links');
+    expect(nochmal.joker).toBe(1);
+  });
+
+  it('stellt auch gewonnen wieder her', () => {
+    const z = stand(r([ZIEL_STUFE - 1, ZIEL_STUFE - 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { joker: 1 });
+    const geschafft = ziehen(z, 'links');
+    expect(geschafft.gewonnen).toBe(true);
+    expect(zurueck(geschafft).gewonnen).toBe(false);
+  });
+});
+
+describe('Joker: Hammer', () => {
+  it('entfernt genau die gewählte Kachel, ohne neue dazuzulegen, und kostet einen Joker', () => {
+    const z = stand(r([1, 2, 0, 0], [0, 0, 3, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { joker: 2 });
+    const nach = hammer(z, 1, 0);
+    expect(nach.raster[0]![1]).toBeNull();
+    expect(nach.raster.flat().filter((f) => f !== null)).toHaveLength(2);
+    expect(nach.joker).toBe(1);
+    expect(nach.punkte).toBe(z.punkte);
+    expect(nach.entfernt).toEqual({ x: 1, y: 0, stufe: 2 });
+    expect(nach.zug).toBe(z.zug + 1);
+  });
+
+  it('tut nichts auf einem leeren Feld, ohne Joker oder außerhalb des Bretts', () => {
+    const z = stand(r([1, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { joker: 1 });
+    expect(hammer(z, 2, 2)).toBe(z);
+    expect(hammer(z, 9, 9)).toBe(z);
+    const ohne = stand(r([1, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { joker: 0 });
+    expect(hammer(ohne, 0, 0)).toBe(ohne);
+  });
+
+  it('lässt sich mit Zurück wieder rückgängig machen — das kostet einen weiteren Joker', () => {
+    const z = stand(r([1, 2, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]), { joker: 2 });
+    const weg = hammer(z, 0, 0);
+    const wieder = zurueck(weg);
+    expect(wieder.raster).toEqual(z.raster);
+    expect(wieder.joker).toBe(0);
+  });
+});
+
+describe('Joker: festgefahren', () => {
+  it('ist mit Joker nicht vorbei, sondern festgefahren — und ohne Joker vorbei', () => {
+    let festgefahren = 0;
+    let vorbei = 0;
+    for (let saat = 0; saat < 60; saat++) {
+      const mit = ziehen(stand(VOR_DER_SACKGASSE(), { saat, joker: 1 }), 'links');
+      const ohne = ziehen(stand(VOR_DER_SACKGASSE(), { saat, joker: 0 }), 'links');
+      expect(zugMoeglich(mit.raster)).toBe(false);
+      expect(mit.festgefahren).toBe(true);
+      expect(mit.vorbei).toBe(false);
+      festgefahren++;
+      expect(zugMoeglich(ohne.raster)).toBe(false);
+      expect(ohne.vorbei).toBe(true);
+      expect(ohne.festgefahren).toBe(false);
+      vorbei++;
+    }
+    expect(festgefahren).toBe(60);
+    expect(vorbei).toBe(60);
+  });
+
+  it('nimmt in diesem Zustand keine Züge mehr an', () => {
+    const z = stand(SACKGASSE(), { joker: 1, festgefahren: true });
+    expect(ziehen(z, 'links')).toBe(z);
+    expect(ziehen(z, 'rechts')).toBe(z);
+  });
+
+  it('ein Hammer führt wieder heraus', () => {
+    const z = stand(SACKGASSE(), { joker: 1, festgefahren: true });
+    const nach = hammer(z, 0, 0);
+    expect(nach.festgefahren).toBe(false);
+    expect(nach.vorbei).toBe(false);
+    expect(zugMoeglich(nach.raster)).toBe(true);
+  });
+
+  it('ein Zurück führt ebenfalls heraus', () => {
+    // Echter Weg dorthin: ein Zug, nach dem nichts mehr geht, dann zurück.
+    const z = stand(VOR_DER_SACKGASSE(), { joker: 2 });
+    const nach = ziehen(z, 'links');
+    expect(nach.festgefahren).toBe(true);
+    const raus = zurueck(nach);
+    expect(raus.festgefahren).toBe(false);
+    expect(zugMoeglich(raus.raster)).toBe(true);
+    expect(raus.raster).toEqual(z.raster);
+  });
+});
+
+describe('Joker: ganze Spiele', () => {
+  it('hält über viele zufällige Spiele mit Jokern alle Grundregeln ein', () => {
+    const richtungen = ['hoch', 'runter', 'links', 'rechts'] as const;
+    for (let saat = 1; saat <= 60; saat++) {
+      let z = neuesSpiel(saat);
+      for (let i = 0; i < 400 && !z.vorbei; i++) {
+        const w = (i * 7 + saat * 3) % 11;
+        if (z.festgefahren) {
+          // Aus der Sackgasse hilft ein Joker — abwechselnd Zurück und Hammer.
+          z = i % 2 === 0 && z.verlauf ? zurueck(z) : hammer(z, i % GROESSE, (i >> 2) % GROESSE);
+          if (z.festgefahren && z.joker > 0) z = hammer(z, 0, 0);
+        } else if (w === 0 && z.joker > 0 && z.verlauf) {
+          z = zurueck(z);
+        } else if (w === 1 && z.joker > 0) {
+          z = hammer(z, (i + saat) % GROESSE, i % GROESSE);
+        } else {
+          z = ziehen(z, richtungen[(i + saat) % 4]!);
+        }
+        expect(z.joker).toBeGreaterThanOrEqual(0);
+        // Vorbei heißt: kein Zug und kein Joker. Festgefahren heißt: kein Zug, aber Joker.
+        if (z.vorbei) {
+          expect(zugMoeglich(z.raster)).toBe(false);
+          expect(z.joker).toBe(0);
+        }
+        if (z.festgefahren) {
+          expect(zugMoeglich(z.raster)).toBe(false);
+          expect(z.joker).toBeGreaterThan(0);
+        }
+        // Nie beides zugleich, und die beste Kachel liegt nie unter der besten auf dem Brett.
+        expect(z.vorbei && z.festgefahren).toBe(false);
+        expect(z.hoechsteStufe).toBeGreaterThanOrEqual(hoechsteStufe(z.raster));
+      }
     }
   });
 });

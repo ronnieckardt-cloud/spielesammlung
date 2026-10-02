@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useInput } from '../../core/useInput';
 import { Steuerkreuz } from '../../core/Steuerkreuz';
 import { sfx } from '../../core/sfx';
@@ -7,7 +7,7 @@ import { haptik } from '../../core/haptik';
 import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { saatAus } from '../../core/rng';
 import type { GameProps } from '../../core/types';
-import { GROESSE, neuesSpiel, wertVonStufe, ziehen } from './logik';
+import { GROESSE, MEILENSTEIN_AB, hammer, neuesSpiel, wertVonStufe, zurueck, ziehen } from './logik';
 import type { Richtung, Zustand } from './logik';
 import { kachelFarbe, kachelTextFarbe } from './farben';
 import { MergeUpIcon } from './Icon';
@@ -83,6 +83,11 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
         <p className="mt-3 text-sm font-semibold text-white/85">
           Wische die Kacheln zusammen — zwei gleiche werden eine doppelte.
         </p>
+        {/* Die Joker erfährt man sonst erst, wenn man sie schon hat. */}
+        <p className="mx-auto mt-2 max-w-xs text-xs font-semibold text-white/75">
+          Ab der {wertVonStufe(MEILENSTEIN_AB)} gibt es für jede neue Bestkachel einen Joker:
+          einen Zug zurück oder eine Kachel wegschlagen.
+        </p>
         {bestScore > 0 && (
           <p className="mt-1.5 text-sm font-bold text-white/70">
             <span aria-hidden="true">🏆</span> Beste Punktzahl: {bestScore}
@@ -134,6 +139,101 @@ const STUPS_VERSATZ: Record<Richtung, string> = {
   rechts: `translateX(${STUPS_PX}px)`,
 };
 
+/**
+ * Die weggeschlagene Kachel zerbröselt an ihrem Platz — dieselben Klassen wie in Block Burst. Ohne
+ * das wäre sie von einem Augenblick zum anderen weg, und man sähe nicht, **welche** der Hammer
+ * getroffen hat. Endet unsichtbar (`forwards`), steht also bis zum nächsten Zug harmlos da.
+ */
+function Verpuffen({ stufe }: { stufe: number }) {
+  const farbe = kachelFarbe(stufe);
+  const krumen: readonly { kx: string; ky: string }[] = [
+    { kx: '-14px', ky: '-12px' },
+    { kx: '15px', ky: '-9px' },
+    { kx: '-11px', ky: '14px' },
+    { kx: '13px', ky: '12px' },
+  ];
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0 grid place-items-center">
+      <span className="aufloesen-blitz size-full rounded-xl" style={{ backgroundColor: farbe }} />
+      {krumen.map((k, i) => (
+        <span
+          key={i}
+          className="kruemel absolute size-2.5 rounded-sm"
+          style={{ backgroundColor: farbe, '--kx': k.kx, '--ky': k.ky } as CSSProperties}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** Pfeil nach links zurück — eigenes SVG statt Emoji oder Schriftzeichen, das je Gerät anders aussieht. */
+function ZurueckSymbol() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 14L4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+    </svg>
+  );
+}
+
+/** Ein Hammer: Kopf quer, Stiel schräg — die Silhouette soll auch bei 24 Pixeln noch „Hammer" sagen. */
+function HammerSymbol() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14.5 3.5l6 6-3 3-6-6z" fill="currentColor" fillOpacity="0.25" />
+      <path d="M12.5 8.5L4 17a1.8 1.8 0 0 0 0 2.5l.5.5a1.8 1.8 0 0 0 2.5 0l8.5-8.5" />
+    </svg>
+  );
+}
+
+/**
+ * Ein Joker-Knopf neben dem Steuerkreuz. Ein Symbol **und** ein Wort: Zwei gleich aussehende
+ * Rundknöpfe ohne Beschriftung muss man erst ausprobieren, und ein Joker ist zu knapp dafür.
+ */
+function JokerKnopf({
+  beschriftung,
+  symbol,
+  onClick,
+  deaktiviert,
+  an = false,
+  dringend = false,
+}: {
+  beschriftung: string;
+  symbol: ReactNode;
+  onClick: () => void;
+  deaktiviert: boolean;
+  an?: boolean;
+  dringend?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={deaktiviert}
+      aria-pressed={an}
+      // `touch-none`: Wie beim Steuerkreuz soll ein Daumen, der kurz verrutscht, nichts scrollen oder markieren.
+      //
+      // Hintergrund und Rand stehen **inline**: `.spielknopf` setzt beides ohne `@layer` und schlägt
+      // damit jede Tailwind-Klasse — der „Abbrechen"-Knopf war dadurch dunkel auf dunkel.
+      className={`spielknopf touch-none select-none flex-col gap-0.5 px-2 py-1.5 text-[11px] font-bold leading-none ${
+        an ? 'text-slate-900' : dringend ? 'text-amber-100' : 'text-text'
+      }`}
+      style={{
+        minWidth: '4.25rem',
+        minHeight: '3.5rem',
+        ...(an
+          ? { backgroundColor: '#ffffff', borderColor: '#ffffff', borderWidth: 2 }
+          : dringend
+            ? { backgroundColor: 'rgba(251, 191, 36, 0.22)', borderColor: '#fcd34d', borderWidth: 2 }
+            : {}),
+      }}
+    >
+      {symbol}
+      <span>{beschriftung}</span>
+    </button>
+  );
+}
+
 export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
   // Nach „Nochmal" direkt weiterspielen statt wieder über den
   // Startbildschirm zu gehen — der gehört nur ans Betreten des Spiels.
@@ -161,6 +261,10 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
   const [gelandet, setGelandet] = useState(true);
   const [stups, setStups] = useState<Richtung | null>(null);
   const stupsUhrRef = useRef(0);
+  // Hammer-Modus: Der nächste Tipp auf eine Kachel entfernt sie. Ein eigener Modus statt einer
+  // Geste, weil ein Antippen auf dem Brett sonst ständig versehentlich Kacheln kosten würde.
+  const [hammerModus, setHammerModus] = useState(false);
+  const [meilenstein, setMeilenstein] = useState<{ id: number; stufe: number } | null>(null);
 
   useLayoutEffect(() => {
     if (ruhig || z.bild === null) return;
@@ -217,6 +321,37 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
     [fehlzug],
   );
 
+  /** Joker: den letzten Zug zurücknehmen. */
+  const beiZurueck = useCallback(() => {
+    const alt = zRef.current;
+    const neu = zurueck(alt);
+    if (neu === alt) return;
+    zRef.current = neu;
+    setHammerModus(false);
+    setZ(neu);
+    sfx('klick');
+    haptik('fehler');
+  }, []);
+
+  /** Joker: Hammer ein- oder ausschalten. */
+  const beiHammerKnopf = useCallback(() => {
+    const alt = zRef.current;
+    if (alt.vorbei || (alt.joker < 1 && !hammerModus)) return;
+    setHammerModus((an) => !an);
+  }, [hammerModus]);
+
+  /** Im Hammer-Modus: die angetippte Kachel entfernen. */
+  const beiFeld = useCallback((x: number, y: number) => {
+    const alt = zRef.current;
+    const neu = hammer(alt, x, y);
+    if (neu === alt) return;
+    zRef.current = neu;
+    setHammerModus(false);
+    setZ(neu);
+    sfx('gut');
+    haptik('jubel');
+  }, []);
+
   useInput(
     (eingabe) => {
       // Ein schneller Wisch nach unten ist hier schlicht ein Zug nach
@@ -231,7 +366,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
     },
     // Kein Wiederholen bei gehaltener Taste — ein Zug soll ein Tastendruck
     // sein, sonst rauscht das halbe Spiel bei einem zu langen Druck durch.
-    { bereich: feldRef, wiederholen: [], wurf: 'down', aktiv: gestartet && !z.vorbei },
+    { bereich: feldRef, wiederholen: [], wurf: 'down', aktiv: gestartet && !z.vorbei && !hammerModus },
   );
 
   useEffect(() => {
@@ -250,6 +385,22 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
       sfx('stufe');
     }
   }, [z.gewonnen]);
+
+  // Ein Meilenstein ist ein Ereignis, das man **sehen** soll: Der Joker kommt sonst still ins
+  // Zähler-Feld, und niemand weiß, woher er stammt.
+  useEffect(() => {
+    if (z.meilenstein === null) return;
+    setMeilenstein({ id: z.zug, stufe: z.meilenstein });
+    sfx('stufe');
+    haptik('jubel');
+    const uhr = window.setTimeout(() => setMeilenstein(null), 1800);
+    return () => window.clearTimeout(uhr);
+  }, [z.meilenstein, z.zug]);
+
+  // Der Hammer-Modus endet von selbst, wenn es nichts mehr zu hämmern gibt.
+  useEffect(() => {
+    if (hammerModus && (z.joker < 1 || z.vorbei)) setHammerModus(false);
+  }, [hammerModus, z.joker, z.vorbei]);
 
   useEffect(() => {
     if (z.vorbei) {
@@ -281,13 +432,42 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
         {z.punkte}
       </output>
 
-      <p className="text-sm text-gedaempft">
-        Beste Kachel:{' '}
-        <span className="font-bold tabular-nums text-text">
-          {z.hoechsteStufe > 0 ? wertVonStufe(z.hoechsteStufe) : '–'}
-        </span>
-        {z.gewonnen && <span className="ml-2">🎉 2048 geschafft!</span>}
-      </p>
+      {/* Die Statuszeile sagt, was gerade zu tun ist — **über** dem Brett statt auf ihm. Ein Schild auf
+          dem Brett verdeckte genau die Kacheln, unter denen man sich beim Hammern entscheiden muss. */}
+      {/* Feste Höhe: Die drei Zustände wechseln, das Brett darunter soll dabei nicht springen. */}
+      <div className="flex h-6 shrink-0 items-center justify-center">
+      {hammerModus ? (
+        <p className="rounded-full border border-amber-300/70 bg-amber-400/15 px-3 py-px text-sm font-bold text-amber-100">
+          Tippe die Kachel, die weg soll
+        </p>
+      ) : z.festgefahren ? (
+        <p className="rounded-full border border-amber-300/70 bg-amber-400/15 px-3 py-px text-sm font-bold text-amber-100">
+          Kein Zug mehr! Nimm einen Joker ({z.joker})
+        </p>
+      ) : (
+        <p className="flex items-center gap-3 text-sm text-gedaempft">
+          <span>
+            Beste Kachel:{' '}
+            <span className="font-bold tabular-nums text-text">
+              {z.hoechsteStufe > 0 ? wertVonStufe(z.hoechsteStufe) : '–'}
+            </span>
+          </span>
+          {/* Wort **und** Zahl, nicht nur ein Symbol mit Ziffer: Was ein Joker ist, steht auf dem
+              Startbildschirm, aber wer ihn schon vergessen hat, soll es hier ablesen können. */}
+          <span
+            className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${
+              z.joker > 0 ? 'border-amber-300/70 bg-amber-400/15 text-amber-100' : 'border-rand text-gedaempft'
+            }`}
+          >
+            Joker{' '}
+            <span key={z.joker} className="punkte-bumsen inline-block tabular-nums">
+              {z.joker}
+            </span>
+          </span>
+          {z.gewonnen && <span>🎉 2048 geschafft!</span>}
+        </p>
+      )}
+      </div>
 
       <div className="spielbuehne">
       <div
@@ -300,10 +480,18 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
             '--vz': 1,
             transform: stups ? STUPS_VERSATZ[stups] : undefined,
             transition: 'transform 90ms ease-out',
+            outline: hammerModus ? '2px dashed rgba(251, 191, 36, 0.9)' : undefined,
+            outlineOffset: hammerModus ? '3px' : undefined,
           } as CSSProperties
         }
-        role="img"
-        aria-label={`Spielfeld. ${beschreibung}.${z.vorbei ? ' Vorbei.' : ''}`}
+        // Im Hammer-Modus stecken Knöpfe im Brett, und ein `img` macht seine Kinder unsichtbar
+        // für Vorleseprogramme.
+        role={hammerModus ? 'group' : 'img'}
+        aria-label={
+          hammerModus
+            ? 'Spielfeld. Hammer aktiv: Tippe die Kachel an, die weg soll.'
+            : `Spielfeld. ${beschreibung}.${z.vorbei ? ' Vorbei.' : ''}${z.festgefahren ? ' Es geht kein Zug mehr, setze einen Joker ein.' : ''}`
+        }
       >
         {z.raster.flat().map((feld, i) => {
           const x = i % GROESSE;
@@ -315,7 +503,7 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
           const dx = bild && !gelandet ? bild.vonX - x : 0;
           const dy = bild && !gelandet ? bild.vonY - y : 0;
           return (
-            <div key={i} className="grid place-items-center rounded-xl bg-flaeche-hoch">
+            <div key={i} className="relative grid place-items-center rounded-xl bg-flaeche-hoch">
               {feld !== null && (
                 <div
                   // `relative z-10`: Eine rutschende Kachel zieht über fremde
@@ -360,7 +548,20 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
                   >
                     {wertVonStufe(feld)}
                   </div>
+                  {hammerModus && (
+                    // Strichlinie **und** Knopf: Welche Kacheln antippbar sind, darf nicht nur am
+                    // Farbton des Umrisses hängen.
+                    <button
+                      type="button"
+                      onClick={() => beiFeld(x, y)}
+                      aria-label={`Kachel ${wertVonStufe(feld)} in Zeile ${y + 1}, Spalte ${x + 1} wegschlagen`}
+                      className="absolute inset-0 rounded-xl border-2 border-dashed border-amber-300"
+                    />
+                  )}
                 </div>
+              )}
+              {feld === null && z.entfernt && z.entfernt.x === x && z.entfernt.y === y && !ruhig && (
+                <Verpuffen key={z.zug} stufe={z.entfernt.stufe} />
               )}
             </div>
           );
@@ -370,6 +571,19 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
             `.spielbuehne > *:not(.absolute)` das Popup zu einem zweiten
             Flex-Kind machen und das Brett zur Seite schieben. */}
         <Punktegewinn gewinn={gewinn} />
+
+        {/* Lässt Berührungen durch: Wer mitten im Wisch ist, soll nicht an einem Schild hängen bleiben. */}
+        {meilenstein && (
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 top-2 z-20 grid justify-items-center">
+            <div
+              key={meilenstein.id}
+              className="welle-schild rounded-2xl border border-white/25 bg-black/70 px-4 py-2 text-center backdrop-blur-sm"
+            >
+              <p className="text-base font-extrabold text-white">Meilenstein {wertVonStufe(meilenstein.stufe)}!</p>
+              <p className="text-sm font-bold text-amber-300">+1 Joker</p>
+            </div>
+          </div>
+        )}
       </div>
 
       </div>
@@ -377,12 +591,40 @@ export function MergeUp({ onScore, onGameOver, settings, bestScore, istErsteRund
       {/* Der gemeinsame Baustein statt einer Kopie. Der Kopie hier fehlten
           `touch-none` und die Unterdrückung des Kontextmenüs — langes
           Drücken auf einen Pfeil öffnete auf dem iPhone das Auswahlmenü. */}
-      <Steuerkreuz kompakt onRichtung={beiKreuz} aktiv={!z.vorbei} />
+      <div className="flex items-center gap-3">
+        <JokerKnopf
+          beschriftung="Zurück"
+          symbol={<ZurueckSymbol />}
+          onClick={beiZurueck}
+          deaktiviert={z.vorbei || z.joker < 1 || z.verlauf === null}
+          dringend={z.festgefahren && z.verlauf !== null}
+        />
+        <Steuerkreuz kompakt onRichtung={beiKreuz} aktiv={!z.vorbei && !z.festgefahren && !hammerModus} />
+        <JokerKnopf
+          beschriftung={hammerModus ? 'Abbrechen' : 'Hammer'}
+          symbol={<HammerSymbol />}
+          onClick={beiHammerKnopf}
+          deaktiviert={z.vorbei || (z.joker < 1 && !hammerModus)}
+          an={hammerModus}
+          dringend={z.festgefahren}
+        />
+      </div>
 
       <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
         Pfeiltasten, Wischen oder die Knöpfe schieben alle Kacheln. Zwei
         gleiche verschmelzen zur doppelten. Ziel ist die 2048 — danach darfst
-        du weiterspielen, solange noch ein Zug geht.
+        du weiterspielen. Joker gibt es für jede neue Bestkachel ab der{' '}
+        {wertVonStufe(MEILENSTEIN_AB)}: einen Zug zurück oder eine Kachel weg.
+      </p>
+
+      <p className="sr-only" aria-live="polite">
+        {hammerModus
+          ? 'Hammer aktiv. Tippe die Kachel an, die weg soll.'
+          : meilenstein
+            ? `Meilenstein ${wertVonStufe(meilenstein.stufe)}. Ein Joker dazu.`
+            : z.festgefahren
+              ? `Kein Zug mehr. Du hast ${z.joker} Joker: Zurück oder Hammer.`
+              : ''}
       </p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}

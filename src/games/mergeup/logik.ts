@@ -20,6 +20,16 @@ export const ZIEL_STUFE = 11;
 /** Wahrscheinlichkeit, dass eine neue Kachel Stufe 2 (also 4) statt 1 (also 2) ist. */
 export const CHANCE_VIER = 0.1;
 
+/** Mit so vielen Jokern beginnt jede Runde. */
+export const START_JOKER = 1;
+
+/**
+ * Ab dieser Stufe (2^6 = 64) gibt es für jede **neue** höchste Kachel einen Joker. Darunter geht es
+ * viel zu schnell: Die ersten Kacheln entstehen in den ersten zwanzig Zügen von selbst, ein Joker
+ * dafür wäre ein Geschenk und keine Belohnung.
+ */
+export const MEILENSTEIN_AB = 6;
+
 /** null = leeres Feld, sonst die Stufe (angezeigter Wert ist 2^Stufe). */
 export type Feld = number | null;
 export type Raster = readonly (readonly Feld[])[];
@@ -49,11 +59,40 @@ export type Kachelbild = {
 /** Für jedes Feld des Rasters ein `Kachelbild`, oder null für „leer". */
 export type Zugbild = readonly (readonly (Kachelbild | null)[])[];
 
+/** Was „Zurück" wiederherstellt: der Stand vor dem letzten Zug (oder Hammer). */
+export type Rueckstand = {
+  raster: Raster;
+  punkte: number;
+  hoechsteStufe: number;
+  gewonnen: boolean;
+  saat: number;
+};
+
 export type Zustand = {
   raster: Raster;
   punkte: number;
-  /** Höchste bisher erreichte Stufe — für die Anzeige „Beste Kachel". */
+  /** Höchste bisher erreichte Stufe — für die Anzeige „Beste Kachel". Sinkt nie, auch nicht, wenn man die Kachel wegschlägt. */
   hoechsteStufe: number;
+  /**
+   * Joker: Jeder kann entweder den letzten Zug zurücknehmen (`zurueck`) oder eine Kachel entfernen
+   * (`hammer`). Ein einziger Vorrat für beides, damit die Frage „wofür?" eine Entscheidung ist und
+   * nicht zwei getrennte Zähler.
+   */
+  joker: number;
+  /** Höchste Stufe, für die schon belohnt wurde. Verhindert, dass dieselbe Kachel zweimal einen Joker gibt. */
+  belohnt: number;
+  /** Stand vor dem letzten Zug, für `zurueck`. Null am Anfang und gleich nach einem Zurück. */
+  verlauf: Rueckstand | null;
+  /**
+   * Es geht kein Zug mehr, aber es sind noch Joker da: Die Runde ist **nicht** vorbei, man darf
+   * einen Joker einsetzen. Ohne diese Zwischenstufe verfielen Joker genau in dem Moment, in dem man
+   * sie am dringendsten braucht.
+   */
+  festgefahren: boolean;
+  /** Stufe des Meilensteins, der im letzten Zug erreicht wurde — für die Anzeige. Sonst null. */
+  meilenstein: number | null;
+  /** Die Kachel, die der letzte Hammer entfernt hat — für die Anzeige. Sonst null. */
+  entfernt: { x: number; y: number; stufe: number } | null;
   /** True, sobald ZIEL_STUFE erreicht wurde. Weiterspielen bleibt erlaubt. */
   gewonnen: boolean;
   vorbei: boolean;
@@ -273,6 +312,12 @@ export function neuesSpiel(saat: number): Zustand {
     raster: zweite.raster,
     punkte: 0,
     hoechsteStufe: hoechsteStufe(zweite.raster),
+    joker: START_JOKER,
+    belohnt: hoechsteStufe(zweite.raster),
+    verlauf: null,
+    festgefahren: false,
+    meilenstein: null,
+    entfernt: null,
     gewonnen: false,
     vorbei: false,
     saat: zweite.saat,
@@ -281,14 +326,27 @@ export function neuesSpiel(saat: number): Zustand {
   };
 }
 
+function rueckstand(z: Zustand): Rueckstand {
+  return {
+    raster: z.raster,
+    punkte: z.punkte,
+    hoechsteStufe: z.hoechsteStufe,
+    gewonnen: z.gewonnen,
+    saat: z.saat,
+  };
+}
+
 /**
  * Ein Zug: schieben, bei Bewegung eine neue Kachel dazulegen, danach
  * prüfen, ob noch etwas geht. Ein Zug ohne Bewegung ist kein Zug — dann
  * kommt auch keine neue Kachel dazu, sonst wäre wiederholtes Drücken gegen
  * eine Wand eine Strafe.
+ *
+ * Eine neue höchste Kachel ab `MEILENSTEIN_AB` gibt einen Joker. Geht danach nichts mehr, ist die
+ * Runde nur dann vorbei, wenn auch kein Joker mehr da ist (`festgefahren` sonst).
  */
 export function ziehen(z: Zustand, richtung: Richtung): Zustand {
-  if (z.vorbei) return z;
+  if (z.vorbei || z.festgefahren) return z;
 
   const e = schieben(z.raster, richtung);
   if (!e.bewegt) return z;
@@ -302,14 +360,84 @@ export function ziehen(z: Zustand, richtung: Richtung): Zustand {
     bild[y]![x] = { vonX: x, vonY: y, verschmolzen: false, neu: true };
   }
 
+  // Für jede Stufe zwischen dem bisher Belohnten und der neuen höchsten — in der Regel genau eine.
+  let neueJoker = 0;
+  for (let s = Math.max(z.belohnt + 1, MEILENSTEIN_AB); s <= hoechste; s++) neueJoker++;
+  const joker = z.joker + neueJoker;
+  const stecken = !zugMoeglich(mitNeuer.raster);
+
   return {
     raster: mitNeuer.raster,
     punkte: z.punkte + e.punkte,
-    hoechsteStufe: hoechste,
+    hoechsteStufe: Math.max(z.hoechsteStufe, hoechste),
+    joker,
+    belohnt: Math.max(z.belohnt, hoechste),
+    verlauf: rueckstand(z),
+    festgefahren: stecken && joker > 0,
+    meilenstein: neueJoker > 0 ? hoechste : null,
+    entfernt: null,
     gewonnen: z.gewonnen || hoechste >= ZIEL_STUFE,
-    vorbei: !zugMoeglich(mitNeuer.raster),
+    vorbei: stecken && joker === 0,
     saat: mitNeuer.saat,
     zug: z.zug + 1,
     bild,
+  };
+}
+
+/**
+ * Joker: den letzten Zug (oder Hammer) zurücknehmen. Kostet einen Joker und stellt Raster, Punkte
+ * und Zufallsstand wieder her — wer denselben Zug noch einmal macht, bekommt dieselbe neue Kachel
+ * an derselben Stelle, wer einen anderen macht, eine andere. Nur ein Schritt zurück: Ein
+ * Zurück nach dem Zurück gibt es nicht, bis wieder gezogen wurde.
+ *
+ * Der Meilenstein-Joker bleibt, auch wenn der Zug zurückgenommen wird (`belohnt` wird nicht
+ * zurückgesetzt) — sonst ließe sich derselbe Meilenstein beliebig oft „verdienen".
+ */
+export function zurueck(z: Zustand): Zustand {
+  if (z.vorbei || z.joker < 1 || !z.verlauf) return z;
+  const v = z.verlauf;
+  const joker = z.joker - 1;
+  const stecken = !zugMoeglich(v.raster);
+  return {
+    ...z,
+    raster: v.raster,
+    punkte: v.punkte,
+    hoechsteStufe: v.hoechsteStufe,
+    gewonnen: v.gewonnen,
+    saat: v.saat,
+    joker,
+    verlauf: null,
+    festgefahren: stecken && joker > 0,
+    vorbei: stecken && joker === 0,
+    meilenstein: null,
+    entfernt: null,
+    zug: z.zug + 1,
+    bild: null,
+  };
+}
+
+/**
+ * Joker: eine beliebige Kachel entfernen. Kostet einen Joker, legt **keine** neue Kachel dazu und
+ * gibt keine Punkte. Ein Zurück danach ist möglich (es kostet dann einen weiteren Joker) — wer die
+ * falsche Kachel angetippt hat, soll nicht mit dem Fehler leben müssen.
+ */
+export function hammer(z: Zustand, x: number, y: number): Zustand {
+  if (z.vorbei || z.joker < 1) return z;
+  const stufe = z.raster[y]?.[x];
+  if (stufe === null || stufe === undefined) return z;
+  const raster = z.raster.map((reihe) => [...reihe]);
+  raster[y]![x] = null;
+  return {
+    ...z,
+    raster,
+    joker: z.joker - 1,
+    verlauf: rueckstand(z),
+    // Es ist jetzt ein Feld frei, also geht immer wieder ein Zug.
+    festgefahren: false,
+    vorbei: false,
+    meilenstein: null,
+    entfernt: { x, y, stufe },
+    zug: z.zug + 1,
+    bild: null,
   };
 }
