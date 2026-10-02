@@ -3,13 +3,16 @@ import {
   DAUERN,
   TEMPO_FENSTER,
   bewertung,
+  neuerRekord,
   neuesSpiel,
   punkte,
+  rekordTipps,
   rest,
   stufeFuerTempo,
   takt,
   tempo,
   tippen,
+  vorsprung,
 } from './logik';
 import type { Zustand } from './logik';
 
@@ -165,5 +168,45 @@ describe('bewertung', () => {
       (['rot', 'gruen', 'blau', 'regenbogen'] as const).map((s) => bewertung(s)),
     );
     expect(texte.size).toBe(4);
+  });
+});
+
+describe('Rekord-Tempo', () => {
+  it('rekordTipps ist das kleinste n, das den Rekord erreicht — in jeder Rundenlänge', () => {
+    for (const dauer of DAUERN) {
+      for (const best of [1, 5, 9, 17, 33, 48, 70]) {
+        const n = rekordTipps(best, dauer);
+        expect(punkte(n, dauer), `${best} in ${dauer} s`).toBeGreaterThanOrEqual(best);
+        expect(punkte(n - 1, dauer), `${best} in ${dauer} s`).toBeLessThan(best);
+      }
+    }
+  });
+
+  it('ohne bisherigen Rekord gibt es keine Marke und keinen Vorsprung', () => {
+    expect(rekordTipps(0, 10)).toBe(0);
+    const z = tippen(neuesSpiel(10));
+    expect(vorsprung(z, 0)).toBe(0);
+  });
+
+  it('der Vorsprung wächst, wenn man schneller tippt als der Rekord, und schmilzt, wenn man nachlässt', () => {
+    // Rekord 40 Punkte in 10 s = 40 Tipps = vier je Sekunde.
+    const schnell = tippenMit(neuesSpiel(10), 6, 4);
+    expect(vorsprung(schnell, 40)).toBeGreaterThan(0);
+    const langsam = tippenMit(neuesSpiel(10), 2, 4);
+    expect(vorsprung(langsam, 40)).toBeLessThan(0);
+    // Wer nach dem schnellen Start aufhört, fällt zurück.
+    let z = schnell;
+    for (let i = 0; i < 60 * 3; i++) z = takt(z, 1 / 60);
+    expect(vorsprung(z, 40)).toBeLessThan(vorsprung(schnell, 40));
+  });
+
+  it('vor dem ersten Tipp steht die Uhr — und damit der Vorsprung — still', () => {
+    expect(vorsprung(neuesSpiel(10), 40)).toBe(0);
+  });
+
+  it('neuerRekord heißt übertroffen, nicht nur erreicht — und braucht einen vorherigen Rekord', () => {
+    expect(neuerRekord(40, 10, 40)).toBe(false);
+    expect(neuerRekord(41, 10, 40)).toBe(true);
+    expect(neuerRekord(100, 10, 0)).toBe(false);
   });
 });

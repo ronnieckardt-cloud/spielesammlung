@@ -1445,6 +1445,55 @@ steht in `logik.ts` (reine Funktionen, 40+ neue Tests), die Anzeige in
   Karten hochkant sind (Verhältnis 3:4) — sonst quetscht `.spielbrett` sie
   zu Quadraten.
 
+### Version 2 — Serie, Blick, Wirbel
+
+Die Bestandsaufnahme ergab: eine saubere Gedächtnisprobe, aber **ohne Entscheidung** —
+man deckt auf, was man deckt, und merkt oder merkt nicht. Jetzt drei Dinge, alle
+in `logik.ts` (reine Funktionen, rund 20 neue Tests plus ein Spieler mit Gedächtnis
+als Beleg):
+
+- **Serie:** Paare ohne Fehlgriff dazwischen bringen Zuschlag (`serieBonus`: das
+  zweite +15, das dritte +30, ab dem vierten +45). Der Zuschlag steckt schon in
+  `punkte` und steht getrennt in `bonus`. Das Herz (`Komboherz`) neben dem Punktestand
+  zeigt die Serie. Ein fehlerfreies Spiel baut den vollen Zuschlag von selbst auf;
+  der höchste mögliche Stand (15 Paare) liegt bei rund 2100 und damit unter dem
+  Serverdeckel von 3000.
+- **Blick:** Ein Joker, ab Level 3 mit einem im Vorrat, höchstens zwei, jede dritte
+  Serie schenkt einen. Man tippt den Knopf (Auge, „Blick", Vorrat), dann eine Karte —
+  **ihre Zeile** liegt zwei Sekunden offen. Er kostet 24 Punkte (zwei Fehlgriffe) und
+  unterbricht die Serie nicht. Der Knopf ist ein Modus wie der Hammer in Merge Up:
+  Solange man wählt, tragen die Karten einen gestrichelten Rahmen (Form, nicht nur
+  Farbe) und ein Schild sagt, was zu tun ist.
+- **Wirbel:** Ab Level 9 (5×4 Karten) mischt jeder sechste Fehlgriff (ab Level 13 jeder
+  fünfte) beim Zudecken alle **verdeckten** Karten neu; gefundene bleiben liegen. Die
+  Saat kommt aus Level und Wirbelzahl — dieselbe Runde mit denselben Fehlgriffen wirbelt
+  gleich (Duell). Ein Zähler aus Punkten (gefüllt gegen leer) zeigt, wie nah der nächste
+  ist; beim letzten Fehlgriff davor wird er zum Warnwort.
+
+**Warum der Blick nur eine Zeile zeigt.** Die erste Fassung deckte **alle** Karten auf.
+Der Gedächtnis-Spieler (`bot.ts`) kam damit auf jedem Level mit genau so vielen Zügen
+wie Paaren durch — das Spiel war ein Abschreiben. Ein Test (`bot.test.ts`) und die
+Messung stehen jetzt dafür, dass der Blick **hilft, aber nicht ersetzt**: Mit ihm
+braucht der Bot auf 15 Paaren im Mittel 23 Züge, ohne 34, ohne Wirbel 27.
+*Merksatz:* Ein Joker, der das Spiel auf sein Ergebnis kürzt, ist keiner — er muss eine
+Wahl sein (wohin schaue ich, wann), nicht eine Abkürzung.
+
+**Warum der Wirbel erst bei sechs und fünf Fehlgriffen kommt.** Die erste Fassung wirbelte
+nach vier und drei: Auf den großen Feldern kam ein Bot, der nichts vergisst außer durch
+den Wirbel, nie ans Ziel — jeder Wirbel löscht sein Wissen, blindes Aufdecken führt fast
+immer zum nächsten Fehlgriff, und nach drei Zügen wirbelt es wieder (60 Züge Grenze,
+97 gebraucht). Bei sechs und fünf spürt der Bot den Wirbel (Level 13 bis 28: 34 statt
+27 Züge), kommt in 15 von 16 Leveln durch; wer viele Fehlgriffe macht, wirbelt öfter —
+das ist die Strafe. Zwei Tests halten es fest: der Wirbel kostet messbar Züge (über 15 %
+mehr als auf demselben Feld ohne), und mit Blick sind die tiefen Level schaffbar.
+
+**Fallen:** Der Wirbel passiert in `schliessen`, **nach** dem Zudecken — vorher liegen zwei
+Karten offen, und ein Mischen unter ihnen sähe aus wie ein Trick. Die Karten wackeln mit
+`rotate`/`translate` (eigene Eigenschaften, damit sie dem Umschlagen in `.karte-dreher`
+nicht in die Quere kommen); die Verzögerung je Karte muss unter `.ruhig` eigens auf 0.
+Beim Levelwechsel müssen die Merker für „Blick verdient"/„Wirbel erlebt" mit zurück, sonst
+sähe der Effekt im neuen Feld einen verdienten Blick, der nur das Startgeschenk ist.
+
 ## Blade Toss — Besonderheiten
 
 Ronnis eigene Idee: ein Holzstamm von vorn (also die runde Schnittfläche),
@@ -2199,6 +2248,21 @@ grün, hellblau ist schon gut, und Regenbogen heißt übelst schnell."
 - **Nicht duellfähig**: Es gibt keine Levelnummer. Ein Duell bräuchte hier
   nur dieselbe Rundenlänge — eine eigene Sache, bewusst nicht mit
   hineingemischt.
+- **Rekord-Tempo** (`rekordTipps`, `vorsprung`, `neuerRekord`): Unter der Zahl steht, wie
+  weit man gegenüber dem Rekord vorn liegt („▲ +8 zum Rekord-Tempo" / „▼ −3 …"), vor dem
+  ersten Tipp, was zu schlagen ist. Der Rekord gilt für **jede** Rundenlänge, weil die
+  Punkte „Tipps je zehn Sekunden" sind — `rekordTipps` rechnet ihn auf die gewählte
+  Länge um. Verglichen wird mit einem **gleichmäßig** tippenden Rekordhalter: Es gibt
+  keine gespeicherte Kurve des Rekordlaufs (ein Spiel darf nicht an den Speicher), nur
+  die eine Zahl. Wer vorn startet und nachlässt, sieht den Vorsprung schmelzen — das
+  lehrt das Einteilen der Kräfte. Pfeil und Zahl, nicht nur ein Farbton; der Kasten ist
+  dunkel unterlegt, weil der Grund von Rot bis Regenbogen reicht. Punkte und Server sind
+  davon unberührt.
+- **Der Regenbogen hatte eine Naht.** `.tempo-regenbogen::before` lief mit 100°; bei einem
+  schrägen Winkel passen rechte und linke Kante zweier aneinandergesetzter Kacheln nicht
+  zusammen, und mitten im Feld stand eine harte senkrechte Linie (Magenta gegen
+  Rot-Orange). Mit 90° ist die Kachel an den Rändern gleich. Aufgefallen ist es erst im
+  Bild, nicht im Code.
 
 ## Das Duell
 
