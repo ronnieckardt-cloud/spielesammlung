@@ -921,7 +921,8 @@ für `quiz` und `wortspiel` auf **100000**; das Duell lehnt über 1.000.000 ab).
 Mit Verdopplung je Stufe bis zur Million wäre jede zweite Bestleistung aus
 der Rangliste gefallen. Die Preise wachsen deshalb nur mit Faktor 1,3 bis 2
 je Stufe (`PREISE`). Wer die Leiter ändert, muss **beide** Schranken
-mitdenken. *Merksatz:* Ein neues Punktesystem ist erst fertig, wenn der
+mitdenken (die Dreifach-Regel gilt seit dem „Anlaufschutz" nur noch, wenn schon
+ein ernsthafter Maßstab da ist — siehe „Anmeldung"). *Merksatz:* Ein neues Punktesystem ist erst fertig, wenn der
 Server es annimmt — nicht wenn die App es anzeigt.
 
 **Inhalte werden gegengeprüft, nicht nur geschrieben.** Fakten kann kein Test
@@ -1396,10 +1397,10 @@ steht in `logik.ts` (reine Funktionen, 40+ neue Tests), die Anzeige in
   nur noch aus den Kugeln `rest` ([Spalte, Zeile, Farbe]) besteht.
 - **Punkte:** Der Maßstab ändert sich um Größenordnungen (der Bot kommt in
   250 Schüssen auf 30.000 bis 50.000; vorher lag die beste Runde bei 370). Die
-  Obergrenze in `spiel_katalog.max_punkte` (200000) reicht. **Aber der Server
-  markiert ein Ergebnis über dem Dreifachen der bisherigen Bestleistung als
-  `verdaechtig`** (siehe „Anmeldung") — ein erstes gutes Ergebnis nach dem
-  Umbau landet dort, bleibt aber lokal die Bestleistung.
+  Obergrenze in `spiel_katalog.max_punkte` (200000) reicht. Die Dreifach-Regel
+  des Servers (siehe „Anmeldung", „Anlaufschutz") greift hier erst ab einer
+  Bestleistung von 10.000 — ein erstes gutes Ergebnis nach dem Umbau wird
+  angenommen.
 
 ## Pair Up — Besonderheiten
 
@@ -2399,6 +2400,24 @@ positioniertes Element mit Stufe 1 wird über einem mit `auto` gezeichnet —
 ganz gleich, was weiter unten im Baum steht. Der Dialog in `Spielrahmen.tsx`
 braucht deshalb ein eigenes `z-20`.
 
+**Der Anlaufschutz im Server (`spiel_ergebnis_melden`).** Ein Ergebnis über dem
+Dreifachen der **globalen** Bestleistung eines Spiels ist `verdaechtig`: Es
+bleibt in `spiel_ergebnis`, erreicht aber nie `spiel_bestwert` und damit nie
+die Rangliste. Das ist als Schutz gegen erfundene Zahlen richtig — hatte aber
+einen Webfehler: Ein verdächtiges Ergebnis hebt die Bestleistung nicht an, die
+Messlatte bleibt also unten, und jedes weitere ehrliche Ergebnis über dem
+Dreifachen fliegt ebenfalls heraus (Todesspirale). Gefunden hat es das
+Nachsehen in der Tabelle: Dash City 5179 und 2608 sowie Line Fall 724 standen
+als `verdaechtig`, alle drei echt, alle bei einem Spiel, dessen Skala sich
+durch einen Umbau verschoben hatte oder das noch kaum Ergebnisse hatte.
+Seitdem gilt die Regel nur noch, wenn die bisherige Bestleistung mindestens
+**`max_punkte / 20`** beträgt (Migration `spiel_ergebnis_melden_anlaufschutz`)
+— darunter ist noch kein verlässlicher Maßstab da, und `max_punkte` deckelt
+Erfundenes ohnehin nach oben. *Merksatz:* Eine Prüfung, die sich ihre eigene
+Messlatte nur über bestandene Prüfungen hebt, braucht einen Anlauf.
+Die drei oben genannten Altfälle stehen weiter auf `verdaechtig` (nicht von
+Hand freigegeben).
+
 **Noch nicht gebaut:** Battle, Co-op, Avatare. Die Tabellen dafür gibt es
 noch nicht.
 
@@ -2439,6 +2458,98 @@ Regel oben: das Prinzip ist frei, der Name nicht. Interne `id` ist
   Blade Toss: `useInput` meldet ein Antippen erst beim Loslassen, zusammen
   mit `onPointerDown` käme jeder Tipp zweimal an — und ein doppelter Sprung
   wirft die Kugel viel zu hoch.
+
+### Version 2 — Hindernisarten, Etappen, Serie
+
+Die Bestandsaufnahme ergab: ein sauberes Timing-Spiel, aber **ohne jede Abwechslung**.
+Jedes Hindernis war derselbe Ring; ab Ring 27 (Tempo) und Ring 36 (Radius) änderte sich
+nichts mehr, und der einzige Punktewert war „ein Ring = ein Punkt" — ein Spieler, der die
+Stellung des Rings genau abpasste, bekam dafür keinen Punkt mehr als einer, der gerade eben
+durchrutschte. Jetzt drei Hindernisarten, Etappen und eine Serie.
+
+- **Drei Arten, alle mit genau einem Tor** (`Art` in `logik.ts`): der gewöhnliche **Ring**, das
+  **Laufband** (ein Streifen über die ganze Breite, dessen Farben seitlich laufen; die Kugel
+  kommt bei x = 0 durch) und der **Pulsring** (dreht mit schwingendem Tempo, 0,2- bis 1,8-faches
+  des Grundtempos, Mittelwert gleich). Jede Farbe kommt an jedem Tor irgendwann an — **jedes
+  Hindernis ist immer zu schaffen**, die Härte kommt aus Tempo und Rhythmus. Der Pulsring dreht
+  bewusst nur in **eine** Richtung weiter: Ein hin- und herschwingender Ring würde manche Farbe
+  nie ans Tor bringen. (Ein Doppelring aus zwei ineinanderliegenden Ringen war zuerst
+  geplant und wurde **vor dem Bau verworfen**: Bei gleichem Tempo und entgegengesetzter
+  Richtung ist die Hälfte aller zufälligen Stellungen für die Farbe der Kugel *nie* zu
+  schaffen. Zwei Tore in kurzem Abstand brauchen aufeinander abgestimmte Stellungen — kein
+  Zufall.)
+- **Das Band ist über `torFarbe` und `bandSegmente` an die Anzeige gebunden.** Geprüft wird die
+  Farbe bei x = 0, gezeichnet werden dieselben Segmente; ein Test liest für 360 Stellungen
+  beides und verlangt Gleichheit. Dasselbe Muster wie bei den Ringbögen (`farbeAnStelle`),
+  wo Anzeige und Prüfung nicht auseinanderlaufen dürfen. Die Strichmuster der Farben sind für
+  das Band **eigene, kleinere Maße** (`bandMuster`): Die Ringmuster haben Strichlängen ab 13,
+  ein Band-Segment ist 12,5 breit — Gelb wäre von Rot nicht zu unterscheiden. `bandVersatz`
+  legt die **Mitte** des Segments auf einen Strich, nicht in eine Lücke (dort sitzt die Raute,
+  und eine Raute im Loch las sich, als fehle dem Segment ein Stück).
+- **Etappen** (`ETAPPE_LAENGE` = 8): Etappe 1 nur Ringe, Etappe 2 bringt Laufbänder, Etappe 3
+  Pulsringe (je an Stelle 2 und 4 der Etappe, **garantiert**: Wer die Neuheit dem Zufall
+  überließe, könnte „Laufbänder!" melden und eine ganze Etappe lang keines zeigen), ab Etappe 4
+  gemischt. `etappenNeuheit` steht neben `artFuer`, damit Text und Erzeugung nicht auseinanderlaufen
+  (ein Test verlangt Übereinstimmung). Eine geschaffte Etappe zahlt `ETAPPEN_BONUS` × Etappennummer;
+  die Meldung liegt im **unteren** Teil des Bretts (oben sieht man den nächsten Ring), in drei kurzen
+  Zeilen — in vier Zeilen verdeckte sie auf 375 × 560 die Kugel.
+- **Die Serie hängt an der Genauigkeit, nicht an der Uhr.** Zuerst war sie ein Zeitfenster
+  („schnell hintereinander", 3,2 s, enger werdend) — und das war **falsch**: Gemessen kam der
+  vorausschauende Bot im Mittel in 2,3 s von Tor zu Tor, und das hat keine Spielweise mit
+  *Können* zu tun. Wie lange man auf seine Farbe wartet, bestimmt allein die Stellung des Rings
+  bei der Ankunft (bei einer Umdrehung in vier Sekunden im Mittel zwei Sekunden, nicht eine
+  Viertelumdrehung — jede Farbe kommt nur einmal je Umdrehung ans Tor). Eine Serie, die an der
+  Ringstellung hängt, misst Glück. Jetzt: Wer die Farbe **in der Mitte** des Bogens trifft
+  (`abstandZurMitte` ≤ `mitteBreite(etappe)`), setzt die Serie fort und bekommt den Faktor
+  (×1 bis ×`FAKTOR_MAX` = 5); wer am Rand durchrutscht, kommt durch, aber die Serie reißt.
+  Warten kostet nichts — es kostet höchstens Fingerarbeit, denn schweben heißt dauernd tippen.
+- **Die Mitte wird mit den Etappen schmaler** (0,60 → 0,30 rad bei einem Bogen von ±0,785,
+  Etappe 1 bis 7). Das ist das **Stellrad nach dem Deckel**: Ab Etappe 4 steigt das Tempo nicht
+  mehr (ohne Deckel wäre es irgendwann unschaffbar), also muss etwas anderes weiter steigen,
+  sonst spielt ein sicherer Spieler endlos auf demselben Niveau. Die Genauigkeit ist dieses
+  Stellrad. Gemessen: Bei der engsten Mitte bleiben 0,18 s Zeitfenster am schnellsten Ring.
+- **Die Regel steht im Bild.** Jede Farbe trägt in der Mitte ihres Bogens eine kleine weiße
+  **Raute**, und unter dem Tor stehen zwei Striche, **so weit auseinander wie die Mitte reicht**
+  (`Tormarke`, wandert mit der Etappe). Steht die Raute zwischen den Strichen, ist es „mitten
+  durch". Dieselbe Lehre wie bei der ersten Tormarke: Eine Regel, die man raten muss, fühlt sich
+  unfair an, auch wenn sie es nicht ist. Der Pulsring trägt zusätzlich einen dünnen gestrichelten
+  Kreis außen herum — er soll auf den ersten Blick als „der, der stockt" erkennbar sein.
+- **Das Herz zeigt den Faktor, nicht die Länge der Serie** (dieselbe Lehre wie Snake Rush und
+  Bubble Pop: „×7" neben einem Höchstfaktor von fünf wäre gelogen). Es hängt über der oberen
+  rechten Ecke der Bühne, kostet also keine Höhe. Die acht Punkte oben rechts zählen die
+  Hindernisse der Etappe (Form, nicht nur Farbe); auf 320 Pixel Breite passen sie nur in
+  `size-2` mit `gap-0.5`.
+- **Töne:** Mitten durch klettert die Tonhöhe mit der Serie (`sfx('gut', …)`), am Rand durch gibt es
+  nur ein schlichtes Klicken — geschafft, aber ohne Glanz. Eine geschaffte Etappe klingt nach `stufe`.
+- **Der Bot (`bot.ts`) hat die Genauigkeit eingestellt.** Er rechnet in jedem Bild mit der **echten**
+  Spielrechnung (`takt`) vor, ob „ab jetzt steigen" das nächste Tor mit Sicherheitsabstand
+  (`reserve`, Bogenmaß) schafft, und wählt dafür unter drei Tippschemata (Dauerfeuer, am höchsten
+  Punkt tippen, sinken lassen) das schnellste, das noch passt — ein Mensch regelt sein Tempo
+  genauso. **Seine Vorausrechnung muss denselben Zeitschritt benutzen wie das Spiel**: Mit
+  1/30 statt 1/60 kam er bei langsamem Steigen um Zehntelsekunden daneben an (die Tipps liegen
+  auf anderen Rasterpunkten, der Fehler summiert sich über den Anflug) und starb in allen acht
+  Läufen nach höchstens zehn Hindernissen. Er stirbt mit genug Reserve **nie** — jedes Tor lässt ihm
+  irgendwann ein Fenster —, also beweist er zwei andere Dinge: dass **alles zu schaffen ist**
+  (Etappe 8 bis 12 mit allen Arten und den schnellsten Tempi, sechs Saaten, ohne Tod) und dass
+  **Genauigkeit sich lohnt** (Etappe 6, sechs Saaten, 45 s: 961 / 999 / 1388 Punkte bei Reserve
+  0 / 0,3 / 0,5). In Etappe 1 ist der Unterschied klein (453 / 535 / 575) — dort ist die Mitte
+  breit; er wächst mit der Etappe, genau wie er soll. Ein dritter Test beweist, dass stumpfes
+  Dauertippen in der ersten Etappe scheitert.
+  *Merksatz:* Ein vorsichtiger Bot zeigt nicht, wo ein Mensch scheitert — nur, ob es geht. Wo
+  man scheitert, stellt man über Zeitfenster ein (Test auf `(π/2)/Tempo` und `2·MITTE_MIN/Tempo`),
+  nicht über den Tod des Bots.
+- **Hindernisse weit unter dem Bild werden weggeräumt** (`ABRAEUM_TIEFE` = 250): Ohne das wüchse
+  die Liste mit jedem Hindernis, und ein langer Lauf drehte tausend Ringe je Bild weiter.
+- **Punkte:** Ein langer Lauf bringt jetzt Hunderte statt zweistelliger Zahlen (der Bot kommt in
+  45 s auf Etappe 6 auf rund 240). `spiel_katalog.max_punkte` für `farbringe` steht deshalb auf
+  50000 (vorher 5000). Der Anlaufschutz im Server (siehe „Anmeldung") nimmt ein erstes gutes
+  Ergebnis nach dem Umbau an.
+- **Prüfhaken nur für Bildschirmfotos** (auf einem echten Gerät nie gesetzt):
+  `globalThis.__ringStart = { geschafft, halt }` beginnt nach so vielen Hindernissen (`neuesSpielAb`)
+  und hält auf Wunsch die Uhr an; solange er gesetzt ist, liefert `globalThis.__ringStand()` den
+  laufenden Zustand. Ein Spieler im Seitenkontext (`requestAnimationFrame`, jedes Bild) liest ihn aus und
+  spielt mit `pointerdown`-Ereignissen — **nicht** von außen mit Playwright-Aufrufen: Jeder Umlauf
+  kostet 20 bis 40 ms, und die Kugel fiel nach 2,5 s.
 
 ## Even Cut — Besonderheiten
 

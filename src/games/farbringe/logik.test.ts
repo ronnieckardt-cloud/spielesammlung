@@ -1,24 +1,48 @@
 import { describe, expect, it } from 'vitest';
 import { saatAus } from '../../core/rng';
 import {
+  ART_WERT,
+  BAND_PERIODE,
+  ETAPPEN_BONUS,
+  ETAPPE_LAENGE,
   FALL_GRENZE,
   FARB_ANZAHL,
+  FAKTOR_MAX,
   KUGEL_R,
+  MITTE_MIN,
+  MITTE_START,
+  PULS_PERIODE,
+  PULS_TIEFE,
   RING_ABSTAND,
   SCHWERKRAFT,
   SICHT_HOCH,
   SICHT_RUNTER,
   SPRUNG,
+  abstandZurMitte,
+  artFuer,
+  bandSegmente,
+  etappeVon,
+  etappenNeuheit,
   farbeAnStelle,
   halbmesserFuerRing,
+  mitteBreite,
   neuesSpiel,
+  serieFaktor,
   springen,
   takt,
+  tempoFuerBand,
+  tempoFuerPuls,
   tempoFuerRing,
+  torFarbe,
 } from './logik';
 import type { Ring, Zustand } from './logik';
 
 const SAAT = saatAus('farbringe', 1);
+
+/** Ein Ring für Tests: Pflichtfelder vorbelegt, der Rest wie angegeben. */
+function ringVon(teil: Partial<Ring>): Ring {
+  return { id: 0, nr: 0, art: 'ring', y: 0, halbmesser: 25, winkel: 0, tempo: 0, phase: 0, durch: false, ...teil };
+}
 
 /** Lässt die Zeit in kleinen Schritten laufen, wie die echte Schleife. */
 function laufen(z: Zustand, sekunden: number, beiSchritt?: (z: Zustand) => Zustand): Zustand {
@@ -32,7 +56,7 @@ function laufen(z: Zustand, sekunden: number, beiSchritt?: (z: Zustand) => Zusta
 }
 
 describe('farbeAnStelle', () => {
-  const ring: Ring = { y: 0, halbmesser: 25, winkel: 0, tempo: 0, durch: false };
+  const ring = ringVon({});
 
   it('teilt den Kreis in vier gleich große Bögen', () => {
     const gefunden = new Set<number>();
@@ -171,14 +195,12 @@ describe('Ringe durchqueren', () => {
   function mitRuhendemRing(farbeUnten: number): Zustand {
     const z = neuesSpiel(SAAT);
     const bogen = (2 * Math.PI) / FARB_ANZAHL;
-    const ring: Ring = {
+    const ring = ringVon({
       y: 30,
       halbmesser: 10,
       // So gedreht, dass die Mitte des Bogens `farbeUnten` genau unten steht.
       winkel: modulo(-Math.PI / 2 - farbeUnten * bogen - bogen / 2),
-      tempo: 0,
-      durch: false,
-    };
+    });
     return { ...z, ringe: [ring], wechsler: [], farbe: 0 };
   }
 
@@ -284,13 +306,247 @@ describe('Farbwechsler', () => {
   });
 });
 
+describe('Mitten im Spiel beginnen', () => {
+  it('beginnt in der verlangten Etappe, mit der Kugel am Fuß der Hindernisse', () => {
+    const z = neuesSpiel(SAAT, 5);
+    expect(etappeVon(z.geschafft)).toBe(5);
+    expect(z.ringe[0]!.nr).toBe(4 * ETAPPE_LAENGE);
+    expect(z.ringe[0]!.y - z.ringe[0]!.halbmesser).toBeGreaterThan(z.kugelY + 5);
+    expect(z.punkte).toBe(0);
+  });
+
+  it('ist für Etappe 1 dasselbe wie ein gewöhnlicher Start', () => {
+    expect(neuesSpiel(SAAT, 1)).toEqual(neuesSpiel(SAAT));
+  });
+});
+
 describe('Nachschub', () => {
   it('erzeugt neue Ringe, während man aufsteigt', () => {
     const z = neuesSpiel(SAAT);
-    const mitPunkten = takt({ ...z, punkte: 12 }, 1 / 60);
+    const mitPunkten = takt({ ...z, geschafft: 12 }, 1 / 60);
     expect(mitPunkten.ringe.length).toBeGreaterThan(z.ringe.length);
     // Und die neuen liegen wirklich weiter oben.
     const hoechster = Math.max(...mitPunkten.ringe.map((r) => r.y));
     expect(hoechster).toBeGreaterThan(RING_ABSTAND * 5);
+  });
+});
+
+/**
+ * Ein Zustand mit Ringen, die stillstehen und die Farbe 0 in der Mitte am Tor
+ * zeigen — `versatz` schiebt sie aus der Mitte (Bogenmaß).
+ */
+function mitStehendenRingen(anzahl: number, versatz = 0): Zustand {
+  const z = neuesSpiel(SAAT);
+  const bogen = (2 * Math.PI) / FARB_ANZAHL;
+  const ringe = Array.from({ length: anzahl }, (_, i) =>
+    ringVon({
+      id: i,
+      nr: i,
+      y: 30 + i * 90,
+      halbmesser: 10,
+      winkel: (((-Math.PI / 2 - bogen / 2 - versatz) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI),
+    }),
+  );
+  return { ...z, ringe, wechsler: [], farbe: 0 };
+}
+
+function steigen(s: Zustand): Zustand {
+  return s.kugelTempo < 20 ? springen(s) : s;
+}
+
+describe('Hindernisarten', () => {
+  it('liest beim Band dieselbe Farbe am Tor, die das Bild bei x = 0 zeigt', () => {
+    // Anzeige und Prüfung dürfen nicht auseinanderlaufen: Das Band wird aus
+    // `bandSegmente` gezeichnet, geprüft wird mit `torFarbe`.
+    for (let i = 0; i < 360; i++) {
+      const ring = ringVon({ art: 'band', winkel: (i / 360) * 2 * Math.PI });
+      const segment = bandSegmente(ring).find((s) => s.x <= 0 && 0 < s.x + s.breite)!;
+      expect(segment.farbe).toBe(torFarbe(ring));
+    }
+  });
+
+  it('zeigt am Band vier gleich breite Farben, die sich nach einer Periode wiederholen', () => {
+    const segmente = bandSegmente(ringVon({ art: 'band', winkel: 1 }));
+    expect(segmente[0]!.breite * FARB_ANZAHL).toBeCloseTo(BAND_PERIODE, 6);
+    expect(segmente[0]!.farbe).toBe(segmente[FARB_ANZAHL]!.farbe);
+  });
+
+  it('liest beim Ring das Tor unten, beim Band bei x = 0', () => {
+    const ring = ringVon({ winkel: 0.7 });
+    expect(torFarbe(ring)).toBe(farbeAnStelle(ring, -Math.PI / 2));
+  });
+
+  it('beginnt mit gewöhnlichen Ringen und führt eine Neuheit je Etappe ein', () => {
+    for (let nr = 0; nr < ETAPPE_LAENGE; nr++) expect(artFuer(nr, 0.9)).toBe('ring');
+    // Etappe 2 bringt das Band, Etappe 3 den Pulsring — und zwar garantiert.
+    const art = (e: number) => Array.from({ length: ETAPPE_LAENGE }, (_, i) => artFuer((e - 1) * ETAPPE_LAENGE + i, 0.1));
+    expect(art(2)).toContain('band');
+    expect(art(2)).not.toContain('puls');
+    expect(art(3)).toContain('puls');
+    expect(art(3)).not.toContain('band');
+  });
+
+  it('meldet als Neuheit genau das, was die Erzeugung bringt', () => {
+    expect(etappenNeuheit(2)?.art).toBe('band');
+    expect(etappenNeuheit(3)?.art).toBe('puls');
+    expect(etappenNeuheit(1)).toBeNull();
+  });
+
+  it('mischt ab Etappe 4 alle drei Arten', () => {
+    const z = (() => {
+      let s = neuesSpiel(SAAT);
+      // Genug Hindernisse erzeugen lassen, ohne zu spielen.
+      s = { ...s, geschafft: 120 };
+      return takt(s, 1 / 60);
+    })();
+    const arten = new Set(z.ringe.filter((r) => r.nr >= 3 * ETAPPE_LAENGE).map((r) => r.art));
+    expect(arten.size).toBe(3);
+  });
+
+  it('lässt das Tempo des Pulsrings um das Grundtempo schwingen — und nie rückwärts laufen', () => {
+    const ring = ringVon({ art: 'puls', tempo: 2, phase: 0.3 });
+    const dt = 1 / 600;
+    let z: Zustand = { ...neuesSpiel(SAAT), ringe: [ring], wechsler: [], kugelY: 0, kugelTempo: 0 };
+    let weg = 0;
+    let letzter = z.ringe[0]!.winkel;
+    let kleinste = Infinity;
+    let groesste = 0;
+    for (let t = 0; t < PULS_PERIODE; t += dt) {
+      // Die Kugel fest halten, damit nichts anderes passiert.
+      z = takt({ ...z, kugelY: 0, kugelTempo: 0, hoehe: 0 }, dt);
+      const jetzt = z.ringe[0]!.winkel;
+      const schritt = (((jetzt - letzter) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      weg += schritt;
+      kleinste = Math.min(kleinste, schritt / dt);
+      groesste = Math.max(groesste, schritt / dt);
+      letzter = jetzt;
+    }
+    // Ein Durchlauf der Schwingung dreht im Mittel mit dem Grundtempo (±2 %).
+    expect(weg / PULS_PERIODE).toBeGreaterThan(2 * 0.98);
+    expect(weg / PULS_PERIODE).toBeLessThan(2 * 1.02);
+    // Die Schwankung ist wirklich da, und es gibt nie Stillstand oder Rückwärtsgang.
+    expect(kleinste).toBeGreaterThan(0.1);
+    expect(kleinste).toBeLessThan(2 * (1 - PULS_TIEFE) * 1.1);
+    expect(groesste).toBeGreaterThan(2 * (1 + PULS_TIEFE) * 0.9);
+  });
+
+  it('lässt auch beim schnellsten Band und Pulsring genug Zeit zum Zielen', () => {
+    // Eine Farbe geht in (π/2)/Tempo Sekunden am Tor vorbei.
+    expect(Math.PI / 2 / tempoFuerBand(9999)).toBeGreaterThan(0.35);
+    // Der Pulsring ist im schnellsten Moment das 1,8-fache seines Grundtempos.
+    expect(Math.PI / 2 / (tempoFuerPuls(9999) * (1 + PULS_TIEFE))).toBeGreaterThan(0.28);
+  });
+
+  it('lässt auch die schmalste Mitte noch ein Zeitfenster, das man treffen kann', () => {
+    // Die Mitte reicht ±MITTE_MIN um die Bogenmitte — das ist 2·MITTE_MIN lang.
+    const schnellster = Math.max(tempoFuerRing(9999), tempoFuerBand(9999), tempoFuerPuls(9999));
+    expect((2 * MITTE_MIN) / schnellster).toBeGreaterThan(0.15);
+  });
+});
+
+describe('Die Mitte', () => {
+  it('ist 0 genau in der Mitte des Bogens und läuft von −π/4 bis π/4', () => {
+    const bogen = (2 * Math.PI) / FARB_ANZAHL;
+    for (const art of ['ring', 'band'] as const) {
+      // Winkel, bei dem die Mitte des Bogens 0 am Tor steht.
+      const mitte = art === 'band' ? -bogen / 2 : -Math.PI / 2 - bogen / 2;
+      expect(abstandZurMitte(ringVon({ art, winkel: mitte }))).toBeCloseTo(0, 9);
+      for (let i = 0; i < 720; i++) {
+        const a = abstandZurMitte(ringVon({ art, winkel: (i / 720) * 2 * Math.PI }));
+        expect(a).toBeGreaterThanOrEqual(-bogen / 2 - 1e-9);
+        expect(a).toBeLessThan(bogen / 2 + 1e-9);
+      }
+    }
+  });
+
+  it('wird mit den Etappen schmaler — aber nie schmaler als das Mindestmaß', () => {
+    expect(mitteBreite(1)).toBe(MITTE_START);
+    expect(mitteBreite(3)).toBeLessThan(mitteBreite(2));
+    expect(mitteBreite(500)).toBe(MITTE_MIN);
+    // Die Mitte passt in den Bogen (±π/4), sonst wäre jeder Durchflug „mitten".
+    expect(MITTE_START).toBeLessThan(Math.PI / 4);
+  });
+});
+
+describe('Serie, Punkte und Etappen', () => {
+  it('gibt für einen Durchflug in der Mitte den Grundwert und eine Serie von eins', () => {
+    const z = laufen(mitStehendenRingen(1), 1.6, steigen);
+    expect(z.geschafft).toBe(1);
+    expect(z.serie).toBe(1);
+    expect(z.punkte).toBe(ART_WERT.ring * 1);
+  });
+
+  it('lässt den Faktor mit jedem Treffer in der Mitte wachsen', () => {
+    const z = laufen(mitStehendenRingen(3), 5, steigen);
+    expect(z.geschafft).toBe(3);
+    expect(z.serie).toBe(3);
+    // 1·1 + 1·2 + 1·3
+    expect(z.punkte).toBe(6);
+  });
+
+  it('deckelt den Faktor', () => {
+    expect(serieFaktor(0)).toBe(1);
+    expect(serieFaktor(2)).toBe(2);
+    expect(serieFaktor(99)).toBe(FAKTOR_MAX);
+  });
+
+  it('zählt einen Durchflug am Rand des Bogens, reißt aber die Serie', () => {
+    // Knapp innerhalb des Bogens (0,75 von 0,785), aber weit außerhalb der Mitte.
+    const z0 = mitStehendenRingen(2);
+    const rand = { ...z0, ringe: [z0.ringe[0]!, { ...mitStehendenRingen(2, 0.75).ringe[1]! }], serie: 2, geschafft: 2 };
+    const z = laufen(rand, 5, steigen);
+    expect(z.vorbei).toBe(false);
+    // Der erste Ring (mittig) hat die Serie auf 3 gebracht, der zweite (am Rand) riss sie.
+    expect(z.geschafft).toBe(4);
+    expect(z.serie).toBe(0);
+    // 3 (Faktor 3) für den ersten, nur 1 (kein Faktor) für den zweiten.
+    expect(z.punkte).toBe(3 + 1);
+  });
+
+  it('beendet die Runde bei der falschen Farbe, auch mit Serie', () => {
+    const z0 = mitStehendenRingen(1);
+    const z = laufen({ ...z0, farbe: 2, serie: 4 }, 1.6, steigen);
+    expect(z.vorbei).toBe(true);
+  });
+
+  it('lässt die Serie nicht durch Warten reißen', () => {
+    // Die Serie hängt an der Genauigkeit, nicht an der Uhr: Wie lang man auf
+    // seine Farbe warten muss, bestimmt allein der Ring.
+    let z: Zustand = { ...mitStehendenRingen(1), serie: 3 };
+    // 20 Sekunden unter dem Tor (bei y = 20) schweben: Ein Sprung trägt gut
+    // 20 Einheiten, also wird erst unter −10 neu getippt.
+    const dt = 1 / 60;
+    for (let t = 0; t < 20; t += dt) {
+      z = takt(z.kugelY < -10 && z.kugelTempo < 0 ? springen(z) : z, dt);
+    }
+    expect(z.vorbei).toBe(false);
+    expect(z.serie).toBe(3);
+  });
+
+  it('zählt Etappen und gibt beim Abschluss den Bonus', () => {
+    expect(etappeVon(0)).toBe(1);
+    expect(etappeVon(ETAPPE_LAENGE - 1)).toBe(1);
+    expect(etappeVon(ETAPPE_LAENGE)).toBe(2);
+    // Das letzte Hindernis der ersten Etappe: Grundwert × Faktor plus Bonus.
+    const vorher = { ...mitStehendenRingen(1), geschafft: ETAPPE_LAENGE - 1 };
+    const z = laufen(vorher, 1.6, steigen);
+    expect(z.geschafft).toBe(ETAPPE_LAENGE);
+    expect(z.punkte).toBe(1 + ETAPPEN_BONUS * 1);
+    // Die zweite Etappe zahlt doppelt.
+    const zweite = laufen({ ...mitStehendenRingen(1), geschafft: 2 * ETAPPE_LAENGE - 1 }, 1.6, steigen);
+    expect(zweite.punkte).toBe(1 + ETAPPEN_BONUS * 2);
+  });
+
+  it('gewichtet das schwerere Hindernis höher', () => {
+    expect(ART_WERT.puls).toBeGreaterThan(ART_WERT.ring);
+  });
+
+  it('räumt weit zurückliegende Hindernisse weg, damit ein langer Lauf nicht zäh wird', () => {
+    let z = neuesSpiel(SAAT);
+    // Weit nach oben versetzen, ohne zu spielen.
+    z = { ...z, kugelY: 5000, hoehe: 5000, geschafft: 60 };
+    z = takt(z, 1 / 60);
+    expect(z.ringe.every((r) => r.y >= z.hoehe - 300)).toBe(true);
+    expect(z.ringe.length).toBe(z.wechsler.length);
   });
 });
