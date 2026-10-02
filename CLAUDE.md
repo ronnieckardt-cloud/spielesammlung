@@ -950,16 +950,26 @@ Punkte und Zeit, danach kommt die nächste.
   Figur kurz in die Richtung ruckeln. Ohne das wirkt ein blockierter Wisch wie
   ein verschluckter. Strafen schütteln das Brett und zeigen „−3 s" am Timer —
   beides erst bei der **Ankunft**, nicht schon beim Wisch.
-- **Eine Eingabe wird vorgemerkt**, solange die Figur noch gleitet (höchstens
-  385 ms bei sieben Feldern). Wer schnell wischt, will keinen Zug
-  verschlucken; mehr als eine Eingabe zu puffern hieße, einen Fehlgriff
-  nachträglich noch auszuführen.
-- **Ein gehaltener Pfeil ist kein Befehl, noch einmal dorthin zu ziehen.**
-  `Steuerkreuz` wiederholt bei Halten alle 45 ms; ein Zug gegen ein Loch
-  kostet Zeit. `richten` verwirft deshalb dieselbe Richtung, die innerhalb von
-  320 ms nach der letzten Eingabe noch einmal ankommt — und **jede
-  verworfene Wiederholung verlängert die Sperre**, bis der Finger wirklich
-  oben ist. Der Baustein selbst blieb unverändert.
+- **Bis zu zwei Züge werden vorgemerkt**, solange die Figur noch unterwegs ist (höchstens 385 ms bei
+  sieben Feldern). Wer schnell tippt oder wischt, will keinen Zug verschlucken; mehr als zwei zu
+  puffern hieße, einen Fehlgriff nachträglich noch auszuführen.
+- **Zwei Wege, ein Zug: Wischen gleitet, das Kreuz geht ein Feld.** Das war in der ersten Fassung
+  gar nicht vorgesehen. Rückmeldung: „die Steuerung hüpft jedes Mal nur ans Ende des Feldes — ich
+  kann keine einzelnen Kästchen hüpfen." Das Gleiten ist die Kernidee, aber ein Spiel, in dem man nie
+  ein einzelnes Feld gehen kann, fühlt sich bei engen Stellen bevormundend an. `gleiten(z, richtung,
+  hoechstens)` nimmt deshalb ein Höchstmaß; `1` ist der Schritt. **Der Schritt ist kein Schlupfloch:**
+  Er ist ein vollwertiger Zug — er zählt für die Bestmarke, lässt die Kometen ziehen, schluckt einen
+  Stern auf dem Feld und kostet Zeit, wenn das Feld ein Loch ist. Wer sich Feld für Feld
+  vorantastet, braucht mehr Züge und bekommt weniger Wertung als jemand, der den Gleitzug sieht. Die
+  Bestmarke bleibt die beste Folge von **Gleitzügen** (`loesung` unverändert). Tastatur und
+  Wischen gleiten (`useInput` meldet beide über denselben Kanal), das Kreuz geht Schritte.
+- **Ein gehaltener Pfeil darf keine Strafe vervielfachen.** `Steuerkreuz` wiederholt bei Halten alle
+  45 ms; ein Zug gegen ein Loch kostet drei Sekunden. Nach einem Zug, der Zeit gekostet hat, nimmt
+  `richten` dieselbe Richtung 600 ms lang nicht mehr an, und **jede verworfene Wiederholung
+  verlängert die Sperre**, bis der Finger oben ist. Die erste Fassung verwarf jede Wiederholung
+  derselben Richtung innerhalb von 320 ms — das hätte mit Einzelschritten schnelles Tippen („dreimal
+  rechts") unmöglich gemacht. Die Sperre hängt deshalb an der **Strafe**, nicht an der Wiederholung.
+  Der Baustein selbst blieb unverändert.
 - **`gleiten` läuft nicht in einem `setState`-Updater.** Töne und Zeitgeber im
   Updater feuern unter StrictMode doppelt (siehe „Ein Updater darf keine
   Nebenwirkungen haben"). Stattdessen hält eine Ref (`zRef`) den Stand;

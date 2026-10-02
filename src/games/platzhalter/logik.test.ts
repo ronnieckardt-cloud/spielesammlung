@@ -162,6 +162,68 @@ describe('Gleiten', () => {
   });
 });
 
+describe('Einzelschritt', () => {
+  it('geht genau ein Feld, auch wenn der Weg frei ist', () => {
+    const g = gleiten(brett({ sterne: [stern(5, 5)] }), 'right', 1);
+    expect(g.zustand.spieler).toEqual({ x: 1, y: 0 });
+    expect(g.weg).toHaveLength(1);
+    expect(g.anprall).toBe('schritt');
+    expect(g.bewegt).toBe(true);
+    expect(g.strafe).toBe(false);
+  });
+
+  it('ist ein vollwertiger Zug: zählt für die Bestmarke und lässt die Kometen ziehen', () => {
+    const z = brett({ sterne: [stern(5, 5)], kometen: [{ x: 4, y: 3, dx: 0, dy: 1 }] });
+    const g = gleiten(z, 'right', 1);
+    expect(g.zustand.zuege).toBe(1);
+    expect(g.zustand.kometen[0]).toEqual({ x: 4, y: 4, dx: 0, dy: 1 });
+  });
+
+  it('schluckt einen Stern auf dem einen Feld', () => {
+    const g = gleiten(brett({ sterne: [stern(1, 0), stern(5, 5)] }), 'right', 1);
+    expect(g.gesammelt.map((s) => s.stern.x)).toEqual([1]);
+    expect(g.sternPunkte).toBe(STERN_PUNKTE);
+  });
+
+  it('schafft die Welle, wenn das eine Feld der letzte Stern ist', () => {
+    const g = gleiten(brett({ sterne: [stern(1, 0)] }), 'right', 1);
+    expect(g.welleGeschafft).toBe(true);
+  });
+
+  it('bleibt gegen eine Wand oder einen Felsen ein Nicht-Zug', () => {
+    expect(gleiten(brett({ sterne: [stern(5, 5)] }), 'left', 1).bewegt).toBe(false);
+    const g = gleiten(brett({ felsen: [{ x: 1, y: 0 }], sterne: [stern(5, 5)] }), 'right', 1);
+    expect(g.bewegt).toBe(false);
+    expect(g.strafe).toBe(false);
+  });
+
+  it('kostet Zeit, wenn das eine Feld ein Loch ist — wie beim Gleiten', () => {
+    const z = brett({ loecher: [{ x: 1, y: 0 }], sterne: [stern(5, 5)], restZeit: 20 });
+    const g = gleiten(z, 'right', 1);
+    expect(g.strafe).toBe(true);
+    expect(g.zustand.restZeit).toBe(20 - STRAFE_S);
+    expect(g.zustand.spieler).toEqual({ x: 0, y: 0 });
+  });
+
+  it('kostet nichts, wenn man nur bis vor das Loch geht', () => {
+    const z = brett({ loecher: [{ x: 2, y: 0 }], sterne: [stern(5, 5)], restZeit: 20 });
+    const g = gleiten(z, 'right', 1);
+    expect(g.strafe).toBe(false);
+    expect(g.zustand.restZeit).toBe(20);
+  });
+
+  it('ist langsamer als der Gleitzug: Feld für Feld braucht mehr Züge', () => {
+    // Sieben Felder bis zum Stern: ein Gleitzug gegen sieben Schritte.
+    let z = brett({ spieler: { x: 0, y: 0 }, sterne: [stern(5, 0)], par: 1, breite: 6 });
+    for (let i = 0; i < 4; i++) z = gleiten(z, 'right', 1).zustand;
+    expect(z.zuege).toBe(4);
+    const g = gleiten(z, 'right', 1);
+    expect(g.welleGeschafft).toBe(true);
+    // Fünf Züge bei Bestmarke 1: keine Effizienzpunkte mehr.
+    expect(g.welleBonus).toBe(WELLEN_PUNKTE);
+  });
+});
+
 describe('Welle geschafft', () => {
   it('zahlt Bonus samt Effizienz, gibt Zeit zurück und hält die Uhr an', () => {
     const z = brett({ sterne: [stern(5, 0)], par: 1, restZeit: 10 });
