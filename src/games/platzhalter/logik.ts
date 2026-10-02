@@ -407,7 +407,8 @@ export function kometenZiehen(
 // Ein Gleitzug
 // ---------------------------------------------------------------------
 
-export type Anprall = 'wand' | 'fels' | 'loch' | 'komet';
+/** `schritt`: Nichts war im Weg, die Figur ist nur nach dem einen erlaubten Feld stehen geblieben. */
+export type Anprall = 'wand' | 'fels' | 'loch' | 'komet' | 'schritt';
 
 export type Gleiten = {
   zustand: Zustand;
@@ -453,7 +454,18 @@ function mitZeit(z: Zustand, restZeit: number): Zustand {
   return restZeit <= 0 ? { ...z, restZeit: 0, vorbei: true } : { ...z, restZeit };
 }
 
-export function gleiten(z: Zustand, richtung: Richtung): Gleiten {
+/**
+ * Ein Zug in eine Richtung. Ohne `hoechstens` gleitet die Figur, bis etwas im Weg ist; mit
+ * `hoechstens = 1` macht sie genau **einen Schritt**.
+ *
+ * Der Einzelschritt war in der ersten Fassung gar nicht vorgesehen — das Spiel sollte ein
+ * Gleit-Rätsel sein. Rückmeldung: „ich kann keine einzelnen Kästchen hüpfen." Er ist jetzt der
+ * zweite Weg, und er ist **kein Schlupfloch**: Ein Schritt ist ein vollwertiger Zug. Er zählt für
+ * die Bestmarke, lässt die Kometen ziehen und kostet beim Wählen Zeit — wer sich Feld für Feld
+ * vorantastet, ist langsamer und bekommt weniger Wertung als jemand, der den Gleitzug sieht. Die
+ * Bestmarke selbst bleibt die beste Folge von Gleitzügen (`loesung`).
+ */
+export function gleiten(z: Zustand, richtung: Richtung, hoechstens = Infinity): Gleiten {
   if (z.vorbei || z.welleGeschafft) return leer(z);
 
   const d = RICHTUNG[richtung];
@@ -463,6 +475,10 @@ export function gleiten(z: Zustand, richtung: Richtung): Gleiten {
   let pos = z.spieler;
   let anprall: Anprall;
   for (;;) {
+    if (weg.length >= hoechstens) {
+      anprall = 'schritt';
+      break;
+    }
     const n = { x: pos.x + d.x, y: pos.y + d.y };
     if (n.x < 0 || n.x >= z.breite || n.y < 0 || n.y >= z.hoehe) {
       anprall = 'wand';

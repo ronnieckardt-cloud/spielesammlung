@@ -36,13 +36,21 @@ const KOMET_MS = 220;
 /** So lange steht das Schild „Welle geschafft", bevor das neue Brett kommt. */
 const FEIER_MS = 1300;
 /**
- * Eine Richtung, die kurz nach derselben Richtung noch einmal ankommt, ist fast immer ein
- * **gehaltener Pfeil**, nicht der Wunsch nach einem zweiten Zug: Nach einem Gleitzug steht man an
- * einem Hindernis, und noch einmal dorthin zu wischen bringt nichts. Der Steuerkreuz-Baustein
- * wiederholt aber bei Halten alle 45 ms — und ein Zug gegen ein Loch kostet Zeit. Jede ankommende
+ * Nach einem Zug, der Zeit gekostet hat (gegen ein Loch oder einen Kometen), wird dieselbe Richtung
+ * eine Weile nicht noch einmal angenommen. Der Steuerkreuz-Baustein wiederholt bei Halten alle
+ * 45 ms — und jeder Wiederholungs-Zug in dasselbe Loch kostete drei Sekunden. Jede ankommende
  * Wiederholung verlängert die Sperre, bis der Finger wirklich oben ist.
+ *
+ * Das trifft **nur** Richtungen nach einer Strafe. Eine erste Fassung verwarf jede Wiederholung
+ * derselben Richtung innerhalb von 320 ms; mit Einzelschritten wäre damit schnelles Tippen
+ * („dreimal rechts") unmöglich gewesen.
  */
-const WIEDERHOLUNG_MS = 320;
+const STRAFSPERRE_MS = 600;
+/** Wie viele Züge vorgemerkt werden, solange die Figur noch unterwegs ist. */
+const MAX_VORGEMERKT = 2;
+
+/** Ein Zug, wie er ankommt: Richtung und wie weit höchstens (1 = ein Schritt). */
+type Zug = { richtung: Richtung; hoechstens: number };
 
 const istRichtung = (wert: string): wert is Richtung =>
   wert === 'up' || wert === 'down' || wert === 'left' || wert === 'right';
@@ -145,10 +153,10 @@ export function Platzhalter({ onScore, onGameOver, settings, bestScore, istErste
   const brett = useRef<HTMLDivElement>(null);
   const figurInnen = useRef<HTMLDivElement>(null);
   const gesperrtBis = useRef(0);
-  const vorgemerkt = useRef<Richtung | null>(null);
-  const letzteEingabe = useRef<{ richtung: Richtung | null; zeit: number }>({ richtung: null, zeit: 0 });
+  const vorgemerkt = useRef<Zug[]>([]);
+  const letzteStrafe = useRef<{ richtung: Richtung | null; zeit: number }>({ richtung: null, zeit: 0 });
   const zaehler = useRef(0);
-  const ausfuehrenRef = useRef<(richtung: Richtung) => void>(() => {});
+  const ausfuehrenRef = useRef<(richtung: Richtung, hoechstens?: number) => void>(() => {});
   const timer = useRef<number[]>([]);
   const gewinn = usePunktegewinn(z.punkte);
 
@@ -166,11 +174,12 @@ export function Platzhalter({ onScore, onGameOver, settings, bestScore, istErste
   const bewegungErlaubt = !settings.reducedMotion;
 
   const ausfuehren = useCallback(
-    (richtung: Richtung) => {
+    (richtung: Richtung, hoechstens = Infinity) => {
       const alt = zRef.current;
       if (alt.vorbei || alt.welleGeschafft) return;
-      const erg = gleiten(alt, richtung);
+      const erg = gleiten(alt, richtung, hoechstens);
       const d = VEKTOR[richtung];
+      if (erg.strafe) letzteStrafe.current = { richtung, zeit: performance.now() };
 
       // Ein Wisch gegen eine Wand ist kein Zug. Trotzdem soll man sehen, dass er angekommen ist:
       // ein kurzer Ruck in die gewählte Richtung. Ohne den wirkt ein blockierter Wisch wie ein
@@ -271,14 +280,13 @@ export function Platzhalter({ onScore, onGameOver, settings, bestScore, istErste
           setSchild(null);
           setzen(naechsteWelle(zRef.current));
           gesperrtBis.current = 0;
-          vorgemerkt.current = null;
+          vorgemerkt.current = [];
         }, dauer + 150 + FEIER_MS);
       } else {
-        // Hat man während des Gleitens schon die nächste Richtung gewischt, kommt sie jetzt dran.
+        // Hat man während des Gleitens schon den nächsten Zug gemacht, kommt er jetzt dran.
         spaeter(() => {
-          const v = vorgemerkt.current;
-          vorgemerkt.current = null;
-          if (v) ausfuehrenRef.current(v);
+          const v = vorgemerkt.current.shift();
+          if (v) ausfuehrenRef.current(v.richtung, v.hoechstens);
         }, dauer + kometZeit + 40);
       }
     },
@@ -287,21 +295,28 @@ export function Platzhalter({ onScore, onGameOver, settings, bestScore, istErste
 
   ausfuehrenRef.current = ausfuehren;
 
-  /** Der eine Eingang für Wischen, Tastatur und Steuerkreuz. */
-  const richten = useCallback((richtung: Richtung) => {
+  /**
+   * Der eine Eingang für alle Wege. **Wischen und Tasten gleiten** (`hoechstens` unbegrenzt), das
+   * **Kreuz macht einen Schritt**: Rückmeldung war, dass man mit dem Gleiten allein nie ein
+   * einzelnes Feld gehen kann.
+   */
+  const richten = useCallback((richtung: Richtung, hoechstens = Infinity) => {
     const jetzt = performance.now();
-    const letzte = letzteEingabe.current;
-    const wiederholung = letzte.richtung === richtung && jetzt - letzte.zeit < WIEDERHOLUNG_MS;
-    letzteEingabe.current = { richtung, zeit: jetzt };
-    if (wiederholung) return;
+    const strafe = letzteStrafe.current;
+    if (strafe.richtung === richtung && jetzt - strafe.zeit < STRAFSPERRE_MS) {
+      letzteStrafe.current = { richtung, zeit: jetzt };
+      return;
+    }
     const s = zRef.current;
     if (s.vorbei || s.welleGeschafft) return;
     if (jetzt < gesperrtBis.current) {
-      vorgemerkt.current = richtung;
+      if (vorgemerkt.current.length < MAX_VORGEMERKT) vorgemerkt.current.push({ richtung, hoechstens });
       return;
     }
-    ausfuehrenRef.current(richtung);
+    ausfuehrenRef.current(richtung, hoechstens);
   }, []);
+
+  const schritt = useCallback((richtung: Richtung) => richten(richtung, 1), [richten]);
 
   useInput(
     (aktion) => {
@@ -350,7 +365,7 @@ export function Platzhalter({ onScore, onGameOver, settings, bestScore, istErste
     return (
       <Startbildschirm
         titel="Star Dash"
-        untertitel="Wische: Dein Sternenschlucker gleitet, bis etwas im Weg ist, und schluckt jeden Stern auf dem Weg."
+        untertitel="Wische: Dein Sternenschlucker gleitet, bis etwas im Weg ist, und schluckt jeden Stern auf dem Weg. Mit dem Kreuz geht er einzelne Felder."
         bestScore={bestScore}
         verlauf="linear-gradient(165deg, #1e1b4b 0%, #1d4ed8 45%, #0ea5e9 100%)"
         deko={DEKO}
@@ -543,13 +558,13 @@ export function Platzhalter({ onScore, onGameOver, settings, bestScore, istErste
         </div>
       </div>
 
-      <Steuerkreuz onRichtung={richten} aktiv={!z.vorbei} kompakt />
+      <Steuerkreuz onRichtung={schritt} aktiv={!z.vorbei} kompakt />
 
       {/* Das Spielziel steht immer da, die Zeichenerklärung nur, wenn Platz ist — dieselbe
           Aufteilung wie in den anderen Spielen. */}
       <div className="max-w-sm text-center text-gedaempft">
-        <p className="text-xs">Gleite über die Sterne. Felsen bremsen dich, Löcher und Kometen kosten Zeit.</p>
-        <p className="nur-bei-platz mt-1 text-sm">Wischen, Pfeiltasten oder das Kreuz unten.</p>
+        <p className="text-xs">Wischen: gleiten. Kreuz: ein Feld. Felsen bremsen, Löcher und Kometen kosten Zeit.</p>
+        <p className="nur-bei-platz mt-1 text-sm">Pfeiltasten gleiten, das Kreuz unten geht Feld für Feld.</p>
       </div>
 
       <p className="sr-only" aria-live="polite">
