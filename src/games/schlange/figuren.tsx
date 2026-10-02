@@ -1,5 +1,6 @@
 import { memo } from 'react';
-import type { Punkt, Richtung } from './logik';
+import { EXTRA_DAUER_SCHRITTE } from './logik';
+import type { Extra, Punkt, Rand, Richtung } from './logik';
 import { gliedArt, kachelMitte, laeufe, laeuftSenkrecht, pfadDurch } from './geometrie';
 
 /**
@@ -26,6 +27,8 @@ const ZUNGE = '#f43f5e';
 const APFEL = '#f43f5e';
 const GOLD = '#facc15';
 const HOF = '#0b0f14';
+/** So viele Schritte liegt ein Extra — der Ring um das Extra schrumpft darauf bezogen. */
+const EXTRA_DAUER = EXTRA_DAUER_SCHRITTE;
 
 /** Strichstärken der vier Schichten. */
 const BREIT_KANTE = 0.92;
@@ -148,29 +151,34 @@ export function Kopf({
 }) {
   const m = kachelMitte(kopf);
   return (
-    <g
-      className={ruhig ? undefined : 'schlange-schluckt'}
-      transform={`translate(${m.x} ${m.y}) rotate(${WINKEL[richtung]})`}
-    >
-      {/* Zunge, züngelt gelegentlich. Liegt hinter dem Kopf, damit sie
-          scheinbar aus dem Maul kommt. */}
-      <path
-        className={ruhig ? undefined : 'schlange-zuengelt'}
-        d="M0.66 0 h0.42 l0.22 -0.15 M1.08 0 l0.22 0.15"
-        stroke={ZUNGE}
-        strokeWidth="0.1"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <ellipse rx="0.7" ry="0.56" fill={KOERPER_DUNKEL} />
-      <ellipse rx="0.6" ry="0.46" fill={KOPF_HELL} />
-      <ellipse cx="-0.06" cy="-0.14" rx="0.44" ry="0.17" fill="#ffffff" opacity="0.28" />
-      {[-1, 1].map((seite) => (
-        <g key={seite}>
-          <circle cx="0.18" cy={0.24 * seite} r="0.19" fill="#ffffff" />
-          <circle cx="0.24" cy={0.24 * seite} r="0.1" fill="#0b1020" />
-        </g>
-      ))}
+    // **Zwei Ebenen, und das ist kein Zierrat.** Die Schluck-Animation skaliert über die einzelne
+    // CSS-Eigenschaft `scale`, und die wird in der Transformationskette *vor* dem `transform`-Attribut
+    // angewandt. Stand beides am selben Element, skalierte die Animation um den Ursprung der
+    // viewBox statt um den Kopf: Bei jedem Apfel sprang der Kopf für 0,2 Sekunden um rund ein
+    // Fünftel seiner Entfernung zur oberen linken Ecke weg — bis zu drei Felder vom Körper. Außen
+    // sitzt deshalb nur die Platzierung, innen die Animation.
+    <g transform={`translate(${m.x} ${m.y}) rotate(${WINKEL[richtung]})`}>
+      <g className={ruhig ? undefined : 'schlange-schluckt'}>
+        {/* Zunge, züngelt gelegentlich. Liegt hinter dem Kopf, damit sie
+            scheinbar aus dem Maul kommt. */}
+        <path
+          className={ruhig ? undefined : 'schlange-zuengelt'}
+          d="M0.66 0 h0.42 l0.22 -0.15 M1.08 0 l0.22 0.15"
+          stroke={ZUNGE}
+          strokeWidth="0.1"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <ellipse rx="0.7" ry="0.56" fill={KOERPER_DUNKEL} />
+        <ellipse rx="0.6" ry="0.46" fill={KOPF_HELL} />
+        <ellipse cx="-0.06" cy="-0.14" rx="0.44" ry="0.17" fill="#ffffff" opacity="0.28" />
+        {[-1, 1].map((seite) => (
+          <g key={seite}>
+            <circle cx="0.18" cy={0.24 * seite} r="0.19" fill="#ffffff" />
+            <circle cx="0.24" cy={0.24 * seite} r="0.1" fill="#0b1020" />
+          </g>
+        ))}
+      </g>
     </g>
   );
 }
@@ -209,9 +217,142 @@ export function Goldstern({ ort, ruhig }: { ort: Punkt; ruhig: boolean }) {
     zacken.push(`${m.x + Math.cos(w) * r} ${m.y + Math.sin(w) * r}`);
   }
   return (
-    <g className={ruhig ? undefined : 'pulsiert-sanft'} style={{ transformOrigin: `${m.x}px ${m.y}px` }}>
+    // Der Ursprung kommt aus der Klasse (`fill-box`, Mitte). Ein eigener `transform-origin` in Pixeln
+    // bezöge sich bei `fill-box` auf die obere linke Ecke des Sterns — und der Stern wanderte beim
+    // Pulsieren davon.
+    <g className={ruhig ? undefined : 'pulsiert-sanft'}>
       <circle cx={m.x} cy={m.y} r="0.52" fill={HOF} opacity="0.7" />
       <path d={`M${zacken.join(' L')} Z`} fill={GOLD} />
+    </g>
+  );
+}
+
+/**
+ * Ein Fels: kantig, grau, mit heller Oberseite und dunkler Schattenseite — er soll auf den ersten
+ * Blick als „hier geht es nicht weiter" lesen und sich dabei vom grünen Körper und den runden Äpfeln
+ * in der **Form** unterscheiden, nicht nur in der Farbe.
+ *
+ * Alle Felsen eines Bildes haben dieselbe Gestalt; ein Fels aus mehreren Kacheln liest sich dadurch
+ * als Gruppe einzelner Steine, nicht als eine zusammenhängende Wand — und genau so ist er gebaut.
+ */
+export function Fels({ ort }: { ort: Punkt }) {
+  return (
+    <g transform={`translate(${ort.x} ${ort.y})`}>
+      <ellipse cx="0.5" cy="0.9" rx="0.42" ry="0.1" fill="#000000" opacity="0.3" />
+      <path
+        d="M0.1 0.8 L0.06 0.46 L0.26 0.14 L0.62 0.07 L0.9 0.28 L0.94 0.66 L0.72 0.9 L0.3 0.92Z"
+        fill="#6b7280"
+        stroke="#374151"
+        strokeWidth="0.06"
+        strokeLinejoin="round"
+      />
+      <path d="M0.26 0.14 L0.62 0.07 L0.9 0.28 L0.56 0.36 L0.34 0.42 L0.06 0.46Z" fill="#9ca3af" />
+      <path d="M0.56 0.36 L0.9 0.28 L0.94 0.66 L0.72 0.9 L0.58 0.62Z" fill="#4b5563" />
+    </g>
+  );
+}
+
+/**
+ * Der Rand der Arena. **Zwei verschiedene Bilder, nicht zwei Farben:** Eine Mauer ist ein
+ * durchgehender Streifen aus roten und gelben Strichen (Warnband), ein offener Rand nur eine feine,
+ * gepunktete Linie. Wer die Farben nicht unterscheidet, sieht trotzdem sofort, dass hier etwas
+ * anders ist — und genau das ist die Information, auf die es bei jedem Randfeld ankommt.
+ */
+export const Randrahmen = memo(function Randrahmen({
+  rand,
+  breite,
+  hoehe,
+}: {
+  rand: Rand;
+  breite: number;
+  hoehe: number;
+}) {
+  if (rand === 'mauer') {
+    const b = breite - 0.28;
+    const h = hoehe - 0.28;
+    return (
+      <g aria-hidden="true">
+        <rect x="0.14" y="0.14" width={b} height={h} fill="none" stroke="#b91c1c" strokeWidth="0.28" />
+        <rect
+          x="0.14"
+          y="0.14"
+          width={b}
+          height={h}
+          fill="none"
+          stroke="#fde68a"
+          strokeWidth="0.28"
+          strokeDasharray="0.45 0.45"
+        />
+      </g>
+    );
+  }
+  return (
+    <rect
+      x="0.08"
+      y="0.08"
+      width={breite - 0.16}
+      height={hoehe - 0.16}
+      fill="none"
+      stroke="#60a5fa"
+      strokeWidth="0.07"
+      strokeDasharray="0.2 0.3"
+      opacity="0.6"
+      aria-hidden="true"
+    />
+  );
+});
+
+/**
+ * Die drei Extras. Jedes hat eine **eigene Silhouette**: das Gold einen Stern, die Zeitlupe eine
+ * Scheibe mit Zeigern, die Schere eine Scheibe mit gekreuzten Klingen. Dazu läuft ein weißer Ring um
+ * das Extra herum ab — er zeigt, wie lange es noch liegt, ohne zu blinken (Dauerpulse gibt es nur
+ * unter 1,7 Hz, und ein schrumpfender Ring braucht nicht einmal das).
+ */
+export function ExtraBild({ extra, rest, ruhig }: { extra: Extra; rest: number; ruhig: boolean }) {
+  const m = kachelMitte(extra);
+  const anteil = Math.max(0, Math.min(1, rest / EXTRA_DAUER));
+  return (
+    <g>
+      {extra.art === 'gold' ? (
+        <Goldstern ort={extra} ruhig={ruhig} />
+      ) : (
+        <g>
+          <circle cx={m.x} cy={m.y} r="0.52" fill={HOF} opacity="0.7" />
+          <circle
+            cx={m.x}
+            cy={m.y}
+            r="0.4"
+            fill={extra.art === 'zeitlupe' ? '#0ea5e9' : '#f97316'}
+          />
+          {extra.art === 'zeitlupe' ? (
+            <g stroke="#ffffff" strokeWidth="0.09" strokeLinecap="round" fill="none">
+              <circle cx={m.x} cy={m.y} r="0.25" strokeWidth="0.07" />
+              <path d={`M${m.x} ${m.y} v-0.17 M${m.x} ${m.y} l0.11 0.07`} />
+            </g>
+          ) : (
+            <g stroke="#ffffff" strokeWidth="0.09" strokeLinecap="round" fill="none">
+              <path
+                d={`M${m.x - 0.22} ${m.y - 0.25} L${m.x + 0.1} ${m.y + 0.08} M${m.x + 0.22} ${m.y - 0.25} L${m.x - 0.1} ${m.y + 0.08}`}
+              />
+              <circle cx={m.x - 0.14} cy={m.y + 0.2} r="0.09" strokeWidth="0.06" />
+              <circle cx={m.x + 0.14} cy={m.y + 0.2} r="0.09" strokeWidth="0.06" />
+            </g>
+          )}
+        </g>
+      )}
+      <circle
+        cx={m.x}
+        cy={m.y}
+        r="0.58"
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth="0.07"
+        strokeLinecap="round"
+        opacity="0.85"
+        pathLength="1"
+        strokeDasharray={`${anteil} 1`}
+        transform={`rotate(-90 ${m.x} ${m.y})`}
+      />
     </g>
   );
 }

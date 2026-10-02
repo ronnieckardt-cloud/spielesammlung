@@ -982,51 +982,110 @@ Punkte und Zeit, danach kommt die nächste.
 
 ## Snake Rush — Besonderheiten
 
-- `logik.ts`: Bewegung läuft über `zeitFortschritt(z, dt)` — die Zeit wird
-  angesammelt, bis ein voller Takt (`taktS`) zusammen ist, dann geht es ein
-  Feld weiter. Dadurch ist das Tempo unabhängig von der Bildrate. Die
-  Schleife holt mehrere fällige Takte nach, falls es einmal geruckelt hat;
-  `useGameLoop` deckelt das ohnehin schon.
-- An den Rändern läuft die Schlange auf der anderen Seite weiter, statt zu
-  sterben — bewusst gnädiger als das Original, weil es sich flüssiger
-  spielt und den einzigen echten Fehler (in sich selbst laufen) klarer macht.
-- Der Kopf darf auf das Feld ziehen, das der Schwanz im selben Schritt
-  freigibt. Deshalb wird in `feldWechseln` erst gekürzt und dann auf
-  Kollision geprüft — andersherum stirbt man bei jeder engen Kurve.
-- Richtungswechsel werden gepuffert (`gepuffert`) und erst beim nächsten
-  Feldwechsel gültig; die Gegenrichtung wird verworfen. Geprüft wird gegen
-  die *aktuelle* Richtung, nicht gegen eine schon gepufferte — sonst
-  schluckt eine schnelle Doppeleingabe (rechts, dann hoch) die zweite.
-- Goldstücke erscheinen alle `GOLD_JE_FUTTER` Futter, geben Zusatzpunkte und
-  verschwinden nach `GOLD_DAUER_SCHRITTE` Schritten wieder. Immer nur eines
-  gleichzeitig, sonst häufen sie sich bei schnellem Spiel.
-- `freiesFeld` zählt erst alle freien Felder und wählt dann eines, statt
-  blind zu würfeln und bei Treffern zu wiederholen — begrenzter Aufwand auch
-  bei fast vollem Feld, und für eine gegebene Saat immer dasselbe Ergebnis.
-- Das Brett ist **ein SVG**, keine 289 Kacheln. Die Schlange bestand vorher
-  aus einzelnen Kacheln mit einer Fuge dazwischen — sie konnten sich also
-  gar nicht berühren, und übrig blieb ein grüner Streifen. Jetzt ist der
-  Körper ein durchgehender Linienzug aus vier Schichten (Schatten, dunkle
-  Kante, Fläche, helle Lichtkante leicht nach oben versetzt); die Kurven
-  entstehen von selbst durch `stroke-linejoin="round"`, es braucht keine
-  Eckvarianten. Dazu Querringe auf den geraden Gliedern, ein Kopf mit zwei
-  Augen und Zunge, ein spitz auslaufender Schwanz. Ronni hat die Machart aus
-  vier gerenderten Varianten ausgewählt.
-- `geometrie.ts` trägt den kniffligen Teil: `versatz` rechnet einen
-  Rand-Umschlag als **einen** Schritt (16 → 0 ist +1, nicht −16), `laeufe`
-  zerlegt die Kette an Umschlägen in Teilstücke. Ohne das malt ein einziger
-  Pfad beim Tunneln quer über das ganze Feld. 17 Tests dazu.
-- **Zeichenreihenfolge beachten:** erst alle dunklen Kanten, dann alle
-  Flächen. Zeichnet man den Schwanz stückweise fertig, malt dessen schmale
-  Kante einen sichtbaren Ring quer über den breiten Körper.
-- Das Goldstück ist ein **Stern**, der Apfel ein Kreis. Vorher waren beide
-  Kreise und nur an der Farbe zu unterscheiden — das verstieß gegen die
-  Regel, dass Farbe nie das einzige Merkmal sein darf.
-- Die Keyframes `schlange-zuengelt` und `schlange-schluckt` enden bei 100 %
-  im Ruhezustand. `.ruhig` kürzt nur die Dauer, das Element bleibt auf dem
-  Schlussbild stehen — stünde die Zunge dort draußen, hinge sie bei
-  „weniger Bewegung" dauerhaft heraus. Zusätzlich setzt die Anzeige die
-  Klassen bei `reducedMotion` gar nicht erst.
+Die Bestandsaufnahme über alle Spiele ergab: ein sauberes, aber **flaches** Snake. Ein einziger,
+immer gleicher Platz; die ersten zwanzig Sekunden sahen aus wie die letzten, und der einzige echte
+Fehler war, sich selbst zu berühren. Dazu zwei Fehler, die niemand gemeldet hatte (siehe unten).
+Jetzt besteht eine Runde aus **Etappen**, dazu Serie und drei Extras. Das Schlangen-Prinzip und die
+Optik (ein durchgehender Körper aus einem Linienzug, Ronnis Auswahl) sind unverändert.
+
+### Etappen und Arenen
+
+- **Sieben Äpfel je Etappe**, danach kommt eine **neue Arena**: Felsen (`felsenErzeugen`) und
+  abwechselnd ein **offener** Rand (man kommt auf der anderen Seite heraus) oder eine **Mauer**
+  (der Rand ist tödlich; ungerade Etappen ab der dritten). Mauer-Etappen bekommen weniger Felsen — der
+  Rand ist dort schon Hindernis genug (`etappenPlan`).
+- **Nach jeder Etappe wirft die Schlange die Hälfte ihres Zuwachses ab** (`startLaengeNach`, gedeckelt
+  bei neun) und startet frisch in der mittleren Reihe, Kopf in der Mitte, Blick nach rechts. Der Platz
+  wird so nie zum Gedränge, und die Schwierigkeit kommt aus Arena und Tempo statt aus der Länge.
+  Neun, weil genau so viele Glieder links vom Kopf in die Reihe passen.
+- **Tempo:** Jede Etappe beginnt etwas schneller (`taktStart`, 0,01 s je Etappe), jeder Apfel
+  beschleunigt weiter, Untergrenze 0,08 s wie bisher. Das Tempo des Spiels ist damit eine Funktion
+  von Etappe und Äpfeln, nicht mehr nur von der Zahl der Äpfel — nach einer Etappe gibt es also
+  einen kleinen Atemzug, keinen glatten Dauerlauf.
+- **Jede Arena ist bewiesen befahrbar** (`arenaGueltig`): Alle freien Felder hängen zusammen, und
+  **kein freies Feld hat weniger als zwei freie Nachbarn**. Das Zweite ist der eigentliche Punkt:
+  Eine Schlange kann nicht umdrehen, ein Feld mit nur einem Ausgang ist für sie also der Tod — und
+  ein Apfel darin eine Falle statt einer Aufgabe. Der Erzeuger setzt Bausteine (Einzelfelsen, Paare,
+  Balken, Winkel) und verwirft jeden, der die Arena ungültig machen würde. Die Startreihe bleibt
+  immer frei. Ein Test über 30 Etappen mal 40 Saaten hält das fest.
+- **Der wichtigste Test ist ein vorsichtiger Spieler.** Er nimmt den kürzesten Weg zum Apfel, aber
+  nur über Züge, nach denen noch genug freie Fläche bleibt. Er kommt durch zehn Etappen in dreißig
+  verschiedenen Spielen, ohne zu sterben — wo er stürbe, wäre die Arena unfair. Er rechnet über
+  Indizes und Nachbartabellen, nicht über Zeichenketten: Die erste Fassung brauchte 15 Sekunden,
+  diese unter 3.
+- **Die Uhr steht, solange die Etappe gefeiert wird** (`etappeGeschafft`). Das Schild sagt, was
+  kommt — „Als Nächstes: tödlicher Rand!" —, weil man eine Mauer vorher wissen will. Der Wechsel
+  selbst ist ein Zeitgeber in der Anzeige (`FEIER_MS`), die Logik kennt keine Uhr.
+
+### Serie, Extras, Eingabe
+
+- **Serie (Kombo).** Ein Apfel zählt für die Serie, wenn er innerhalb von „kürzester Weg + 6
+  Schritte" gegessen wird; sonst fängt sie bei eins an (den Apfel gibt es trotzdem). **Der Weg wird
+  über Felsen und, wenn der Rand offen ist, über den Rand gerechnet** (`wegLaenge`), nicht als
+  Luftlinie: Ein Apfel hinter einer Felswand würde sonst jede Serie zerreißen, ohne dass man etwas
+  falsch gemacht hätte. Der Faktor wächst bis ×5; **die Serie selbst hört dort auf zu zählen**, weil
+  das Herz in der Anzeige (`Komboherz`) diese Zahl zeigt — „×7" neben einem Faktor von höchstens
+  fünf wäre gelogen (das hat die erste Fassung gezeigt). Ein Test lässt den vorsichtigen Spieler
+  laufen und verlangt, dass er die Serie in weniger als zehn Prozent der Fälle verliert.
+- **Drei Extras, nie mehr als eines gleichzeitig**, alle drei Äpfel eines (`EXTRA_JE_FUTTER`), je 45
+  Schritte lang liegen: **Gold** (+50), **Zeitlupe** (16 Schritte lang dauert jedes Feld das 1,7-fache,
+  +20) und **Schere** (schneidet vier Glieder ab, nie unter die Startlänge, +20). Die Schere erscheint
+  nur, wenn die Schlange lang genug ist, dass sie etwas bringt. Jedes Extra hat eine **eigene
+  Silhouette** (Stern, Scheibe mit Zeigern, Scheibe mit gekreuzten Klingen); ein weißer Ring um das
+  Extra schrumpft mit der Restzeit. Kein Blinken: Ein ablaufender Ring ist ruhiger und braucht keine
+  Dauerpuls-Grenze zu respektieren.
+- **Zwei Richtungen werden vorgemerkt**, nicht eine (`MAX_PUFFER`). Mit einem Platz ging jede
+  schnelle Doppelkurve verloren („hoch, dann links" um eine Ecke): Die zweite Eingabe überschrieb die
+  erste, und die Schlange fuhr geradeaus weiter. Bei zwölf Feldern je Sekunde ist das der häufigste
+  Grund, warum sich Snake auf dem Handy „unpräzise" anfühlt. Geprüft wird gegen die **zuletzt
+  vorgemerkte** Richtung, nicht gegen die aktuelle: aus „rechts, hoch" ist „links" erlaubt.
+- **Ein langer oder schneller Wisch nach unten kam nie an** — und das ohne Meldung. `useInput` macht
+  daraus standardmäßig `drop`, und das kennt Snake Rush nicht. Dieselbe Falle wie bei Dash City, nur
+  nie gemerkt, weil kurze Wische und die Pfeiltasten funktionierten. `wurf: 'down'` behebt es und
+  nimmt der Leertaste nebenbei die Bedeutung. Wischen gilt außerdem auf der ganzen Bühne.
+
+### Zwei Fehler, die schon vorher drin waren
+
+- **Der Kopf sprang bei jedem Apfel weg.** Die Schluck-Animation skaliert über die einzelne
+  CSS-Eigenschaft `scale`, und die wird in der Transformationskette **vor** dem `transform`-Attribut
+  angewandt. Standen beide am selben `<g>`, skalierte die Animation um den Ursprung der viewBox
+  statt um den Kopf: Für 0,2 Sekunden saß er um ein Fünftel seiner Entfernung zur oberen linken Ecke
+  verschoben — bis zu drei Felder vom Körper entfernt. Das fiel nie auf, weil der Kopf danach wieder
+  stimmt. Nachgemessen: 258 → 313 Pixel in einem Testbild. Jetzt sitzt die Platzierung auf einem
+  äußeren `<g>`, die Animation auf einem inneren. *Merksatz:* Bei SVG nie `scale` (oder `rotate`,
+  `translate`) als einzelne Eigenschaft und `transform` als Attribut auf **demselben** Element
+  mischen.
+- **Das Goldstück wanderte beim Pulsieren.** Ein eigener `transform-origin` in Pixeln, zusammen mit
+  `transform-box: fill-box` aus der Klasse, bezog sich auf die obere linke Ecke des Sterns statt auf
+  den Mittelpunkt. Der Ursprung kommt jetzt aus der Klasse.
+
+### Was geblieben ist
+
+- `logik.ts`: Bewegung läuft über `zeitFortschritt(z, dt)` — die Zeit wird angesammelt, bis ein
+  voller Takt (`wirksamerTakt`, in der Zeitlupe länger) zusammen ist, dann geht es ein Feld weiter.
+  Tempo unabhängig von der Bildrate. Die Schleife holt mehrere fällige Takte nach und hört **mitten
+  im Nachholen** auf, wenn die Etappe geschafft ist — sonst fährt die Schlange nach dem letzten Apfel
+  noch einen Schritt in die alte Arena.
+- Der Kopf darf auf das Feld ziehen, das der Schwanz im selben Schritt freigibt (`feldWechseln` kürzt
+  erst, prüft dann). Andersherum stirbt man bei jeder engen Kurve.
+- `freiesFeld` zählt erst alle freien Felder und wählt dann eines, statt blind zu würfeln. Neue
+  Äpfel erscheinen nicht innerhalb von zwei Schritten um den Kopf (`naeheKopf`) — außer dort ist alles
+  voll.
+- Das Brett ist **ein SVG**, keine 289 Kacheln: Der Körper ist ein durchgehender Linienzug aus vier
+  Schichten (Schatten, dunkle Kante, Fläche, helle Lichtkante). `geometrie.ts` zerlegt die Kette an
+  Rand-Umschlägen in Läufe (`versatz`: 16 → 0 ist **ein** Schritt). **Erst alle dunklen Kanten, dann
+  alle Flächen** — sonst malt der Schwanz einen Ring quer über den Körper.
+- **Form, nicht nur Farbe:** Apfel = Kreis, Gold = Stern, Zeitlupe und Schere = Scheibe mit je eigenem
+  Zeichen, Fels = kantig. Der Rand ist **ein anderes Bild**, nicht eine andere Farbe: Mauer = rot-gelb
+  gestreiftes Warnband, offen = feine gepunktete Linie; dazu steht „Mauer-Rand" / „Offener Rand" als
+  Wort in der Kopfzeile. Die Äpfel einer Etappe sind sieben Punkte, gefüllt oder leer.
+- Die Keyframes `schlange-zuengelt` und `schlange-schluckt` enden bei 100 % im Ruhezustand (`.ruhig`
+  kürzt nur die Dauer); bei „weniger Bewegung" werden die Klassen gar nicht erst gesetzt.
+- Nicht duellfähig: Der Zufall hängt an der Runde, nicht an einer Levelnummer.
+- **Prüfhaken nur für Bildschirmfotos** (auf einem echten Gerät nie gesetzt): `__schlangeStart =
+  { etappe }` beginnt in einer späteren Etappe, und solange er gesetzt ist, liefert
+  `__schlangeStand()` den laufenden Zustand — damit lässt sich das Spiel von außen mit echten Tasten
+  und Touch-Ereignissen spielen.
 
 ## Merge Up — Besonderheiten
 
