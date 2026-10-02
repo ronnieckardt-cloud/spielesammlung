@@ -16,6 +16,12 @@ import { rng, saatAus } from '../../core/rng';
  * das Zurückdrehen nach einem Fehlgriff — und auch das ist hier nur ein
  * Zustandswechsel (`schliessen`), den die Anzeige nach ihrer Wartezeit
  * auslöst. Die Logik selbst kennt keine Uhr.
+ *
+ * Darüber liegen drei Entscheidungen, die aus einer Gedächtnisprobe ein Spiel
+ * machen: die **Serie** (Paare ohne Fehlgriff dazwischen bringen Zuschlag),
+ * der **Blick** (ein Joker: eine Zeile kurz aufdecken — kostet Punkte) und der
+ * **Wirbel** (ab Level 9 mischt jeder n-te Fehlgriff die verdeckten Karten
+ * neu — dann gilt das Gelernte nicht mehr).
  */
 
 /** So viele verschiedene Motive gibt es (siehe `motive.tsx`). */
@@ -44,7 +50,59 @@ export type Zustand = {
   vorbei: boolean;
   /** Alle Paare gefunden. `vorbei` ohne `gewonnen` heißt: Züge aufgebraucht. */
   gewonnen: boolean;
+  /** Paare in Folge ohne Fehlgriff dazwischen. */
+  serie: number;
+  /** Summe der Serien-Zuschläge — in `punkte` schon enthalten, hier getrennt für Tests und Anzeige. */
+  bonus: number;
+  /** Wie viele Blicke noch im Vorrat sind. */
+  blick: number;
+  /**
+   * Welche Zeile gerade im Blick liegt (`null` = keiner). Die Anzeige deckt sie dann auf und ruft nach
+   * ihrer Wartezeit `blickEnde`.
+   */
+  blickZeile: number | null;
+  /** Wie viele Blicke in dieser Runde genommen wurden — jeder kostet `BLICK_KOSTEN` Punkte. */
+  blicke: number;
+  /** Fehlgriffe seit dem letzten Wirbel. */
+  fehlerSeitWirbel: number;
+  /** Der Fehlgriff, der gerade offen liegt, löst beim Zudecken einen Wirbel aus. */
+  wirbelFaellig: boolean;
+  /** Wie oft schon gewirbelt wurde — die Saat des nächsten Wirbels. */
+  wirbel: number;
 };
+
+/** Ab diesem Level gibt es den Blick. Darunter (drei und vier Paare) gäbe es nichts zu merken. */
+export const BLICK_AB_LEVEL = 3;
+export const START_BLICK = 1;
+/** Mehr als zwei auf Vorrat würden aus dem Blick ein Dauermittel machen. */
+export const MAX_BLICK = 2;
+/** Jedes dritte Paar in Folge bringt einen Blick. */
+export const BLICK_ALLE_SERIE = 3;
+/** Was ein Blick kostet: zwei Fehlgriffe. Eine Zahl, die man sich merken kann — und die ihn zu einer Wahl macht. */
+export const BLICK_KOSTEN = 24;
+
+/** Der Zuschlag für das `serie`-te Paar in Folge: 0, 15, 30, danach 45. */
+export function serieBonus(serie: number): number {
+  return Math.min(3, Math.max(0, Math.floor(serie) - 1)) * 15;
+}
+
+/** Ab diesem Level (5×4 Karten) wird gewirbelt. */
+export const WIRBEL_AB_LEVEL = 9;
+
+/**
+ * Nach wie vielen Fehlgriffen gewirbelt wird, `null` = nie. Sechs, ab Level 13 fünf.
+ *
+ * **Gemessen, nicht geschätzt.** Mit „alle vier / alle drei" (die erste Fassung) kam ein Spieler, der
+ * nichts vergisst außer durch den Wirbel, auf den großen Feldern nie ans Ziel: Jeder Wirbel löscht sein
+ * Wissen, blindes Aufdecken führt fast immer zum nächsten Fehlgriff, und der nächste Wirbel folgt nach
+ * drei Zügen — eine Spirale, aus der es keinen Ausweg gab (60 Züge Grenze, 97 gebraucht). Bei sechs und
+ * fünf spürt der perfekte Spieler den Wirbel (auf 15 Paaren rund 2 bis 4 je Runde), kommt aber durch; wer
+ * viele Fehlgriffe macht, wirbelt öfter — genau das ist die Strafe.
+ */
+export function wirbelAlle(level: number): number | null {
+  if (level < WIRBEL_AB_LEVEL) return null;
+  return level < 13 ? 6 : 5;
+}
 
 /**
  * Feldgröße je Level. Wächst in festen Stufen und ist bei 6×5 gedeckelt —
@@ -117,11 +175,11 @@ export function zugGrenzeFuerLevel(level: number): number | null {
  * dazukommen) und sinkt bei jedem Fehlgriff um 12. Am Ende, wenn alle Paare
  * liegen, kommt genau derselbe Wert heraus wie vorher auch.
  */
-export function punkteFuerZuege(paare: number, zuege: number): number {
+export function punkteFuerZuege(paare: number, zuege: number, blicke = 0): number {
   const hoechstwert = paare * 100;
   const sockel = paare * 20;
   const zuviel = Math.max(0, zuege - paare);
-  return Math.max(sockel, hoechstwert - zuviel * 12);
+  return Math.max(sockel, hoechstwert - zuviel * 12 - blicke * BLICK_KOSTEN);
 }
 
 export function neuesSpiel(level: number): Zustand {
@@ -151,6 +209,14 @@ export function neuesSpiel(level: number): Zustand {
     punkte: 0,
     vorbei: false,
     gewonnen: false,
+    serie: 0,
+    bonus: 0,
+    blick: stufe >= BLICK_AB_LEVEL ? START_BLICK : 0,
+    blickZeile: null,
+    blicke: 0,
+    fehlerSeitWirbel: 0,
+    wirbelFaellig: false,
+    wirbel: 0,
   };
 }
 
@@ -163,7 +229,7 @@ export function neuesSpiel(level: number): Zustand {
  * verbrauchen.
  */
 export function aufdecken(z: Zustand, position: number): Zustand {
-  if (z.vorbei || z.offen.length >= 2) return z;
+  if (z.vorbei || z.blickZeile !== null || z.offen.length >= 2) return z;
   const karte = z.karten[position];
   if (!karte || karte.gefunden || z.offen.includes(position)) return z;
 
@@ -183,6 +249,25 @@ export function aufdecken(z: Zustand, position: number): Zustand {
   // Ein Sieg mit dem allerletzten erlaubten Zug bleibt ein Sieg.
   const aufgebraucht = !gewonnen && z.zugGrenze !== null && zuege >= z.zugGrenze;
 
+  // Serie: Ein Treffer verlängert sie und bringt den Zuschlag, ein Fehlgriff reißt sie ab. Jede dritte
+  // Folge schenkt einen Blick (nie über den Vorrat hinaus).
+  const serie = treffer ? z.serie + 1 : 0;
+  const bonus = z.bonus + (treffer ? serieBonus(serie) : 0);
+  const blick =
+    treffer && serie % BLICK_ALLE_SERIE === 0 && z.level >= BLICK_AB_LEVEL ? Math.min(MAX_BLICK, z.blick + 1) : z.blick;
+
+  // Wirbel: Der n-te Fehlgriff seit dem letzten löst beim Zudecken einen aus.
+  const alle = wirbelAlle(z.level);
+  let fehlerSeitWirbel = z.fehlerSeitWirbel;
+  let wirbelFaellig = false;
+  if (!treffer && alle !== null) {
+    fehlerSeitWirbel += 1;
+    if (fehlerSeitWirbel >= alle) {
+      wirbelFaellig = true;
+      fehlerSeitWirbel = 0;
+    }
+  }
+
   return {
     ...z,
     karten,
@@ -193,17 +278,97 @@ export function aufdecken(z: Zustand, position: number): Zustand {
     zuege,
     vorbei: gewonnen || aufgebraucht,
     gewonnen,
+    serie,
+    bonus,
+    blick,
+    fehlerSeitWirbel,
+    wirbelFaellig,
     // Läuft mit, statt erst am Schluss zu springen — sonst stand die ganze
     // Runde über eine 0 in der Kopfzeile und es gab keinerlei Rückmeldung
-    // darauf, ob ein Zug gut war. Der Endwert bleibt derselbe wie vorher.
-    punkte: punkteFuerZuege(gefunden, zuege),
+    // darauf, ob ein Zug gut war. Ohne Serie und Blick ist der Endwert derselbe wie früher.
+    punkte: punkteFuerZuege(gefunden, zuege, z.blicke) + bonus,
   };
 }
 
-/** Nach einem Fehlgriff wieder zudecken — von der Anzeige zeitverzögert gerufen. */
+/**
+ * Nach einem Fehlgriff wieder zudecken — von der Anzeige zeitverzögert gerufen.
+ *
+ * Hier, **nach** dem Zudecken, passiert auch der Wirbel: Alle verdeckten Karten tauschen ihre Motive
+ * untereinander. Gefundene Paare bleiben, wo sie liegen. Die Saat kommt aus Level und Wirbelzahl —
+ * dieselbe Runde, gespielt von zwei Personen mit denselben Fehlgriffen, wirbelt gleich (Duell).
+ */
 export function schliessen(z: Zustand): Zustand {
   if (z.offen.length === 0) return z;
-  return { ...z, offen: [], fehlgriff: false };
+  const zu: Zustand = { ...z, offen: [], fehlgriff: false };
+  if (!z.wirbelFaellig) return zu;
+  return { ...zu, karten: wirbeln(zu), wirbelFaellig: false, wirbel: z.wirbel + 1 };
+}
+
+/** Die verdeckten Karten neu verteilen. Bei höchstens zwei übrigen gibt es nichts zu mischen. */
+function wirbeln(z: Zustand): readonly Karte[] {
+  const plaetze = z.karten.flatMap((k, i) => (k.gefunden ? [] : [i]));
+  if (plaetze.length <= 2) return z.karten;
+  const motive = plaetze.map((i) => z.karten[i]!.motiv);
+  let neu = rng(saatAus('paare', 'wirbel', z.level, z.wirbel)).mischen(motive);
+  // Ein Wirbel, bei dem alles liegen bleibt, wäre keiner — dann eine Stelle weiterschieben.
+  if (neu.every((m, i) => m === motive[i])) neu = [...motive.slice(1), motive[0]!];
+  const karten = [...z.karten];
+  plaetze.forEach((platz, k) => {
+    karten[platz] = { ...karten[platz]!, motiv: neu[k]! };
+  });
+  return karten;
+}
+
+/** Wie viele Fehlgriffe noch bis zum nächsten Wirbel — `null`, wenn es auf diesem Level keinen gibt. */
+export function fehlerBisWirbel(z: Zustand): number | null {
+  const alle = wirbelAlle(z.level);
+  return alle === null ? null : alle - z.fehlerSeitWirbel;
+}
+
+/** Kann man jetzt einen Blick nehmen? Nicht, solange Karten offen liegen, und nicht, wenn nichts mehr zu merken ist. */
+export function blickMoeglich(z: Zustand): boolean {
+  if (z.vorbei || z.blickZeile !== null || z.fehlgriff || z.offen.length > 0 || z.blick <= 0) return false;
+  // Bei einem letzten Paar gäbe es nichts zu sehen, was man nicht ohnehin wüsste.
+  return z.karten.length / 2 - gefundenePaare(z) >= 2;
+}
+
+/** Welche Karten eine Zeile enthält — die Positionen, nicht die Motive. */
+export function karteInZeile(z: Zustand, zeile: number): number[] {
+  const von = zeile * z.spalten;
+  return z.karten.map((_, i) => i).filter((i) => i >= von && i < von + z.spalten);
+}
+
+/** Lohnt der Blick auf diese Zeile? Mindestens zwei noch verdeckte Karten müssen darin liegen. */
+export function zeileBlickbar(z: Zustand, zeile: number): boolean {
+  return karteInZeile(z, zeile).filter((i) => !z.karten[i]!.gefunden).length >= 2;
+}
+
+/**
+ * Der Blick: Die Anzeige deckt **eine Zeile** kurz auf, die man selbst wählt. Er kostet einen Blick aus dem
+ * Vorrat und `BLICK_KOSTEN` Punkte — und er unterbricht die Serie nicht.
+ *
+ * Eine Zeile, nicht das ganze Feld: Ein Blick auf alle Karten ließe jedes Level fehlerfrei durchspielen und
+ * machte aus einem Gedächtnisspiel ein Abschreiben — gemessen mit einem Spieler, der nichts vergisst, kam er
+ * auf jedem Level mit genau so vielen Zügen wie Paaren durch. Mit einer Zeile ist es eine Wahl: **wohin**
+ * man schaut und **wann**.
+ *
+ * Solange er läuft, bleiben alle Berührungen wirkungslos (`aufdecken`), sonst ließe sich im Blick spielen.
+ */
+export function blickNutzen(z: Zustand, zeile: number): Zustand {
+  if (!blickMoeglich(z) || !zeileBlickbar(z, zeile)) return z;
+  const blicke = z.blicke + 1;
+  return {
+    ...z,
+    blick: z.blick - 1,
+    blicke,
+    blickZeile: zeile,
+    punkte: punkteFuerZuege(gefundenePaare(z), z.zuege, blicke) + z.bonus,
+  };
+}
+
+/** Der Blick ist vorbei — von der Anzeige nach ihrer Wartezeit gerufen. */
+export function blickEnde(z: Zustand): Zustand {
+  return z.blickZeile !== null ? { ...z, blickZeile: null } : z;
 }
 
 /** Wie viele Paare schon liegen — nur für die Anzeige. */

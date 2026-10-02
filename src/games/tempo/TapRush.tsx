@@ -11,13 +11,16 @@ import type { GameProps } from '../../core/types';
 import {
   DAUERN,
   bewertung,
+  neuerRekord,
   neuesSpiel,
   punkte,
+  rekordTipps,
   rest,
   stufeFuerTempo,
   takt,
   tempo,
   tippen,
+  vorsprung,
 } from './logik';
 import type { Stufe, Zustand } from './logik';
 import { TempoIcon } from './Icon';
@@ -222,6 +225,9 @@ export function TapRush({ onScore, onGameOver, settings, bestScore, istErsteRund
 
   const jetzt = tempo(z);
   const stufe = stufeFuerTempo(jetzt);
+  const marke = rekordTipps(bestScore, z.dauer);
+  const vorn = vorsprung(z, bestScore);
+  const rekord = z.vorbei && neuerRekord(z.tipps, z.dauer, bestScore);
   const restZeit = rest(z);
   const anteil = z.dauer > 0 ? restZeit / z.dauer : 0;
 
@@ -257,7 +263,9 @@ export function TapRush({ onScore, onGameOver, settings, bestScore, istErsteRund
         // Fokusrahmen kommt nur über `:focus-visible`.
         autoFocus
         disabled={z.vorbei}
-        aria-label={`Zum Tippen, mit der Tastatur die Leertaste. ${z.tipps} Tipps, ${jetzt.toFixed(1)} pro Sekunde.`}
+        aria-label={`Zum Tippen, mit der Tastatur die Leertaste. ${z.tipps} Tipps, ${jetzt.toFixed(1)} pro Sekunde.${
+          marke > 0 && z.laeuft ? ` ${Math.abs(vorn)} Tipps ${vorn >= 0 ? 'vor' : 'hinter'} dem Rekord-Tempo.` : ''
+        }`}
         className={`spielbrett-rahmen relative flex min-h-0 flex-1 touch-none flex-col items-center justify-center gap-2 select-none ${
           stufe === 'regenbogen' ? 'tempo-regenbogen' : ''
         }`}
@@ -287,8 +295,22 @@ export function TapRush({ onScore, onGameOver, settings, bestScore, istErsteRund
           {z.tipps}
         </span>
         <span className="text-lg font-black text-white/90">
-          {z.vorbei ? bewertung(stufe) : z.laeuft ? STUFENTEXT[stufe] : 'Tippen!'}
+          {rekord ? 'Neuer Rekord!' : z.vorbei ? bewertung(stufe) : z.laeuft ? STUFENTEXT[stufe] : 'Tippen!'}
         </span>
+        {/* Das Rekord-Tempo: Wer vorn liegt, sieht ▲, wer zurückliegt, ▼ — Pfeil und Zahl, nicht nur ein
+            Farbton (der Grund wechselt ohnehin die Farbe). Der Kasten ist dunkel unterlegt, weil
+            der Grund von Rot bis Hellblau und Regenbogen reicht und Text darauf sonst verschwände.
+            Vor dem ersten Tipp steht dort, was zu schlagen ist. */}
+        {marke > 0 && !z.vorbei && (
+          <span
+            className="rounded-full bg-black/40 px-3 py-1 text-sm font-bold text-white tabular-nums"
+            aria-live="off"
+          >
+            {z.laeuft
+              ? `${vorn >= 0 ? '▲ +' : '▼ −'}${Math.abs(vorn)} zum Rekord-Tempo`
+              : `Rekord: ${marke} Tipps in ${z.dauer} s`}
+          </span>
+        )}
         {/* Der Punktestand steht klein dabei — er ist nicht dasselbe wie die
             Tippzahl, und wer das nicht sieht, wundert sich am Rundenende. */}
         {z.laeuft && (

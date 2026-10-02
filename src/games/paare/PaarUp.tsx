@@ -1,17 +1,49 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { haptik } from '../../core/haptik';
+import { Komboherz } from '../../core/Komboherz';
 import { levelstand } from '../../core/levelstand';
 import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import { sfx } from '../../core/sfx';
 import type { GameProps } from '../../core/types';
-import { aufdecken, gefundenePaare, neuesSpiel, schliessen } from './logik';
+import {
+  BLICK_KOSTEN,
+  aufdecken,
+  blickEnde,
+  blickMoeglich,
+  blickNutzen,
+  fehlerBisWirbel,
+  gefundenePaare,
+  neuesSpiel,
+  schliessen,
+  zeileBlickbar,
+} from './logik';
 import type { Zustand } from './logik';
 import { MOTIVE, MotivBild } from './motive';
 import { PaarUpIcon } from './Icon';
 
 /** Wie lange ein Fehlgriff offen liegen bleibt, bevor er zugedeckt wird. */
 const ZUDECKEN_MS = 900;
+
+/** Wie lange eine Zeile im Blick aufgedeckt bleibt. Länger als ein Fehlgriff: Es sind mehr Karten zu merken. */
+const BLICK_MS = 2000;
+
+/** Wie lange die Karten nach einem Wirbel durcheinanderwackeln, und wie lange die Meldung steht. */
+const WIRBEL_MS = 800;
+const MELDUNG_MS = 1600;
+
+/** Ein Schild über dem Brett. */
+type Meldung = { id: number; text: string };
+
+/** Ein Auge — für den Blick-Knopf. Pfad statt Emoji, wie bei allen Symbolen hier. */
+function AugenSymbol() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
 
 /**
  * Welche Levelnummer als Nächstes drankommt.
@@ -133,15 +165,42 @@ export function PaarUp({
   };
   const [gestartet, setGestartet] = useState(!istErsteRunde);
   const [z, setZ] = useState<Zustand>(() => neuesSpiel(festesLevel ?? levelStand.anfang(startLevel)));
-
-  const beiKarte = useCallback((position: number) => {
-    setZ((alt) => aufdecken(alt, position));
+  // `true`, solange man den Blick-Knopf angetippt hat und eine Zeile wählen soll — dann deckt ein Antippen
+  // nicht eine Karte auf, sondern schaut in ihre Zeile (derselbe Modus wie der Hammer in Merge Up).
+  const [blickWahl, setBlickWahl] = useState(false);
+  const [wirbelt, setWirbelt] = useState(false);
+  const [meldung, setMeldung] = useState<Meldung | null>(null);
+  const meldungIdRef = useRef(0);
+  const melden = useCallback((text: string) => {
+    meldungIdRef.current += 1;
+    setMeldung({ id: meldungIdRef.current, text });
   }, []);
+
+  const beiKarte = useCallback(
+    (position: number) => {
+      if (blickWahl) {
+        const zeile = Math.floor(position / z.spalten);
+        const neu = blickNutzen(z, zeile);
+        if (neu === z) {
+          sfx('schlecht');
+          return;
+        }
+        setBlickWahl(false);
+        setZ(neu);
+        sfx('klick', 6);
+        return;
+      }
+      setZ((alt) => aufdecken(alt, position));
+    },
+    [blickWahl, z],
+  );
 
   // Merker für den Ton-Effekt weiter unten. Sie stehen hier oben, weil der
   // Levelwechsel sie mit zurücksetzen muss.
   const vorZuegenRef = useRef(z.zuege);
   const vorPaarenRef = useRef(0);
+  const vorBlickRef = useRef(z.blick);
+  const vorWirbelRef = useRef(z.wirbel);
 
   const beiLevelWechsel = useCallback(
     (level: number) => {
@@ -156,7 +215,13 @@ export function PaarUp({
       // man sich vertippt, obwohl man nur weitergeblättert hat.
       vorZuegenRef.current = 0;
       vorPaarenRef.current = 0;
-      setZ(neuesSpiel(ziel));
+      const neu = neuesSpiel(ziel);
+      // Auch die Merker für Blick und Wirbel: Sonst sähe der Effekt unten im neuen Feld einen „verdienten" Blick.
+      vorBlickRef.current = neu.blick;
+      vorWirbelRef.current = neu.wirbel;
+      setBlickWahl(false);
+      setMeldung(null);
+      setZ(neu);
     },
     [festesLevel],
   );
@@ -169,6 +234,50 @@ export function PaarUp({
     const uhr = window.setTimeout(() => setZ(schliessen), ZUDECKEN_MS);
     return () => window.clearTimeout(uhr);
   }, [z.fehlgriff, z.zuege]);
+
+  // Der Blick endet nach seiner Wartezeit von selbst — die Logik kennt keine Uhr, sie merkt sich nur, welche
+  // Zeile gerade aufgedeckt ist.
+  useEffect(() => {
+    if (z.blickZeile === null) return;
+    const uhr = window.setTimeout(() => setZ(blickEnde), BLICK_MS);
+    return () => window.clearTimeout(uhr);
+  }, [z.blickZeile]);
+
+  // Einen Blick verdient, einen Wirbel erlebt: Beides ist ein Ereignis, das man bemerken muss.
+  useEffect(() => {
+    if (z.blick > vorBlickRef.current) {
+      melden('Blick verdient!');
+      sfx('stufe');
+    }
+    vorBlickRef.current = z.blick;
+  }, [z.blick, melden]);
+
+  useEffect(() => {
+    if (z.wirbel > vorWirbelRef.current) {
+      setWirbelt(true);
+      melden('Wirbel! Alle verdeckten Karten haben getauscht.');
+      sfx('schlecht');
+      haptik('fehler');
+    }
+    vorWirbelRef.current = z.wirbel;
+  }, [z.wirbel, melden]);
+
+  useEffect(() => {
+    if (!wirbelt) return;
+    const uhr = window.setTimeout(() => setWirbelt(false), WIRBEL_MS);
+    return () => window.clearTimeout(uhr);
+  }, [wirbelt]);
+
+  useEffect(() => {
+    if (!meldung) return;
+    const uhr = window.setTimeout(() => setMeldung((alt) => (alt?.id === meldung.id ? null : alt)), MELDUNG_MS);
+    return () => window.clearTimeout(uhr);
+  }, [meldung]);
+
+  // Nach dem Ende oder wenn kein Blick mehr geht, ist der Wahlmodus sinnlos.
+  useEffect(() => {
+    if (blickWahl && (z.vorbei || z.blick <= 0 || z.fehlgriff)) setBlickWahl(false);
+  }, [blickWahl, z.vorbei, z.blick, z.fehlgriff]);
 
   useEffect(() => {
     onScore(z.punkte);
@@ -225,14 +334,23 @@ export function PaarUp({
           (4xl/5xl statt 5xl/6xl): Hier steht darunter noch die Zeile mit
           Level, Paaren und Zügen, und die Karten sind hochkant — der Platz
           über dem Brett ist knapper als in den beiden anderen Spielen. */}
-      <output
-        aria-live="off"
-        key={z.punkte}
-        className="punkte-bumsen text-4xl font-black tabular-nums text-text sm:text-5xl"
-        style={{ textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
-      >
-        {z.punkte}
-      </output>
+      <div className="relative flex w-full max-w-md items-center justify-center">
+        <output
+          aria-live="off"
+          key={z.punkte}
+          className="punkte-bumsen text-4xl font-black tabular-nums text-text sm:text-5xl"
+          style={{ textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
+        >
+          {z.punkte}
+        </output>
+        {/* Das Herz wächst mit der Serie. Es liegt neben der Zahl und kostet keine Höhe. */}
+        <Komboherz
+          kombo={z.serie}
+          ruhig={settings.reducedMotion}
+          beschriftung="Serie"
+          className="absolute -right-2 top-1/2 z-10 -translate-y-1/2"
+        />
+      </div>
 
       <div className="flex w-full max-w-md items-center justify-between text-sm">
         <div className="flex items-center gap-1 font-semibold text-gedaempft">
@@ -280,7 +398,10 @@ export function PaarUp({
           }
         >
           {z.karten.map((karte, i) => {
-            const offen = karte.gefunden || z.offen.includes(i);
+            const imBlick = z.blickZeile !== null && Math.floor(i / z.spalten) === z.blickZeile && !karte.gefunden;
+            const offen = karte.gefunden || z.offen.includes(i) || imBlick;
+            // Beim Wählen der Blick-Zeile: Nur wo er sich lohnt, bekommt die Karte den gestrichelten Rahmen.
+            const zielbar = blickWahl && !karte.gefunden && zeileBlickbar(z, Math.floor(i / z.spalten));
             // Nur die beiden Karten, die gerade nicht zusammenpassen.
             const falsch = z.fehlgriff && z.offen.includes(i);
             const motiv = MOTIVE[karte.motiv]!;
@@ -289,15 +410,20 @@ export function PaarUp({
                 key={i}
                 type="button"
                 onClick={() => beiKarte(i)}
-                disabled={offen || z.offen.length >= 2}
+                disabled={(offen && !imBlick) || z.offen.length >= 2 || z.blickZeile !== null}
                 aria-label={
                   offen
-                    ? `${motiv.name}${karte.gefunden ? ', gefunden' : falsch ? ', passt nicht' : ''}`
-                    : 'Verdeckte Karte'
+                    ? `${motiv.name}${karte.gefunden ? ', gefunden' : falsch ? ', passt nicht' : imBlick ? ', im Blick' : ''}`
+                    : blickWahl
+                      ? `Verdeckte Karte, Zeile ${Math.floor(i / z.spalten) + 1} ansehen`
+                      : 'Verdeckte Karte'
                 }
                 className={`karte-huelle aspect-3/4 min-h-0 w-full ${
                   karte.gefunden ? 'karte-erledigt' : ''
-                } ${falsch ? 'karte-falsch' : ''}`}
+                } ${falsch ? 'karte-falsch' : ''} ${imBlick ? 'karte-blick' : ''} ${zielbar ? 'karte-zielbar' : ''} ${
+                  wirbelt && !karte.gefunden && !settings.reducedMotion ? 'karte-wirbel' : ''
+                }`}
+                style={wirbelt ? ({ '--wirbel-versatz': `${(i % 7) * 40}ms` } as CSSProperties) : undefined}
               >
                 <span className={`karte-dreher ${offen ? 'karte-offen' : ''}`}>
                   {/* Rückseite: das, was man sieht, solange die Karte liegt. */}
@@ -319,12 +445,90 @@ export function PaarUp({
           {/* Gehört ins Brett, nicht in die Bühne: Die Bühne ist der ganze
               freie Platz, das „+N" soll aber über den Karten stehen. */}
           <Punktegewinn gewinn={gewinn} />
+
+          {/* Ein Schild oben im Brett — es nimmt keine Berührung an, der Finger spielt weiter. Beim Wählen der
+              Blick-Zeile bleibt es stehen und sagt, was zu tun ist; sonst zeigt es kurz ein Ereignis. */}
+          {(blickWahl || meldung) && (
+            <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex justify-center" role="status">
+              <p
+                key={blickWahl ? 'wahl' : meldung?.id}
+                className={`${settings.reducedMotion ? '' : 'bubble-meldung '}max-w-full rounded-full border border-white/30 bg-black/75 px-4 py-1.5 text-center text-sm font-bold text-white shadow-xl backdrop-blur-sm`}
+              >
+                {blickWahl ? 'Tippe eine Karte — ihre Zeile wird aufgedeckt.' : meldung?.text}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Unter dem Brett: der Blick (Symbol, Wort und Vorrat) und der Wirbel-Zähler, wo es einen gibt. Beides
+          erscheint erst, wo es etwas bedeutet — auf den kleinen Feldern gäbe es nichts zu merken. */}
+      {(z.blick > 0 || z.blicke > 0 || fehlerBisWirbel(z) !== null) && (
+        <div className="flex w-full max-w-md items-stretch justify-between gap-2 text-gedaempft md:max-w-xl">
+          <button
+            type="button"
+            onClick={() => setBlickWahl((an) => !an)}
+            disabled={!blickWahl && !blickMoeglich(z)}
+            aria-pressed={blickWahl}
+            aria-label={
+              z.blick <= 0
+                ? 'Kein Blick im Vorrat. Man verdient einen mit drei Paaren in Folge.'
+                : blickWahl
+                  ? 'Blick abbrechen'
+                  : `Blick nehmen: Eine Zeile deiner Wahl wird kurz aufgedeckt. Kostet ${BLICK_KOSTEN} Punkte. ${z.blick} im Vorrat.`
+            }
+            className="flex min-h-11 min-w-0 flex-1 touch-manipulation items-center justify-center gap-1.5 rounded-xl border px-2 text-[13px] font-bold transition-[transform,opacity] duration-100 enabled:active:scale-95 disabled:opacity-35"
+            style={
+              blickWahl
+                ? { borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,0.28)', color: '#fff' }
+                : z.blick > 0
+                  ? { borderColor: '#fbbf24', backgroundColor: 'var(--color-flaeche)', color: 'var(--color-text)' }
+                  : { borderColor: 'var(--color-rand)', backgroundColor: 'var(--color-flaeche)', color: 'var(--color-text)' }
+            }
+          >
+            <AugenSymbol />
+            <span>{blickWahl ? 'Abbrechen' : 'Blick'}</span>
+            {!blickWahl && (
+              <span aria-hidden="true" className="rounded-full bg-black/35 px-1.5 text-xs tabular-nums">
+                ×{z.blick}
+              </span>
+            )}
+          </button>
+
+          {fehlerBisWirbel(z) !== null && (
+            <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1">
+              {/* Die Punkte sind die Fehlgriffe bis zum Wirbel: gefüllt gegen leer ist ein Formunterschied. */}
+              <span className={`text-[11px] leading-none font-semibold ${fehlerBisWirbel(z) === 1 ? 'font-bold text-warnung' : ''}`}>
+                {fehlerBisWirbel(z) === 1 ? 'Gleich Wirbel!' : 'Wirbel'}
+              </span>
+              <span
+                role="img"
+                aria-label={`Noch ${fehlerBisWirbel(z)} Fehlgriffe bis zum Wirbel.`}
+                className="flex items-center gap-1"
+              >
+                {Array.from({ length: z.fehlerSeitWirbel + (fehlerBisWirbel(z) ?? 0) }, (_, i) => (
+                  <span
+                    key={i}
+                    aria-hidden="true"
+                    className={`size-1.5 rounded-full ${
+                      i < z.fehlerSeitWirbel
+                        ? fehlerBisWirbel(z) === 1
+                          ? 'bg-warnung'
+                          : 'bg-gedaempft'
+                        : 'border border-gedaempft/70'
+                    }`}
+                  />
+                ))}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       <p className="nur-bei-platz max-w-sm text-center text-xs text-gedaempft">
-        Tippe zwei Karten an. Passen sie zusammen, bleiben sie liegen. Je
-        weniger Züge du brauchst, desto mehr Punkte gibt es.
+        Tippe zwei Karten an. Passen sie zusammen, bleiben sie liegen — und mehrere Paare in Folge bringen
+        Zuschlag. Der Blick deckt eine Zeile kurz auf (kostet {BLICK_KOSTEN} Punkte). Ab Level 9 mischt jeder
+        sechste Fehlgriff die verdeckten Karten neu.
         {z.zugGrenze !== null && ` Auf diesem Level hast du höchstens ${z.zugGrenze} Züge.`}
       </p>
 
@@ -333,7 +537,9 @@ export function PaarUp({
           obwohl bei fünfzig freien Zügen nichts zu entscheiden ist. */}
       <p className="sr-only" aria-live="polite">
         {geschafft} von {paare} Paaren gefunden.
+        {z.serie >= 2 && ` Serie von ${z.serie}.`}
         {knapp && ` Noch ${uebrig} ${uebrig === 1 ? 'Zug' : 'Züge'} übrig.`}
+        {meldung && ` ${meldung.text}`}
       </p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}

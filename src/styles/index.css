@@ -1665,8 +1665,10 @@ html.eigenstaendig body {
   z-index: -1;
   inset: 0 auto 0 0;
   width: 300%;
+  /* Genau waagerecht (90°): Bei einem schrägen Winkel passen rechte und linke Kante zweier
+     aneinandergesetzter Kacheln nicht zusammen, und mitten im Feld stand eine harte senkrechte Naht. */
   background: linear-gradient(
-    100deg,
+    90deg,
     #ef4444,
     #f59e0b,
     #facc15,
@@ -1886,4 +1888,61 @@ html.eigenstaendig body {
 
 .bubble-meldung {
   animation: bubble-meldung 0.28s var(--kurve-raus, ease-out) both;
+}
+
+/* Pair Up: Blick und Wirbel.
+
+   `.karte-blick`: Die Karten der Zeile im Blick liegen offen und tragen einen goldenen Rahmen — wie
+   `.karte-falsch` als Übergang auf der Vorderseite, nicht als Keyframes, damit er genau so lange steht, wie
+   der Blick dauert.
+
+   `.karte-zielbar`: Solange man eine Zeile für den Blick wählt, tragen die Karten, in deren Zeile sich der
+   Blick lohnt, einen gestrichelten Rahmen auf der **Rückseite** (Form, nicht nur Farbe).
+
+   `.karte-wirbel`: Die verdeckten Karten wackeln kurz durcheinander. Eigene Eigenschaften (`rotate`,
+   `translate`) statt `transform`: Die Hülle trägt keine Drehung, und `.karte-dreher` darunter braucht seine
+   eigene für das Umschlagen. Die Verzögerung je Karte kommt über `--wirbel-versatz` — und muss unter `.ruhig`
+   selbst auf 0, weil die globale Regel nur die Dauer kürzt, nicht die Verzögerung. Endet im Ruhezustand. */
+.karte-blick .karte-vorderseite {
+  box-shadow:
+    inset 0 0 0 3px #fbbf24,
+    0 0 14px rgba(251, 191, 36, 0.5);
+  transition: box-shadow 0.12s ease-out;
+}
+
+.karte-zielbar .karte-rueckseite {
+  outline: 2px dashed #fbbf24;
+  outline-offset: -4px;
+}
+
+@keyframes karte-wirbel {
+  0% {
+    rotate: 0deg;
+    translate: 0 0;
+  }
+  20% {
+    rotate: -9deg;
+    translate: -4px 2px;
+  }
+  45% {
+    rotate: 8deg;
+    translate: 5px -3px;
+  }
+  70% {
+    rotate: -5deg;
+    translate: -2px 3px;
+  }
+  100% {
+    rotate: 0deg;
+    translate: 0 0;
+  }
+}
+
+.karte-wirbel {
+  animation: karte-wirbel 0.5s ease-in-out both;
+  animation-delay: var(--wirbel-versatz, 0ms);
+}
+
+.ruhig .karte-wirbel {
+  animation-delay: 0ms;
 }

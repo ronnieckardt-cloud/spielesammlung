@@ -1,13 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import {
+  BLICK_ALLE_SERIE,
+  BLICK_KOSTEN,
   DECKEL_LEVEL,
+  MAX_BLICK,
   MOTIV_ANZAHL,
+  START_BLICK,
+  WIRBEL_AB_LEVEL,
   aufdecken,
+  blickEnde,
+  blickMoeglich,
+  blickNutzen,
+  fehlerBisWirbel,
   gefundenePaare,
+  karteInZeile,
   neuesSpiel,
   punkteFuerZuege,
   schliessen,
+  serieBonus,
   stufeFuerLevel,
+  wirbelAlle,
+  zeileBlickbar,
   zugGrenzeFuerLevel,
 } from './logik';
 import type { Zustand } from './logik';
@@ -248,7 +261,9 @@ describe('Rundenende und Punkte', () => {
     const z = perfektDurchspielen(neuesSpiel(3));
     const paare = z.karten.length / 2;
     expect(z.zuege).toBe(paare);
-    expect(z.punkte).toBe(paare * 100);
+    // Die 100 je Paar plus die Zuschläge der Serie, die ein fehlerfreies Spiel von selbst aufbaut.
+    expect(z.punkte).toBe(paare * 100 + z.bonus);
+    expect(z.bonus).toBeGreaterThan(0);
   });
 
   it('zieht für jeden Zug zu viel ab, aber nie unter den Sockel', () => {
@@ -290,7 +305,7 @@ describe('Punktestand während der Runde', () => {
   it('endet auf demselben Wert wie die Schlussrechnung', () => {
     for (const level of [1, 4, 9]) {
       const z = perfektDurchspielen(neuesSpiel(level));
-      expect(z.punkte).toBe(punkteFuerZuege(z.karten.length / 2, z.zuege));
+      expect(z.punkte).toBe(punkteFuerZuege(z.karten.length / 2, z.zuege) + z.bonus);
     }
   });
 });
@@ -321,5 +336,235 @@ describe('Zuggrenze', () => {
     expect(z.zugGrenze).toBeNull();
     expect(z.vorbei).toBe(false);
     expect(z.zuege).toBe(80);
+  });
+});
+
+/* ====== Serie, Blick, Wirbel ================================================================ */
+
+/** Deckt `a` und eine fremde Karte auf (ein Fehlgriff), deckt dann zu. Gibt Zustand nach dem Zudecken zurück. */
+function fehlgriffMachen(z: Zustand): Zustand {
+  const a = z.karten.findIndex((k) => !k.gefunden);
+  const b = fremdeKarteZu(z, a);
+  return schliessen(aufdecken(aufdecken(z, a), b));
+}
+
+/** Findet ein Paar (zwei Positionen) unter den noch verdeckten Karten. */
+function paarFinden(z: Zustand): [number, number] {
+  const a = z.karten.findIndex((k) => !k.gefunden);
+  return [a, partnerVon(z, a)];
+}
+
+function treffer(z: Zustand): Zustand {
+  const [a, b] = paarFinden(z);
+  return aufdecken(aufdecken(z, a), b);
+}
+
+describe('Serie', () => {
+  it('serieBonus: 0, 0, 15, 30, danach 45', () => {
+    expect([0, 1, 2, 3, 4, 5, 20].map(serieBonus)).toEqual([0, 0, 15, 30, 45, 45, 45]);
+  });
+
+  it('jedes Paar in Folge bringt mehr — ein Fehlgriff reißt die Serie ab', () => {
+    let z = neuesSpiel(5);
+    z = treffer(z);
+    expect(z.serie).toBe(1);
+    expect(z.bonus).toBe(0);
+    z = treffer(z);
+    expect(z.serie).toBe(2);
+    expect(z.bonus).toBe(15);
+    z = fehlgriffMachen(z);
+    expect(z.serie).toBe(0);
+    expect(z.bonus).toBe(15); // Der bisherige Zuschlag bleibt, nur die Serie ist weg.
+    z = treffer(z);
+    expect(z.serie).toBe(1);
+    expect(z.bonus).toBe(15);
+  });
+
+  it('die Punkte enthalten die Zuschläge schon während der Runde', () => {
+    let z = neuesSpiel(5);
+    z = treffer(z);
+    z = treffer(z);
+    expect(z.punkte).toBe(punkteFuerZuege(2, 2) + 15);
+  });
+
+  it('ein fehlerfreies Spiel baut den vollen Zuschlag auf', () => {
+    const z = perfektDurchspielen(neuesSpiel(7)); // acht Paare
+    // 0 + 15 + 30 + 45 · 5
+    expect(z.bonus).toBe(15 + 30 + 45 * 5);
+  });
+});
+
+describe('Blick', () => {
+  it('ab Level 3 liegt einer im Vorrat, darunter keiner', () => {
+    expect(neuesSpiel(2).blick).toBe(0);
+    expect(neuesSpiel(3).blick).toBe(START_BLICK);
+  });
+
+  it('jede dritte Serie schenkt einen — nie über den Vorrat hinaus', () => {
+    let z = neuesSpiel(7);
+    z = { ...z, blick: 0 };
+    z = treffer(z);
+    z = treffer(z);
+    expect(z.blick).toBe(0);
+    z = treffer(z);
+    expect(z.serie).toBe(BLICK_ALLE_SERIE);
+    expect(z.blick).toBe(1);
+    // Mit vollem Vorrat bleibt es dabei.
+    const voll = { ...neuesSpiel(7), blick: MAX_BLICK, serie: 2 };
+    expect(treffer(voll).blick).toBe(MAX_BLICK);
+    // Unter Level 3 gibt es keinen, auch nicht durch eine Serie.
+    let klein = neuesSpiel(1);
+    klein = { ...klein, serie: 2 };
+    expect(treffer(klein).blick).toBe(0);
+  });
+
+  it('kostet einen Blick aus dem Vorrat und Punkte, ändert aber die Serie nicht', () => {
+    let z = neuesSpiel(7);
+    z = treffer(z);
+    const vorher = z.punkte;
+    const mit = blickNutzen(z, 0);
+    expect(mit.blickZeile).toBe(0);
+    expect(mit.blick).toBe(z.blick - 1);
+    expect(mit.blicke).toBe(1);
+    expect(mit.punkte).toBe(vorher - BLICK_KOSTEN);
+    expect(mit.serie).toBe(z.serie);
+    expect(mit.zuege).toBe(z.zuege); // kein Zug
+  });
+
+  it('solange er läuft, nimmt das Feld keine Karte an', () => {
+    const z = blickNutzen(neuesSpiel(7), 0);
+    expect(aufdecken(z, 5)).toBe(z);
+    const danach = blickEnde(z);
+    expect(danach.blickZeile).toBeNull();
+    expect(aufdecken(danach, 5)).not.toBe(danach);
+    expect(blickEnde(danach)).toBe(danach);
+  });
+
+  it('geht nicht ohne Vorrat, mit offenen Karten, nach dem Ende oder bei einem letzten Paar', () => {
+    const ohne = { ...neuesSpiel(7), blick: 0 };
+    expect(blickMoeglich(ohne)).toBe(false);
+    expect(blickNutzen(ohne, 0)).toBe(ohne);
+
+    const eine = aufdecken(neuesSpiel(7), 0);
+    expect(blickMoeglich(eine)).toBe(false);
+
+    let nachFehl = neuesSpiel(7);
+    const a = 0;
+    nachFehl = aufdecken(aufdecken(nachFehl, a), fremdeKarteZu(nachFehl, a));
+    expect(nachFehl.fehlgriff).toBe(true);
+    expect(blickMoeglich(nachFehl)).toBe(false);
+
+    expect(blickMoeglich({ ...neuesSpiel(7), vorbei: true })).toBe(false);
+
+    // Bei drei Paaren (Level 1) gibt es keinen; bei vier (Level 3), wenn nur noch ein Paar liegt, auch nicht.
+    let z = neuesSpiel(3);
+    z = treffer(z);
+    z = treffer(z);
+    z = treffer(z);
+    expect(z.karten.length / 2 - gefundenePaare(z)).toBe(1);
+    expect(blickMoeglich(z)).toBe(false);
+  });
+
+  it('eine Zeile ohne mindestens zwei verdeckte Karten lohnt nicht und wird abgelehnt', () => {
+    const z = neuesSpiel(7);
+    const alleGefunden = {
+      ...z,
+      karten: z.karten.map((k, i) => (i < z.spalten ? { ...k, gefunden: true } : k)),
+    };
+    expect(zeileBlickbar(alleGefunden, 0)).toBe(false);
+    expect(blickNutzen(alleGefunden, 0)).toBe(alleGefunden);
+    expect(zeileBlickbar(alleGefunden, 1)).toBe(true);
+  });
+
+  it('karteInZeile liefert genau eine Zeile', () => {
+    const z = neuesSpiel(7); // 4 Spalten
+    expect(karteInZeile(z, 0)).toEqual([0, 1, 2, 3]);
+    expect(karteInZeile(z, 3)).toEqual([12, 13, 14, 15]);
+  });
+
+  it('die Punkte fallen nie unter den Sockel, auch mit Blicken', () => {
+    expect(punkteFuerZuege(6, 500, 4)).toBe(120);
+    expect(punkteFuerZuege(6, 6, 2)).toBe(600 - 2 * BLICK_KOSTEN);
+  });
+});
+
+describe('Wirbel', () => {
+  it('gibt es erst ab Level 9, danach alle sechs, ab Level 13 alle fünf Fehlgriffe', () => {
+    for (let level = 1; level < WIRBEL_AB_LEVEL; level++) expect(wirbelAlle(level)).toBeNull();
+    expect(wirbelAlle(9)).toBe(6);
+    expect(wirbelAlle(12)).toBe(6);
+    expect(wirbelAlle(13)).toBe(5);
+    expect(wirbelAlle(40)).toBe(5);
+    // Darunter wird nie gewirbelt, auch nicht nach vielen Fehlgriffen.
+    let z = neuesSpiel(8);
+    for (let i = 0; i < 12; i++) z = fehlgriffMachen(z);
+    expect(z.wirbel).toBe(0);
+  });
+
+  it('der n-te Fehlgriff mischt beim Zudecken alle verdeckten Karten — und nur die', () => {
+    const alle = wirbelAlle(9)!;
+    let z = neuesSpiel(9);
+    // Erst ein Treffer, damit es eine gefundene Karte gibt, die liegen bleiben muss.
+    z = treffer(z);
+    const gefundenVorher = z.karten.map((k, i) => (k.gefunden ? i : -1)).filter((i) => i >= 0);
+    const motiveVorher = z.karten.map((k) => k.motiv);
+
+    for (let i = 0; i < alle - 1; i++) {
+      z = fehlgriffMachen(z);
+      expect(z.wirbel).toBe(0);
+    }
+    expect(fehlerBisWirbel(z)).toBe(1);
+    // Der entscheidende Fehlgriff: Vor dem Zudecken ist der Wirbel nur fällig …
+    const a = z.karten.findIndex((k) => !k.gefunden);
+    z = aufdecken(aufdecken(z, a), fremdeKarteZu(z, a));
+    expect(z.wirbelFaellig).toBe(true);
+    const unterVorher = z.karten.map((k) => k.motiv);
+    // … und erst das Zudecken mischt.
+    z = schliessen(z);
+    expect(z.wirbel).toBe(1);
+    expect(z.wirbelFaellig).toBe(false);
+    expect(fehlerBisWirbel(z)).toBe(alle);
+
+    const nachher = z.karten.map((k) => k.motiv);
+    // Gefundene Paare liegen, wo sie lagen.
+    for (const i of gefundenVorher) expect(nachher[i]).toBe(motiveVorher[i]);
+    // Die verdeckten tauschen untereinander: dieselben Motive, mindestens eins woanders.
+    const verdeckt = z.karten.map((k, i) => (k.gefunden ? -1 : i)).filter((i) => i >= 0);
+    expect(verdeckt.map((i) => nachher[i]!).sort()).toEqual(verdeckt.map((i) => unterVorher[i]!).sort());
+    expect(verdeckt.some((i) => nachher[i] !== unterVorher[i])).toBe(true);
+  });
+
+  it('ist aus der Saat bestimmt — und der zweite Wirbel mischt anders als der erste', () => {
+    const lauf = () => {
+      let z = neuesSpiel(10);
+      const reihenfolgen: (readonly number[])[] = [];
+      for (let w = 0; w < 2; w++) {
+        for (let i = 0; i < wirbelAlle(10)!; i++) z = fehlgriffMachen(z);
+        reihenfolgen.push(z.karten.map((k) => k.motiv));
+      }
+      return reihenfolgen;
+    };
+    expect(lauf()).toEqual(lauf());
+    const [erste, zweite] = lauf();
+    expect(erste).not.toEqual(zweite);
+  });
+
+  it('bei höchstens zwei verdeckten Karten gibt es nichts zu mischen', () => {
+    const z = neuesSpiel(9);
+    // Alles bis auf ein Paar gefunden.
+    const [a, b] = paarFinden(z);
+    const fast = { ...z, karten: z.karten.map((k, i) => (i === a || i === b ? k : { ...k, gefunden: true })) };
+    const offen = { ...fast, offen: [a, b], fehlgriff: true, wirbelFaellig: true };
+    const nachher = schliessen(offen);
+    expect(nachher.karten).toEqual(offen.karten);
+  });
+
+  it('die Fehlgriffzahl läuft nach dem Wirbel von vorn', () => {
+    let z = neuesSpiel(9);
+    for (let i = 0; i < wirbelAlle(9)!; i++) z = fehlgriffMachen(z);
+    expect(z.wirbel).toBe(1);
+    expect(z.fehlerSeitWirbel).toBe(0);
+    expect(fehlerBisWirbel(z)).toBe(wirbelAlle(9));
+    expect(fehlerBisWirbel(neuesSpiel(2))).toBeNull();
   });
 });

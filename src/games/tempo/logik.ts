@@ -122,6 +122,41 @@ export function punkte(tipps: number, dauer: number): number {
   return Math.round((tipps * 10) / dauer);
 }
 
+/**
+ * Wie viele Tipps in dieser Rundenlänge nötig sind, um die bisherige Bestleistung zu **erreichen**.
+ *
+ * Die Punkte sind „Tipps je zehn Sekunden", gerundet — der Rekord gilt also für jede Rundenlänge. Das
+ * kleinste `n` mit `punkte(n, dauer) >= bestScore` ist hier die Marke. 0 heißt: Es gibt noch keinen
+ * Rekord (kein Vergleich anzeigen).
+ */
+export function rekordTipps(bestScore: number, dauer: number): number {
+  if (bestScore <= 0 || dauer <= 0) return 0;
+  let n = Math.max(0, Math.floor(((bestScore - 0.5) * dauer) / 10));
+  // Von unten herantasten: Die Rundung kann um einen Tipp danebenliegen.
+  while (punkte(n, dauer) < bestScore) n++;
+  return n;
+}
+
+/**
+ * Wie weit man gegenüber dem Rekord-Tempo vorn liegt: Tipps jetzt minus die Tipps, die ein gleichmäßig
+ * tippender Rekordhalter zu diesem Zeitpunkt schon hätte. Positiv heißt vorn.
+ *
+ * **Gleichmäßig** ist die Annahme, und sie ist bewusst die einfache: Es gibt keine gespeicherte Kurve des
+ * Rekordlaufs (ein Spiel darf nicht an den Speicher), nur die eine Zahl `bestScore`. Wer am Anfang
+ * schneller ist und später nachlässt, sieht seinen Vorsprung schmelzen — genau das ist die Information,
+ * die das Einteilen der Kräfte lehrt.
+ */
+export function vorsprung(z: Zustand, bestScore: number): number {
+  const ziel = rekordTipps(bestScore, z.dauer);
+  if (ziel === 0 || !z.laeuft) return 0;
+  return Math.round(z.tipps - (ziel * z.zeit) / z.dauer);
+}
+
+/** Ist die Bestleistung übertroffen (nicht nur erreicht)? Ohne bisherigen Rekord zählt nichts als „neu". */
+export function neuerRekord(tipps: number, dauer: number, bestScore: number): boolean {
+  return bestScore > 0 && punkte(tipps, dauer) > bestScore;
+}
+
 /** Kurzer Kommentar zum Ergebnis. */
 export function bewertung(stufe: Stufe): string {
   switch (stufe) {
