@@ -1809,3 +1809,20 @@ html.eigenstaendig body {
 .welle-schild {
   animation: welle-schild 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
+
+/* Snake Rush: Eine neue Arena erscheint. Nur Deckkraft, kein `scale` — bei SVG-Elementen bezieht
+   sich die Skalierung sonst auf die obere linke Ecke des ganzen Bildes statt auf die eigene Mitte,
+   und die Felsen führen beim Einblenden quer über das Brett. Endet sichtbar, damit es unter
+   `.ruhig` einfach sofort steht. */
+@keyframes arena-rein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.arena-rein {
+  animation: arena-rein 0.4s ease-out both;
+}
