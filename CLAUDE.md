@@ -1313,12 +1313,93 @@ im Spiel; in einem Testskript nach dem Wisch warten, bevor getippt wird.
   obersten Zeile verlieren (`haengendeKugeln`, Flutfüllung von oben). Sie
   geben doppelte Punkte — das belohnt Schüsse, die eine tragende Kugel
   treffen, statt nur die größte Gruppe zu suchen.
-- Nachschub von oben kommt nur nach Schüssen **ohne** Treffer
-  (`NACHSCHUB_NACH_SCHUESSEN`) — ein Treffer soll belohnt werden, nicht
-  zusätzlich die Wabe herunterdrücken.
+- Nachschub von oben kommt nur nach Schüssen **ohne** Treffer (in der ersten
+  Etappe nach `NACHSCHUB_NACH_SCHUESSEN` = 8, später früher, siehe unten) — ein
+  Treffer soll belohnt werden, nicht zusätzlich die Wabe herunterdrücken.
 - Neue Kugeln werden nur aus Farben gezogen, die noch im Feld liegen
   (`vorhandeneFarben`) — sonst bekommt man irgendwann eine Farbe ins Rohr,
   die es gar nicht mehr gibt, und der Schuss ist zwangsläufig verschenkt.
+
+### Version 2 — Entscheidungen und Etappen
+
+Die Bestandsaufnahme ergab: ein sauberes Zielspiel, aber **ohne jede
+Entscheidung außer „wohin"**, endlos, und „alle Kugeln weg" (der einzige
+Sieg) kam praktisch nie vor, weil der Nachschub weiterlief. Jetzt: Tauschen,
+Serie, zwei verdiente Spezialkugeln, Felsen und Etappen. Alles Rechnende
+steht in `logik.ts` (reine Funktionen, 40+ neue Tests), die Anzeige in
+`BubblePop.tsx` und `Spezialkugeln.tsx`.
+
+- **Tauschen** (`tauschen`): Kugel im Rohr gegen die nächste, kostet nichts.
+  Es ändert nicht, was danach gezogen wird — nur die Reihenfolge. Gesperrt,
+  solange die Spezialkugel im Rohr liegt.
+- **Serie und Faktor** (`serieFaktor`, höchstens ×4): Der zweite Treffer in
+  Folge zählt ×2, der dritte ×3. Ein Schuss ohne Treffer setzt sie zurück.
+  Das Herz (`Komboherz`) neben dem Punktestand zeigt den **Faktor**, nicht
+  die Länge der Serie — die hört bei ×4 auf zu zählen, und „×7" neben einem
+  Höchstfaktor von vier wäre gelogen (dieselbe Lehre wie bei Snake Rush).
+- **Zwei Spezialkugeln, nie mehr als eine im Vorrat:** die **Bombe** (ein
+  Schuss, der mindestens vier Kugeln herunterholt) sprengt ihr Feld und alle
+  sechs Nachbarn, ganz gleich welche Farbe — auch Felsen. Der **Regenbogen**
+  (jeder vierte Treffer in Folge) nimmt die Farbe, mit der am Landepunkt die
+  größte Gruppe entsteht (`regenbogenFarbe`; bei Gleichstand der kleinere
+  Index, damit die Vorschau schon vor dem Schuss stimmt). Beide sind ein
+  **zusätzlicher** Schuss: Die gewöhnlichen Kugeln im Rohr bleiben, wie sie
+  waren. Man legt sie selbst ins Rohr (Knopf unter dem Feld, Symbol **und**
+  Wort, „Abbrechen" solange sie drin liegt) — verdienen allein wäre
+  Zufall, die Entscheidung *wann* ist der Punkt. Eine Bombe ohne Nachbarn ist
+  vertan und zählt als Fehlschuss.
+- **Felsen** (`STEIN = 9`, weit über den Farbindizes, damit die Anzeige mit
+  `% 5` ihn nie mit einer Farbe verwechselt): bilden nie eine Gruppe, zählen
+  nicht in `vorhandeneFarben` (es kann also nie ein Fels ins Rohr kommen),
+  fallen aber wie jede Kugel, sobald ihnen der Halt fehlt (20 Punkte). Sie
+  liegen nur in den Zeilen 1 bis 4 — **nie in Zeile 0**: Dort blieben sie ewig
+  hängen, und ein Feld mit einem Fels an der Decke ließe sich nie leerräumen.
+  Eigene Form (eckig, mit Facette und Rissen), nicht nur eine graue Farbe.
+- **Etappen:** Ein leeres Feld beendet die Runde nicht mehr, sondern bringt
+  500 × Etappennummer und das nächste, härtere Feld. Härter heißt: Nachschub
+  nach 8, 6, dann 4 Schüssen ohne Treffer (`nachschubIntervall`), Startzeilen
+  5, 6, dann 7 (`startZeilenFuer`, gedeckelt — mehr ließe keinen Anflug),
+  Felsen 0, 4, 6, 8 … höchstens 12 (`felsenFuer`). `gewonnen` heißt „mindestens
+  ein Feld geräumt" (wie 2048 in Merge Up) — die Hülle zeigt dann „Gewonnen!"
+  statt „Vorbei". Beendet wird die Runde nur durch die Verlustzeile.
+- **Der Bot (`bot.ts`) hat die Schwierigkeit eingestellt.** Er sieht einen
+  Schuss voraus, zielt auf drei Grad genau, tauscht und setzt Spezialkugeln
+  ein. Die erste Fassung der Etappen (Nachschub 9 − Etappe, 6 Zeilen,
+  höchstens 8 Felsen) ließ ihn in 400 Schüssen bis Etappe 11 bis 15 kommen —
+  viel zu leicht, dafür gibt es die Etappen ja. Nach dem Verschärfen
+  (zwölf Saaten, bis 400 Schüsse): **mit Spezialkugeln Etappe 3 bis 10, ohne
+  sie 3 bis 6**; jeder Lauf endet vor Schuss 300. Zwei Tests halten das fest:
+  Der Bot räumt die erste Etappe in jeder Saat, und er kommt mit den
+  Spezialkugeln weiter als ohne. Ein dritter beweist, dass blindes Schießen
+  (immer senkrecht) in jeder Saat verliert — das Spiel ist nicht endlos.
+  *Merksatz:* Ein Bot, der ein neues Spielsystem nur „durchspielt", beweist
+  nichts — er muss an der richtigen Stelle scheitern.
+- **Tests, die ein Feld leerräumen, lösen jetzt den Etappenwechsel aus.**
+  Wer einen neuen Test schreibt, braucht einen **Ballast** (eine Kugel an der
+  Decke, die nirgends hineinreicht), sonst steht danach ein ganz anderes Feld
+  da. Die alten Tests wurden entsprechend ergänzt.
+- **Oberfläche:** Eine Knopfzeile unter dem Feld (Tauschen mit Vorschau der
+  nächsten Kugel — Nachschub-Zähler — Spezialkugel), Etappennummer links neben
+  dem Punktestand, Herz rechts. Meldungen („Feld geräumt!", „Bombe verdient!")
+  liegen im **unteren, meist leeren Teil** des Felds, nicht in der Mitte: Eine
+  erste Fassung legte sie über die Kugeln, und ein Spezialkugel-Hinweis, der
+  alle paar Schüsse kommt, darf nichts verdecken. Nach einer geräumten Etappe
+  nimmt das Feld eine Sekunde lang keinen Schuss an — der Finger ist noch
+  unterwegs. Die Vorschau am Landepunkt zeigt bei der Bombe die **betroffenen
+  Felder**, beim Regenbogen die Farbe, die er annehmen würde. Auf 320 Pixel
+  Breite entfällt das Pfeilsymbol am Tauschen-Knopf (`min-[360px]`), sonst
+  ragte der Inhalt aus dem Rahmen. Der Knopf trägt Tailwind-Klassen statt
+  `.spielknopf`, weil dessen unlayerte Innenabstände Utilities überstimmen.
+- **Prüfhaken nur für Bildschirmfotos** (auf einem echten Gerät nie gesetzt):
+  `globalThis.__bubbleStart = { etappe, spezial, serie, rest }` beginnt in
+  einer späteren Etappe, mit Spezialkugel oder Serie, oder mit einem Feld, das
+  nur noch aus den Kugeln `rest` ([Spalte, Zeile, Farbe]) besteht.
+- **Punkte:** Der Maßstab ändert sich um Größenordnungen (der Bot kommt in
+  250 Schüssen auf 30.000 bis 50.000; vorher lag die beste Runde bei 370). Die
+  Obergrenze in `spiel_katalog.max_punkte` (200000) reicht. **Aber der Server
+  markiert ein Ergebnis über dem Dreifachen der bisherigen Bestleistung als
+  `verdaechtig`** (siehe „Anmeldung") — ein erstes gutes Ergebnis nach dem
+  Umbau landet dort, bleibt aber lokal die Bestleistung.
 
 ## Pair Up — Besonderheiten
 

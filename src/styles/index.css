@@ -1853,3 +1853,37 @@ html.eigenstaendig body {
     opacity: 0.4;
   }
 }
+
+/* Bubble Pop: Das neue Feld einer Etappe rutscht von oben herein, und Meldungen blenden auf. Beide enden im
+   Ruhezustand (`both` hält das Schlussbild, das ohnehin der normale Zustand ist) — unter `.ruhig` steht
+   dadurch alles sofort da. Eigene Eigenschaften (`translate`) statt `transform`: Das `<g>` trägt kein
+   `transform`-Attribut, dort gäbe es sonst die Mischfalle aus Snake Rush. */
+@keyframes bubble-etappe-rein {
+  0% {
+    opacity: 0;
+    translate: 0 -26px;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.bubble-etappe-rein {
+  animation: bubble-etappe-rein 0.5s var(--kurve-raus, ease-out) both;
+}
+
+@keyframes bubble-meldung {
+  0% {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.bubble-meldung {
+  animation: bubble-meldung 0.28s var(--kurve-raus, ease-out) both;
+}
