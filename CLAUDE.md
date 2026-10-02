@@ -1118,6 +1118,74 @@ Optik (ein durchgehender Körper aus einem Linienzug, Ronnis Auswahl) sind unver
 - Farben in `farben.ts` sind bewusst eine eigene, kräftige Reihe (Blau →
   Grün → Gelb → Rot → Violett), nicht die beigen Töne des Originals.
 
+### Joker — Zurück und Hammer
+
+Die Bestandsaufnahme ergab: Merge Up war sauber, aber **ohne jede Entscheidung außerhalb des Wischens**,
+und ein einziger falscher Zug beendete eine Runde, die zwanzig Minuten gedauert hatte. Beides löst
+derselbe Baustein: ein Vorrat an **Jokern**, jeder entweder ein **Zug zurück** (`zurueck`) oder eine
+**Kachel weggeschlagen** (`hammer`).
+
+- **Ein gemeinsamer Vorrat für beide**, nicht zwei Zähler. Erst dadurch ist die Frage „wofür setze ich
+  ihn ein?" eine Entscheidung; mit getrennten Zählern wäre es nur Buchführung.
+- **Verdient wird über Meilensteine** (`MEILENSTEIN_AB = 6`, also ab der 64): jede neue Bestkachel ab
+  da gibt einen Joker. Dazu **einer zum Start** (`START_JOKER`), damit man die Knöpfe überhaupt einmal
+  gesehen hat, bevor man sie braucht. Kleinere Stufen geben nichts — sonst würde die 8 und die 16
+  schon belohnt, und der Vorrat wäre nie knapp.
+- **`belohnt` verhindert das Doppelverdienen.** Ohne dieses Feld ließe sich ein Joker einsetzen
+  (Zurück), die 64 erneut bauen und noch einmal kassieren — eine Joker-Maschine. `belohnt` ist die
+  höchste je belohnte Stufe und sinkt nie, auch nicht durch ein Zurück.
+- **`hoechsteStufe` ist jetzt „je erreicht", nicht „liegt gerade auf dem Brett".** Vorher rechnete
+  `ziehen` sie jedes Mal aus dem Raster neu; nach einem Hammer auf die größte Kachel wäre die Anzeige
+  gefallen (und mit ihr der Meilenstein-Vergleich). `Math.max` statt Neuberechnung.
+- **`festgefahren` ist eine eigene Zwischenstufe vor `vorbei`.** Geht kein Zug mehr, aber es ist noch
+  ein Joker da, ist die Runde **nicht** zu Ende — man soll ihn einsetzen dürfen. Ohne diese Stufe
+  verfielen Joker genau in dem Augenblick, in dem man sie am dringendsten braucht. `vorbei` heißt
+  jetzt: kein Zug **und** kein Joker.
+- **Der Hammer lässt keine neue Kachel erscheinen** und ist mit `verlauf` selbst zurücknehmbar — aber
+  das kostet einen **weiteren** Joker. Sonst wäre „Hammer, dann Zurück" ein Weg, einen Joker gratis
+  zurückzubekommen.
+- **Zurück geht nur einen Zug weit** (`verlauf` hält genau einen Stand). Mehr würde aus einer
+  begrenzten Hilfe ein freies Ausprobieren machen, und die Punkte wären nichts mehr wert.
+- **Ein Test mischt Wischen, Zurück und Hammer über 60 Saaten** (je bis zu 400 Schritte, feste Folge
+  statt Zufall) und prüft nach **jedem** Schritt die Grundregeln: Vorrat nie negativ; „vorbei" heißt
+  kein Zug **und** kein Joker, „festgefahren" kein Zug **aber** Joker, nie beides; die beste Kachel
+  liegt nie unter der besten auf dem Brett. Einzelne Tests allein hätten die Übergänge zwischen den
+  Zuständen nicht abgedeckt.
+- **Zurück gibt einen Meilenstein-Joker nicht zurück** — sonst ließe er sich beliebig oft verdienen
+  (eigener Test).
+
+**Oberfläche** (`MergeUp.tsx`):
+
+- **Zwei Knöpfe links und rechts vom Steuerkreuz**, je Symbol **und** Wort (Zurück, Hammer). Zwei
+  unbeschriftete Rundknöpfe muss man erst ausprobieren, und ein Joker ist zu knapp dafür. Die
+  Steuerzeile bleibt so hoch wie das Kreuz allein (100 Pixel) — die Knöpfe kosten keine Brettgröße.
+- **Der Hammer ist ein Modus, keine Geste.** Ein Antippen auf dem Brett löste sonst ständig versehentlich
+  Kacheln aus. Im Modus bekommt jede Kachel eine **Strichlinie und einen Knopf** (nicht nur einen
+  Farbton), das Brett einen gestrichelten Umriss, der Hammer-Knopf wird zu „Abbrechen". Wischen ist
+  dort ausgeschaltet; die Modus-Taste beendet ihn wieder.
+- **Meldungen stehen in der Statuszeile über dem Brett, nicht auf dem Brett.** Die erste Fassung legte
+  „Tippe die Kachel, die weg soll" und „Kein Zug mehr!" aufs Brett — und verdeckte damit genau die
+  Kacheln, unter denen man sich entscheiden muss. Nur der **Meilenstein** liegt kurz (1,8 s) über dem
+  Brett, `pointer-events-none`, weil er ein Ereignis ist und nichts erklärt. Die Statuszeile hat feste
+  Höhe (`h-6`), damit das Brett beim Wechsel der drei Zustände nicht springt.
+- **`.spielknopf` schlägt Tailwind-Farben.** Die Klasse setzt `background-color` und `border` ohne
+  `@layer` — `bg-white` und `border-amber-300` am selben Knopf wirkten nicht, der „Abbrechen"-Knopf
+  war dunkel auf dunkel. Farben für Zustände (an, dringend) stehen deshalb **inline**. Dieselbe Falle
+  wie bei `.spielbuehne > *` (siehe „Ein Absolut-Kind der Bühne").
+- **Im Stillstand leuchten beide Knöpfe goldgelb** (Rand und Fläche, nicht nur ein Farbwechsel), das
+  Steuerkreuz ist gesperrt, die Statuszeile nennt die Zahl der Joker.
+- Die weggeschlagene Kachel **zerbröselt an ihrem Platz** (`Verpuffen`, dieselben Klassen
+  `.aufloesen-blitz`/`.kruemel` wie Block Burst). Ohne das ist sie von einem Augenblick zum anderen weg,
+  und man sieht nicht, welche der Hammer getroffen hat. Bei „weniger Bewegung" entfällt es.
+- Vorleseprogramme bekommen Meilenstein, Hammer-Modus und Stillstand über eine `aria-live`-Zeile; im
+  Hammer-Modus wechselt das Brett von `role="img"` zu `group`, weil ein `img` seine Kinder (die
+  Kachel-Knöpfe) für Vorleseprogramme unsichtbar macht.
+
+*Prüfen mit Playwright:* Ein Tipp **innerhalb von rund 300 ms nach einem synthetischen Wisch** (CDP
+`Input.dispatchTouchEvent`) verliert in Chrome gelegentlich sein `click` — gemessen: bei 300 ms
+rund jeder dritte Tipp, bei 1,5 s Abstand sechs von sechs. Das ist ein Emulations-Artefakt, kein Fehler
+im Spiel; in einem Testskript nach dem Wisch warten, bevor getippt wird.
+
 ## Bubble Pop — Besonderheiten
 
 - Wabenraster im „odd-r"-Versatz: jede ungerade Zeile ist eine halbe Kugel
