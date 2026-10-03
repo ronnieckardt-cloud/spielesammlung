@@ -2509,8 +2509,12 @@ Seitdem gilt die Regel nur noch, wenn die bisherige Bestleistung mindestens
 — darunter ist noch kein verlässlicher Maßstab da, und `max_punkte` deckelt
 Erfundenes ohnehin nach oben. *Merksatz:* Eine Prüfung, die sich ihre eigene
 Messlatte nur über bestandene Prüfungen hebt, braucht einen Anlauf.
-Die drei oben genannten Altfälle stehen weiter auf `verdaechtig` (nicht von
-Hand freigegeben).
+Die drei oben genannten Altfälle (Dash City 5179 und 2608, Line Fall 724) sind
+auf Ronnis Okay von Hand freigegeben: `verdaechtig` auf `false`, und
+`spiel_bestwert` danach so angehoben, wie es die Funktion bei einem
+unauffälligen Ergebnis selbst getan hätte (nur Line Fall änderte sich, 168 →
+724; Dash City hatte schon 7465). Wer so etwas wiederholt: beides in **einer**
+Anweisung, sonst steht ein freigegebenes Ergebnis ohne Rang in der Liste.
 
 **Noch nicht gebaut:** Battle, Co-op, Avatare. Die Tabellen dafür gibt es
 noch nicht.
