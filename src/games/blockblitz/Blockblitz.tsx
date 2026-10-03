@@ -12,15 +12,21 @@ import { Komboherz } from '../../core/Komboherz';
 import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
 import type { GameProps } from '../../core/types';
 import {
+  ANZAHL_FARBEN,
   BREITE,
+  FORMEN,
   HOEHE,
+  LINIEN_JE_ETAPPE,
   legen,
+  leeresRaster,
   loesbareLinien,
   neuesSpiel,
   passtAn,
   PUNKTE_SCHWELLE_ANZEIGE,
+  etappeFuer,
   teilLegen,
   volleZeilenUndSpalten,
+  zurueck,
 } from './logik';
 import type { Teil, TeilForm, Zustand } from './logik';
 import { ankerAufBrett, ankerFuerZelle, formGroesse } from './geometrie';
@@ -43,6 +49,8 @@ const FEHLER_DAUER_MS = 400;
 // eines einzigen langsamen, gemeinsamen Aufblitzens.
 const ZERBROESELN_VERSATZ_MS = 55; // Zeitversatz je Diagonal-Schritt beim Auflösen
 const ZERBROESELN_DAUER_MS = 260; // Dauer einer einzelnen Zelle, siehe index.css
+/** Wann die Etappenmeldung kommt: nachdem eine einzelne Reihe zerbröselt ist ((7 + 0) Diagonalen mal Versatz plus Dauer). */
+const ETAPPENMELDUNG_NACH_MS = 7 * ZERBROESELN_VERSATZ_MS + ZERBROESELN_DAUER_MS + 80;
 
 /** Wohin die Krümel wegspritzen. Feste Liste, damit es nicht flackert. */
 const KRUEMEL: readonly { kx: string; ky: string }[] = [
@@ -204,6 +212,9 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
         <p className="mt-3 text-sm font-semibold text-white/85">
           Lege die Teile aufs Feld — volle Reihen und Spalten lösen sich auf.
         </p>
+        <p className="mt-1.5 text-sm font-semibold text-white/75">
+          Jedes Tablett lässt sich ganz ablegen. Alle {LINIEN_JE_ETAPPE} Linien: neue Etappe und ein Joker zum Rückgängigmachen.
+        </p>
         {bestScore > 0 && (
           /* Regel und Bestleistung stehen nebeneinander, nicht
              statt einander — siehe core/Startbildschirm.tsx. */
@@ -225,11 +236,89 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
   );
 }
 
+/**
+ * Prüfhaken nur für Bildschirmfotos (auf einem echten Gerät nie gesetzt):
+ * `globalThis.__blockStart = { etappe, joker, linien, raster, tablett, stillstand }`
+ * beginnt auf einer späteren Etappe, mit einem bestimmten Brett (`#` belegt) und
+ * Tablett (Nummern aus `FORMEN`) oder mitten im Stillstand. Solange er gesetzt
+ * ist, liefert `globalThis.__blockStand()` den laufenden Zustand — damit lässt sich
+ * das Spiel von außen mit echten Touch-Ereignissen spielen.
+ */
+type Pruefhaken = {
+  etappe?: number;
+  joker?: number;
+  linien?: number;
+  punkte?: number;
+  raster?: readonly string[];
+  tablett?: readonly number[];
+  stillstand?: boolean;
+};
+
+function pruefhaken(): Pruefhaken | undefined {
+  return (globalThis as { __blockStart?: Pruefhaken }).__blockStart;
+}
+
+function startZustand(saat: number): Zustand {
+  const haken = pruefhaken();
+  let z = neuesSpiel(saat, haken?.etappe ?? 1);
+  if (!haken) return z;
+  if (haken.raster) {
+    const raster = leeresRaster().map((zeile, y) =>
+      zeile.map((_, x) => (haken.raster![y]?.[x] === '#' ? (x + y) % ANZAHL_FARBEN : null)),
+    );
+    z = { ...z, raster };
+  }
+  if (haken.tablett) {
+    z = {
+      ...z,
+      tablett: haken.tablett.map((nr, i) => ({ id: `haken-${i}`, form: FORMEN[nr]!, farbe: i % ANZAHL_FARBEN })),
+    };
+  }
+  if (haken.joker !== undefined) z = { ...z, joker: haken.joker };
+  if (haken.linien !== undefined) z = { ...z, linien: haken.linien };
+  if (haken.punkte !== undefined) z = { ...z, punkte: haken.punkte };
+  // Der Stillstand braucht einen Stand zum Zurückholen — hier genügt ein leeres Brett.
+  if (haken.stillstand) z = { ...z, festgefahren: true, verlauf: { ...neuesSpiel(saat, haken.etappe ?? 1), verlauf: null } };
+  return z;
+}
+
+/**
+ * Wie groß die Punktzahl steht. Sie teilt sich die Zeile mit Etappe und
+ * Rückgängig-Knopf, und die beiden Seiten sind gleich breit, damit die Zahl
+ * mittig bleibt — wächst sie auf fünf Stellen, würde sie sonst auf einem
+ * 320 Pixel breiten Gerät in den Knopf laufen (gemessen: 5 Pixel Überlappung).
+ * Gute Läufe liegen heute im fünfstelligen Bereich, das ist kein Sonderfall.
+ */
+function punkteGroesse(punkte: number): string {
+  const stellen = String(punkte).length;
+  if (stellen <= 4) return 'text-5xl max-[359px]:text-4xl sm:text-6xl';
+  if (stellen === 5) return 'text-4xl max-[359px]:text-3xl sm:text-5xl';
+  return 'text-3xl max-[359px]:text-2xl sm:text-4xl';
+}
+
+function ZurueckSymbol() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="size-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 14L4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+    </svg>
+  );
+}
+
 export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
   // Nach „Nochmal" direkt weiterspielen statt wieder über den
   // Startbildschirm zu gehen — der gehört nur ans Betreten des Spiels.
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesSpiel(saatAus('blockblitz', Date.now())));
+  const [z, setZ] = useState<Zustand>(() => startZustand(saatAus('blockblitz', Date.now())));
   const [zug, setZug] = useState<ZugZustand | null>(null);
   const [ausgewaehlt, setAusgewaehlt] = useState<number | null>(null);
   /**
@@ -267,6 +356,14 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
   /** Welches Tablett-Teil gerade wackelt, weil der Zug nicht ging. */
   const [fehler, setFehler] = useState<{ index: number; nr: number } | null>(null);
   const fehlerNr = useRef(0);
+  /**
+   * Eine neue Etappe ist ein Ereignis, das man **sehen** soll: Der Joker kommt
+   * sonst still in den Zähler, und niemand weiß, woher er stammt.
+   */
+  const [etappenMeldung, setEtappenMeldung] = useState<{ id: number; etappe: number; joker: boolean } | null>(null);
+  const etappeVorher = useRef(etappeFuer(z.linien));
+  const jokerVorher = useRef(z.joker);
+  const etappenUhren = useRef<number[]>([]);
 
   // Das „+N" über dem Feld kommt aus dem gemeinsamen Baustein statt aus
   // einer zweiten, eigenen Rechnung: Es liest den wirklichen Zuwachs des
@@ -281,6 +378,7 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
   // zu einer Kettenreaktion führen kann.
   const zRef = useRef(z);
   zRef.current = z;
+  if (pruefhaken()) (globalThis as { __blockStand?: () => Zustand }).__blockStand = () => zRef.current;
 
   /**
    * Ein misslungener Zug war vorher völlig stumm: Erfolg klingt, Misserfolg
@@ -504,6 +602,13 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
       return;
     }
 
+    // Rückgängig per Tastatur — nur eine Zugabe, die Pflicht ist der Knopf.
+    if (e.key === 'z' || e.key === 'Z' || e.key === 'Backspace') {
+      e.preventDefault();
+      beiZurueck();
+      return;
+    }
+
     // Ziffern wählen ein Teil, ohne dass der Fokus das Brett verlassen muss.
     const nummer = Number(e.key);
     if (Number.isInteger(nummer) && nummer >= 1 && nummer <= z.tablett.length) {
@@ -523,6 +628,55 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
     setAusgewaehlt(index); // damit man auch bei Fehlversuch sieht, womit gelegt wurde
     legenVersuchen(index, ankerAusZelle(teil.form, zielFeld.x, zielFeld.y));
   };
+
+  /**
+   * Der Joker: den letzten Zug zurücknehmen. Rechnet **vor** dem `setZ`, nicht
+   * im Updater — Töne in einem Updater feuern unter StrictMode doppelt.
+   */
+  const beiZurueck = useCallback(() => {
+    const aktuell = zRef.current;
+    if (aktuell.vorbei || aktuell.joker < 1 || aktuell.verlauf === null) return;
+    sfx('klick');
+    haptik('fehler');
+    setAusgewaehlt(null);
+    setBlitzZellen(null);
+    // Eine Etappenmeldung für einen Zug, den es nicht mehr gibt, wäre gelogen.
+    for (const uhr of etappenUhren.current) window.clearTimeout(uhr);
+    etappenUhren.current = [];
+    setEtappenMeldung(null);
+    setZ(zurueck(aktuell));
+  }, []);
+
+  useEffect(() => {
+    const etappe = etappeFuer(z.linien);
+    const hoeher = etappe > etappeVorher.current;
+    const jokerMehr = z.joker > jokerVorher.current;
+    etappeVorher.current = etappe;
+    jokerVorher.current = z.joker;
+    if (!hoeher) return;
+    // Erst wenn die Reihe zerbröselt ist: Die Meldung liegt oben auf dem Brett,
+    // und genau dort passiert das Auflösen — sonst sähe man es nicht.
+    //
+    // Die Zeitgeber gehören **nicht** in die Aufräumfunktion dieses Effekts: Der
+    // nächste Zug ändert `z.linien` und würde sie sonst abbrechen, bevor die
+    // Meldung wieder verschwindet — sie bliebe dann für immer stehen.
+    for (const uhr of etappenUhren.current) window.clearTimeout(uhr);
+    const zeigen = () => {
+      setEtappenMeldung({ id: z.linien, etappe, joker: jokerMehr });
+      sfx('stufe');
+      haptik('jubel');
+      etappenUhren.current = [window.setTimeout(() => setEtappenMeldung(null), 1800)];
+    };
+    if (settings.reducedMotion) zeigen();
+    else etappenUhren.current = [window.setTimeout(zeigen, ETAPPENMELDUNG_NACH_MS)];
+  }, [z.linien, z.joker, settings.reducedMotion]);
+
+  useEffect(
+    () => () => {
+      for (const uhr of etappenUhren.current) window.clearTimeout(uhr);
+    },
+    [],
+  );
 
   useEffect(() => {
     onScore(z.punkte);
@@ -547,7 +701,7 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
    * sonst aus dem Zielfeld — angezeigt wird in beiden Fällen dasselbe.
    */
   const vorschauIndex = zug ? zug.tablettIndex : ausgewaehlt;
-  const vorschauTeil = vorschauIndex !== null && !z.vorbei ? (z.tablett[vorschauIndex] ?? null) : null;
+  const vorschauTeil = vorschauIndex !== null && !z.vorbei && !z.festgefahren ? (z.tablett[vorschauIndex] ?? null) : null;
   const vorschauAnker: Anker | null = !vorschauTeil
     ? null
     : zug
@@ -586,11 +740,13 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
   const hinweisLinien = useMemo(() => loesbareLinien(z.raster, z.tablett), [z.raster, z.tablett]);
   // Beim Ziehen ausgeblendet — dann führt die stärkere Zug-Vorschau, und
   // zwei blinkende Signale nebeneinander wären nur unruhig.
-  const zeigeHinweis = !zug && !z.vorbei;
+  const zeigeHinweis = !zug && !z.vorbei && !z.festgefahren;
   const hinweisZeilen = zeigeHinweis ? hinweisLinien.zeilen : [];
   const hinweisSpalten = zeigeHinweis ? hinweisLinien.spalten : [];
 
   const belegteFelder = z.raster.flat().filter((c) => c !== null).length;
+  const etappe = etappeFuer(z.linien);
+  const linienInEtappe = z.linien % LINIEN_JE_ETAPPE;
 
   if (!gestartet) {
     return (
@@ -602,16 +758,71 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
     <div
       className="spielseite flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden p-3"
     >
-      <div className="flex flex-col items-center gap-1">
+      {/* Etappe links, Punktestand in der Mitte, Rückgängig rechts — in **einer**
+          Zeile, die nicht höher ist als die Zahl allein. Der Joker kostet so
+          keine Brettgröße. Die Seitenzellen sind gleich breit (`1fr`), damit die
+          Zahl auch dann mittig bleibt, wenn sie wächst. */}
+      <div className="grid w-full max-w-md grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <div className="justify-self-start" aria-label={`Etappe ${etappe}, ${linienInEtappe} von ${LINIEN_JE_ETAPPE} Linien`} role="group">
+          <p className="text-[10px] leading-none font-bold tracking-wider text-white/70 uppercase">Etappe</p>
+          <p
+            key={etappe}
+            className="punkte-bumsen text-2xl leading-tight font-black tabular-nums text-white"
+            style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}
+          >
+            {etappe}
+          </p>
+          {/* Wie weit es noch bis zur nächsten Etappe ist — acht Striche, ein
+              Strich je Linie. Form und Zahl, nicht nur Länge in einer Farbe. */}
+          <div aria-hidden="true" className="mt-0.5 flex gap-px">
+            {Array.from({ length: LINIEN_JE_ETAPPE }, (_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 w-1.5 rounded-[1px] ${i < linienInEtappe ? 'bg-amber-300' : 'bg-white/25'}`}
+              />
+            ))}
+          </div>
+        </div>
+
         <output
           key={z.punkte}
           aria-live="polite"
           aria-label={`${z.punkte} Punkte`}
-          className="punkte-bumsen text-5xl leading-none font-extrabold tabular-nums text-white sm:text-6xl"
+          className={`punkte-bumsen leading-none font-extrabold tabular-nums text-white ${punkteGroesse(z.punkte)}`}
           style={{ textShadow: '0 2px 16px rgba(0,0,0,0.55)' }}
         >
           {z.punkte}
         </output>
+
+        {/* „Rückgängig“ und nicht „Zurück“: In der Kopfzeile steht schon ein
+            „← Zurück“, das die Runde verlässt. Im Stillstand heißt es „Tippe auf
+            …“ — wer da das falsche Zurück trifft, verliert die Runde. */}
+        <button
+          type="button"
+          onClick={beiZurueck}
+          disabled={z.vorbei || z.joker < 1 || z.verlauf === null}
+          aria-label={`Letzten Zug rückgängig machen, ${z.joker} Joker`}
+          // Farben für den dringenden Zustand stehen **inline**: `.spielknopf` setzt
+          // Hintergrund und Rand ohne `@layer` und schlägt jede Tailwind-Klasse.
+          className={`spielknopf relative min-h-12 min-w-[4rem] flex-col gap-0.5 justify-self-end px-2 py-1 text-[11px] leading-none font-bold touch-none select-none max-[359px]:px-1 max-[359px]:text-[10px] ${
+            z.festgefahren ? 'text-amber-100' : 'text-text'
+          }`}
+          style={
+            z.festgefahren
+              ? { backgroundColor: 'rgba(251, 191, 36, 0.28)', borderColor: '#fcd34d', borderWidth: 2 }
+              : undefined
+          }
+        >
+          <ZurueckSymbol />
+          <span>Rückgängig</span>
+          {/* Wie viele Joker noch da sind — als Zahl, nicht als Farbe. */}
+          <span
+            key={z.joker}
+            className="punkte-bumsen absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full border border-white/40 bg-slate-900 text-[11px] font-extrabold text-white tabular-nums"
+          >
+            {z.joker}
+          </span>
+        </button>
       </div>
 
       <div className="spielbuehne relative">
@@ -624,6 +835,20 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
           ruhig={settings.reducedMotion}
           className="absolute -top-2 right-0 z-10"
         />
+        {/* Lässt Berührungen durch: Wer mitten im Ziehen ist, soll an keinem
+            Schild hängen bleiben. Liegt oben auf dem Brett, solange es nur zwei
+            Zeilen sind — unten fliegt das gezogene Teil herein. */}
+        {etappenMeldung && (
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 top-3 z-20 grid justify-items-center">
+            <div
+              key={etappenMeldung.id}
+              className="welle-schild rounded-2xl border border-white/25 bg-black/70 px-4 py-2 text-center backdrop-blur-sm"
+            >
+              <p className="text-base font-extrabold text-white">Etappe {etappenMeldung.etappe}!</p>
+              {etappenMeldung.joker && <p className="text-sm font-bold text-amber-300">+1 Joker</p>}
+            </div>
+          </div>
+        )}
         <div
           ref={rasterRef}
           className="spielbrett spielbrett-rahmen relative grid touch-none gap-1 p-1"
@@ -757,12 +982,26 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
         </div>
       </div>
 
-      <div className="flex justify-center gap-4">
+      <div className="relative flex justify-center gap-4">
+        {/* Im Stillstand sagt das Tablett selbst, was zu tun ist: Die Teile
+            passen nirgends mehr, das Brett darüber bleibt unverdeckt. */}
+        {z.festgefahren && (
+          <div
+            role="status"
+            className="absolute inset-0 z-10 grid place-items-center rounded-xl border-2 border-amber-300/80 bg-slate-950/95 px-3 text-center"
+          >
+            <p className="text-sm font-bold text-amber-100">
+              Nichts passt mehr.
+              <br />
+              Tippe auf <span className="underline">Rückgängig</span> ({z.joker} Joker).
+            </p>
+          </div>
+        )}
         {z.tablett.map((teil, i) => (
           <button
             key={teil?.id ?? `leer-${i}`}
             type="button"
-            disabled={!teil || z.vorbei}
+            disabled={!teil || z.vorbei || z.festgefahren}
             onPointerDown={teil ? beiTablettPointerDown(i) : undefined}
             onKeyDown={teil ? beiTablettTaste(i) : undefined}
             onClick={teil ? beiTablettKlick(i) : undefined}
@@ -795,7 +1034,9 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
 
       <p className="nur-bei-platz max-w-sm text-center text-sm text-gedaempft">
         Ziehen oder antippen und ein Zielfeld antippen. Volle Reihen und
-        Spalten lösen sich auf.
+        Spalten lösen sich auf. Jedes Tablett lässt sich ganz ablegen — überlege
+        dir die Reihenfolge. Alle {LINIEN_JE_ETAPPE} Linien gibt es eine neue
+        Etappe und einen Joker: Er nimmt deinen letzten Zug zurück.
       </p>
 
       {zug && vorschauTeil && (
@@ -807,6 +1048,14 @@ export function Blockblitz({ onScore, onGameOver, settings, bestScore, istErsteR
           <TeilAnzeige teil={vorschauTeil} zellgroesse={zellgroesseAmFinger} />
         </div>
       )}
+
+      <p className="sr-only" aria-live="polite">
+        {etappenMeldung
+          ? `Etappe ${etappenMeldung.etappe}.${etappenMeldung.joker ? ' Ein Joker dazu.' : ''}`
+          : z.festgefahren
+            ? `Nichts passt mehr. Du hast ${z.joker} Joker: Rückgängig nimmt den letzten Zug zurück.`
+            : ''}
+      </p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}
     </div>

@@ -1,4 +1,5 @@
 import { schritt } from '../../core/rng';
+import { ersteZuege, formMasken, loesbar, maskenAus } from './loeser';
 
 /**
  * Blockblitz: Teile aufs 8×8-Raster legen, volle Reihen und Spalten lösen
@@ -86,8 +87,28 @@ export type Zustand = {
   punkte: number;
   /** Aufeinanderfolgende Züge mit Auflösung — für die steigenden Kombo-Punkte. */
   kombo: number;
+  /** Kein Teil passt mehr **und** kein Joker kann es retten: Die Runde ist aus. */
   vorbei: boolean;
+  /**
+   * Kein Teil passt mehr, aber ein Joker ist noch da. Die Runde ist **nicht**
+   * zu Ende — man soll ihn einsetzen dürfen (siehe `zurueck`). Ohne diese
+   * Zwischenstufe verfiele der Joker genau in dem Augenblick, in dem man ihn
+   * am dringendsten braucht.
+   */
+  festgefahren: boolean;
   saat: number;
+  /** Alle aufgelösten Reihen und Spalten der Runde — daraus folgt die Etappe. */
+  linien: number;
+  /** Vorrat an „Zurück"-Jokern. */
+  joker: number;
+  /**
+   * Die höchste Etappe, für die schon ein Joker gutgeschrieben wurde. Sinkt nie,
+   * auch nicht durch ein „Zurück": Sonst ließe sich eine Etappe einsetzen,
+   * wieder erreichen und noch einmal kassieren — eine Joker-Maschine.
+   */
+  belohnt: number;
+  /** Der Stand vor dem letzten Zug (ohne eigenen Verlauf), `null` am Anfang und nach einem „Zurück". */
+  verlauf: Zustand | null;
 };
 
 export function leeresRaster(): Raster {
@@ -217,15 +238,34 @@ export function punkteFuerZug(zellenGelegt: number, anzahlLinien: number, komboN
  */
 export const PUNKTE_SCHWELLE_ANZEIGE = PUNKTE_PRO_LINIE;
 
+/** Wie viele aufgelöste Reihen und Spalten eine Etappe kostet. */
+export const LINIEN_JE_ETAPPE = 8;
+/** Mehr als so viele Joker liegen nie im Vorrat — ein Vorrat ohne Decke ist keine Entscheidung mehr. */
+export const JOKER_MAX = 3;
+/** Ein Joker zum Start, damit man den Knopf überhaupt einmal gesehen hat, bevor man ihn braucht. */
+export const START_JOKER = 1;
+export function etappeFuer(linien: number): number {
+  return 1 + Math.floor(linien / LINIEN_JE_ETAPPE);
+}
+
 /**
  * Wie stark größere Teile bei vollerem Feld benachteiligt werden — nie auf
  * 0, ein großes Teil bleibt immer möglich, nur seltener. Ohne das ist der
  * Tod reine Pechsache, sobald zufällig drei große Teile hintereinander
  * kommen und das Feld schon eng ist.
+ *
+ * Mit der Etappe wird die Nachsicht kleiner und die Vorliebe für große Teile
+ * größer: Wer weit kommt, bekommt auch bei vollerem Feld sperrige Teile.
  */
-export function gewichtFuerGroesse(groesse: number, fuellstand: number): number {
-  return 1 / (1 + fuellstand * groesse * 0.35);
+export function gewichtFuerGroesse(groesse: number, fuellstand: number, etappe = 1): number {
+  const nachsicht = NACHSICHT_START * Math.pow(NACHSICHT_FAKTOR, etappe - 1);
+  const sperrig = Math.pow(groesse, SPERRIG_EXPONENT * (etappe - 1));
+  return sperrig / (1 + fuellstand * groesse * nachsicht);
 }
+
+const NACHSICHT_START = 0.35;
+const NACHSICHT_FAKTOR = 0.92;
+const SPERRIG_EXPONENT = 0.06;
 
 export function fuellstand(raster: Raster): number {
   let belegt = 0;
@@ -233,8 +273,29 @@ export function fuellstand(raster: Raster): number {
   return belegt / (BREITE * HOEHE);
 }
 
-function neuesTeil(saat: number, fuellstandWert: number): { teil: Teil; saat: number } {
-  const gewichte = FORMEN.map((f) => gewichtFuerGroesse(f.length, fuellstandWert));
+/**
+ * Aus wie vielen lösbaren Tabletts das Spiel das knappste aussucht.
+ *
+ * Etappe 1: aus einem — es nimmt, was kommt. Mit jeder Etappe mehr, bis zur
+ * Decke. „Knapp" heißt hier: Von allen ersten Zügen lassen sich nur wenige
+ * zu Ende führen (`ersteZuege`). Das ist ein **gestuftes** Stellrad. Die
+ * erste Fassung nahm eine feste Schwelle („höchstens 92 Prozent verzeihende
+ * Züge") und war schon auf Etappe 2 eine Wand: Auf einem halbleeren Brett ist
+ * fast jedes Tablett nachsichtig, die Schwelle griff also nie, und es blieb
+ * bei „immer das knappste von allen" — die Spielzeit eines gierigen Spielers
+ * fiel von 83 auf 35 Züge, in einem einzigen Schritt.
+ */
+export function auswahlGroesse(etappe: number): number {
+  return Math.min(AUSWAHL_MAX, 1 + Math.floor((etappe - 1) / ETAPPEN_JE_AUSWAHL));
+}
+
+const ETAPPEN_JE_AUSWAHL = 3;
+const AUSWAHL_MAX = 6;
+/** So viele Tabletts werden je Austeilen höchstens gezogen, bis genug lösbare beisammen sind. */
+const VERSUCHE = 40;
+
+function neuesTeil(saat: number, fuellstandWert: number, etappe: number): { teil: Teil; saat: number } {
+  const gewichte = FORMEN.map((f) => gewichtFuerGroesse(f.length, fuellstandWert, etappe));
   const gesamt = gewichte.reduce((a, b) => a + b, 0);
 
   const formSchritt = schritt(saat);
@@ -254,22 +315,96 @@ function neuesTeil(saat: number, fuellstandWert: number): { teil: Teil; saat: nu
   };
 }
 
-function neuesTablett(saat: number, raster: Raster): { tablett: readonly Teil[]; saat: number } {
+function einTablett(saat: number, raster: Raster, etappe: number): { tablett: readonly Teil[]; saat: number } {
   const fuellstandWert = fuellstand(raster);
   let s = saat;
   const tablett: Teil[] = [];
   for (let i = 0; i < 3; i++) {
-    const gezogen = neuesTeil(s, fuellstandWert);
+    const gezogen = neuesTeil(s, fuellstandWert, etappe);
     tablett.push(gezogen.teil);
     s = gezogen.saat;
   }
   return { tablett, saat: s };
 }
 
-export function neuesSpiel(saat: number): Zustand {
+/**
+ * Die kleinsten Teile, die noch alle drei unterkommen — die Rückfallebene,
+ * wenn keiner der Kandidaten lösbar war. Gibt es auch dafür keine Lösung, ist
+ * das Brett so voll, dass die Runde ehrlich zu Ende ist.
+ */
+function notTablett(raster: Raster, saat: number): readonly Teil[] | null {
+  const brett = maskenAus(raster);
+  const klein = FORMEN.filter((f) => f.length <= 3);
+  for (const a of klein) {
+    for (const b of klein) {
+      for (const c of klein) {
+        if (loesbar(brett, [formMasken(a), formMasken(b), formMasken(c)])) {
+          return [a, b, c].map((form, i) => ({ id: `${saat}-not${i}`, form, farbe: i % ANZAHL_FARBEN }));
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Teilt drei neue Teile aus — und zwar nie ein Tablett, das nicht zu schaffen
+ * ist.
+ *
+ * Vorher entschied der Zufall über das Ende: Auch bei bestem Spiel kam in
+ * einigen Prozent der Fälle ein Tablett, dessen drei Teile zusammen nirgends
+ * mehr hinpassten. Wer dort starb, hatte nichts falsch gemacht, und ein Kind
+ * schreibt so etwas sich selbst zu. Jetzt wird ausprobiert, bis eines geht
+ * (`loesbar`), und **wer stirbt, hat sich verlegt**.
+ *
+ * Mit der Etappe wird zusätzlich gewählt, wie knapp es ist (`auswahlGroesse`):
+ * Schwierigkeit entsteht nicht daraus, dass man unfair stirbt, sondern daraus,
+ * dass immer weniger Züge richtig sind.
+ */
+function neuesTablett(saat: number, raster: Raster, etappe: number): { tablett: readonly Teil[]; saat: number } {
+  const brett = maskenAus(raster);
+  const gewuenscht = auswahlGroesse(etappe);
+  let s = saat;
+  let bester: { tablett: readonly Teil[]; verzeihen: number } | null = null;
+  let gefunden = 0;
+
+  for (let versuch = 0; versuch < VERSUCHE && gefunden < gewuenscht; versuch++) {
+    const kandidat = einTablett(s, raster, etappe);
+    s = kandidat.saat;
+    const formen = kandidat.tablett.map((t) => formMasken(t.form));
+    if (!loesbar(brett, formen)) continue;
+    gefunden++;
+    // Auf Etappe 1 gibt es nichts zu wählen — dann gleich nehmen und sich das
+    // Durchzählen der ersten Züge sparen.
+    if (gewuenscht === 1) return { tablett: kandidat.tablett, saat: s };
+    const { zuege, gut } = ersteZuege(brett, formen);
+    const verzeihen = zuege === 0 ? 0 : gut / zuege;
+    if (!bester || verzeihen < bester.verzeihen) bester = { tablett: kandidat.tablett, verzeihen };
+  }
+
+  if (bester) return { tablett: bester.tablett, saat: s };
+  const not = notTablett(raster, s);
+  if (not) return { tablett: not, saat: s };
+  // Nichts geht mehr: ein beliebiges Tablett, die Runde endet an ihm.
+  return einTablett(s, raster, etappe);
+}
+
+export function neuesSpiel(saat: number, etappe = 1): Zustand {
   const raster = leeresRaster();
-  const { tablett, saat: neueSaat } = neuesTablett(saat, raster);
-  return { raster, tablett, punkte: 0, kombo: 0, vorbei: false, saat: neueSaat };
+  const { tablett, saat: neueSaat } = neuesTablett(saat, raster, etappe);
+  return {
+    raster,
+    tablett,
+    punkte: 0,
+    kombo: 0,
+    vorbei: false,
+    festgefahren: false,
+    saat: neueSaat,
+    linien: (etappe - 1) * LINIEN_JE_ETAPPE,
+    joker: START_JOKER,
+    belohnt: etappe,
+    verlauf: null,
+  };
 }
 
 /**
@@ -278,7 +413,7 @@ export function neuesSpiel(saat: number): Zustand {
  * Teile ziehen, und ehrlich prüfen, ob überhaupt noch etwas passt.
  */
 export function teilLegen(z: Zustand, tablettIndex: number, ankerX: number, ankerY: number): Zustand {
-  if (z.vorbei) return z;
+  if (z.vorbei || z.festgefahren) return z;
   const teil = z.tablett[tablettIndex];
   if (!teil) return z;
   if (!passtAn(z.raster, teil.form, ankerX, ankerY)) return z;
@@ -291,16 +426,47 @@ export function teilLegen(z: Zustand, tablettIndex: number, ankerX: number, anke
   const neueKombo = anzahlLinien > 0 ? z.kombo + 1 : 0;
   const zugPunkte = punkteFuerZug(teil.form.length, anzahlLinien, neueKombo);
 
+  const linien = z.linien + anzahlLinien;
+  const etappe = etappeFuer(linien);
+  // Für jede erstmals erreichte Etappe ein Joker — gedeckelt.
+  const belohnt = Math.max(z.belohnt, etappe);
+  const joker = Math.min(JOKER_MAX, z.joker + (belohnt - z.belohnt));
+
   let tablett: readonly (Teil | null)[] = z.tablett.map((t, i) => (i === tablettIndex ? null : t));
   let saat = z.saat;
 
   if (tablett.every((t) => t === null)) {
-    const gezogen = neuesTablett(saat, aufgeloest);
+    const gezogen = neuesTablett(saat, aufgeloest, etappe);
     tablett = gezogen.tablett;
     saat = gezogen.saat;
   }
 
-  const vorbei = tablett.every((t) => t === null || !passtIrgendwo(aufgeloest, t.form));
+  const keinZug = tablett.every((t) => t === null || !passtIrgendwo(aufgeloest, t.form));
 
-  return { raster: aufgeloest, tablett, punkte: z.punkte + zugPunkte, kombo: neueKombo, vorbei, saat };
+  return {
+    raster: aufgeloest,
+    tablett,
+    punkte: z.punkte + zugPunkte,
+    kombo: neueKombo,
+    vorbei: keinZug && joker === 0,
+    festgefahren: keinZug && joker > 0,
+    saat,
+    linien,
+    joker,
+    belohnt,
+    verlauf: { ...z, verlauf: null },
+  };
+}
+
+/**
+ * Den letzten Zug zurücknehmen — kostet einen Joker.
+ *
+ * Geht nur **einen** Zug weit (`verlauf` hält genau einen Stand): Mehr würde
+ * aus einer begrenzten Hilfe ein freies Ausprobieren machen, und die Punkte
+ * wären nichts mehr wert. Der Vorrat und die schon belohnte Etappe bleiben, wie
+ * sie jetzt sind — beides stammt nicht aus dem zurückgenommenen Stand.
+ */
+export function zurueck(z: Zustand): Zustand {
+  if (z.vorbei || !z.verlauf || z.joker <= 0) return z;
+  return { ...z.verlauf, joker: z.joker - 1, belohnt: z.belohnt, verlauf: null };
 }
