@@ -4,12 +4,17 @@ import { useGameLoop } from '../../core/useGameLoop';
 import { sfx } from '../../core/sfx';
 import { saatAus } from '../../core/rng';
 import { Punktegewinn, usePunktegewinn } from '../../core/Punktegewinn';
+import { Komboherz } from '../../core/Komboherz';
 import type { GameProps } from '../../core/types';
 import {
   ANKUNFT,
+  GOLD_PUNKTE,
   MESSER_PUNKTE,
+  bossBonus,
   flugFortschritt,
-  messerFuerLevel,
+  istBoss,
+  ketteFaktor,
+  levelAufbauen,
   neuesSpiel,
   stossPartner,
   werfen,
@@ -36,6 +41,21 @@ import { BladeTossIcon } from './Icon';
  * Augenblick, an dem man sieht, woran es lag.
  */
 const STOSS_ZEIGEN_MS = 750;
+
+/**
+ * Prüfhaken nur für Bildschirmfotos (auf einem echten Gerät nie gesetzt):
+ * `globalThis.__messerStart = { level, halt, kette }` beginnt in einem späteren Level, mit einer
+ * Apfelkette und auf Wunsch angehaltener Uhr. Solange er gesetzt ist, liefert `globalThis.__messerStand()`
+ * den laufenden Zustand — damit lässt sich das Spiel von außen spielen.
+ */
+function pruefhaken(): { level?: number; halt?: boolean; kette?: number } | undefined {
+  return (globalThis as { __messerStart?: { level?: number; halt?: boolean; kette?: number } }).__messerStart;
+}
+
+/** Wie lange eine Boss-Meldung steht (ms). */
+const MELDUNG_MS = 1900;
+
+type Meldung = { id: number; text: string; neben?: string };
 
 /** Rechnet einen Steckwinkel in die Drehung um, die die Anzeige braucht. */
 const alsGrad = (steck: number, stammwinkel: number) =>
@@ -109,7 +129,14 @@ function Startbildschirm({ bestScore, onStart }: { bestScore: number; onStart: (
 
 export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRunde }: GameProps) {
   const [gestartet, setGestartet] = useState(!istErsteRunde);
-  const [z, setZ] = useState<Zustand>(() => neuesSpiel(saatAus('messerwurf', Date.now())));
+  const [z, setZ] = useState<Zustand>(() => {
+    const saat = saatAus('messerwurf', Date.now());
+    const haken = pruefhaken();
+    return haken?.level && haken.level > 1 ? levelAufbauen(haken.level, 0, saat, haken.kette ?? 0) : neuesSpiel(saat);
+  });
+  const zRef = useRef(z);
+  zRef.current = z;
+  if (pruefhaken()) (globalThis as { __messerStand?: () => Zustand }).__messerStand = () => zRef.current;
 
   /**
    * Das „+N" über dem Brett. Die Schwelle liegt über `MESSER_PUNKTE`: Jeder
@@ -173,7 +200,7 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
 
   useGameLoop((dt) => setZ((alt) => zeitFortschritt(alt, dt)), {
     fps: 60,
-    running: gestartet && !z.vorbei,
+    running: gestartet && !z.vorbei && !pruefhaken()?.halt,
   });
 
   useEffect(() => {
@@ -184,14 +211,35 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
   const vorMesserRef = useRef(z.messer.length);
   const vorAepfelRef = useRef(z.aepfel.length);
   const vorLevelRef = useRef(z.level);
+  const vorPauseRef = useRef(z.pauseRest > 0);
+  const [meldung, setMeldung] = useState<Meldung | null>(null);
   useEffect(() => {
-    if (z.aepfel.length < vorAepfelRef.current) sfx('stufe');
+    // Ein Apfel in einer Kette klingt höher als der davor, wie überall bei Serien.
+    if (z.aepfel.length < vorAepfelRef.current) sfx('stufe', Math.min(12, (z.kette - 1) * 2));
     else if (z.messer.length > vorMesserRef.current) sfx('klick');
-    if (z.level > vorLevelRef.current) sfx('gut');
+    if (z.level > vorLevelRef.current) {
+      sfx('gut');
+      if (istBoss(z.level)) {
+        sfx('stufe');
+        setMeldung({ id: z.level, text: 'Boss-Stamm!', neben: `Goldener Apfel: ${GOLD_PUNKTE} Punkte` });
+      }
+    }
+    // Der Boss ist besiegt, sobald sein letztes Messer sitzt — nicht erst, wenn der nächste Level kommt.
+    if (z.pauseRest > 0 && !vorPauseRef.current && istBoss(z.level)) {
+      sfx('stufe', 7);
+      setMeldung({ id: z.level + 0.5, text: 'Boss besiegt!', neben: `+${bossBonus(z.level)} Punkte` });
+    }
     vorMesserRef.current = z.messer.length;
     vorAepfelRef.current = z.aepfel.length;
     vorLevelRef.current = z.level;
+    vorPauseRef.current = z.pauseRest > 0;
   }, [z]);
+
+  useEffect(() => {
+    if (!meldung) return;
+    const uhr = window.setTimeout(() => setMeldung(null), MELDUNG_MS);
+    return () => window.clearTimeout(uhr);
+  }, [meldung]);
 
   // Das Rundenende wird bewusst verzögert gemeldet: Erst steht das Bild vom
   // Zusammenstoß, dann kommt der Bildschirm der Hülle darüber.
@@ -207,8 +255,11 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
     return <Startbildschirm bestScore={bestScore} onStart={() => setGestartet(true)} />;
   }
 
-  const gesamt = messerFuerLevel(z.level);
+  // Der Vorrat zeigt, was noch **geworfen** wird — nicht, was schon steckt.
+  // Der Vorrat zeigt, was in diesem Level noch **geworfen** wird — nicht, was schon steckt.
+  const gesamt = z.wuerfe;
   const geworfen = gesamt - z.uebrig;
+  const boss = istBoss(z.level);
   // Welche steckende Klinge der tödliche Wurf erwischt hat — beide werden
   // rot, damit der Zusammenstoß als Paar zu lesen ist.
   const stossIndex = stossPartner(z);
@@ -228,10 +279,21 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
         {z.punkte}
       </output>
       <span className="text-sm text-gedaempft">
-        Level {z.level} · {z.messer.length} im Holz
+        Level {z.level}
+        {/* Der Boss steht als **Wort** da, nicht nur als anderer Stamm. */}
+        {boss && <strong className="text-amber-300"> · Boss</strong>} · {z.messer.length} im Holz
       </span>
 
-      <div className="spielbuehne">
+      <div className="spielbuehne relative">
+        {/* Das Herz hängt über der oberen rechten Ecke der Bühne, wie in Snake Rush und Ring Rise: Es
+            kostet keine Höhe. Es zeigt den **Faktor** der Apfelkette, nicht ihre Länge — die hört bei
+            ×4 auf zu zählen, und „×6" neben einem Höchstfaktor von vier wäre gelogen. */}
+        <Komboherz
+          kombo={ketteFaktor(z.kette) >= 2 ? ketteFaktor(z.kette) : 0}
+          ruhig={settings.reducedMotion}
+          beschriftung="Apfelkette"
+          className="absolute -top-2 right-0 z-10"
+        />
         {/* Das Brett ist ein eigenes Element um das SVG herum, nicht das SVG
             selbst: Der Punktegewinn ist ein `div` und gehört ins Brett (so
             macht es Ghost Chase) — direkt in der Bühne würde er das Brett
@@ -244,7 +306,7 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
             viewBox={`0 0 100 ${HOEHE}`}
             className="h-full w-full"
             role="img"
-            aria-label={`Blade Toss, Level ${z.level}. Noch ${z.uebrig} von ${gesamt} Messern zu werfen.${z.vorbei ? ' Vorbei — eigenes Messer getroffen.' : ''}`}
+            aria-label={`Blade Toss, Level ${z.level}${boss ? ', Boss-Stamm' : ''}. Noch ${z.uebrig} von ${gesamt} Messern zu werfen.${z.vorbei ? ' Vorbei — eigenes Messer getroffen.' : ''}`}
           >
             <Bretterwand />
 
@@ -254,9 +316,9 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
                 erster Versuch zeichnete die Messer unter den Stamm, damit die
                 Klinge „im Holz verschwindet"; dann waren aber alle Messer
                 unsichtbar, sobald sie nach oben zeigten. */}
-            <Stamm />
-            {z.aepfel.map((steck, i) => (
-              <Apfel key={i} drehung={alsGrad(steck, z.winkel)} />
+            <Stamm boss={boss} />
+            {z.aepfel.map((apfel, i) => (
+              <Apfel key={i} drehung={alsGrad(apfel.steck, z.winkel)} gold={apfel.gold} />
             ))}
             {z.messer.map((steck, i) => (
               <SteckendesMesser key={i} drehung={alsGrad(steck, z.winkel)} alarm={i === stossIndex} />
@@ -268,6 +330,7 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
               <ZerteilterApfel
                 drehung={alsGrad(z.zerteilt.steck, z.winkel)}
                 fortschritt={zerteiltFortschritt(z)}
+                gold={z.zerteilt.gold}
               />
             )}
 
@@ -287,8 +350,27 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
           </svg>
 
           <Punktegewinn gewinn={gewinn} />
+
+          {/* Die Boss-Meldung liegt **oben** im Brett, über dem Stamm: Unten fliegt das Messer
+              herein, in der Mitte sitzt der Stamm. Oben ist nichts außer dem Rand. */}
+          {meldung && (
+            <div
+              key={meldung.id}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-2 top-1 z-10 grid justify-items-center rounded-lg border border-white/20 bg-black/60 px-2 py-0.5 text-center leading-tight whitespace-nowrap"
+            >
+              <div className={`grid justify-items-center ${settings.reducedMotion ? '' : 'welle-schild'}`}>
+                <p className="text-[13px] font-extrabold text-amber-300">{meldung.text}</p>
+                {meldung.neben && <p className="text-[11px] font-semibold text-white/90">{meldung.neben}</p>}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      <span className="sr-only" aria-live="polite">
+        {meldung ? `${meldung.text} ${meldung.neben ?? ''}` : ''}
+      </span>
 
       {/* Vorrat: ein Symbol je Messer dieses Levels, verbrauchte blass. */}
       <div className="flex items-end gap-1" aria-hidden="true">
@@ -303,7 +385,10 @@ export function BladeToss({ onScore, onGameOver, settings, bestScore, istErsteRu
           an der überhaupt noch stand, worum es geht. */}
       <p className="max-w-sm text-center text-xs text-gedaempft">
         Irgendwo antippen wirft ein Messer — nie in ein Messer, das schon steckt.
-        <span className="nur-bei-platz"> Äpfel geben Extrapunkte.</span>
+        <span className="nur-bei-platz">
+          {' '}
+          Äpfel geben Extrapunkte, mehrere hintereinander immer mehr. Jeder fünfte Stamm ist ein Boss.
+        </span>
       </p>
 
       {settings.reducedMotion && <span className="sr-only">Animationen sind reduziert.</span>}

@@ -1536,6 +1536,100 @@ bekannten Vorbilds — dieselbe Regel wie bei Pair Up.
   der neue Stamm kommt. Ohne sie wirft ein noch tippender Finger sofort ins
   frische Level.
 
+### Version 2 — faire Zeitfenster, Boss-Stamm, Apfelkette
+
+Die Bestandsaufnahme ergab einen Fehler, der nicht im Spielen aufgefallen wäre, sondern erst beim
+**Ausrechnen**: Wie groß ist das Zeitfenster für den schwersten Wurf eines Levels, wenn man **perfekt**
+spielt (jedes Messer in die Mitte der größten Lücke)? Gemessen über 30 Saaten (`bestesFenster`):
+
+| Level | Messer im Stamm | Fenster, Median | schlechtestes |
+|---|---|---|---|
+| 5 | 9 (2 + 7) | 377 ms | 171 ms |
+| 8 | 12 (3 + 9) | 155 ms | 107 ms |
+| 10 | 13 | 122 ms | 71 ms |
+| 15 | 13 | 95 ms | 41 ms |
+| 20 bis 40 | 13 | 70 bis 80 ms | 39 bis 47 ms |
+
+Das Fenster ist die Länge des legalen Bereichs (Lücke minus `MIN_ABSTAND` nach beiden Seiten) geteilt
+durch das Tempo. Ab Level 8 lag es unter dem, was irgendjemand zuverlässig trifft: Dort entschied nicht
+Können, sondern Zufall — und das Spiel versprach bis Level 40 steigende Schwierigkeit. *Merksatz:* Wo ein
+Spiel auf einem Zeitfenster beruht, gehört dessen Länge in einen Test, nicht in ein Gefühl.
+
+- **Die Messer sind schlanker, damit mehr hineinpassen** (Klinge 4,4 statt 6 breit, `MIN_ABSTAND` 0,155 statt
+  0,2). Jedes Messer sperrte vorher 0,4 des Umfangs von 6,28, bei dreizehn Messern also fast alles.
+  **Die beiden Zahlen hängen zusammen** (`KLINGE_HALB` in `figuren.tsx`, `MIN_ABSTAND` in `logik.ts`):
+  2 · 2,2 / 28 ≈ 0,157. Wer eine ändert, ändert die andere mit, sonst steckt ein „erlaubtes" Messer sichtbar
+  im Nachbarn oder ein „tödliches" liegt sichtbar daneben.
+- **Die Zahl der Messer im Stamm wächst von 3 bis 10 (Level 21) und bleibt dann stehen**
+  (`gesamtFuerLevel`), vorgesteckt höchstens 3 (`vorgestecktFuerLevel`, ab Level 4). Die Tempo-Kurve ist
+  gedeckelt bei 2,8 (Level 11). Der Engpass-Fenster-Wert liegt damit zwischen 1,8 s (Level 1) und rund
+  120 ms am Ende (`gleichmaessigesFenster`) — ein Test verlangt für **jeden** Level 1 bis 60 und je 25 Saaten,
+  dass das echte Fenster bei bestem Spiel mindestens `fensterZiel` erreicht (70 Prozent des gleichmäßigen),
+  und dass das gleichmäßige nie unter 115 ms fällt.
+- **`levelAufbauen` verwirft zu enge Verteilungen.** Die vorgesteckten Messer liegen zufällig; hat eine
+  Verteilung selbst bei bestem Spiel ein Fenster unter dem Ziel, wird neu gewürfelt (40 Versuche), danach
+  steckt ein Messer weniger vor und der Spieler wirft eines mehr. In den gemessenen Saaten kam das nie vor —
+  die Absicherung steht für künftige Änderungen am Fahrplan.
+- **Das wechselnde Drehmuster war kaputt, und zwar unbemerkt.** Es wechselte zwischen gleich langen
+  Abschnitten in beide Richtungen; dass sie sich zu fast null addieren, war reiner Zufall. Der Stamm pendelte
+  dann nur hin und her, und eine Lücke außerhalb der Spanne kam **nie** oder erst nach Minuten am
+  Einschlagpunkt vorbei. Der Bot hat es gefunden: Er wartete in Level 5 bis zu acht Sekunden auf die Mitte
+  seiner Lücke. Jetzt dreht der Stamm vorwärts lang (1,8 bis 2,8 s) und zurück kurz (0,3 bis 0,7 s mit
+  0,7-fachem Tempo), kommt also immer weiter. `umlaufZeit` misst, wie lange er für einen ganzen Umfang
+  braucht; ein Test verlangt weniger als sechs Sekunden für jeden Level bis 80 und je 20 Saaten (gemessen
+  höchstens 5,3). *Merksatz:* Eine Zufallsgröße, die sich zufällig aufhebt, ist keine Schwierigkeit, sondern ein
+  Fehler mit guter Laune.
+- **Wechselnder Stamm erst ab Level 6.** Level 5 ist der erste Boss und dreht noch gleichmäßig: Dichter
+  bestückt *und* mit Richtungswechsel wäre auf einmal zu viel.
+- **Boss-Stamm jeder fünfte Level** (`istBoss`): ein Messer mehr im Stamm, dafür **0,75-faches Tempo** — er
+  prüft Genauigkeit, nicht Geschwindigkeit —, ein **goldener Apfel** (100 statt 25 Punkte), und beim letzten
+  Messer ein Bonus von 100 mal der Nummer des Bosses (`bossBonus`). Der Bonus kommt **beim Treffen des
+  letzten Messers**, nicht erst beim Levelwechsel: Das „+N" über dem Brett soll im Moment des Siegs stehen.
+  Optisch: dunkleres Holz, zwei Eisenbänder, zwölf Nieten (die Form sagt „anderer Stamm", nicht nur die
+  Farbe), das Wort „Boss" in der Zeile unter dem Punktestand. Der goldene Apfel ist **größer**, trägt einen
+  Stern und einen hellen Schein: Beim Zielen sieht man nicht lange hin, die Silhouette muss sagen, dass er das
+  Vierfache wert ist.
+- **Apfelkette** (`kette`, `ketteFaktor`, höchstens ×4): Jeder getroffene Apfel zählt eine Stufe mehr; bleibt
+  am Ende eines Levels ein Apfel stehen, reißt die Kette. Die Kette überlebt den Levelwechsel (`levelAufbauen`
+  nimmt sie mit). Das ist die **Entscheidung** des Spiels: Ein Apfel liegt mindestens 0,34 vom nächsten Messer,
+  man trifft ihn mit 0,26 Spielraum — wer ihn nimmt, steckt sein Messer aber womöglich dicht an ein anderes
+  und verbaut sich die Lücke für später. Das Herz (`Komboherz`) zeigt den **Faktor**, nicht die Länge der Kette
+  (dieselbe Lehre wie Snake Rush und Ring Rise).
+- **Zwei Äpfel dürfen sich nicht überlappen** (`APFEL_UNTEREINANDER` 0,55). Mit dem kleineren Mindestabstand
+  für Messer (0,34) lagen zwei Äpfel im Bild ineinander; ein Apfel ist 0,38 breit, der goldene 0,47.
+  Gefunden hat das erst das Bild (Level 12 auf 320 Pixeln), kein Test.
+- **Der Bot (`bot.ts`) hat die Schwierigkeit eingestellt.** Er zielt auf die Mitte der größten Lücke, rechnet
+  mit der **echten** Spielrechnung (`zeitFortschritt`) aus, wann der Stamm sie unter den Einschlagpunkt gedreht
+  hat — die Flugzeit zählt das Spiel in ganzen Bildern, also 8 statt 7,2 —, und wirft mit einer
+  **Ungenauigkeit** in Sekunden (Standardabweichung, aus seiner eigenen Saat). Ein Mensch tippt so ungenau,
+  auch wenn er genau weiß, wann er will. Gemessen (30 Saaten, ab Level 1, 300 s):
+
+  | Ungenauigkeit | Level im Median | tot |
+  |---|---|---|
+  | 0 ms | 28 (nur die Zeit ist um) | 0 von 30 |
+  | 40 ms | 29 | 1 von 30 |
+  | 80 ms | 21 | 26 von 30 |
+  | 120 ms | 13 | 30 von 30 |
+  | 160 ms | 12 | 30 von 30 |
+
+  Wer 120 ms danebenliegt (ein Kind, das zum ersten Mal spielt) kommt bis Level 13; wer 40 ms schafft, spielt
+  praktisch unbegrenzt. Der perfekte Bot stirbt in **keinem** Level, auch nicht in den späten und in den
+  Boss-Stämmen (Test über Level 12, 15, 20, 25, 30, 40, 60) — damit ist bewiesen, dass jedes Level zu schaffen
+  ist. Wahlloses Werfen stirbt zwischen Level 4 und 11 (Median 6): Früh sind die Lücken groß genug, dass auch
+  Zufall eine Weile gutgeht.
+- **Ein Level dauert rund elf Sekunden** (beim Bot, der die größte Lücke abwartet; ein Mensch wirft in die
+  nächste ausreichende und ist schneller). Die Schwierigkeit steigt nach Level 21 nicht mehr — das Tempo ist
+  gedeckelt, die Zahl der Messer auch —, aber Boss und Apfelkette halten den Rekord offen.
+- **`wuerfe` im Zustand** (Zahl der zu werfenden Messer des Levels) gehört der Vorratsanzeige: Wegen der
+  verworfenen Verteilungen ist sie nicht mehr aus der Levelnummer allein zu rechnen.
+- **Boss-Meldung oben im Brett**, nicht unten und nicht in der Mitte: Unten fliegt das Messer herein, in der
+  Mitte sitzt der Stamm. Zwei kurze Zeilen (13 und 11 Pixel) — in der ersten, größeren Fassung verdeckte sie
+  auf 375 × 560 den oberen Rand des Stamms samt Goldapfel.
+- **Prüfhaken nur für Bildschirmfotos** (auf einem echten Gerät nie gesetzt):
+  `globalThis.__messerStart = { level, halt, kette }` beginnt in einem späteren Level, mit Apfelkette und auf
+  Wunsch angehaltener Uhr; `__messerStand()` liefert den laufenden Zustand. Wie bei Ring Rise spielt ein
+  Spieler im Seitenkontext (`requestAnimationFrame`, `pointerdown`).
+
 ## Drop Four — Besonderheiten
 
 Das erste Spiel der Sammlung, bei dem ein Gegner zurückspielt. Bis dahin
