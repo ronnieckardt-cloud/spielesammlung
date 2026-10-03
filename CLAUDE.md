@@ -643,6 +643,116 @@ versucht deshalb genau dasselbe Level erneut.
   Sonderfall: anders als beim Zerbröseln gibt es hier kein
   `--verzoegerung`, das separat auf 0 gesetzt werden müsste.
 
+### Version 2 — lösbare Tabletts, Etappen, Rückgängig
+
+Die Bestandsaufnahme ergab: ein sauberes Legespiel, aber **der Zufall entschied über das Ende**. Gemessen
+mit einem gierigen Bot (300 Spiele, `bot.ts`): In **47 Prozent** der Fälle (140 von 300) endete die Runde
+an einem Tablett, dessen drei Teile schon beim Austeilen nirgends zusammen hinpassten. Wer dort starb, hatte
+nichts falsch gemacht — und ein Kind schreibt so etwas sich selbst zu. Der Anteil solcher Tabletts an allen
+ausgeteilten: 6,3 Prozent bei einem Zufallsspieler, 3,8 beim gierigen, 1,2 bei einem, der vorausplant.
+
+- **Jedes Tablett ist zu schaffen** (`neuesTablett`). Beim Austeilen wird ein Kandidat gezogen und mit einem
+  echten Löser geprüft (`loesbar` in `loeser.ts`), bis einer geht; findet sich keiner, kommen die kleinsten Teile,
+  die noch zusammen unterkommen (`notTablett`). **Wer stirbt, hat sich verlegt.** Allein das verlängert die
+  Runde eines gierigen Bots von im Median 50 auf 83 Züge (Punkte 374 → 747).
+- **Der Löser rechnet auf Zeilenmasken**, nicht auf dem Raster: Ein Brett sind acht Zahlen von 0 bis 255. Beim
+  Austeilen werden Zehntausende Stellungen durchprobiert; mit je einem kopierten 8×8-Feld wäre das auf einem
+  alten iPad zu spüren. Gemessen mit der Maskenfassung: Austeilen im Mittel 0,43 ms, höchstens 1,6 ms — auch
+  auf Etappe 25 mit sechs verglichenen Kandidaten.
+- **Zwei Tests halten den Löser an die Spielregel:** `legenMasken` gegen `legen` + `aufloesen` auf 1500 zufälligen
+  Brettern (darunter über hundert mit Abräumen), und `loesbar`/`ersteZuege` gegen eine bewusst langsame
+  Rasterfassung (250 Bretter, beide Antworten kommen vor). Eine Prüfung, die dieselbe Rechnung benutzt wie der
+  geprüfte Code, prüft nichts — dort steht deshalb eine zweite, einfache Fassung.
+- **Der perfekte Spieler stirbt nie** (`sichererZug`: kennt die Lösung des Tabletts, legt nur Züge, nach denen
+  sie noch geht). Test über Etappe 1 und 12: 250 Züge, nie tot. Das heißt auch: **Wer perfekt spielt, spielt
+  endlos** (700 Züge im Versuch: Etappe 56, rund 11 500 Punkte) — wie der perfekte Bot bei Ring Rise und Blade
+  Toss gewollt. Die Schwierigkeit entsteht für alle anderen.
+
+**Etappen** (`LINIEN_JE_ETAPPE` = 8, `etappeFuer`). Alle acht aufgelösten Reihen oder Spalten kommt die nächste.
+Der Name ist **„Etappe", nicht „Stufe"**: Die Hülle benutzt „Stufe" für das Spielerlevel („🎉 Stufe 2 erreicht!"
+im Rundenende), und zwei Stufen in einem Bild, die etwas Verschiedenes meinen, verwirren. „Etappe" ist auch
+der Name bei Snake Rush, Ring Rise und Bubble Pop. Mit der Etappe wird es enger, über zwei Hebel:
+
+- **Das Spiel sucht das knappste Tablett aus mehreren** (`auswahlGroesse`: 1 + ⌊(Etappe − 1) / 3⌋, höchstens 6).
+  „Knapp" heißt: Von allen ersten Zügen lassen sich nur wenige zu Ende führen (`ersteZuege`). Etappe 1 bis 3
+  nimmt, was kommt — das gibt dem Anfang Ruhe.
+- **Weniger Nachsicht, mehr große Teile** (`gewichtFuerGroesse(…, etappe)`): Die Kulanz bei vollem Feld sinkt um
+  8 Prozent je Etappe, große Teile werden mit `groesse^(0,06 · (Etappe − 1))` bevorzugt. Nie auf null.
+
+**Die erste Fassung war eine Wand.** Statt „das knappste von N" stand dort eine feste Schwelle („höchstens 92
+Prozent verzeihende Züge"). Auf einem halbleeren Brett ist fast jedes Tablett nachsichtig, die Schwelle griff
+also nie, und es blieb bei „immer das knappste von sechzehn" — die Spielzeit eines gierigen Bots fiel schon auf
+Etappe 2 von 83 auf 35 Züge, in einem einzigen Schritt. Die Hebel einzeln gemessen (60 Saaten, gieriger Bot,
+Median der Züge, Start auf Etappe 1 / 8):
+
+| Hebel | Etappe 1 | Etappe 8 |
+|---|---|---|
+| keiner | 83 | 86 |
+| feste Schwelle („knappstes von 16") | 35 | 23 |
+| nur große Teile bevorzugt | 56 | 47 |
+| nur weniger Nachsicht | 77 | 50 |
+
+Der Endstand („bestes von N", sanfte Gewichte) gibt **59 / 38 / 29 / 29** für Start auf Etappe 1 / 4 / 8 / 12:
+Ein gieriger Spieler kommt länger durch als vor dem Umbau (50) und im Median bis Etappe 4, ein Spieler auf
+Etappe 8 hält halb so lange. Ab Etappe 16 ändert sich nichts mehr (die Auswahl ist gedeckelt). Ein Test
+verlangt für Etappe 12 weniger als 75 Prozent der Züge von Etappe 1.
+*Merksatz:* Ein fester Schwellenwert, den die meisten Kandidaten ohnehin überschreiten, ist kein Stellrad,
+sondern ein Schalter. Ein Stellrad muss abgestuft sein — hier über „aus wie vielen wird gewählt".
+
+**Rückgängig** (`zurueck`, derselbe Gedanke wie bei Merge Up). Ein einzelner verrutschter Finger beim Ziehen
+beendet eine Runde, die zehn Minuten gedauert hat. Ein Vorrat von **Jokern** (`START_JOKER` = 1, `JOKER_MAX` = 3,
+einer je neu erreichter Etappe) nimmt den **letzten Zug** zurück; `verlauf` hält genau einen Stand.
+
+- **`belohnt` verhindert das Doppelverdienen:** Ohne die höchste je belohnte Etappe ließe sich eine Etappe
+  erreichen, zurücknehmen, erneut erreichen und noch einmal kassieren. Eigener Test.
+- **`festgefahren` ist eine Zwischenstufe vor `vorbei`:** Passt nichts mehr, aber ein Joker ist da, ist die Runde
+  **nicht** zu Ende — der Joker soll nicht in genau dem Augenblick verfallen, in dem man ihn braucht. Ein
+  Zufallstest über 40 Spiele mit gemischtem Legen und Zurück prüft nach **jedem** Schritt die Grundregeln
+  (Vorrat nie negativ oder über der Decke, nie beides zugleich, „vorbei" heißt wirklich nichts passt).
+- **Gemessen:** Ein Spieler mit Aussetzern (5/15/30 Prozent beliebiger Züge), der bei Stillstand zurücknimmt und
+  dann überlegt legt, kommt im Median von 59 auf 74, von 37 auf 53 und von 35 auf 56 Züge. Er hilft, ersetzt
+  aber nichts: Ein gieriger Spieler stirbt auch mit Joker (Test).
+- **Der Knopf heißt „Rückgängig", nicht „Zurück".** In der Kopfzeile steht schon „← Zurück", das die Runde
+  verlässt, und im Stillstand heißt es „Tippe auf …" — wer dort das falsche Zurück trifft, verliert die Runde.
+  (Merge Up nennt seinen Knopf noch „Zurück"; bei einer Überarbeitung dort mitdenken.)
+
+**Zwei Zusätze, die gemessen und wieder verworfen wurden** — der Wert dieses Abschnitts liegt darin, dass sie
+nicht mehr im Code stehen:
+
+- **Sterne** (ein Teil je Tablett trägt einen Stern, +20 je Stern beim Auflösen seiner Reihe). Ein Spieler, der
+  sie **ignoriert**, holt 98,7 Prozent der Punkte (15,28 gegen 15,48 je Zug beim gierigen, 19,31 gegen 19,30 beim
+  perfekten Bot): Die Reihen fallen ohnehin ständig, jeder Stern kommt von allein mit. Das ist keine
+  Entscheidung, sondern Deko.
+- **Blitzblank** (leeres Brett, +150). Der perfekte Bot räumte in 4200 Zügen **nie** ein ganzes Brett, ein
+  gieriger in zwei von hundert Spielen. Eine Prämie, die kaum jemand je sieht, braucht keinen Platz auf dem Bildschirm.
+*Merksatz:* Eine Zusatzregel, die ein Bot ignorieren kann, ohne Punkte zu verlieren, ist keine Entscheidung.
+
+**Oberfläche** (`Blockblitz.tsx`):
+
+- **Etappe links, Punktestand mittig, Rückgängig rechts — in einer Zeile**, die nicht höher ist als die Zahl
+  allein: Der Joker kostet keine Brettgröße. Die Seitenzellen sind gleich breit (`1fr`), damit die Zahl mittig
+  bleibt. Auf 320 Pixeln lief eine **fünfstellige** Zahl in den Knopf (5 Pixel Überlappung, gemessen): Die Schrift
+  schrumpft jetzt mit der Stellenzahl (`punkteGroesse`), der Knopf mit der Breite. Gute Läufe liegen im
+  fünfstelligen Bereich, das ist kein Sonderfall.
+- **Acht kleine Striche unter der Etappe** zählen die Linien bis zur nächsten, dazu Zahl und Beschriftung. Der
+  Joker-Vorrat steht als Zahl am Knopf, nicht als Farbe.
+- **Der Stillstand spricht auf dem Tablett**, nicht auf dem Brett: Die Teile passen ohnehin nirgends, das Brett
+  bleibt unverdeckt („Nichts passt mehr. Tippe auf Rückgängig (1 Joker)"), der Knopf wird goldgelb.
+  Hintergrund und Rand stehen **inline**, weil `.spielknopf` Tailwind-Farben überstimmt.
+- **Die Etappenmeldung kommt erst nach dem Zerbröseln** (`ETAPPENMELDUNG_NACH_MS`): Sie liegt oben auf dem
+  Brett, und genau dort fällt die Reihe. Ihre Zeitgeber stehen **nicht** in der Aufräumfunktion des Effekts — der
+  nächste Zug ändert `z.linien` und bräche sie ab, bevor die Meldung verschwindet. Ein Rückgängig räumt sie ab:
+  Eine Meldung für einen Zug, den es nicht mehr gibt, wäre gelogen.
+- Der Hinweis auf dem Startbildschirm sagt, was neu ist („Jedes Tablett lässt sich ganz ablegen"), denn die
+  Regelzeile im Spiel trägt `.nur-bei-platz` und fällt auf kurzen Bildschirmen weg.
+- **Prüfhaken nur für Bildschirmfotos** (auf einem echten Gerät nie gesetzt):
+  `globalThis.__blockStart = { etappe, joker, linien, punkte, raster, tablett, stillstand }` beginnt auf einer
+  späteren Etappe, mit einem Brett aus Text (`#` belegt) und einem Tablett aus Nummern in `FORMEN`, oder mitten im
+  Stillstand; solange er gesetzt ist, liefert `__blockStand()` den laufenden Zustand. Mit echten Tipp-Ereignissen
+  durchgespielt (21 Züge, ein Stillstand, ein Rückgängig, Ende): kein Konsolenfehler, jeder Zug kam an.
+- **Punkte:** Der Maßstab wächst (gieriger Bot rund 15 Punkte je Zug, perfekter rund 19, vorher lag die beste Runde
+  bei 422). `spiel_katalog.max_punkte` (500000) reicht; die Dreifach-Regel des Servers greift erst ab 25 000.
+
 ## Reihenfall — Besonderheiten
 
 - `logik.ts`: Formen und Wandtritte im SRS-Stil (Standard-Drehsystem), von

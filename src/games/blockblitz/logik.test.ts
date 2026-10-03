@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
+import { rng } from '../../core/rng';
 import {
   ANZAHL_FARBEN,
   BREITE,
   FORMEN,
   HOEHE,
+  JOKER_MAX,
+  LINIEN_JE_ETAPPE,
+  START_JOKER,
   aufloesen,
+  auswahlGroesse,
   fuellstand,
   gewichtFuerGroesse,
   legen,
@@ -14,7 +19,9 @@ import {
   passtIrgendwo,
   punkteFuerZug,
   PUNKTE_SCHWELLE_ANZEIGE,
+  etappeFuer,
   teilLegen,
+  zurueck,
   loesbareLinien,
   volleZeilenUndSpalten,
 } from './logik';
@@ -236,15 +243,13 @@ describe('teilLegen', () => {
     // dass eine Platzierung wegen Größe/Rand fehlschlägt.
     const einzelTeil = FORMEN.find((f) => f.length === 1)!;
     let z: Zustand = {
+      ...neuesSpiel(3),
       raster: leeresRaster(),
       tablett: [
         { id: 'a', form: einzelTeil, farbe: 0 },
         { id: 'b', form: einzelTeil, farbe: 1 },
         { id: 'c', form: einzelTeil, farbe: 2 },
       ],
-      punkte: 0,
-      kombo: 0,
-      vorbei: false,
       saat: 3,
     };
 
@@ -268,12 +273,9 @@ describe('teilLegen', () => {
     for (let x = 0; x < BREITE - 1; x++) raster = legen(raster, [{ dx: 0, dy: 0 }], x, 0, 0);
     const einzelTeil = FORMEN.find((f) => f.length === 1)!;
     const z: Zustand = {
+      ...neuesSpiel(1),
       raster,
       tablett: [{ id: 't', form: einzelTeil, farbe: 0 }, null, null],
-      punkte: 0,
-      kombo: 0,
-      vorbei: false,
-      saat: 1,
     };
     const nach = teilLegen(z, 0, BREITE - 1, 0);
     expect(nach.raster[0]!.every((zelle) => zelle === null)).toBe(true);
@@ -299,16 +301,13 @@ describe('teilLegen', () => {
     );
     const zweierTeil = FORMEN.find((f) => f.length === 2)!;
     const z: Zustand = {
+      ...neuesSpiel(1),
       raster,
       tablett: [
         { id: 'a', form: zweierTeil, farbe: 0 },
         { id: 'b', form: zweierTeil, farbe: 1 },
         { id: 'c', form: zweierTeil, farbe: 2 },
       ],
-      punkte: 0,
-      kombo: 0,
-      vorbei: false,
-      saat: 1,
     };
     // Keines der drei 2er-Teile kann noch irgendwo hin (nur 1 freie Zelle).
     expect(z.tablett.every((t) => t !== null && !passtIrgendwo(z.raster, t.form))).toBe(true);
@@ -394,5 +393,260 @@ describe('loesbareLinien', () => {
     const treffer = loesbareLinien(raster, [EINZELTEIL, null, null]);
     expect(treffer.zeilen).toContain(0);
     expect(treffer.spalten).toContain(0);
+  });
+});
+
+// ─── Etappen, Joker, Zurück ──────────────────────────────────────────────────
+
+/** Ein Brett aus Text: `#` belegt (Farbe 0), alles andere leer. */
+function brettAus(zeilen: readonly string[]): Raster {
+  return zeilen.map((z) => Array.from({ length: BREITE }, (_, x) => (z[x] === '#' ? 0 : null)));
+}
+
+const EINZEL: Teil = { id: 'e', form: FORMEN.find((f) => f.length === 1)!, farbe: 1 };
+const ZWEIER: Teil = { id: 'z', form: FORMEN.find((f) => f.length === 2 && f.every((v) => v.dy === 0))!, farbe: 2 };
+
+/**
+ * Ein Brett, auf dem **ein** Einzelteil bei (7,0) die oberste Zeile schließt —
+ * und sonst nichts. Die Zeile darunter ist ebenfalls fast voll, damit nach dem
+ * Abräumen Steine stehen bleiben.
+ */
+function zeileFastVoll(): Raster {
+  return brettAus(['#######.', '#.......', '', '', '', '', '', ''].map((z) => z.padEnd(BREITE, '.')));
+}
+
+describe('etappeFuer', () => {
+  it('beginnt bei Etappe 1 und steigt alle LINIEN_JE_ETAPPE Linien um eins', () => {
+    expect(etappeFuer(0)).toBe(1);
+    expect(etappeFuer(LINIEN_JE_ETAPPE - 1)).toBe(1);
+    expect(etappeFuer(LINIEN_JE_ETAPPE)).toBe(2);
+    expect(etappeFuer(5 * LINIEN_JE_ETAPPE)).toBe(6);
+  });
+
+  it('wird beim Start auf einer höheren Etappe passend vorbelegt', () => {
+    const z = neuesSpiel(3, 7);
+    expect(etappeFuer(z.linien)).toBe(7);
+    expect(z.belohnt).toBe(7);
+    expect(z.joker).toBe(START_JOKER); // keine nachgeschenkten Joker für übersprungene Etappen
+  });
+});
+
+describe('auswahlGroesse', () => {
+  it('beginnt bei einem Tablett und wächst nie rückwärts', () => {
+    expect(auswahlGroesse(1)).toBe(1);
+    let vorher = 1;
+    for (let etappe = 1; etappe <= 60; etappe++) {
+      const jetzt = auswahlGroesse(etappe);
+      expect(jetzt).toBeGreaterThanOrEqual(vorher);
+      vorher = jetzt;
+    }
+  });
+
+  it('gibt den ersten Etappen noch Ruhe: Bis zur dritten nimmt das Spiel, was kommt', () => {
+    expect(auswahlGroesse(2)).toBe(1);
+    expect(auswahlGroesse(3)).toBe(1);
+    expect(auswahlGroesse(4)).toBeGreaterThan(1);
+  });
+
+  it('hat eine Decke, sonst rechnet das Austeilen irgendwann zu lange', () => {
+    expect(auswahlGroesse(500)).toBe(auswahlGroesse(50));
+    expect(auswahlGroesse(500)).toBeLessThanOrEqual(8);
+  });
+});
+
+describe('gewichtFuerGroesse nach Etappe', () => {
+  it('gleicht auf Etappe 1 der alten Rechnung', () => {
+    expect(gewichtFuerGroesse(4, 0.5)).toBeCloseTo(1 / (1 + 0.5 * 4 * 0.35), 10);
+  });
+
+  it('bevorzugt mit der Etappe große Teile und verzeiht ein volles Feld weniger', () => {
+    const verhaeltnis = (etappe: number) => gewichtFuerGroesse(9, 0.6, etappe) / gewichtFuerGroesse(1, 0.6, etappe);
+    expect(verhaeltnis(10)).toBeGreaterThan(verhaeltnis(1));
+    // Auch auf hoher Etappe bleibt jedes Teil möglich.
+    expect(gewichtFuerGroesse(1, 0.9, 50)).toBeGreaterThan(0);
+  });
+});
+
+describe('Linien zählen für die Etappe', () => {
+  it('zählt Zeilen und Spalten eines Zuges zusammen', () => {
+    const z: Zustand = { ...neuesSpiel(1), raster: zeileFastVoll(), tablett: [EINZEL, null, null] };
+    const nach = teilLegen(z, 0, 7, 0);
+    expect(nach.linien).toBe(1);
+  });
+
+  it('belohnt die erste Etappe mit einem Joker, gedeckelt bei JOKER_MAX', () => {
+    const z: Zustand = {
+      ...neuesSpiel(1),
+      raster: zeileFastVoll(),
+      tablett: [EINZEL, null, null],
+      linien: LINIEN_JE_ETAPPE - 1,
+    };
+    const nach = teilLegen(z, 0, 7, 0);
+    expect(etappeFuer(nach.linien)).toBe(2);
+    expect(nach.joker).toBe(START_JOKER + 1);
+
+    const voll: Zustand = { ...z, joker: JOKER_MAX };
+    expect(teilLegen(voll, 0, 7, 0).joker).toBe(JOKER_MAX);
+  });
+
+  it('schenkt dem Spieler für einen Sprung über mehrere Etappen auf einmal jede einzelne', () => {
+    // Zehn Linien in einem Zug gibt es nicht — aber der Rechenweg soll nicht
+    // an „genau eine Etappe je Zug" hängen.
+    const z: Zustand = {
+      ...neuesSpiel(1),
+      raster: zeileFastVoll(),
+      tablett: [EINZEL, null, null],
+      linien: 3 * LINIEN_JE_ETAPPE - 1,
+      belohnt: 1,
+      joker: 0,
+    };
+    const nach = teilLegen(z, 0, 7, 0);
+    expect(etappeFuer(nach.linien)).toBe(4);
+    expect(nach.joker).toBe(3);
+    expect(nach.belohnt).toBe(4);
+  });
+});
+
+describe('zurueck', () => {
+  function nachEinemZug(): { vorher: Zustand; nachher: Zustand } {
+    const vorher: Zustand = { ...neuesSpiel(5), raster: leeresRaster(), tablett: [EINZEL, ZWEIER, EINZEL] };
+    const nachher = teilLegen(vorher, 1, 2, 3);
+    return { vorher, nachher };
+  }
+
+  it('stellt Brett, Tablett, Punkte und Kombo wie vor dem Zug her', () => {
+    const { vorher, nachher } = nachEinemZug();
+    expect(nachher.raster).not.toEqual(vorher.raster);
+    const zurueckZ = zurueck(nachher);
+    expect(zurueckZ.raster).toEqual(vorher.raster);
+    expect(zurueckZ.tablett).toEqual(vorher.tablett);
+    expect(zurueckZ.punkte).toBe(vorher.punkte);
+    expect(zurueckZ.kombo).toBe(vorher.kombo);
+    expect(zurueckZ.linien).toBe(vorher.linien);
+    expect(zurueckZ.saat).toBe(vorher.saat);
+  });
+
+  it('kostet genau einen Joker', () => {
+    const { nachher } = nachEinemZug();
+    expect(zurueck(nachher).joker).toBe(nachher.joker - 1);
+  });
+
+  it('geht nur einen Zug weit', () => {
+    const { nachher } = nachEinemZug();
+    const einmal = zurueck(nachher);
+    expect(einmal.verlauf).toBeNull();
+    expect(zurueck(einmal)).toBe(einmal);
+  });
+
+  it('tut am Anfang und ohne Joker nichts', () => {
+    const start = neuesSpiel(2);
+    expect(zurueck(start)).toBe(start);
+    const { nachher } = nachEinemZug();
+    const ohne = { ...nachher, joker: 0 };
+    expect(zurueck(ohne)).toBe(ohne);
+  });
+
+  it('lässt nach dem Zurück denselben Zug wieder zu — und denselben Ausgang', () => {
+    const { nachher } = nachEinemZug();
+    const nochmal = teilLegen(zurueck(nachher), 1, 2, 3);
+    expect(nochmal.raster).toEqual(nachher.raster);
+    expect(nochmal.punkte).toBe(nachher.punkte);
+    expect(nochmal.tablett).toEqual(nachher.tablett);
+  });
+
+  it('gibt eine verdiente Etappe nicht zurück: Aufstieg, Zurück, derselbe Zug ergibt keinen zweiten Joker', () => {
+    // Sonst ließe sich ein Joker verdienen, einsetzen und wieder verdienen —
+    // eine Joker-Maschine.
+    const z: Zustand = {
+      ...neuesSpiel(1),
+      raster: zeileFastVoll(),
+      tablett: [EINZEL, null, null],
+      linien: LINIEN_JE_ETAPPE - 1,
+      joker: 0,
+    };
+    const aufstieg = teilLegen(z, 0, 7, 0);
+    expect(aufstieg.joker).toBe(1);
+    const zurueckZ = zurueck(aufstieg);
+    expect(zurueckZ.joker).toBe(0); // ausgegeben
+    expect(zurueckZ.linien).toBe(LINIEN_JE_ETAPPE - 1); // die Linie ist wieder weg
+    const nochmal = teilLegen(zurueckZ, 0, 7, 0);
+    expect(nochmal.linien).toBe(LINIEN_JE_ETAPPE);
+    expect(nochmal.joker).toBe(0); // die Etappe war schon belohnt
+  });
+});
+
+describe('festgefahren', () => {
+  // Zwei freie Felder je Zeile und Spalte, nirgends zwei nebeneinander (siehe
+  // loeser.test.ts): Kein Domino passt, ein Einzelteil schließt noch keine Linie.
+  const loecher = brettAus(
+    Array.from({ length: 8 }, (_, i) =>
+      Array.from({ length: 8 }, (_, x) => (x === i || x === (i + 2) % 8 ? '.' : '#')).join(''),
+    ),
+  );
+  const festgefahrenZ = (joker: number): Zustand => ({
+    ...neuesSpiel(1),
+    raster: loecher,
+    tablett: [EINZEL, ZWEIER, ZWEIER],
+    joker,
+  });
+
+  it('ist nicht das Ende, solange ein Joker da ist', () => {
+    const nach = teilLegen(festgefahrenZ(1), 0, 0, 0);
+    expect(nach.festgefahren).toBe(true);
+    expect(nach.vorbei).toBe(false);
+  });
+
+  it('wird ohne Joker zum Ende', () => {
+    const nach = teilLegen(festgefahrenZ(0), 0, 0, 0);
+    expect(nach.festgefahren).toBe(false);
+    expect(nach.vorbei).toBe(true);
+  });
+
+  it('nimmt im Stillstand keinen Zug mehr an, aber ein Zurück', () => {
+    const still = teilLegen(festgefahrenZ(1), 0, 0, 0);
+    expect(teilLegen(still, 1, 2, 2)).toBe(still);
+    const frei = zurueck(still);
+    expect(frei.festgefahren).toBe(false);
+    expect(frei.vorbei).toBe(false);
+    expect(frei.joker).toBe(0);
+    expect(frei.tablett[0]).not.toBeNull(); // das Einzelteil liegt wieder im Tablett
+  });
+});
+
+describe('Spielverlauf mit Zurück: Grundregeln nach jedem Schritt', () => {
+  it('hält Vorrat, Stillstand und Tablett über viele zufällige Spiele zusammen', () => {
+    // Wischen, Legen und Zurück gemischt — Einzeltests allein decken die
+    // Übergänge zwischen den Zuständen nicht ab.
+    for (let saat = 1; saat <= 40; saat++) {
+      const zufall = rng(saat * 31);
+      let z = neuesSpiel(saat);
+      for (let schritt = 0; schritt < 250 && !z.vorbei; schritt++) {
+        if (z.joker > 0 && z.verlauf && zufall.zahl() < 0.08) z = zurueck(z);
+        if (z.festgefahren) {
+          z = zurueck(z);
+          continue;
+        }
+        const moegliche: [number, number, number][] = [];
+        z.tablett.forEach((t, i) => {
+          if (!t) return;
+          for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) if (passtAn(z.raster, t.form, x, y)) moegliche.push([i, x, y]);
+        });
+        if (moegliche.length === 0) break;
+        const [i, x, y] = zufall.waehlen(moegliche);
+        z = teilLegen(z, i!, x!, y!);
+
+        expect(z.joker).toBeGreaterThanOrEqual(0);
+        expect(z.joker).toBeLessThanOrEqual(JOKER_MAX);
+        expect(z.vorbei && z.festgefahren).toBe(false);
+        expect(z.belohnt).toBeGreaterThanOrEqual(etappeFuer(z.linien));
+        expect(z.tablett).toHaveLength(3);
+        expect(z.punkte).toBeGreaterThanOrEqual(0);
+        // „Vorbei" heißt wirklich: nichts passt mehr, und kein Joker rettet es.
+        const passt = z.tablett.some((t) => t && passtIrgendwo(z.raster, t.form));
+        if (z.vorbei) expect(passt).toBe(false);
+        if (z.festgefahren) expect(passt).toBe(false);
+        if (!z.vorbei && !z.festgefahren) expect(passt).toBe(true);
+      }
+    }
   });
 });
